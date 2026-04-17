@@ -1,0 +1,2166 @@
+openapi: 3.0.0
+info:
+  title: API de Gestão Financeira Pessoal
+  description: |
+    API REST para autenticação e gestão de contas, categorias, transações,
+    transferências, dívidas, metas e alertas.
+
+    ## Convenção de idioma
+    Os nomes dos campos seguem **camelCase em português**, pois as entidades
+    do banco de dados estão em português (ex. `nome`, `senha`, `saldoInicial`).
+    Alguns campos de domínio financeiro estão em espanhol (ex. `montoTotal`,
+    `fechaVencimiento`, `diasAnticipacion`).
+
+    ## Autenticação
+    Todos os endpoints (exceto `/auth/register` e `/auth/login`) requerem um
+    token JWT no header `Authorization: Bearer <token>`.
+    O token expira em **1 hora**.
+
+    ## Códigos de status
+    - `200` — Operação bem-sucedida (GET, PATCH, DELETE)
+    - `201` — Recurso criado (POST)
+    - `400` — Validação de campos falhou
+    - `401` — Token ausente, expirado ou inválido
+    - `404` — Recurso não encontrado ou não pertence ao usuário
+    - `409` — Conflito (ex. e-mail duplicado)
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+    description: Servidor local de desenvolvimento
+
+tags:
+  - name: Auth
+    description: Registro, login e alteração de senha
+  - name: Contas
+    description: Gestão de contas financeiras (banco, dinheiro, cartão, etc.)
+  - name: Categorias
+    description: Categorias de receitas e despesas
+  - name: Transacoes
+    description: Registro de transações (receitas e despesas)
+  - name: Transferencias
+    description: Transferências entre contas próprias
+  - name: Dividas
+    description: Gestão de dívidas
+  - name: Pagos de Divida
+    description: Pagamentos de dívidas (operação atômica com transação)
+  - name: Metas
+    description: Metas financeiras de economia ou redução de dívida
+  - name: Alertas
+    description: Alertas de vencimentos e limites de gasto
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtido em /auth/login. Expira em 1 hora.
+
+  schemas:
+    # ══════════════════════════════════════
+    #  AUTH
+    # ══════════════════════════════════════
+    RegisterRequest:
+      type: object
+      required: [nome, email, senha]
+      properties:
+        nome:
+          type: string
+          description: Nome completo do usuário.
+          example: Andre
+        email:
+          type: string
+          format: email
+          description: E-mail único do usuário (usado para login).
+          example: andre@test.com
+        senha:
+          type: string
+          minLength: 6
+          description: Senha (mínimo 6 caracteres). Armazenada como hash bcrypt.
+          example: "123456"
+
+    RegisterResponse:
+      type: object
+      properties:
+        usuario:
+          type: object
+          description: Dados públicos do usuário recém-criado.
+          properties:
+            id:
+              type: string
+              format: uuid
+            nome:
+              type: string
+            email:
+              type: string
+
+    LoginRequest:
+      type: object
+      required: [email, senha]
+      properties:
+        email:
+          type: string
+          format: email
+          description: E-mail registrado.
+          example: andre@test.com
+        senha:
+          type: string
+          description: Senha em texto plano (comparada com o hash).
+          example: "123456"
+
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: Token JWT válido por 1 hora. Enviar no header Authorization.
+        usuario:
+          type: object
+          description: Dados públicos do usuário autenticado.
+          properties:
+            id:
+              type: string
+              format: uuid
+            nome:
+              type: string
+            email:
+              type: string
+
+    ResetPasswordRequest:
+      type: object
+      required: [novaSenha]
+      properties:
+        novaSenha:
+          type: string
+          minLength: 6
+          description: Nova senha (mínimo 6 caracteres). O e-mail é obtido do token.
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Mensagem de confirmação da operação.
+          example: Senha atualizada com sucesso
+
+    # ══════════════════════════════════════
+    #  CONTAS
+    # ══════════════════════════════════════
+    CreateContaRequest:
+      type: object
+      required: [nome, tipo, saldoInicial]
+      properties:
+        nome:
+          type: string
+          description: Nome descritivo da conta.
+          example: Carteira
+        tipo:
+          type: string
+          enum: [dinheiro, banco, poupanca, cartao_credito]
+          description: |
+            Tipo de conta:
+            - `dinheiro` — Dinheiro em espécie
+            - `banco` — Conta bancária
+            - `poupanca` — Conta poupança
+            - `cartao_credito` — Cartão de crédito
+        saldoInicial:
+          type: number
+          format: double
+          description: Saldo inicial da conta (decimal 12,2).
+          example: 500.00
+        limiteCredito:
+          type: number
+          format: double
+          nullable: true
+          description: Limite de crédito (aplica-se apenas para cartão de crédito).
+        dataCorte:
+          type: integer
+          nullable: true
+          description: Dia do mês de corte (1-31). Apenas para cartão de crédito.
+        dataPagamento:
+          type: integer
+          nullable: true
+          description: Dia do mês de pagamento (1-31). Apenas para cartão de crédito.
+
+    UpdateContaRequest:
+      type: object
+      description: Apenas os campos enviados serão atualizados. Não é permitido alterar `tipo` nem `saldoInicial`.
+      properties:
+        nome:
+          type: string
+          description: Novo nome da conta.
+        limiteCredito:
+          type: number
+          format: double
+          description: Novo limite de crédito.
+        dataCorte:
+          type: integer
+          description: Novo dia de corte.
+        dataPagamento:
+          type: integer
+          description: Novo dia de pagamento.
+        ativa:
+          type: boolean
+          description: Estado ativo/inativo da conta.
+
+    Conta:
+      type: object
+      description: Entidade completa de uma conta financeira.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único da conta.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono da conta.
+        nome:
+          type: string
+          description: Nome descritivo.
+        tipo:
+          type: string
+          enum: [dinheiro, banco, poupanca, cartao_credito]
+          description: Tipo de conta financeira.
+        saldoInicial:
+          type: number
+          format: double
+          description: Saldo com o qual a conta foi criada.
+        moeda:
+          type: string
+          description: Moeda da conta (padrão BRL).
+          example: BRL
+        limiteCredito:
+          type: number
+          nullable: true
+          description: Limite de crédito (null se não se aplica).
+        dataCorte:
+          type: integer
+          nullable: true
+          description: Dia de fechamento da fatura (null se não se aplica).
+        dataPagamento:
+          type: integer
+          nullable: true
+          description: Dia de vencimento da fatura (null se não se aplica).
+        ativa:
+          type: boolean
+          description: Se a conta está ativa (false = soft delete).
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação.
+        updatedAt:
+          type: string
+          format: date-time
+          description: Data da última atualização.
+
+    # ══════════════════════════════════════
+    #  CATEGORIAS
+    # ══════════════════════════════════════
+    CreateCategoriaRequest:
+      type: object
+      required: [nome, tipo]
+      properties:
+        nome:
+          type: string
+          description: Nome da categoria.
+          example: Alimentação
+        tipo:
+          type: string
+          enum: [receita, despesa]
+          description: |
+            Tipo de categoria:
+            - `receita` — Receita (entrada)
+            - `despesa` — Despesa (saída)
+        cor:
+          type: string
+          nullable: true
+          description: Cor hexadecimal para representação visual.
+          example: "#FF5733"
+        icone:
+          type: string
+          nullable: true
+          description: Nome do ícone para a interface.
+          example: utensils
+
+    UpdateCategoriaRequest:
+      type: object
+      description: Apenas os campos enviados serão atualizados. Não é permitido alterar `tipo`.
+      properties:
+        nome:
+          type: string
+          description: Novo nome.
+        cor:
+          type: string
+          description: Nova cor hexadecimal.
+        icone:
+          type: string
+          description: Novo ícone.
+        ativa:
+          type: boolean
+          description: Estado ativo/inativo.
+
+    Categoria:
+      type: object
+      description: Entidade completa de uma categoria.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono.
+        nome:
+          type: string
+          description: Nome da categoria.
+        tipo:
+          type: string
+          enum: [receita, despesa]
+          description: Tipo (receita ou despesa).
+        cor:
+          type: string
+          nullable: true
+          description: Cor hexadecimal.
+        icone:
+          type: string
+          nullable: true
+          description: Nome do ícone.
+        ativa:
+          type: boolean
+          description: Se está ativa.
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação.
+
+    # ══════════════════════════════════════
+    #  TRANSACOES
+    # ══════════════════════════════════════
+    CreateTransacaoRequest:
+      type: object
+      required: [contaId, categoriaId, tipo, valor, data]
+      properties:
+        contaId:
+          type: string
+          format: uuid
+          description: ID da conta associada (deve existir e pertencer ao usuário).
+        categoriaId:
+          type: string
+          format: uuid
+          description: ID da categoria associada (deve existir e pertencer ao usuário).
+        tipo:
+          type: string
+          enum: [receita, despesa]
+          description: |
+            Tipo de transação:
+            - `receita` — Receita (entrada)
+            - `despesa` — Despesa (saída)
+        valor:
+          type: number
+          format: double
+          description: Valor monetário (decimal 12,2). Sempre positivo.
+          example: 50.00
+        data:
+          type: string
+          format: date
+          description: Data da transação (formato YYYY-MM-DD).
+          example: "2026-03-30"
+        descricao:
+          type: string
+          nullable: true
+          description: Descrição opcional da transação.
+        ehAjuste:
+          type: boolean
+          default: false
+          description: Se é um ajuste manual de saldo (não uma transação real).
+
+    UpdateTransacaoRequest:
+      type: object
+      description: Apenas os campos enviados serão atualizados. Não é permitido alterar `tipo` nem `ehAjuste`.
+      properties:
+        contaId:
+          type: string
+          format: uuid
+          description: Nova conta associada.
+        categoriaId:
+          type: string
+          format: uuid
+          description: Nova categoria associada.
+        valor:
+          type: number
+          format: double
+          description: Novo valor monetário.
+        data:
+          type: string
+          format: date
+          description: Nova data.
+        descricao:
+          type: string
+          description: Nova descrição.
+
+    Transacao:
+      type: object
+      description: Entidade completa de uma transação.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono.
+        contaId:
+          type: string
+          format: uuid
+          description: ID da conta associada.
+        categoriaId:
+          type: string
+          format: uuid
+          description: ID da categoria associada.
+        tipo:
+          type: string
+          enum: [receita, despesa]
+          description: Tipo (receita ou despesa).
+        valor:
+          type: number
+          format: double
+          description: Valor monetário.
+        data:
+          type: string
+          format: date
+          description: Data da transação.
+        descricao:
+          type: string
+          nullable: true
+          description: Descrição opcional.
+        ehAjuste:
+          type: boolean
+          description: Se é um ajuste manual de saldo.
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação do registro.
+        updatedAt:
+          type: string
+          format: date-time
+          description: Data da última atualização.
+
+    # ══════════════════════════════════════
+    #  TRANSFERENCIAS
+    # ══════════════════════════════════════
+    CreateTransferenciaRequest:
+      type: object
+      required: [contaOrigemId, contaDestinoId, valor, data]
+      properties:
+        contaOrigemId:
+          type: string
+          format: uuid
+          description: ID da conta de origem. Não pode ser igual a contaDestinoId.
+        contaDestinoId:
+          type: string
+          format: uuid
+          description: ID da conta de destino. Não pode ser igual a contaOrigemId.
+        valor:
+          type: number
+          format: double
+          description: Valor da transferência (decimal 12,2).
+          example: 200.00
+        data:
+          type: string
+          format: date
+          description: Data da transferência.
+        descricao:
+          type: string
+          nullable: true
+          description: Descrição opcional.
+        comissao:
+          type: number
+          format: double
+          default: 0
+          description: Comissão ou taxa da transferência (padrão 0).
+
+    UpdateTransferenciaRequest:
+      type: object
+      description: Apenas os campos enviados serão atualizados. Não é permitido alterar as contas de origem/destino.
+      properties:
+        valor:
+          type: number
+          format: double
+          description: Novo valor.
+        data:
+          type: string
+          format: date
+          description: Nova data.
+        descricao:
+          type: string
+          description: Nova descrição.
+        comissao:
+          type: number
+          format: double
+          description: Nova comissão.
+
+    Transferencia:
+      type: object
+      description: Entidade completa de uma transferência entre contas.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono.
+        contaOrigemId:
+          type: string
+          format: uuid
+          description: ID da conta de origem.
+        contaDestinoId:
+          type: string
+          format: uuid
+          description: ID da conta de destino.
+        valor:
+          type: number
+          format: double
+          description: Valor transferido.
+        data:
+          type: string
+          format: date
+          description: Data da transferência.
+        descricao:
+          type: string
+          nullable: true
+          description: Descrição opcional.
+        comissao:
+          type: number
+          format: double
+          description: Comissão cobrada.
+        moeda:
+          type: string
+          description: Moeda da transferência.
+          example: BRL
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação.
+        updatedAt:
+          type: string
+          format: date-time
+          description: Data da última atualização.
+
+    # ══════════════════════════════════════
+    #  DIVIDAS
+    # ══════════════════════════════════════
+    CreateDividaRequest:
+      type: object
+      required: [nome, montoTotal, fechaInicio, fechaVencimiento]
+      properties:
+        nome:
+          type: string
+          description: Nome descritivo da dívida.
+          example: Empréstimo pessoal
+        montoTotal:
+          type: number
+          format: double
+          description: Valor total da dívida (decimal 12,2).
+          example: 5000.00
+        fechaInicio:
+          type: string
+          format: date
+          description: Data em que a dívida foi contraída.
+        fechaVencimiento:
+          type: string
+          format: date
+          description: Data limite para pagamento total.
+        contaId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Conta associada (opcional). Se informada, deve existir e pertencer ao usuário.
+        tasaInteres:
+          type: number
+          format: double
+          nullable: true
+          description: Taxa de juros (decimal 5,2). Ex. 2.50 = 2,5%.
+        cuotaMensual:
+          type: number
+          format: double
+          nullable: true
+          description: Valor da parcela mensal (se aplicável).
+        proximoVencimiento:
+          type: string
+          format: date
+          nullable: true
+          description: Data do próximo vencimento de parcela.
+        periodicidade:
+          type: string
+          enum: [semanal, quinzenal, mensal, anual]
+          nullable: true
+          description: |
+            Periodicidade de pagamento:
+            - `semanal` — Semanal
+            - `quinzenal` — Quinzenal
+            - `mensal` — Mensal
+            - `anual` — Anual
+
+    UpdateDividaRequest:
+      type: object
+      description: Apenas os campos enviados serão atualizados. Não é permitido alterar `montoTotal` nem `fechaInicio`.
+      properties:
+        nome:
+          type: string
+          description: Novo nome.
+        tasaInteres:
+          type: number
+          format: double
+          description: Nova taxa de juros.
+        cuotaMensual:
+          type: number
+          format: double
+          description: Novo valor da parcela mensal.
+        fechaVencimiento:
+          type: string
+          format: date
+          description: Nova data de vencimento total.
+        proximoVencimiento:
+          type: string
+          format: date
+          description: Nova data do próximo vencimento.
+        periodicidade:
+          type: string
+          enum: [semanal, quinzenal, mensal, anual]
+          description: Nova periodicidade.
+        ativa:
+          type: boolean
+          description: Estado ativo/inativo.
+
+    Divida:
+      type: object
+      description: Entidade completa de uma dívida.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono.
+        contaId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Conta associada (pode ser null).
+        nome:
+          type: string
+          description: Nome da dívida.
+        montoTotal:
+          type: number
+          format: double
+          description: Valor total da dívida.
+        tasaInteres:
+          type: number
+          nullable: true
+          description: Taxa de juros.
+        cuotaMensual:
+          type: number
+          nullable: true
+          description: Valor da parcela mensal.
+        fechaInicio:
+          type: string
+          format: date
+          description: Data de início.
+        fechaVencimiento:
+          type: string
+          format: date
+          description: Data de vencimento total.
+        proximoVencimiento:
+          type: string
+          format: date
+          nullable: true
+          description: Data do próximo vencimento de parcela.
+        periodicidade:
+          type: string
+          enum: [semanal, quinzenal, mensal, anual]
+          nullable: true
+          description: Periodicidade de pagamento.
+        ativa:
+          type: boolean
+          description: Se a dívida está ativa.
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação.
+
+    # ══════════════════════════════════════
+    #  PAGOS DIVIDA
+    # ══════════════════════════════════════
+    CreatePagoDividaRequest:
+      type: object
+      required: [dividaId, contaId, categoriaId, valor, data]
+      properties:
+        dividaId:
+          type: string
+          format: uuid
+          description: ID da dívida à qual o pagamento se aplica.
+        contaId:
+          type: string
+          format: uuid
+          description: ID da conta de onde o pagamento é feito.
+        categoriaId:
+          type: string
+          format: uuid
+          description: ID da categoria para a transação de despesa criada automaticamente.
+        valor:
+          type: number
+          format: double
+          description: Valor do pagamento (decimal 12,2).
+          example: 500.00
+        data:
+          type: string
+          format: date
+          description: Data do pagamento.
+        descricao:
+          type: string
+          nullable: true
+          description: Descrição opcional do pagamento.
+
+    PagoDivida:
+      type: object
+      description: |
+        Entidade de pagamento de dívida. Ao criar um pagamento, é gerada automaticamente
+        uma transação do tipo `despesa` na mesma operação atômica.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único do pagamento.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono.
+        dividaId:
+          type: string
+          format: uuid
+          description: ID da dívida associada.
+        contaId:
+          type: string
+          format: uuid
+          description: ID da conta de onde foi pago.
+        transacaoId:
+          type: string
+          format: uuid
+          description: ID da transação de despesa gerada automaticamente (relação 1-para-1).
+        valor:
+          type: number
+          format: double
+          description: Valor do pagamento.
+        data:
+          type: string
+          format: date
+          description: Data do pagamento.
+        descricao:
+          type: string
+          nullable: true
+          description: Descrição opcional.
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação.
+
+    # ══════════════════════════════════════
+    #  METAS
+    # ══════════════════════════════════════
+    CreateMetaRequest:
+      type: object
+      required: [nome, tipo, montoObjetivo, fechaLimite]
+      properties:
+        nome:
+          type: string
+          description: Nome descritivo da meta.
+          example: Viagem de férias
+        tipo:
+          type: string
+          enum: [economia, reducao_divida]
+          description: |
+            Tipo de meta:
+            - `economia` — Meta de economia
+            - `reducao_divida` — Meta de redução de dívida
+        montoObjetivo:
+          type: number
+          format: double
+          description: Valor objetivo a alcançar (decimal 12,2).
+          example: 3000.00
+        fechaLimite:
+          type: string
+          format: date
+          description: Data limite para cumprir a meta.
+        contaId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Conta associada (opcional, para metas de economia).
+        dividaId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Dívida associada (opcional, para metas de redução de dívida).
+
+    UpdateMetaRequest:
+      type: object
+      description: Apenas os campos enviados serão atualizados. Não é permitido alterar `tipo`.
+      properties:
+        nome:
+          type: string
+          description: Novo nome.
+        montoObjetivo:
+          type: number
+          format: double
+          description: Novo valor objetivo.
+        montoActual:
+          type: number
+          format: double
+          description: Valor atual economizado/pago (atualização manual do progresso).
+        fechaLimite:
+          type: string
+          format: date
+          description: Nova data limite.
+        ativa:
+          type: boolean
+          description: Estado ativo/inativo.
+
+    Meta:
+      type: object
+      description: Entidade completa de uma meta financeira.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono.
+        nome:
+          type: string
+          description: Nome da meta.
+        tipo:
+          type: string
+          enum: [economia, reducao_divida]
+          description: Tipo de meta.
+        montoObjetivo:
+          type: number
+          format: double
+          description: Valor objetivo.
+        montoActual:
+          type: number
+          format: double
+          description: Valor atual acumulado (padrão 0).
+        fechaLimite:
+          type: string
+          format: date
+          description: Data limite.
+        contaId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Conta associada.
+        dividaId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Dívida associada.
+        ativa:
+          type: boolean
+          description: Se a meta está ativa.
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação.
+
+    # ══════════════════════════════════════
+    #  ALERTAS
+    # ══════════════════════════════════════
+    CreateAlertaRequest:
+      type: object
+      required: [tipo, referenciaId, diasAnticipacion]
+      properties:
+        tipo:
+          type: string
+          enum: [vencimento_divida, vencimento_meta, limite_gasto]
+          description: |
+            Tipo de alerta:
+            - `vencimento_divida` — Aviso de vencimento de dívida
+            - `vencimento_meta` — Aviso de vencimento de meta
+            - `limite_gasto` — Aviso de limite de gasto atingido
+        referenciaId:
+          type: string
+          format: uuid
+          description: ID do recurso ao qual o alerta se refere (dívida, meta, etc.).
+        diasAnticipacion:
+          type: integer
+          minimum: 1
+          description: Dias de antecedência para disparar o alerta.
+          example: 7
+
+    UpdateAlertaRequest:
+      type: object
+      properties:
+        diasAnticipacion:
+          type: integer
+          minimum: 1
+          description: Novos dias de antecedência.
+        ativa:
+          type: boolean
+          description: Estado ativo/inativo.
+
+    Alerta:
+      type: object
+      description: Entidade completa de um alerta.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador único.
+        usuarioId:
+          type: string
+          format: uuid
+          description: ID do usuário dono.
+        tipo:
+          type: string
+          enum: [vencimento_divida, vencimento_meta, limite_gasto]
+          description: Tipo de alerta.
+        referenciaId:
+          type: string
+          format: uuid
+          description: ID do recurso referenciado.
+        diasAnticipacion:
+          type: integer
+          description: Dias de antecedência configurados.
+        ativa:
+          type: boolean
+          description: Se o alerta está ativo.
+        ultimaNotificacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: Data/hora da última notificação enviada (null se nunca foi notificado).
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação.
+
+    # ══════════════════════════════════════
+    #  ERROS
+    # ══════════════════════════════════════
+    Error400:
+      type: object
+      description: Erro de validação. O campo `message` pode ser string ou array de strings com os erros específicos.
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        message:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          description: Detalhe do erro de validação.
+        error:
+          type: string
+          example: Bad Request
+
+    Error401:
+      type: object
+      description: Erro de autenticação (token ausente, expirado ou inválido).
+      properties:
+        statusCode:
+          type: integer
+          example: 401
+        message:
+          type: string
+          example: Unauthorized
+
+    Error404:
+      type: object
+      description: Recurso não encontrado ou não pertence ao usuário autenticado.
+      properties:
+        statusCode:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: Conta não encontrada
+
+    Error409:
+      type: object
+      description: Conflito (ex. e-mail já cadastrado).
+      properties:
+        statusCode:
+          type: integer
+          example: 409
+        message:
+          type: string
+          example: E-mail já cadastrado
+
+  responses:
+    BadRequest:
+      description: Validação de campos falhou.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error400'
+    Unauthorized:
+      description: Token JWT ausente, expirado ou inválido.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error401'
+    NotFound:
+      description: Recurso não encontrado ou não pertence ao usuário autenticado.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error404'
+    Conflict:
+      description: Conflito (recurso duplicado).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error409'
+
+paths:
+  # ════════════════════════════════════════
+  #  AUTH
+  # ════════════════════════════════════════
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Registrar novo usuário
+      description: Cria um novo usuário. O e-mail deve ser único. A senha é armazenada como hash bcrypt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuário criado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Fazer login
+      description: |
+        Autentica o usuário e retorna um token JWT válido por 1 hora.
+        O token deve ser enviado no header `Authorization: Bearer <token>` em todas as demais requisições.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login bem-sucedido. Retorna token JWT e dados do usuário.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: E-mail ou senha inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error401'
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Alterar senha
+      description: |
+        Altera a senha do usuário autenticado. O e-mail é obtido automaticamente do token JWT,
+        portanto só é necessário enviar a nova senha no body.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '201':
+          description: Senha atualizada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ════════════════════════════════════════
+  #  CONTAS
+  # ════════════════════════════════════════
+  /contas:
+    post:
+      tags: [Contas]
+      summary: Criar conta
+      description: Cria uma nova conta financeira para o usuário autenticado.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContaRequest'
+      responses:
+        '201':
+          description: Conta criada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags: [Contas]
+      summary: Listar contas ativas
+      description: Retorna todas as contas **ativas** (`ativa = true`) do usuário autenticado.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de contas ativas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /contas/{id}:
+    get:
+      tags: [Contas]
+      summary: Obter conta por ID
+      description: Retorna uma conta específica do usuário autenticado.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da conta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe da conta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Contas]
+      summary: Atualizar conta
+      description: Atualiza os campos enviados de uma conta. Retorna a conta atualizada.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da conta.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContaRequest'
+      responses:
+        '200':
+          description: Conta atualizada. Retorna a entidade completa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /contas/{id}/desativar:
+    patch:
+      tags: [Contas]
+      summary: Desativar conta (soft delete)
+      description: Marca a conta como inativa (`ativa = false`). Não exclui dados. Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da conta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Conta desativada com sucesso. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════
+  #  CATEGORIAS
+  # ════════════════════════════════════════
+  /categorias:
+    post:
+      tags: [Categorias]
+      summary: Criar categoria
+      description: Cria uma nova categoria de receita ou despesa.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoriaRequest'
+      responses:
+        '201':
+          description: Categoria criada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Categoria'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags: [Categorias]
+      summary: Listar categorias ativas
+      description: Retorna todas as categorias **ativas** do usuário autenticado.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de categorias ativas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Categoria'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /categorias/{id}:
+    get:
+      tags: [Categorias]
+      summary: Obter categoria por ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da categoria.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe da categoria.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Categoria'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Categorias]
+      summary: Atualizar categoria
+      description: Atualiza os campos enviados. Retorna a categoria atualizada.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da categoria.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoriaRequest'
+      responses:
+        '200':
+          description: Categoria atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Categoria'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /categorias/{id}/desativar:
+    patch:
+      tags: [Categorias]
+      summary: Desativar categoria (soft delete)
+      description: Marca como inativa. Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da categoria.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Categoria desativada. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════
+  #  TRANSACOES
+  # ════════════════════════════════════════
+  /transacoes:
+    post:
+      tags: [Transacoes]
+      summary: Criar transação
+      description: |
+        Cria uma nova transação. Valida que `contaId` e `categoriaId`
+        existam e pertençam ao usuário antes de criar.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransacaoRequest'
+      responses:
+        '201':
+          description: Transação criada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transacao'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Conta ou categoria não encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error404'
+    get:
+      tags: [Transacoes]
+      summary: Listar transações
+      description: |
+        Retorna todas as transações do usuário autenticado,
+        ordenadas por data **descendente** (mais recentes primeiro).
+        Atualmente não suporta filtros por query params.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de transações ordenadas por data DESC.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transacao'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /transacoes/{id}:
+    get:
+      tags: [Transacoes]
+      summary: Obter transação por ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da transação.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe da transação.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transacao'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Transacoes]
+      summary: Atualizar transação
+      description: Atualiza os campos enviados. Retorna a transação atualizada.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da transação.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTransacaoRequest'
+      responses:
+        '200':
+          description: Transação atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transacao'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Transacoes]
+      summary: Excluir transação
+      description: Exclui a transação permanentemente (hard delete). Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da transação.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transação excluída. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════
+  #  TRANSFERENCIAS
+  # ════════════════════════════════════════
+  /transferencias:
+    post:
+      tags: [Transferencias]
+      summary: Criar transferência
+      description: |
+        Cria uma transferência entre duas contas do usuário.
+        Valida que ambas as contas existam e que **origem ≠ destino** (retorna 400 se forem iguais).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferenciaRequest'
+      responses:
+        '201':
+          description: Transferência criada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transferencia'
+        '400':
+          description: Conta de origem e destino são a mesma.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error400'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Conta de origem ou destino não encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error404'
+    get:
+      tags: [Transferencias]
+      summary: Listar transferências
+      description: |
+        Retorna todas as transferências do usuário autenticado,
+        ordenadas por data **descendente**.
+        Atualmente não suporta filtros por query params.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de transferências ordenadas por data DESC.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transferencia'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /transferencias/{id}:
+    get:
+      tags: [Transferencias]
+      summary: Obter transferência por ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da transferência.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe da transferência.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transferencia'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Transferencias]
+      summary: Atualizar transferência
+      description: Atualiza os campos enviados. Não é permitido alterar as contas. Retorna a entidade atualizada.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da transferência.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTransferenciaRequest'
+      responses:
+        '200':
+          description: Transferência atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transferencia'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Transferencias]
+      summary: Excluir transferência
+      description: Exclui a transferência permanentemente (hard delete). Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da transferência.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Transferência excluída. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════
+  #  DIVIDAS
+  # ════════════════════════════════════════
+  /dividas:
+    post:
+      tags: [Dividas]
+      summary: Criar dívida
+      description: |
+        Cria uma nova dívida. Se `contaId` for informado, valida que a conta exista e pertença ao usuário.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDividaRequest'
+      responses:
+        '201':
+          description: Dívida criada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Divida'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags: [Dividas]
+      summary: Listar dívidas
+      description: |
+        Retorna todas as dívidas do usuário autenticado,
+        ordenadas por `proximoVencimiento` **ascendente** (mais próximas de vencer primeiro).
+        Atualmente não suporta filtros por query params.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de dívidas ordenadas por próximo vencimento ASC.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Divida'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /dividas/{id}:
+    get:
+      tags: [Dividas]
+      summary: Obter dívida por ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da dívida.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe da dívida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Divida'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Dividas]
+      summary: Atualizar dívida
+      description: Atualiza os campos enviados. Retorna a dívida atualizada.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da dívida.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDividaRequest'
+      responses:
+        '200':
+          description: Dívida atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Divida'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dividas/{id}/desativar:
+    patch:
+      tags: [Dividas]
+      summary: Desativar dívida (soft delete)
+      description: Marca a dívida como inativa. Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da dívida.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dívida desativada. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════
+  #  PAGOS DE DIVIDA
+  # ════════════════════════════════════════
+  /pagos-divida:
+    post:
+      tags: [Pagos de Divida]
+      summary: Criar pagamento de dívida
+      description: |
+        Cria um pagamento de dívida como **operação atômica**:
+        1. Cria uma transação do tipo `despesa` na conta indicada
+        2. Cria o registro de pagamento vinculado a essa transação
+
+        Se qualquer etapa falhar, ambas são revertidas (rollback).
+        Valida que `dividaId`, `contaId` e `categoriaId` existam e pertençam ao usuário.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePagoDividaRequest'
+      responses:
+        '201':
+          description: Pagamento criado com sucesso (junto com a transação associada).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagoDivida'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Dívida, conta ou categoria não encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error404'
+
+  /pagos-divida/divida/{dividaId}:
+    get:
+      tags: [Pagos de Divida]
+      summary: Listar pagamentos de uma dívida
+      description: Retorna todos os pagamentos de uma dívida específica, ordenados por data **descendente**.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: dividaId
+          in: path
+          required: true
+          description: UUID da dívida.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de pagamentos da dívida ordenados por data DESC.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PagoDivida'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /pagos-divida/{id}:
+    get:
+      tags: [Pagos de Divida]
+      summary: Obter pagamento por ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID do pagamento.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe do pagamento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagoDivida'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Pagos de Divida]
+      summary: Excluir pagamento de dívida
+      description: |
+        Exclui o pagamento e sua transação associada como **operação atômica**.
+        Ambos os registros são excluídos ou nenhum (rollback em caso de falha).
+        Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID do pagamento.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Pagamento e transação excluídos. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════
+  #  METAS
+  # ════════════════════════════════════════
+  /metas:
+    post:
+      tags: [Metas]
+      summary: Criar meta
+      description: |
+        Cria uma meta financeira. Se `contaId` ou `dividaId` for informado,
+        valida que existam e pertençam ao usuário.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMetaRequest'
+      responses:
+        '201':
+          description: Meta criada com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags: [Metas]
+      summary: Listar metas
+      description: |
+        Retorna todas as metas do usuário autenticado,
+        ordenadas por `fechaLimite` **ascendente** (mais próximas de vencer primeiro).
+        Atualmente não suporta filtros por query params.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de metas ordenadas por data limite ASC.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /metas/{id}:
+    get:
+      tags: [Metas]
+      summary: Obter meta por ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da meta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe da meta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Metas]
+      summary: Atualizar meta
+      description: Atualiza os campos enviados. Retorna a meta atualizada.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da meta.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMetaRequest'
+      responses:
+        '200':
+          description: Meta atualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /metas/{id}/desativar:
+    patch:
+      tags: [Metas]
+      summary: Desativar meta (soft delete)
+      description: Marca a meta como inativa. Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID da meta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Meta desativada. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ════════════════════════════════════════
+  #  ALERTAS
+  # ════════════════════════════════════════
+  /alertas:
+    post:
+      tags: [Alertas]
+      summary: Criar alerta
+      description: Cria um novo alerta vinculado a uma dívida, meta ou limite de gasto.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlertaRequest'
+      responses:
+        '201':
+          description: Alerta criado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alerta'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      tags: [Alertas]
+      summary: Listar alertas ativos
+      description: |
+        Retorna todos os alertas **ativos** (`ativa = true`) do usuário autenticado,
+        ordenados por data de criação **descendente**.
+        Atualmente não suporta filtros por query params.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lista de alertas ativos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alerta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /alertas/{id}:
+    get:
+      tags: [Alertas]
+      summary: Obter alerta por ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID do alerta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalhe do alerta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alerta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Alertas]
+      summary: Atualizar alerta
+      description: Atualiza os campos enviados. Retorna o alerta atualizado.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID do alerta.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAlertaRequest'
+      responses:
+        '200':
+          description: Alerta atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alerta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /alertas/{id}/desativar:
+    patch:
+      tags: [Alertas]
+      summary: Desativar alerta
+      description: Marca o alerta como inativo. Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID do alerta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Alerta desativado. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /alertas/{id}/notificar:
+    patch:
+      tags: [Alertas]
+      summary: Marcar alerta como notificado
+      description: |
+        Registra a data/hora atual em `ultimaNotificacion`.
+        Útil para que o frontend saiba quando foi notificado pela última vez. Não retorna body.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID do alerta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Alerta marcado como notificado. Sem body de resposta.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'

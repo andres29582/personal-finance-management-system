@@ -1,0 +1,43 @@
+export const ContaTheme = {
+  colors: {
+    screenBg: '#EAF5E7',
+    surface: '#FFFFFF',
+    primary: '#0B6B34',
+    primaryStrong: '#075A2B',
+    title: '#123524',
+    text: '#2F4136',
+    muted: '#4B5D52',
+    border: '#D7E6D5',
+    success: '#2E7D32',
+    error: '#C62828',
+    white: '#FFFFFF',
+  },
+  spacing: {
+    xxs: 6,
+    xs: 8,
+    sm: 12,
+    md: 16,
+    lg: 24,
+    xl: 32,
+  },
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 24,
+  },
+  typography: {
+    title: 30,
+    heading: 22,
+    body: 16,
+    caption: 13,
+    button: 16,
+  },
+  shadow: {
+    color: '#000000',
+    opacity: 0.08,
+    radius: 12,
+    offsetY: 6,
+    elevation: 4,
+  },
+} as const;
