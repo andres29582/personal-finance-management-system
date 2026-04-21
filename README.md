@@ -1,38 +1,88 @@
-# Meu Sistema Financeiro
+# Sistema de Gestão Financeira Pessoal
 
-Monorepo do MVP do TCC de Gestao e Controle de Patrimonio (GCP).
+Sistema full stack para gerenciamento de finanças pessoais, desenvolvido como MVP acadêmico com foco em controle de contas, transações, orçamento, metas, dívidas e visão consolidada do patrimônio.
 
-## Estrutura
+## Visão geral
 
-- `backendnest`: API NestJS + TypeORM + PostgreSQL.
-- `frontend`: app Expo Router com foco inicial em web.
-- `docs`: material de apoio para o TCC, onboarding e demo.
+O projeto foi criado para permitir o acompanhamento da vida financeira de forma organizada, centralizando informações sobre entradas, saídas, contas, dívidas e objetivos financeiros em um único sistema.
 
-## Escopo atual do MVP
+A proposta do sistema é responder perguntas importantes do dia a dia, como:
 
-O projeto cobre o fluxo principal do MVP:
+- Quanto dinheiro tenho disponível agora?
+- Quanto gastei em determinado período?
+- Em que categorias estou gastando mais?
+- Estou gastando mais do que ganho?
+- Quanto devo atualmente?
+- Como meu patrimônio está evoluindo?
 
-- cadastro e login;
-- contas com saldo atual calculado em leitura;
-- categorias com seed padrao por usuario;
-- transacoes com validacao entre tipo da categoria e tipo da transacao;
+## Funcionalidades do MVP
+
+O sistema cobre os principais módulos da gestão financeira pessoal:
+
+- autenticação de usuário com cadastro e login;
+- gerenciamento de contas;
+- gerenciamento de categorias;
+- registro de receitas e despesas;
+- cálculo de saldo atual em leitura;
 - dashboard com saldos, receitas, despesas e gastos por categoria;
-- orcamentos mensais;
-- relatorios basicos;
-- metas, alertas, transferencias, dividas e pagamentos de divida.
+- orçamentos mensais;
+- relatórios básicos;
+- metas financeiras;
+- alertas;
+- transferências entre contas;
+- dívidas e pagamentos de dívida.
 
-## Como subir localmente
+## Stack utilizada
 
-1. Configure o backend usando `backendnest/.env.example`.
-2. Aplique a baseline em `backendnest/migrations/0001_mvp_baseline.sql`.
-3. Instale dependencias em `backendnest` e `frontend`.
-4. Inicie a API.
-5. Configure `frontend/.env.example`.
-6. Inicie o Expo Web.
+### Backend
+- NestJS
+- TypeORM
+- PostgreSQL
+- JWT
+- Bcrypt
+- ValidationPipe
 
-## Documentacao
+### Frontend
+- Expo
+- React Native
+- Expo Router
+- execução inicial com foco em web
 
-- `docs/resumen-arquitectura.md`
-- `docs/manual-usuario.md`
-- `docs/matriz-requisitos.md`
-- `docs/guion-demo.md`
+## Estrutura do projeto
+
+```bash
+backendnest/   # API NestJS + TypeORM + PostgreSQL
+frontend/      # aplicação Expo Router
+docs/          # documentação de apoio, arquitetura, manual e demo
+
+Como executar localmente
+1. Backend
+configurar o arquivo backendnest/.env com base em backendnest/.env.example;
+aplicar a baseline em backendnest/migrations/0001_mvp_baseline.sql;
+instalar as dependências do backend;
+iniciar a API.
+2. Frontend
+configurar o arquivo frontend/.env com base em frontend/.env.example;
+instalar as dependências do frontend;
+iniciar o Expo Web.
+Documentação
+
+Os materiais de apoio do projeto estão em:
+
+docs/resumen-arquitectura.md
+docs/manual-usuario.md
+docs/matriz-requisitos.md
+docs/guion-demo.md
+Status do projeto
+
+Projeto em desenvolvimento, com foco na consolidação do MVP funcional e evolução gradual dos módulos complementares.
+
+Próximos passos
+melhorar a experiência do usuário no frontend;
+consolidar fluxos de dívida e pagamento;
+expandir relatórios e indicadores do dashboard;
+revisar a documentação técnica;
+preparar versão de demonstração para apresentação.
+Objetivo do projeto
+
+Além de atender ao escopo acadêmico, o sistema também foi desenvolvido como aplicação prática para estudo de arquitetura full stack, modelagem de dados, regras de negócio e organização modular de software.
