@@ -1,33 +1,33 @@
-# Manual corto de usuario
+# Manual curto do usuário
 
-## Primer acceso
+## Primeiro acesso
 
-1. Abra la pantalla de registro.
-2. Informe nombre, email y contrasena.
-3. Inicie sesion con la cuenta creada.
+1. Abra a tela de cadastro.
+2. Informe nome, e-mail e senha.
+3. Faça login com a conta criada.
 
-## Flujo recomendado
+## Fluxo recomendado
 
-1. Cree al menos una cuenta.
-2. Revise las categorias iniciales creadas automaticamente.
-3. Registre una transaccion de ingreso.
-4. Registre una transaccion de gasto.
-5. Abra el dashboard para revisar saldo, ingresos y gastos del mes.
-6. Defina un orcamento mensual.
-7. Abra relatorios para revisar resumen y movimientos filtrados.
+1. Crie pelo menos uma conta.
+2. Revise as categorias iniciais criadas automaticamente.
+3. Registre uma transação de receita.
+4. Registre uma transação de despesa.
+5. Abra o dashboard para revisar saldo, receitas e despesas do mês.
+6. Defina um orçamento mensal.
+7. Abra relatórios para revisar resumo e movimentos filtrados.
 
-## Funcionalidades disponibles
+## Funcionalidades disponíveis
 
-- Cuentas: alta, edicion y desactivacion.
-- Categorias: alta, edicion, filtrado por tipo y desactivacion.
-- Transacciones: alta, edicion, borrado y filtros.
-- Dashboard: resumen mensual con ultimas transacciones.
-- Orcamentos: presupuesto del mes con alerta de 80% y 100%.
-- Relatorios: mensual, trimestral o por intervalo.
-- Metas, alertas, transferencias, dividas y pagos de divida.
+- Contas: criação, edição e desativação.
+- Categorias: criação, edição, filtro por tipo e desativação.
+- Transações: criação, edição, exclusão e filtros.
+- Dashboard: resumo mensal com últimas transações.
+- Orçamentos: orçamento do mês com alerta de 80% e 100%.
+- Relatórios: mensal, trimestral ou por intervalo.
+- Metas, alertas, transferências, dívidas e pagamentos de dívida.
 
-## Reglas importantes
+## Regras importantes
 
-- Una categoria de `receita` solo puede usarse con una transaccion de `receita`.
-- Una categoria de `despesa` solo puede usarse con una transaccion de `despesa`.
-- Las transferencias entre cuentas no cuentan como ingreso ni gasto del reporte.
+- Uma categoria de `receita` só pode ser usada com uma transação de `receita`.
+- Uma categoria de `despesa` só pode ser usada com uma transação de `despesa`.
+- As transferências entre contas não contam como receita nem despesa do relatório.

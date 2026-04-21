@@ -1,40 +1,38 @@
-# Guion de demo
 
-Duracion objetivo: 5 a 7 minutos.
 
-## 1. Apertura
+## 1. Abertura
 
-- Presentar el problema: control financiero personal en una sola aplicacion.
-- Explicar que el MVP fue construido con Expo Router en frontend y NestJS en backend.
+- Apresentar o problema: controle financeiro pessoal em uma única aplicação.
+- Explicar que o MVP foi construído com Expo Router no frontend e NestJS no backend.
 
-## 2. Registro y acceso
+## 2. Cadastro e acesso
 
-- Mostrar la pantalla de registro.
-- Crear un usuario nuevo.
-- Iniciar sesion y entrar al dashboard.
+- Mostrar a tela de cadastro.
+- Criar um novo usuário.
+- Fazer login e entrar no dashboard.
 
-## 3. Configuracion minima
+## 3. Configuração mínima
 
-- Abrir cuentas y crear una cuenta base.
-- Abrir categorias y mostrar que el usuario recibe categorias seed.
+- Abrir contas e criar uma conta base.
+- Abrir categorias e mostrar que o usuário recebe categorias iniciais.
 
-## 4. Flujo de negocio principal
+## 4. Fluxo de negócio principal
 
-- Registrar una `receita`.
-- Registrar una `despesa`.
-- Volver al dashboard y mostrar saldo total, resumen del mes y ultimas transacciones.
+- Registrar uma `receita`.
+- Registrar uma `despesa`.
+- Voltar ao dashboard e mostrar saldo total, resumo do mês e últimas transações.
 
-## 5. Planeacion financiera
+## 5. Planejamento financeiro
 
-- Crear un orcamento mensual.
-- Mostrar el porcentaje utilizado y la alerta si corresponde.
+- Criar um orçamento mensal.
+- Mostrar o percentual utilizado e o alerta, se aplicável.
 
-## 6. Analisis
+## 6. Análise
 
-- Abrir relatorios.
-- Filtrar por mes y explicar el desglose por categoria.
+- Abrir relatórios.
+- Filtrar por mês e explicar a divisão por categoria.
 
-## 7. Cierre
+## 7. Encerramento
 
-- Mencionar modulos adicionales ya integrados: metas, alertas, transferencias, dividas y pagos de divida.
-- Cerrar con pruebas automatizadas del backend y validacion del flujo MVP.
+- Mencionar módulos adicionais já integrados: metas, alertas, transferências, dívidas e pagamentos de dívida.
+- Encerrar com testes automatizados do backend e validação do fluxo MVP.

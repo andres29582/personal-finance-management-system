@@ -1,42 +1,42 @@
-# Resumen de arquitectura
+# Resumo de arquitetura
 
-## Vision general
+## Visão geral
 
-El sistema esta dividido en dos aplicaciones:
+O sistema está dividido em duas aplicações:
 
-- `frontend`: Expo Router, React Native Web, axios y almacenamiento local para sesion.
-- `backendnest`: NestJS, TypeORM y PostgreSQL.
+- `frontend`: Expo Router, React Native Web, axios e armazenamento local para sessão.
+- `backendnest`: NestJS, TypeORM e PostgreSQL.
 
-## Flujo principal
+## Fluxo principal
 
-1. El usuario se registra o inicia sesion desde el frontend.
-2. El backend devuelve `access_token` y los datos basicos del usuario.
-3. El frontend guarda la sesion y envia el token en cada request.
-4. La API valida JWT y resuelve datos financieros por dominio.
+1. O usuário se cadastra ou faz login pelo frontend.
+2. O backend devolve `access_token` e os dados básicos do usuário.
+3. O frontend salva a sessão e envia o token em cada requisição.
+4. A API valida o JWT e resolve dados financeiros por domínio.
 
-## Dominios del backend
+## Domínios do backend
 
-- `auth`: registro, login y cambio de clave.
-- `contas`: cuentas con `saldoAtual` calculado en lectura.
-- `categorias`: catalogo editable con seed por defecto para usuarios nuevos.
-- `transacoes`: ingresos y gastos.
-- `dashboard`: resumen mensual consolidado.
-- `orcamentos`: presupuesto mensual por usuario.
-- `relatorios`: lectura agregada por periodo.
-- `metas`, `alertas`, `transferencias`, `dividas`, `pagos-divida`: modulos complementarios del MVP.
+- `auth`: cadastro, login e alteração de senha.
+- `contas`: contas com `saldoAtual` calculado na leitura.
+- `categorias`: catálogo editável com seed padrão para novos usuários.
+- `transacoes`: receitas e despesas.
+- `dashboard`: resumo mensal consolidado.
+- `orcamentos`: orçamento mensal por usuário.
+- `relatorios`: leitura agregada por período.
+- `metas`, `alertas`, `transferencias`, `dividas`, `pagos-divida`: módulos complementares do MVP.
 
-## Decisiones clave
+## Decisões-chave
 
-- `transacoes` es la unica fuente para ingresos y gastos.
-- `transferencias` afectan el saldo de cuentas, pero no entran en reportes de ingresos y gastos.
-- `pagos-divida` crea y elimina su `transacao` asociada dentro de una transaccion de base de datos.
-- `saldoAtual` no se persiste en la tabla `conta`; se calcula desde saldo inicial, transacciones y transferencias.
+- `transacoes` é a única fonte para receitas e despesas.
+- `transferencias` afetam o saldo das contas, mas não entram em relatórios de receitas e despesas.
+- `pagos-divida` cria e exclui sua `transacao` associada dentro de uma transação de banco de dados.
+- `saldoAtual` não é persistido na tabela `conta`; ele é calculado a partir do saldo inicial, transações e transferências.
 
 ## Frontend
 
-- `app`: rutas y pantallas.
+- `app`: rotas e telas.
 - `services`: clientes HTTP.
-- `storage`: token y usuario.
+- `storage`: token e usuário.
 - `types`: contratos TypeScript.
-- `components`: bloques reutilizables.
-- `utils`: formato y manejo simple de errores.
+- `components`: blocos reutilizáveis.
+- `utils`: formatação e tratamento simples de erros.
