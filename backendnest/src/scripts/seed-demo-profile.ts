@@ -119,6 +119,7 @@ async function seed(): Promise<void> {
     }
 
     const registration = await authService.register({
+      aceitoPoliticaPrivacidade: true,
       nome: DEMO_PROFILE.nome,
       email: DEMO_PROFILE.email,
       cpf: DEMO_PROFILE.cpf,
@@ -145,7 +146,10 @@ async function seed(): Promise<void> {
 
     const categories = await categoriasService.findAll(userId);
     const categoriesByKey = new Map(
-      categories.map((category) => [`${category.tipo}:${category.nome}`, category]),
+      categories.map((category) => [
+        `${category.tipo}:${category.nome}`,
+        category,
+      ]),
     );
 
     const salarioCategory = requireCategory(
@@ -452,7 +456,7 @@ async function seed(): Promise<void> {
 
 seed().catch((error: unknown) => {
   const message =
-    error instanceof Error ? error.stack ?? error.message : String(error);
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
 
   console.error(message);
   process.exitCode = 1;

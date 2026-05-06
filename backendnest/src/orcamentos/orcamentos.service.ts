@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
+import { notSoftDeleted } from '../common/soft-delete.query';
 import { randomUUID } from 'crypto';
 import { resolveMonthRange } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
@@ -14,6 +15,7 @@ import { CreateOrcamentoDto } from './dto/create-orcamento.dto';
 import { FindOrcamentosDto } from './dto/find-orcamentos.dto';
 import { UpdateOrcamentoDto } from './dto/update-orcamento.dto';
 import { Orcamento } from './entities/orcamento.entity';
+import { LogsService } from '../logs/logs.service';
 
 @Injectable()
 export class OrcamentosService {
@@ -22,6 +24,7 @@ export class OrcamentosService {
     private readonly orcamentosRepository: Repository<Orcamento>,
     @InjectRepository(Transacao)
     private readonly transacoesRepository: Repository<Transacao>,
+    private readonly logsService: LogsService,
   ) {}
 
   async create(usuarioId: string, dto: CreateOrcamentoDto) {
@@ -44,7 +47,18 @@ export class OrcamentosService {
 
     await this.orcamentosRepository.save(budget);
 
-    return this.findOne(budget.id, usuarioId);
+    const created = await this.findOne(budget.id, usuarioId);
+    await this.logsService.logEntityEvent({
+      event: 'ORCAMENTO_CREATED',
+      module: 'orcamentos',
+      action: 'create',
+      userId: usuarioId,
+      entity: 'orcamento',
+      entityId: budget.id,
+      message: 'Orcamento criado com sucesso.',
+      details: { mesReferencia: dto.mesReferencia },
+    });
+    return created;
   }
 
   async findAll(usuarioId: string, query: FindOrcamentosDto) {
@@ -78,7 +92,17 @@ export class OrcamentosService {
   async update(id: string, usuarioId: string, dto: UpdateOrcamentoDto) {
     await this.findOne(id, usuarioId);
     await this.orcamentosRepository.update(id, dto);
-    return this.findOne(id, usuarioId);
+    const updated = await this.findOne(id, usuarioId);
+    await this.logsService.logEntityEvent({
+      event: 'ORCAMENTO_UPDATED',
+      module: 'orcamentos',
+      action: 'update',
+      userId: usuarioId,
+      entity: 'orcamento',
+      entityId: id,
+      message: 'Orcamento atualizado com sucesso.',
+    });
+    return updated;
   }
 
   private async enrichBudgetWithProgress(
@@ -91,6 +115,7 @@ export class OrcamentosService {
         usuarioId,
         tipo: TipoTransacao.DESPESA,
         data: Between(monthRange.startDate, monthRange.endDate),
+        ...notSoftDeleted,
       },
     });
     const gastoAtual = expenseTransactions.reduce(

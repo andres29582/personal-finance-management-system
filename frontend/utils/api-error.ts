@@ -24,7 +24,8 @@ export async function resolveApiError(
     await clearSession();
 
     return {
-      message: 'Sessao expirada. Faca login novamente.',
+      message:
+        messagesByStatus[status] ?? 'Sessao expirada. Faca login novamente.',
       unauthorized: true,
     };
   }

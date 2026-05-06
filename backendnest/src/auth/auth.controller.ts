@@ -11,8 +11,10 @@ import type { AuthenticatedRequest } from '../common/authenticated-request';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ResetPasswordTokenDto } from './dto/reset-password-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -30,6 +32,20 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async signIn(@Body() loginDto: LoginDto) {
     return this.authService.signIn(loginDto.email, loginDto.senha);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Post('reset-password-token')
+  @HttpCode(200)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async resetPasswordWithToken(@Body() dto: ResetPasswordTokenDto) {
+    return this.authService.resetPasswordWithToken(dto.token, dto.novaSenha);
   }
 
   @Post('refresh')

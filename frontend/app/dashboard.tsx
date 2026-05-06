@@ -1,29 +1,31 @@
-﻿import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AppButton } from '../components/app-button';
-import { AppMessage } from '../components/app-message';
-import { AppCard, AppScreen, AppStatusCard } from '../components/app-screen';
-import { ContaTheme } from '../constants/contas-theme';
-import { logoutSession } from '../services/authService';
-import { getDashboard } from '../services/dashboardService';
-import { clearSession, getUser } from '../storage/authStorage';
-import { UsuarioLogado } from '../types/auth';
-import { DashboardResponse } from '../types/dashboard';
-import { resolveApiError } from '../utils/api-error';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AppButton } from "../components/app-button";
+import { AppMessage } from "../components/app-message";
+import { AppCard, AppScreen, AppStatusCard } from "../components/app-screen";
+import { ContaTheme } from "../constants/contas-theme";
+import { logoutSession } from "../services/authService";
+import { getDashboard } from "../services/dashboardService";
+import { clearSession, getUser } from "../storage/authStorage";
+import { UsuarioLogado } from "../types/auth";
+import { DashboardResponse } from "../types/dashboard";
+import { resolveApiError } from "../utils/api-error";
+import { formatCurrency, formatDate } from "../utils/formatters";
 
 const shortcuts = [
-  { label: 'Contas', route: '/contas' as const },
-  { label: 'Categorias', route: '/categorias' as const },
-  { label: 'Transacoes', route: '/transacoes' as const },
-  { label: 'Orcamentos', route: '/orcamentos' as const },
-  { label: 'Relatorios', route: '/relatorios' as const },
-  { label: 'Metas', route: '/metas' as const },
-  { label: 'Alertas', route: '/alertas' as const },
-  { label: 'Transferencias', route: '/transferencias' as const },
-  { label: 'Dividas', route: '/dividas' as const },
-  { label: 'Senha', route: '/reset-password' as const },
+  { label: "Contas", route: "/contas" as const },
+  { label: "Categorias", route: "/categorias" as const },
+  { label: "Transacoes", route: "/transacoes" as const },
+  { label: "Orcamentos", route: "/orcamentos" as const },
+  { label: "Relatorios", route: "/relatorios" as const },
+  { label: "Auditoria", route: "/audit-logs" as const },
+  { label: "Previsao ML", route: "/previsao-deficit" as const },
+  { label: "Metas", route: "/metas" as const },
+  { label: "Alertas", route: "/alertas" as const },
+  { label: "Transferencias", route: "/transferencias" as const },
+  { label: "Dividas", route: "/dividas" as const },
+  { label: "Senha", route: "/reset-password" as const },
 ];
 
 export default function DashboardScreen() {
@@ -31,24 +33,27 @@ export default function DashboardScreen() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
 
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
-      setMessage('');
-      const [user, dashboardData] = await Promise.all([getUser(), getDashboard()]);
+      setMessage("");
+      const [user, dashboardData] = await Promise.all([
+        getUser(),
+        getDashboard(),
+      ]);
       setUsuario(user);
       setDashboard(dashboardData);
     } catch (error) {
       const resolvedError = await resolveApiError(
         error,
-        'Nao foi possivel carregar o dashboard.',
+        "Nao foi possivel carregar o dashboard.",
       );
       setMessage(resolvedError.message);
 
       if (resolvedError.unauthorized) {
-        router.replace('/login');
+        router.replace("/login");
       }
     } finally {
       setLoading(false);
@@ -66,30 +71,32 @@ export default function DashboardScreen() {
       await logoutSession();
     } finally {
       await clearSession();
-      router.replace('/login');
+      router.replace("/login");
     }
   }
 
   return (
     <AppScreen
-      title={`Ola${usuario?.nome ? `, ${usuario.nome}` : ''}`}
-      subtitle={usuario?.email ?? 'Resumo financeiro do mes'}
-      headerStart={(
+      title={`Ola${usuario?.nome ? `, ${usuario.nome}` : ""}`}
+      subtitle={usuario?.email ?? "Resumo financeiro do mes"}
+      headerStart={
         <TouchableOpacity
           accessibilityLabel="Abrir perfil do usuario"
-          onPress={() => router.push('/usuario')}
+          onPress={() => router.push("/usuario")}
           style={styles.userIconButton}
         >
           <Image
-            source={require('../assets/images/icone-usuario.png')}
+            source={require("../assets/images/icone-usuario.png")}
             style={styles.userIcon}
           />
         </TouchableOpacity>
-      )}
+      }
       actionLabel="Sair"
       onActionPress={handleLogout}
     >
-      {message && dashboard ? <AppMessage tone="error" value={message} /> : null}
+      {message && dashboard ? (
+        <AppMessage tone="error" value={message} />
+      ) : null}
 
       {loading && !dashboard ? (
         <AppStatusCard
@@ -123,19 +130,27 @@ export default function DashboardScreen() {
           <View style={styles.metricsGrid}>
             <AppCard>
               <Text style={styles.metricLabel}>Saldo total</Text>
-              <Text style={styles.metricValue}>{formatCurrency(dashboard.saldoTotal)}</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(dashboard.saldoTotal)}
+              </Text>
             </AppCard>
             <AppCard>
               <Text style={styles.metricLabel}>Receitas do mes</Text>
-              <Text style={styles.metricValue}>{formatCurrency(dashboard.receitasMes)}</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(dashboard.receitasMes)}
+              </Text>
             </AppCard>
             <AppCard>
               <Text style={styles.metricLabel}>Despesas do mes</Text>
-              <Text style={styles.metricValue}>{formatCurrency(dashboard.despesasMes)}</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(dashboard.despesasMes)}
+              </Text>
             </AppCard>
             <AppCard>
               <Text style={styles.metricLabel}>Economia</Text>
-              <Text style={styles.metricValue}>{formatCurrency(dashboard.economiaMes)}</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(dashboard.economiaMes)}
+              </Text>
             </AppCard>
           </View>
 
@@ -144,7 +159,7 @@ export default function DashboardScreen() {
               title="Comece criando sua primeira conta"
               description="As contas sao a base para registrar transacoes, orcamentos e relatorios."
               actionLabel="Nova conta"
-              onActionPress={() => router.push('/contas-create' as never)}
+              onActionPress={() => router.push("/contas-create" as never)}
             />
           ) : null}
 
@@ -160,7 +175,9 @@ export default function DashboardScreen() {
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>Nenhuma despesa registrada neste mes.</Text>
+              <Text style={styles.emptyText}>
+                Nenhuma despesa registrada neste mes.
+              </Text>
             )}
           </AppCard>
 
@@ -169,11 +186,15 @@ export default function DashboardScreen() {
             {dashboard.transacoesRecentes.length ? (
               dashboard.transacoesRecentes.map((item) => (
                 <View key={item.id} style={styles.listItem}>
-                  <Text style={styles.rowLabel}>{item.descricao || item.categoriaNome}</Text>
+                  <Text style={styles.rowLabel}>
+                    {item.descricao || item.categoriaNome}
+                  </Text>
                   <Text style={styles.rowMeta}>
                     {item.contaNome} - {formatDate(item.data)}
                   </Text>
-                  <Text style={styles.rowValue}>{formatCurrency(item.valor)}</Text>
+                  <Text style={styles.rowValue}>
+                    {formatCurrency(item.valor)}
+                  </Text>
                 </View>
               ))
             ) : (
@@ -218,7 +239,7 @@ const styles = StyleSheet.create({
   metricValue: {
     color: ContaTheme.colors.title,
     fontSize: ContaTheme.typography.heading,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: ContaTheme.spacing.xs,
   },
   metricsGrid: {
@@ -232,7 +253,7 @@ const styles = StyleSheet.create({
   rowLabel: {
     color: ContaTheme.colors.title,
     fontSize: ContaTheme.typography.body,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   rowMeta: {
     color: ContaTheme.colors.muted,
@@ -242,21 +263,21 @@ const styles = StyleSheet.create({
   rowValue: {
     color: ContaTheme.colors.primaryStrong,
     fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: ContaTheme.spacing.xs,
   },
   sectionTitle: {
     color: ContaTheme.colors.title,
     fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: ContaTheme.spacing.sm,
   },
   shortcutCell: {
-    width: '48%',
+    width: "48%",
   },
   shortcutGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: ContaTheme.spacing.sm,
   },
   userIcon: {
@@ -268,6 +289,6 @@ const styles = StyleSheet.create({
     borderColor: ContaTheme.colors.border,
     borderRadius: 20,
     borderWidth: 1,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 });

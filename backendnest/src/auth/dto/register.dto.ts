@@ -1,5 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
+  Equals,
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
   IsString,
@@ -69,4 +71,21 @@ export class RegisterDto {
   @IsNotEmpty()
   @MinLength(6)
   senha: string;
+
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === true || value === 'true' || value === 1 || value === '1') {
+      return true;
+    }
+
+    if (value === false || value === 'false' || value === 0 || value === '0') {
+      return false;
+    }
+
+    return value;
+  })
+  @IsBoolean()
+  @Equals(true, {
+    message: 'E necessario aceitar a politica de privacidade.',
+  })
+  aceitoPoliticaPrivacidade: boolean;
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
+import { notSoftDeleted } from '../common/soft-delete.query';
 import { resolveMonthRange } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
 import { Categoria } from '../categorias/entities/categoria.entity';
@@ -29,6 +30,7 @@ export class DashboardService {
           where: {
             usuarioId,
             data: Between(periodRange.startDate, periodRange.endDate),
+            ...notSoftDeleted,
           },
           order: {
             data: 'DESC',
@@ -36,7 +38,7 @@ export class DashboardService {
           },
         }),
         this.transacoesRepository.find({
-          where: { usuarioId },
+          where: { usuarioId, ...notSoftDeleted },
           order: {
             data: 'DESC',
             createdAt: 'DESC',

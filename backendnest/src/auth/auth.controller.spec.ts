@@ -38,6 +38,7 @@ describe('AuthController', () => {
     });
 
     const result = await controller.register({
+      aceitoPoliticaPrivacidade: true,
       cep: '01001-000',
       cidade: 'Sao Paulo',
       cpf: '529.982.247-25',
@@ -49,6 +50,7 @@ describe('AuthController', () => {
     });
 
     expect(authService.register).toHaveBeenCalledWith({
+      aceitoPoliticaPrivacidade: true,
       cep: '01001-000',
       cidade: 'Sao Paulo',
       cpf: '529.982.247-25',

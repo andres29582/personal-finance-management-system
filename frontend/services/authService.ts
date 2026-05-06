@@ -1,4 +1,6 @@
 import {
+  ForgotPasswordRequestDto,
+  ForgotPasswordResponseDto,
   LoginRequestDto,
   LoginResponseDto,
   LogoutResponseDto,
@@ -8,6 +10,7 @@ import {
   RegisterResponseDto,
   ResetPasswordRequestDto,
   ResetPasswordResponseDto,
+  ResetPasswordTokenRequestDto,
 } from '../types/auth';
 import { api } from './api';
 
@@ -43,5 +46,25 @@ export async function resetPassword(
     data,
   );
 
+  return response.data;
+}
+
+export async function forgotPassword(
+  data: ForgotPasswordRequestDto,
+): Promise<ForgotPasswordResponseDto> {
+  const response = await api.post<ForgotPasswordResponseDto>(
+    '/auth/forgot-password',
+    data,
+  );
+  return response.data;
+}
+
+export async function resetPasswordWithToken(
+  data: ResetPasswordTokenRequestDto,
+): Promise<ResetPasswordResponseDto> {
+  const response = await api.post<ResetPasswordResponseDto>(
+    '/auth/reset-password-token',
+    data,
+  );
   return response.data;
 }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { PagoDivida } from './entities/pago-divida.entity';
 import { CreatePagoDividaDto } from './dto/create-pago-divida.dto';
@@ -87,13 +87,17 @@ export class PagosDividaService {
   ): Promise<PagoDivida[]> {
     await this.dividasService.findOne(dividaId, usuarioId);
     return this.pagosDividaRepository.find({
-      where: { dividaId, usuarioId },
+      where: { dividaId, usuarioId, excluidoEm: IsNull() },
       order: { data: 'DESC' },
     });
   }
 
   async findOne(id: string, usuarioId: string): Promise<PagoDivida> {
-    const pago = await this.pagosDividaRepository.findOneBy({ id, usuarioId });
+    const pago = await this.pagosDividaRepository.findOneBy({
+      id,
+      usuarioId,
+      excluidoEm: IsNull(),
+    });
     if (!pago) {
       throw new NotFoundException('Pagamento não encontrado');
     }
@@ -103,19 +107,24 @@ export class PagosDividaService {
   async remove(id: string, usuarioId: string): Promise<void> {
     const pago = await this.findOne(id, usuarioId);
 
+    const now = new Date();
     await this.dataSource.transaction(async (manager) => {
-      await manager.delete(PagoDivida, id);
-      await manager.delete(Transacao, pago.transacaoId);
+      await manager.update(PagoDivida, { id, usuarioId }, { excluidoEm: now });
+      await manager.update(
+        Transacao,
+        { id: pago.transacaoId, usuarioId },
+        { excluidoEm: now },
+      );
     });
 
     await this.logsService.logEntityEvent({
-      event: 'PAGAMENTO_DIVIDA_DELETED',
+      event: 'PAGAMENTO_DIVIDA_SOFT_DELETED',
       module: 'pagamentos_divida',
       action: 'delete',
       userId: usuarioId,
       entity: 'pagamento_divida',
       entityId: pago.id,
-      message: 'Pagamento de divida excluido com sucesso.',
+      message: 'Pagamento de divida excluido logicamente com sucesso.',
       details: {
         contaId: pago.contaId,
         dividaId: pago.dividaId,

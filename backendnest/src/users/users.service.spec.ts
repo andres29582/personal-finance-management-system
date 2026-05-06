@@ -1,4 +1,5 @@
 import { Repository } from 'typeorm';
+import { LogsService } from '../logs/logs.service';
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
 
@@ -7,6 +8,7 @@ describe('UsersService', () => {
   let repository: jest.Mocked<
     Pick<Repository<User>, 'create' | 'findOneBy' | 'save' | 'update'>
   >;
+  let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
 
   beforeEach(() => {
     repository = {
@@ -15,8 +17,14 @@ describe('UsersService', () => {
       save: jest.fn(),
       update: jest.fn(),
     };
+    logsService = {
+      logEntityEvent: jest.fn(),
+    };
 
-    service = new UsersService(repository as unknown as Repository<User>);
+    service = new UsersService(
+      repository as unknown as Repository<User>,
+      logsService as unknown as LogsService,
+    );
   });
 
   it('creates and saves a new user', async () => {
@@ -152,5 +160,12 @@ describe('UsersService', () => {
       numero: '1000',
     });
     expect(result.cpf).toBe('52998224725');
+    expect(logsService.logEntityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'PROFILE_UPDATED',
+        entity: 'usuario',
+        userId: 'user-1',
+      }),
+    );
   });
 });

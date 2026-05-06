@@ -1,0 +1,107 @@
+# GitHub Actions usa chaves e integracoes em ingles por padrao.
+# Por isso, os identificadores tecnicos abaixo seguem esse idioma,
+# enquanto a explicacao da logica fica documentada em portugues.
+
+name: CI
+
+on:
+  # Validamos em push e pull request porque estes sao os pontos
+  # em que o codigo normalmente tenta entrar no fluxo principal.
+  push:
+  pull_request:
+
+# Cancelar execucoes antigas evita gastar tempo com pipelines
+# de commits que ja foram substituidos por versoes mais novas.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# O workflow so precisa ler o conteudo do repositorio.
+# Declarar a permissao minima reduz superficie desnecessaria.
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    # CI=true ajuda ferramentas do ecossistema React/Expo a
+    # assumirem comportamento nao interativo dentro da pipeline.
+    env:
+      CI: true
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias do frontend
+        # npm ci foi escolhido porque reproduz exatamente o lockfile,
+        # deixando a pipeline previsivel e mais confiavel.
+        run: npm ci
+
+      - name: Rodar lint do frontend
+        # Aqui usamos o script atual do projeto para manter a CI
+        # alinhada ao fluxo que ja funciona localmente na equipe.
+        # Os warnings existentes serao tratados na proxima etapa de limpeza.
+        run: npm run lint
+
+      - name: Validar tipos do frontend
+        # A checagem de tipos foi colocada direto na pipeline porque
+        # ainda nao existe um script dedicado no package.json.
+        run: npx tsc --noEmit
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+
+    env:
+      CI: true
+
+    defaults:
+      run:
+        working-directory: backendnest
+
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backendnest/package-lock.json
+
+      - name: Instalar dependencias do backend
+        run: npm ci
+
+      - name: Rodar lint do backend sem autofix
+        # O script npm atual do backend usa --fix, o que e util localmente,
+        # mas inadequado em CI porque uma pipeline nao deve reescrever codigo.
+        # Por isso, executamos o ESLint em modo somente validacao.
+        run: npx eslint "{src,apps,libs,test}/**/*.ts"
+
+      - name: Validar tipos do backend
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Executar testes unitarios do backend
+        # O modo runInBand reduz variacoes de concorrencia e torna
+        # o diagnostico mais estavel para uma primeira pipeline.
+        run: npm test -- --runInBand
+
+      - name: Gerar build do backend
+        # O build fecha o ciclo basico de confianca: lint, tipos,
+        # testes e capacidade real de compilar a aplicacao.
+        run: npm run build

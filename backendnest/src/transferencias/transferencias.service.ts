@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { Transferencia } from './entities/transferencia.entity';
 import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
@@ -62,7 +62,7 @@ export class TransferenciasService {
 
   async findAll(usuarioId: string): Promise<Transferencia[]> {
     return this.transferenciasRepository.find({
-      where: { usuarioId },
+      where: { usuarioId, excluidoEm: IsNull() },
       order: { data: 'DESC', createdAt: 'DESC' },
     });
   }
@@ -71,6 +71,7 @@ export class TransferenciasService {
     const transferencia = await this.transferenciasRepository.findOneBy({
       id,
       usuarioId,
+      excluidoEm: IsNull(),
     });
     if (!transferencia) {
       throw new NotFoundException('Transferência não encontrada');
@@ -105,15 +106,18 @@ export class TransferenciasService {
 
   async remove(id: string, usuarioId: string): Promise<void> {
     const transfer = await this.findOne(id, usuarioId);
-    await this.transferenciasRepository.delete(id);
+    await this.transferenciasRepository.update(
+      { id, usuarioId },
+      { excluidoEm: new Date() },
+    );
     await this.logsService.logEntityEvent({
-      event: 'TRANSFERENCIA_DELETED',
+      event: 'TRANSFERENCIA_SOFT_DELETED',
       module: 'transferencias',
       action: 'delete',
       userId: usuarioId,
       entity: 'transferencia',
       entityId: transfer.id,
-      message: 'Transferencia excluida com sucesso.',
+      message: 'Transferencia excluida logicamente com sucesso.',
       details: {
         contaOrigemId: transfer.contaOrigemId,
         contaDestinoId: transfer.contaDestinoId,

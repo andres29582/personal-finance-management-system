@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { toNumber } from '../common/number.util';
+import { notSoftDeleted } from '../common/soft-delete.query';
 import { LogsService } from '../logs/logs.service';
 import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
@@ -157,10 +158,10 @@ export class ContasService {
     const contaIds = contas.map((conta) => conta.id);
     const [transacoes, transferencias] = await Promise.all([
       this.transacoesRepository.find({
-        where: { usuarioId, contaId: In(contaIds) },
+        where: { usuarioId, contaId: In(contaIds), ...notSoftDeleted },
       }),
       this.transferenciasRepository.find({
-        where: { usuarioId },
+        where: { usuarioId, excluidoEm: IsNull() },
       }),
     ]);
 

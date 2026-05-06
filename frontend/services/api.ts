@@ -33,9 +33,13 @@ function isAuthRefreshExcluded(url?: string) {
     return false;
   }
 
-  return ['/auth/login', '/auth/register', '/auth/refresh'].some((path) =>
-    url.includes(path),
-  );
+  return [
+    '/auth/login',
+    '/auth/register',
+    '/auth/refresh',
+    '/auth/forgot-password',
+    '/auth/reset-password-token',
+  ].some((path) => url.includes(path));
 }
 
 async function attachBearerToken(
@@ -93,6 +97,10 @@ async function refreshAccessToken() {
 }
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  if (isAuthRefreshExcluded(config.url)) {
+    return config;
+  }
+
   return await attachBearerToken(config);
 });
 

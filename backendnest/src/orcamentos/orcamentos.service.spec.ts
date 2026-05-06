@@ -1,4 +1,5 @@
 import { Repository } from 'typeorm';
+import { LogsService } from '../logs/logs.service';
 import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { OrcamentosService } from './orcamentos.service';
@@ -13,6 +14,7 @@ describe('OrcamentosService', () => {
     >
   >;
   let transacoesRepository: jest.Mocked<Pick<Repository<Transacao>, 'find'>>;
+  let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
 
   beforeEach(() => {
     orcamentosRepository = {
@@ -25,10 +27,14 @@ describe('OrcamentosService', () => {
     transacoesRepository = {
       find: jest.fn(),
     };
+    logsService = {
+      logEntityEvent: jest.fn(),
+    };
 
     service = new OrcamentosService(
       orcamentosRepository as unknown as Repository<Orcamento>,
       transacoesRepository as unknown as Repository<Transacao>,
+      logsService as unknown as LogsService,
     );
   });
 

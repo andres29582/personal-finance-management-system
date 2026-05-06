@@ -7,6 +7,7 @@ import { CreateMetaDto } from './dto/create-meta.dto';
 import { UpdateMetaDto } from './dto/update-meta.dto';
 import { ContasService } from '../contas/contas.service';
 import { DividasService } from '../dividas/dividas.service';
+import { LogsService } from '../logs/logs.service';
 
 @Injectable()
 export class MetasService {
@@ -15,6 +16,7 @@ export class MetasService {
     private readonly metasRepository: Repository<Meta>,
     private readonly contasService: ContasService,
     private readonly dividasService: DividasService,
+    private readonly logsService: LogsService,
   ) {}
 
   async create(usuarioId: string, dto: CreateMetaDto): Promise<Meta> {
@@ -30,7 +32,17 @@ export class MetasService {
       usuarioId,
       ...dto,
     });
-    return this.metasRepository.save(meta);
+    const saved = await this.metasRepository.save(meta);
+    await this.logsService.logEntityEvent({
+      event: 'META_CREATED',
+      module: 'metas',
+      action: 'create',
+      userId: usuarioId,
+      entity: 'meta',
+      entityId: saved.id,
+      message: 'Meta criada com sucesso.',
+    });
+    return saved;
   }
 
   async findAll(usuarioId: string): Promise<Meta[]> {
@@ -55,11 +67,30 @@ export class MetasService {
   ): Promise<Meta> {
     await this.findOne(id, usuarioId);
     await this.metasRepository.update(id, dto);
-    return this.findOne(id, usuarioId);
+    const updated = await this.findOne(id, usuarioId);
+    await this.logsService.logEntityEvent({
+      event: 'META_UPDATED',
+      module: 'metas',
+      action: 'update',
+      userId: usuarioId,
+      entity: 'meta',
+      entityId: id,
+      message: 'Meta atualizada com sucesso.',
+    });
+    return updated;
   }
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     await this.findOne(id, usuarioId);
     await this.metasRepository.update(id, { ativa: false });
+    await this.logsService.logEntityEvent({
+      event: 'META_DEACTIVATED',
+      module: 'metas',
+      action: 'deactivate',
+      userId: usuarioId,
+      entity: 'meta',
+      entityId: id,
+      message: 'Meta desativada.',
+    });
   }
 }

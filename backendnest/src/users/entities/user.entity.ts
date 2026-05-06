@@ -43,4 +43,11 @@ export class User {
     default: 'BRL',
   })
   moedaPadrao: string;
+
+  @Column({
+    name: 'lgpd_consentimento_em',
+    type: 'timestamp',
+    nullable: true,
+  })
+  lgpdConsentimentoEm: Date | null;
 }

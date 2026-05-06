@@ -41,4 +41,7 @@ export class Transacao {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @Column({ name: 'excluido_em', type: 'timestamp', nullable: true })
+  excluidoEm: Date | null;
 }

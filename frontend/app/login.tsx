@@ -1,4 +1,4 @@
-﻿import { useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppButton } from '../components/app-button';
@@ -112,9 +112,16 @@ export default function LoginScreen() {
         />
       </AppField>
 
+      <TouchableOpacity
+        onPress={() => router.push('/forgot-password' as never)}
+        disabled={loading}
+        style={styles.forgotWrap}
+      >
+        <Text style={styles.forgotLink}>Esqueci minha senha</Text>
+      </TouchableOpacity>
       <AppMessage
         tone="muted"
-        value="A troca de senha fica disponivel depois do login."
+        value="Logado, voce pode alterar a senha em Configuracoes > Senha."
       />
       <AppMessage tone="error" value={message} />
 
@@ -141,6 +148,15 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   actions: {
     marginTop: ContaTheme.spacing.sm,
+  },
+  forgotLink: {
+    color: ContaTheme.colors.primaryStrong,
+    fontSize: ContaTheme.typography.caption,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  forgotWrap: {
+    marginTop: ContaTheme.spacing.xs,
   },
   footer: {
     flexDirection: 'row',

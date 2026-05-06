@@ -7,6 +7,8 @@ import { AuthController } from './auth.controller';
 import { AuthSessionsService } from './auth-sessions.service';
 import { AuthService } from './auth.service';
 import { AuthSession } from './entities/auth-session.entity';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { CategoriasModule } from '../categorias/categorias.module';
 import { UsersModule } from '../users/users.module';
@@ -15,7 +17,7 @@ import { UsersModule } from '../users/users.module';
   imports: [
     UsersModule,
     CategoriasModule,
-    TypeOrmModule.forFeature([AuthSession]),
+    TypeOrmModule.forFeature([AuthSession, PasswordResetToken]),
     PassportModule,
     ConfigModule,
     JwtModule.registerAsync({
@@ -36,6 +38,7 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthSessionsService, JwtStrategy],
+  providers: [AuthService, AuthSessionsService, JwtStrategy, JwtAuthGuard],
+  exports: [AuthService, JwtModule, JwtAuthGuard],
 })
 export class AuthModule {}

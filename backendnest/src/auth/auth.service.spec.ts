@@ -1,7 +1,9 @@
 ﻿import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { AuthSessionsService } from './auth-sessions.service';
 import { AuthService } from './auth.service';
 import { CategoriasService } from '../categorias/categorias.service';
@@ -40,6 +42,9 @@ describe('AuthService', () => {
   >;
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
   let logsService: jest.Mocked<Pick<LogsService, 'logAuthEvent'>>;
+  let passwordResetTokenRepository: jest.Mocked<
+    Pick<Repository<PasswordResetToken>, 'findOne' | 'save' | 'update'>
+  >;
 
   beforeEach(() => {
     usersService = {
@@ -81,6 +86,11 @@ describe('AuthService', () => {
     logsService = {
       logAuthEvent: jest.fn(),
     };
+    passwordResetTokenRepository = {
+      findOne: jest.fn(),
+      save: jest.fn(),
+      update: jest.fn(),
+    };
 
     service = new AuthService(
       usersService as unknown as UsersService,
@@ -89,6 +99,7 @@ describe('AuthService', () => {
       authSessionsService as unknown as AuthSessionsService,
       configService as unknown as ConfigService,
       logsService as unknown as LogsService,
+      passwordResetTokenRepository as unknown as Repository<PasswordResetToken>,
     );
   });
 
@@ -115,6 +126,7 @@ describe('AuthService', () => {
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
 
     const result = await service.register({
+      aceitoPoliticaPrivacidade: true,
       cep: '01001-000',
       cidade: 'Sao Paulo',
       cpf: '529.982.247-25',
@@ -135,6 +147,7 @@ describe('AuthService', () => {
         nome: 'Ana',
         numero: '123',
         senhaHash: 'hashed-password',
+        lgpdConsentimentoEm: expect.any(Date) as Date,
       }),
     );
     expect(categoriasService.seedDefaultCategories).toHaveBeenCalledWith(
@@ -163,6 +176,7 @@ describe('AuthService', () => {
 
     await expect(
       service.register({
+        aceitoPoliticaPrivacidade: true,
         cep: '01001-000',
         cidade: 'Sao Paulo',
         cpf: '529.982.247-25',
@@ -184,6 +198,7 @@ describe('AuthService', () => {
 
     await expect(
       service.register({
+        aceitoPoliticaPrivacidade: true,
         cep: '01001-000',
         cidade: 'Sao Paulo',
         cpf: '529.982.247-25',

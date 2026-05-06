@@ -1,0 +1,8 @@
+{
+  "receita_mes": 5000,
+  "despesa_mes": 6200,
+  "saldo_inicial_mes": 1000,
+  "num_transacoes_despesa": 40,
+  "num_transacoes_receita": 10,
+  "volatilidade_despesa": 0.5
+}

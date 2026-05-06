@@ -11,6 +11,7 @@ import {
   isValidCpf,
   normalizeDigits,
 } from '../common/br-documents.util';
+import { LogsService } from '../logs/logs.service';
 import { User } from './entities/user.entity';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 
@@ -19,6 +20,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    private readonly logsService: LogsService,
   ) {}
 
   async findByEmail(email: string): Promise<User | null> {
@@ -90,6 +92,21 @@ export class UsersService {
       endereco: dto.endereco?.trim(),
       numero: dto.numero?.trim(),
       cidade: dto.cidade?.trim(),
+    });
+
+    const camposAlterados = (
+      Object.keys(dto) as Array<keyof typeof dto>
+    ).filter((key) => dto[key] !== undefined);
+
+    await this.logsService.logEntityEvent({
+      event: 'PROFILE_UPDATED',
+      module: 'users',
+      action: 'update',
+      userId,
+      entity: 'usuario',
+      entityId: userId,
+      message: 'Perfil do usuario atualizado.',
+      details: { camposAlterados },
     });
 
     return this.getProfile(userId);

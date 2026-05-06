@@ -28,6 +28,9 @@ import { AlertasModule } from './alertas/alertas.module';
 import { OrcamentosModule } from './orcamentos/orcamentos.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { CepModule } from './cep/cep.module';
+import { PrevisoesModule } from './previsoes/previsoes.module';
+import { AuditLogsModule } from './logs/audit-logs.module';
+import { PasswordResetToken } from './auth/entities/password-reset-token.entity';
 import { User } from './users/entities/user.entity';
 import { AuthSession } from './auth/entities/auth-session.entity';
 import { Conta } from './contas/entities/conta.entity';
@@ -58,6 +61,7 @@ import { Orcamento } from './orcamentos/entities/orcamento.entity';
         entities: [
           User,
           AuthSession,
+          PasswordResetToken,
           AuditLog,
           Conta,
           Categoria,
@@ -93,6 +97,7 @@ import { Orcamento } from './orcamentos/entities/orcamento.entity';
 
     LogsModule,
     AuthModule,
+    AuditLogsModule,
     UsersModule,
     ContasModule,
     CategoriasModule,
@@ -101,6 +106,7 @@ import { Orcamento } from './orcamentos/entities/orcamento.entity';
     CepModule,
     OrcamentosModule,
     RelatoriosModule,
+    PrevisoesModule,
     TransferenciasModule,
     DividasModule,
     PagosDividaModule,

@@ -24,6 +24,9 @@ Convenções:
 | Transferências | `POST /transferencias`, `GET /transferencias`, `PATCH /transferencias/:id`, `DELETE /transferencias/:id` | `app/transferencias.tsx`, `app/transferencias-form.tsx` | Transferir valor entre contas e revisar saldo de origem e destino | Deve preservar consistência entre duas contas |
 | Dívidas | `POST /dividas`, `GET /dividas`, `PATCH /dividas/:id` | `app/dividas.tsx`, `app/dividas-form.tsx` | Criar dívida e listar pagamentos vinculados | Integra com pagamentos de dívida |
 | Pagamentos de dívida | `POST /pagos-divida`, `GET /pagos-divida/divida/:dividaId`, `GET /pagos-divida/:id`, `DELETE /pagos-divida/:id` | `app/pagos-divida.tsx` | Registrar pagamento, validar vínculo com a dívida e confirmar transação associada | Depende de uma dívida previamente cadastrada |
+| Recuperação de senha (esqueci) | `POST /auth/forgot-password`, `POST /auth/reset-password-token` | `app/forgot-password.tsx`, `app/reset-password-token.tsx` | Pedir reset por e-mail, usar token (ou fluxo dev com `AUTH_RETURN_RESET_TOKEN`) e validar novo login | Complementa `POST /auth/reset-password` autenticado |
+| Log de auditoria (titular) | `GET /audit-logs` | `app/audit-logs.tsx` | Autenticado, listar eventos do próprio usuário com paginação | Dados sensíveis já mascarados no serviço de logs quando aplicável |
+| Privacidade / LGPD (resumo) | — | `app/privacidade.tsx` | Leitura do texto e aceite no cadastro (`aceitoPoliticaPrivacidade`) | Documentação orientada ao titular |
 
 ## Próximos refinamentos recomendados
 

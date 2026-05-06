@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
+import { notSoftDeleted } from '../common/soft-delete.query';
 import {
   resolveCustomRange,
   resolveMonthRange,
@@ -31,6 +32,7 @@ export class RelatoriosService {
       where: {
         usuarioId,
         data: Between(dateRange.startDate, dateRange.endDate),
+        ...notSoftDeleted,
       },
       order: {
         data: 'DESC',

@@ -1,0 +1,33 @@
+{
+  "accuracy": 0.85,
+  "precision": 0.8695652173913043,
+  "recall": 0.6896551724137931,
+  "f1": 0.7692307692307693,
+  "roc_auc": 0.9357674104124408,
+  "confusion_matrix": [
+    [
+      48,
+      3
+    ],
+    [
+      9,
+      20
+    ]
+  ],
+  "feature_importance_rf": {
+    "receita_mes": 0.25029394159478563,
+    "despesa_mes": 0.3743273862152695,
+    "saldo_inicial_mes": 0.08656510677391131,
+    "num_transacoes_despesa": 0.09634791014678411,
+    "num_transacoes_receita": 0.08347606596321472,
+    "volatilidade_despesa": 0.10898958930603465
+  },
+  "mutual_information": {
+    "receita_mes": 0.02682490566127571,
+    "despesa_mes": 0.12961805882304334,
+    "saldo_inicial_mes": 0.0,
+    "num_transacoes_despesa": 0.07663895970777057,
+    "num_transacoes_receita": 0.023308367375000305,
+    "volatilidade_despesa": 0.0
+  }
+}

@@ -8,7 +8,9 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CategoriasService } from '../categorias/categorias.service';
 import {
   isValidCep,
@@ -20,6 +22,7 @@ import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { AuthSessionsService } from './auth-sessions.service';
 import { RegisterDto } from './dto/register.dto';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
 
 type AuthTokens = {
   access_token: string;
@@ -39,6 +42,8 @@ export class AuthService {
     private readonly authSessionsService: AuthSessionsService,
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
+    @InjectRepository(PasswordResetToken)
+    private readonly passwordResetTokenRepository: Repository<PasswordResetToken>,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -68,6 +73,7 @@ export class AuthService {
     }
 
     const senhaHash = await bcrypt.hash(senha, 10);
+    const consentimentoEm = new Date();
     const user = await this.usersService.create({
       id: randomUUID(),
       nome,
@@ -78,6 +84,7 @@ export class AuthService {
       numero: dto.numero.trim(),
       cidade: dto.cidade.trim(),
       senhaHash,
+      lgpdConsentimentoEm: consentimentoEm,
     });
 
     await this.categoriasService.seedDefaultCategories(user.id);
@@ -217,6 +224,108 @@ export class AuthService {
 
     return {
       message: 'Senha atualizada com sucesso',
+    };
+  }
+
+  /**
+   * Fluxo público de recuperação: gera token de uso único (hash persistido).
+   * Com AUTH_RETURN_RESET_TOKEN=true o token plano é devolvido no JSON (apenas desenvolvimento).
+   */
+  async requestPasswordReset(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.usersService.findByEmail(normalizedEmail);
+    const genericMessage =
+      'Se o e-mail estiver cadastrado, enviaremos instrucoes de recuperacao em instantes.';
+
+    if (!user) {
+      await this.logsService.logAuthEvent({
+        event: 'PASSWORD_RESET_REQUEST_UNKNOWN_EMAIL',
+        level: 'info',
+        success: true,
+        message: 'Pedido de recuperacao para e-mail nao cadastrado.',
+        details: { email: normalizedEmail },
+      });
+
+      return { message: genericMessage };
+    }
+
+    const plainToken = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(plainToken).digest('hex');
+    const ttlMinutes = Number(
+      this.configService.get<string>('PASSWORD_RESET_TTL_MINUTES') ?? '60',
+    );
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+
+    await this.passwordResetTokenRepository.save({
+      id: randomUUID(),
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+      usedAt: null,
+    });
+
+    await this.logsService.logAuthEvent({
+      event: 'PASSWORD_RESET_REQUESTED',
+      level: 'info',
+      userId: user.id,
+      message: 'Token de recuperacao de senha emitido.',
+      details: { email: user.email },
+    });
+
+    const exposeToken =
+      this.configService.get<string>('AUTH_RETURN_RESET_TOKEN') === 'true';
+
+    return {
+      message: genericMessage,
+      ...(exposeToken ? { resetToken: plainToken } : {}),
+    };
+  }
+
+  async resetPasswordWithToken(plainToken: string, novaSenha: string) {
+    const tokenHash = createHash('sha256').update(plainToken).digest('hex');
+    const record = await this.passwordResetTokenRepository.findOne({
+      where: { tokenHash },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (
+      !record ||
+      record.usedAt !== null ||
+      record.expiresAt.getTime() <= Date.now()
+    ) {
+      await this.logsService.logAuthEvent({
+        event: 'PASSWORD_RESET_TOKEN_INVALID',
+        level: 'warn',
+        success: false,
+        message: 'Token de recuperacao invalido ou expirado.',
+      });
+      throw new BadRequestException('Token invalido ou expirado.');
+    }
+
+    const user = await this.usersService.findById(record.userId);
+
+    if (!user) {
+      throw new BadRequestException('Token invalido ou expirado.');
+    }
+
+    const newPasswordHash = await bcrypt.hash(novaSenha, 10);
+    await this.usersService.updatePassword(user.id, newPasswordHash);
+    await this.authSessionsService.revokeAllByUser(user.id);
+    await this.passwordResetTokenRepository.update(
+      { id: record.id },
+      { usedAt: new Date() },
+    );
+
+    await this.logsService.logAuthEvent({
+      event: 'PASSWORD_RESET_TOKEN_SUCCESS',
+      level: 'info',
+      action: 'reset_password',
+      userId: user.id,
+      message: 'Senha redefinida via token de recuperacao.',
+    });
+
+    return {
+      message: 'Senha atualizada com sucesso. Faca login com a nova senha.',
     };
   }
 

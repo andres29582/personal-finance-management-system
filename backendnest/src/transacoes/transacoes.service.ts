@@ -5,8 +5,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { Between, Repository } from 'typeorm';
+import { Between, IsNull, Repository } from 'typeorm';
 import { resolveMonthRange } from '../common/date-range.util';
+import { notSoftDeleted } from '../common/soft-delete.query';
 import { Transacao } from './entities/transacao.entity';
 import { CreateTransacaoDto } from './dto/create-transacao.dto';
 import { FindTransacoesDto } from './dto/find-transacoes.dto';
@@ -84,7 +85,7 @@ export class TransacoesService {
     }
 
     return this.transacoesRepository.find({
-      where: whereClause,
+      where: { ...whereClause, ...notSoftDeleted },
       order: { data: 'DESC', createdAt: 'DESC' },
     });
   }
@@ -93,6 +94,7 @@ export class TransacoesService {
     const transacao = await this.transacoesRepository.findOneBy({
       id,
       usuarioId,
+      excluidoEm: IsNull(),
     });
     if (!transacao) {
       throw new NotFoundException('Transação não encontrada');
@@ -140,15 +142,18 @@ export class TransacoesService {
 
   async remove(id: string, usuarioId: string): Promise<void> {
     const transaction = await this.findOne(id, usuarioId);
-    await this.transacoesRepository.delete(id);
+    await this.transacoesRepository.update(
+      { id, usuarioId },
+      { excluidoEm: new Date() },
+    );
     await this.logsService.logEntityEvent({
-      event: 'TRANSACAO_DELETED',
+      event: 'TRANSACAO_SOFT_DELETED',
       module: 'transacoes',
       action: 'delete',
       userId: usuarioId,
       entity: 'transacao',
       entityId: transaction.id,
-      message: 'Transacao excluida com sucesso.',
+      message: 'Transacao excluida logicamente com sucesso.',
       details: {
         contaId: transaction.contaId,
         categoriaId: transaction.categoriaId,

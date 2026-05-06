@@ -9,8 +9,8 @@ import { PagosDividaService } from './pagos-divida.service';
 
 type TestTransactionManager = {
   create?: jest.Mock;
-  delete?: jest.Mock;
   save?: jest.Mock;
+  update?: jest.Mock;
 };
 
 describe('PagosDividaService', () => {
@@ -111,9 +111,9 @@ describe('PagosDividaService', () => {
     );
   });
 
-  it('removes both the payment and the linked transaction', async () => {
+  it('soft-deletes both the payment and the linked transaction', async () => {
     const manager = {
-      delete: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue(undefined),
     };
 
     repository.findOneBy.mockResolvedValue({
@@ -125,12 +125,20 @@ describe('PagosDividaService', () => {
 
     await service.remove('pago-1', 'user-1');
 
-    expect(manager.delete).toHaveBeenNthCalledWith(1, PagoDivida, 'pago-1');
-    expect(manager.delete).toHaveBeenNthCalledWith(2, Transacao, 'transacao-1');
+    expect(manager.update).toHaveBeenCalledWith(
+      PagoDivida,
+      { id: 'pago-1', usuarioId: 'user-1' },
+      expect.objectContaining({ excluidoEm: expect.any(Date) as Date }),
+    );
+    expect(manager.update).toHaveBeenCalledWith(
+      Transacao,
+      { id: 'transacao-1', usuarioId: 'user-1' },
+      expect.objectContaining({ excluidoEm: expect.any(Date) as Date }),
+    );
     expect(logsService.logEntityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         entity: 'pagamento_divida',
-        event: 'PAGAMENTO_DIVIDA_DELETED',
+        event: 'PAGAMENTO_DIVIDA_SOFT_DELETED',
         userId: 'user-1',
       }),
     );

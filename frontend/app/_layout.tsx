@@ -5,7 +5,14 @@ import { getToken, subscribeAuthState } from '../storage/authStorage';
 
 type AuthStatus = 'authenticated' | 'loading' | 'unauthenticated';
 
-const PUBLIC_ROUTES = new Set(['/login', '/register']);
+const AUTH_ENTRY_ROUTES = new Set(['/login', '/register']);
+const PUBLIC_ROUTES = new Set([
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password-token',
+  '/privacidade',
+]);
 
 export default function RootLayout() {
   const router = useRouter();
@@ -49,7 +56,8 @@ export default function RootLayout() {
   const shouldRedirectToLogin =
     authStatus === 'unauthenticated' && !isPublicRoute;
   const shouldRedirectToDashboard =
-    authStatus === 'authenticated' && (isPublicRoute || currentPath === '/');
+    authStatus === 'authenticated' &&
+    (AUTH_ENTRY_ROUTES.has(currentPath) || currentPath === '/');
   const shouldBlockRender =
     authStatus === 'loading' ||
     shouldRedirectToLogin ||

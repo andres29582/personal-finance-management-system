@@ -1,0 +1,10 @@
+{
+  "features": [
+    "receita_mes",
+    "despesa_mes",
+    "saldo_inicial_mes",
+    "num_transacoes_despesa",
+    "num_transacoes_receita",
+    "volatilidade_despesa"
+  ]
+}

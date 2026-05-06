@@ -4,6 +4,7 @@ export type LoginRequestDto = {
 };
 
 export type RegisterRequestDto = {
+  aceitoPoliticaPrivacidade: boolean;
   cep: string;
   cidade: string;
   cpf: string;
@@ -55,4 +56,18 @@ export type ResetPasswordResponseDto = {
 
 export type LogoutResponseDto = {
   message: string;
+};
+
+export type ForgotPasswordRequestDto = {
+  email: string;
+};
+
+export type ForgotPasswordResponseDto = {
+  message: string;
+  resetToken?: string;
+};
+
+export type ResetPasswordTokenRequestDto = {
+  token: string;
+  novaSenha: string;
 };

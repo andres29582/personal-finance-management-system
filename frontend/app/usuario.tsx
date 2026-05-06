@@ -1,4 +1,4 @@
-﻿import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, TextInput } from 'react-native';
 import { AppButton } from '../components/app-button';

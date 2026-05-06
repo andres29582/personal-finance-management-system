@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppButton } from '../components/app-button';
@@ -20,6 +20,7 @@ import { Conta } from '../types/conta';
 import { GetRelatorioParams, PeriodoRelatorio, RelatorioResponse } from '../types/relatorio';
 import { resolveApiError } from '../utils/api-error';
 import { formatCurrency, formatDate, getCurrentMonthReference } from '../utils/formatters';
+import { RelatorioGestaoCharts } from '../components/relatorio-gestao-charts';
 
 export default function RelatoriosScreen() {
   const router = useRouter();
@@ -37,6 +38,7 @@ export default function RelatoriosScreen() {
   const [relatorio, setRelatorio] = useState<RelatorioResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const primeiraCargaRef = useRef(false);
 
   useEffect(() => {
     async function loadSelectors() {
@@ -91,7 +93,7 @@ export default function RelatoriosScreen() {
     return base;
   }, [ano, categoriaId, contaId, dataFim, dataInicio, mes, periodo, tipo, trimestre]);
 
-  async function handleGenerate() {
+  const handleGenerate = useCallback(async () => {
     try {
       setLoading(true);
       setMessage('');
@@ -106,11 +108,16 @@ export default function RelatoriosScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filtros]);
 
   useEffect(() => {
-    handleGenerate();
-  }, []);
+    if (primeiraCargaRef.current) {
+      return;
+    }
+
+    primeiraCargaRef.current = true;
+    void handleGenerate();
+  }, [handleGenerate]);
 
   return (
     <AppScreen
@@ -264,6 +271,14 @@ export default function RelatoriosScreen() {
             <Text style={styles.summaryValue}>
               Economia: {formatCurrency(relatorio.resumo.economia)}
             </Text>
+          </AppCard>
+
+          <AppCard>
+            <RelatorioGestaoCharts
+              despesasPorCategoria={relatorio.despesasPorCategoria}
+              totalDespesas={relatorio.resumo.totalDespesas}
+              totalReceitas={relatorio.resumo.totalReceitas}
+            />
           </AppCard>
 
           <AppCard>

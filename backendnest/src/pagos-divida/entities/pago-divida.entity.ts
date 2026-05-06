@@ -28,4 +28,7 @@ export class PagoDivida {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @Column({ name: 'excluido_em', type: 'timestamp', nullable: true })
+  excluidoEm: Date | null;
 }

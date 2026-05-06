@@ -1,4 +1,4 @@
-﻿import { useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppButton } from '../components/app-button';
@@ -25,6 +25,7 @@ type RegisterField =
   | 'endereco'
   | 'nome'
   | 'numero'
+  | 'politica'
   | 'senha';
 
 type RegisterErrors = Partial<Record<RegisterField, string>>;
@@ -40,6 +41,7 @@ export default function RegisterScreen() {
   const [cidade, setCidade] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
+  const [aceitoPoliticaPrivacidade, setAceitoPoliticaPrivacidade] = useState(false);
   const [errors, setErrors] = useState<RegisterErrors>({});
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -115,6 +117,10 @@ export default function RegisterScreen() {
       nextErrors.confirmarSenha = 'As senhas precisam ser iguais.';
     }
 
+    if (!aceitoPoliticaPrivacidade) {
+      nextErrors.politica = 'Aceite a politica de privacidade para continuar.';
+    }
+
     return nextErrors;
   }
 
@@ -131,6 +137,7 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
       await register({
+        aceitoPoliticaPrivacidade: true,
         cep,
         cidade: cidade.trim(),
         cpf,
@@ -316,6 +323,39 @@ export default function RegisterScreen() {
         />
       </AppField>
 
+      <AppField label="Privacidade" error={errors.politica}>
+        <TouchableOpacity
+          style={styles.politicaRow}
+          onPress={() => {
+            setAceitoPoliticaPrivacidade((v) => !v);
+            setErrors((current) => ({ ...current, politica: undefined }));
+          }}
+          disabled={loading}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: aceitoPoliticaPrivacidade }}
+        >
+          <View
+            style={[
+              styles.checkbox,
+              aceitoPoliticaPrivacidade ? styles.checkboxOn : null,
+              errors.politica ? styles.checkboxError : null,
+            ]}
+          >
+            {aceitoPoliticaPrivacidade ? <Text style={styles.checkboxMark}>✓</Text> : null}
+          </View>
+          <Text style={styles.politicaText}>
+            Li e aceito a{' '}
+            <Text
+              style={styles.politicaLink}
+              onPress={() => router.push('/privacidade' as never)}
+            >
+              Politica de Privacidade e LGPD (resumo)
+            </Text>
+            .
+          </Text>
+        </TouchableOpacity>
+      </AppField>
+
       <AppMessage tone="error" value={message} />
 
       <View style={styles.actions}>
@@ -340,6 +380,44 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   actions: {
     marginTop: ContaTheme.spacing.sm,
+  },
+  checkbox: {
+    alignItems: 'center',
+    borderColor: ContaTheme.colors.border,
+    borderRadius: 4,
+    borderWidth: 2,
+    height: 22,
+    justifyContent: 'center',
+    marginRight: ContaTheme.spacing.sm,
+    marginTop: 2,
+    width: 22,
+  },
+  checkboxError: {
+    borderColor: ContaTheme.colors.error,
+  },
+  checkboxMark: {
+    color: ContaTheme.colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  checkboxOn: {
+    backgroundColor: ContaTheme.colors.primary,
+    borderColor: ContaTheme.colors.primary,
+  },
+  politicaLink: {
+    color: ContaTheme.colors.primaryStrong,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  politicaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  politicaText: {
+    color: ContaTheme.colors.text,
+    flex: 1,
+    fontSize: ContaTheme.typography.caption,
+    lineHeight: 20,
   },
   backButton: {
     alignItems: 'center',
