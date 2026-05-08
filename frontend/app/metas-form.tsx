@@ -73,6 +73,11 @@ export default function MetasFormScreen() {
       return;
     }
 
+    if (objetivo <= 0) {
+      setMessage('O objetivo deve ser maior que zero.');
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage('');

@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     gap: ContaTheme.spacing.xs,
   },
   option: {
-    backgroundColor: '#EDF5ED',
+    backgroundColor: ContaTheme.colors.optionBg,
     borderColor: ContaTheme.colors.border,
     borderRadius: ContaTheme.radius.md,
     borderWidth: 1,

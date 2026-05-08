@@ -13,6 +13,7 @@ import {
   getRefreshToken,
   getToken,
   getUser,
+  removeRefreshToken,
   removeToken,
   saveRefreshToken,
   saveToken,
@@ -88,34 +89,163 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-describe('authStorage', () => {
-  it('salva, busca e remove o token de acesso no armazenamento web', async () => {
-    const listener = jest.fn();
-    const unsubscribe = subscribeAuthState(listener);
+const USUARIO_VALIDO: UsuarioLogado = {
+  email: 'andre@exemplo.com',
+  id: '550e8400-e29b-41d4-a716-446655440000',
+  nome: 'Andre Silva',
+};
 
-    await saveToken('access-token-teste');
+describe('authStorage - Token', () => {
+  it('deve salvar token de acesso', async () => {
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
 
-    expect(await getToken()).toBe('access-token-teste');
-    expect(listener).toHaveBeenCalledTimes(1);
+    await saveToken(token);
 
+    expect(await getToken()).toBe(token);
+    expect(localStorage.setItem).toHaveBeenCalledWith('access_token', token);
+  });
+
+  it('deve retornar null se token não existe', async () => {
+    const token = await getToken();
+    expect(token).toBeNull();
+  });
+
+  it('deve remover token de acesso', async () => {
+    await saveToken('token123');
     await removeToken();
 
     expect(await getToken()).toBeNull();
-    expect(listener).toHaveBeenCalledTimes(2);
-
-    unsubscribe();
+    expect(localStorage.removeItem).toHaveBeenCalledWith('access_token');
   });
 
-  it('limpa token, refresh token e usuario da sessao', async () => {
-    const usuario: UsuarioLogado = {
-      email: 'andre@exemplo.com',
-      id: 'usuario-1',
-      nome: 'Andre',
+  it('deve notificar listeners ao salvar token', async () => {
+    const listener = jest.fn();
+    subscribeAuthState(listener);
+
+    await saveToken('token123');
+
+    expect(listener).toHaveBeenCalled();
+  });
+
+  it('deve notificar listeners ao remover token', async () => {
+    const listener = jest.fn();
+    subscribeAuthState(listener);
+
+    await removeToken();
+
+    expect(listener).toHaveBeenCalled();
+  });
+});
+
+describe('authStorage - Refresh Token', () => {
+  it('deve salvar refresh token', async () => {
+    const refreshToken = 'refresh_token_value_xyz';
+
+    await saveRefreshToken(refreshToken);
+
+    expect(await getRefreshToken()).toBe(refreshToken);
+  });
+
+  it('deve retornar null se refresh token não existe', async () => {
+    const token = await getRefreshToken();
+    expect(token).toBeNull();
+  });
+
+  it('deve remover refresh token', async () => {
+    await saveRefreshToken('refresh123');
+    await removeRefreshToken();
+
+    expect(await getRefreshToken()).toBeNull();
+  });
+});
+
+describe('authStorage - Usuário', () => {
+  it('deve salvar usuário válido', async () => {
+    await saveUser(USUARIO_VALIDO);
+
+    const retrieved = await getUser();
+    expect(retrieved).toEqual(USUARIO_VALIDO);
+  });
+
+  it('deve rejeitar usuário inválido (sem id)', async () => {
+    const usuarioInvalido = {
+      nome: 'João',
+      email: 'joao@example.com',
     };
 
-    await saveToken('access-token-teste');
-    await saveRefreshToken('refresh-token-teste');
-    await saveUser(usuario);
+    await expect(saveUser(usuarioInvalido as any)).rejects.toThrow(
+      'Dados de usuario invalidos para salvar na sessao.'
+    );
+  });
+
+  it('deve rejeitar usuário inválido (sem nome)', async () => {
+    const usuarioInvalido = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      email: 'joao@example.com',
+    };
+
+    await expect(saveUser(usuarioInvalido as any)).rejects.toThrow(
+      'Dados de usuario invalidos para salvar na sessao.'
+    );
+  });
+
+  it('deve rejeitar usuário inválido (sem email)', async () => {
+    const usuarioInvalido = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      nome: 'João',
+    };
+
+    await expect(saveUser(usuarioInvalido as any)).rejects.toThrow(
+      'Dados de usuario invalidos para salvar na sessao.'
+    );
+  });
+
+  it('deve retornar null se usuário não existe', async () => {
+    const user = await getUser();
+    expect(user).toBeNull();
+  });
+
+  it('deve descartar usuário com JSON inválido', async () => {
+    localStorage.setItem('usuario_logado', '{usuario-invalido');
+
+    const user = await getUser();
+
+    expect(user).toBeNull();
+    expect(localStorage.getItem('usuario_logado')).toBeNull();
+  });
+
+  it('deve descartar usuário com estrutura inválida (objeto sem campos obrigatórios)', async () => {
+    const usuarioMalformado = { nome: 'João', numero: 123 };
+    localStorage.setItem('usuario_logado', JSON.stringify(usuarioMalformado));
+
+    const user = await getUser();
+
+    expect(user).toBeNull();
+    expect(localStorage.getItem('usuario_logado')).toBeNull();
+  });
+
+  it('deve descartar string "undefined"', async () => {
+    localStorage.setItem('usuario_logado', 'undefined');
+
+    const user = await getUser();
+
+    expect(user).toBeNull();
+  });
+
+  it('deve descartar string "null"', async () => {
+    localStorage.setItem('usuario_logado', 'null');
+
+    const user = await getUser();
+
+    expect(user).toBeNull();
+  });
+});
+
+describe('authStorage - clearSession', () => {
+  it('deve limpar token, refresh token e usuário', async () => {
+    await saveToken('token123');
+    await saveRefreshToken('refresh123');
+    await saveUser(USUARIO_VALIDO);
 
     await clearSession();
 
@@ -124,10 +254,60 @@ describe('authStorage', () => {
     expect(await getUser()).toBeNull();
   });
 
-  it('descarta usuario salvo quando o JSON esta invalido', async () => {
-    localStorage.setItem('usuario_logado', '{usuario-invalido');
+  it('deve ser seguro chamar clearSession mesmo sem dados salvos', async () => {
+    await expect(clearSession()).resolves.not.toThrow();
+  });
+});
 
+describe('authStorage - subscribeAuthState', () => {
+  it('deve notificar múltiplos listeners ao salvar token', async () => {
+    const listener1 = jest.fn();
+    const listener2 = jest.fn();
+
+    subscribeAuthState(listener1);
+    subscribeAuthState(listener2);
+
+    await saveToken('token123');
+
+    expect(listener1).toHaveBeenCalled();
+    expect(listener2).toHaveBeenCalled();
+  });
+
+  it('deve permitir unsubscribe de listener', async () => {
+    const listener = jest.fn();
+    const unsubscribe = subscribeAuthState(listener);
+
+    await saveToken('token123');
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    await saveToken('token456');
+
+    expect(listener).toHaveBeenCalledTimes(1); // Não foi chamado novamente
+  });
+});
+
+describe('authStorage - Integration', () => {
+  it('deve manter sessão completa (token + refresh + user) e limpar', async () => {
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test';
+    const refreshToken = 'refresh_xyz_123';
+
+    // Salvar tudo
+    await saveToken(token);
+    await saveRefreshToken(refreshToken);
+    await saveUser(USUARIO_VALIDO);
+
+    // Verificar tudo está lá
+    expect(await getToken()).toBe(token);
+    expect(await getRefreshToken()).toBe(refreshToken);
+    expect(await getUser()).toEqual(USUARIO_VALIDO);
+
+    // Limpar
+    await clearSession();
+
+    // Verificar tudo foi removido
+    expect(await getToken()).toBeNull();
+    expect(await getRefreshToken()).toBeNull();
     expect(await getUser()).toBeNull();
-    expect(localStorage.getItem('usuario_logado')).toBeNull();
   });
 });

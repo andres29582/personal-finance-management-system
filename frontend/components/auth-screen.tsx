@@ -1,12 +1,14 @@
 import { ReactNode } from 'react';
 import {
   Image,
-  SafeAreaView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ContaTheme } from '../constants/contas-theme';
 
 type AuthScreenProps = {
   cardMaxWidth?: number;
@@ -55,40 +57,47 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 22,
-    paddingVertical: 28,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
+    backgroundColor: ContaTheme.colors.surface,
+    borderRadius: ContaTheme.radius.xl,
+    paddingHorizontal: ContaTheme.spacing.lg,
+    paddingVertical: ContaTheme.spacing.xl,
     width: '100%',
-    elevation: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: `0px ${ContaTheme.shadow.offsetY}px ${ContaTheme.shadow.radius}px rgba(${ContaTheme.shadow.color}, ${ContaTheme.shadow.opacity})`,
+      },
+      default: {
+        shadowColor: ContaTheme.shadow.color,
+        shadowOffset: { width: 0, height: ContaTheme.shadow.offsetY },
+        shadowOpacity: ContaTheme.shadow.opacity,
+        shadowRadius: ContaTheme.shadow.radius,
+        elevation: ContaTheme.shadow.elevation,
+      },
+    }),
   },
   container: {
     alignItems: 'center',
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 28,
+    paddingHorizontal: ContaTheme.spacing.xl,
+    paddingVertical: ContaTheme.spacing.xl,
   },
   screen: {
-    backgroundColor: '#EAF5E7',
+    backgroundColor: ContaTheme.colors.screenBg,
     flex: 1,
     overflow: 'hidden',
   },
   subtitle: {
-    color: '#4B5D52',
-    fontSize: 14,
-    marginBottom: 20,
+    color: ContaTheme.colors.muted,
+    fontSize: ContaTheme.typography.caption,
+    marginBottom: ContaTheme.spacing.lg,
     textAlign: 'center',
   },
   title: {
-    color: '#123524',
-    fontSize: 30,
+    color: ContaTheme.colors.title,
+    fontSize: ContaTheme.typography.title,
     fontWeight: '700',
-    marginBottom: 10,
+    marginBottom: ContaTheme.spacing.sm,
     textAlign: 'center',
   },
 });

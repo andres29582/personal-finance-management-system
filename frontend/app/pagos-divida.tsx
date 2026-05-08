@@ -85,6 +85,11 @@ export default function PagosDividaScreen() {
       return;
     }
 
+    if (parsedValor <= 0) {
+      setMessage('O valor deve ser maior que zero.');
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage('');

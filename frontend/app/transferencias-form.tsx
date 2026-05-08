@@ -69,6 +69,16 @@ export default function TransferenciaFormScreen() {
       return;
     }
 
+    if (parsedValor <= 0) {
+      setMessage('O valor deve ser maior que zero.');
+      return;
+    }
+
+    if (contaOrigemId === contaDestinoId) {
+      setMessage('Conta origem e destino devem ser diferentes.');
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage('');

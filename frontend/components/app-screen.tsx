@@ -1,13 +1,13 @@
 import { ReactNode } from 'react';
 import {
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContaTheme } from '../constants/contas-theme';
 import { AppButton } from './app-button';
 

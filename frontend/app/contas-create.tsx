@@ -14,6 +14,7 @@ import {
 import { ContaTheme } from '../constants/contas-theme';
 import { createConta } from '../services/contaService';
 import { TipoConta } from '../types/conta';
+import { resolveApiError } from '../utils/api-error';
 import { parseDecimalInput } from '../utils/number-input';
 
 const contaTipos: { value: TipoConta; label: string }[] = [
@@ -65,6 +66,11 @@ export default function ContasCreateScreen() {
         return;
       }
 
+      if (limiteCreditoNumber <= 0) {
+        setError('O limite de credito deve ser maior que zero.');
+        return;
+      }
+
       if (!Number.isInteger(dataCorteNumber) || dataCorteNumber < 1 || dataCorteNumber > 31) {
         setError('Dia de corte deve estar entre 1 e 31.');
         return;
@@ -98,13 +104,11 @@ export default function ContasCreateScreen() {
 
       router.replace('/contas');
     } catch (requestError: any) {
-      if (requestError?.response?.status === 400) {
-        setError('Dados invalidos para criar a conta.');
-      } else if (requestError?.response?.status === 401) {
-        setError('Sessao expirada. Faca login novamente.');
-      } else {
-        setError('Nao foi possivel criar a conta.');
-      }
+      const resolvedError = await resolveApiError(
+        requestError,
+        'Nao foi possivel criar a conta.',
+      );
+      setError(resolvedError.message);
     } finally {
       setLoading(false);
     }

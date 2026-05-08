@@ -11,6 +11,7 @@ export const ContaTheme = {
     success: '#2E7D32',
     error: '#C62828',
     white: '#FFFFFF',
+    optionBg: '#EDF5ED',
   },
   spacing: {
     xxs: 6,

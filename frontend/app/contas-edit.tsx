@@ -15,6 +15,7 @@ import {
 import { ContaTheme } from '../constants/contas-theme';
 import { getContaById, updateConta } from '../services/contaService';
 import { Conta } from '../types/conta';
+import { resolveApiError } from '../utils/api-error';
 import { parseDecimalInput } from '../utils/number-input';
 
 export default function ContasEditScreen() {
@@ -49,13 +50,11 @@ export default function ContasEditScreen() {
         setDataCorte(data.dataCorte != null ? String(data.dataCorte) : '');
         setDataPagamento(data.dataPagamento != null ? String(data.dataPagamento) : '');
       } catch (requestError: any) {
-        if (requestError?.response?.status === 404) {
-          setError('Conta nao encontrada.');
-        } else if (requestError?.response?.status === 401) {
-          setError('Sessao expirada. Faca login novamente.');
-        } else {
-          setError('Nao foi possivel carregar a conta.');
-        }
+        const resolvedError = await resolveApiError(
+          requestError,
+          'Nao foi possivel carregar a conta.',
+        );
+        setError(resolvedError.message);
       } finally {
         setLoadingConta(false);
       }
@@ -93,6 +92,11 @@ export default function ContasEditScreen() {
         return;
       }
 
+      if (limiteCreditoNumber <= 0) {
+        setError('O limite de credito deve ser maior que zero.');
+        return;
+      }
+
       if (!Number.isInteger(dataCorteNumber) || dataCorteNumber < 1 || dataCorteNumber > 31) {
         setError('Dia de corte deve estar entre 1 e 31.');
         return;
@@ -124,15 +128,11 @@ export default function ContasEditScreen() {
 
       router.replace('/contas');
     } catch (requestError: any) {
-      if (requestError?.response?.status === 400) {
-        setError('Dados invalidos para atualizar a conta.');
-      } else if (requestError?.response?.status === 404) {
-        setError('Conta nao encontrada.');
-      } else if (requestError?.response?.status === 401) {
-        setError('Sessao expirada. Faca login novamente.');
-      } else {
-        setError('Nao foi possivel atualizar a conta.');
-      }
+      const resolvedError = await resolveApiError(
+        requestError,
+        'Nao foi possivel atualizar a conta.',
+      );
+      setError(resolvedError.message);
     } finally {
       setSaving(false);
     }

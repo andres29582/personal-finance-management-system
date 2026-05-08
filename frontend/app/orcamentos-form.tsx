@@ -57,6 +57,11 @@ export default function OrcamentoFormScreen() {
       return;
     }
 
+    if (parsedValue <= 0) {
+      setMessage('O valor planejado deve ser maior que zero.');
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage('');

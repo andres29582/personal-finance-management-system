@@ -100,6 +100,11 @@ export default function TransacaoFormScreen() {
       return;
     }
 
+    if (parsedValor <= 0) {
+      setMessage('O valor deve ser maior que zero.');
+      return;
+    }
+
     if (!data.trim()) {
       setMessage('Informe a data da transacao.');
       return;
