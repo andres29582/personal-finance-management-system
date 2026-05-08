@@ -1,4 +1,4 @@
-import { Conta } from '../../../../types/conta';
+import { Conta } from '../../../modules/contas/types/conta';
 
 import { TEST_TIMESTAMP } from './constants';
 

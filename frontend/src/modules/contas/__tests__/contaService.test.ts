@@ -1,16 +1,16 @@
-import { api } from '../../services/api';
+import { api } from '../../../shared/services/api';
 import {
   createConta,
   deactivateConta,
   getContaById,
   listContas,
   updateConta,
-} from '../../services/contaService';
-import { Conta, CreateContaRequestDto, UpdateContaRequestDto } from '../../types/conta';
-import { makeConta } from '../../src/shared/test/builders';
+} from '../services/contaService';
+import { makeConta } from '../../../shared/test/builders';
+import { Conta, CreateContaRequestDto, UpdateContaRequestDto } from '../types/conta';
 
 // Mock the API module
-jest.mock('../../services/api');
+jest.mock('../../../shared/services/api');
 const mockedApi = api as jest.Mocked<typeof api>;
 
 describe('contaService', () => {
