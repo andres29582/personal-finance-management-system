@@ -12,7 +12,7 @@ import {
   ResetPasswordResponseDto,
   ResetPasswordTokenRequestDto,
 } from '../types/auth';
-import { api } from '../../../../services/api';
+import { api } from '../../../shared/services/api';
 
 export async function register(
   data: RegisterRequestDto,
