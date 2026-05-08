@@ -1,4 +1,4 @@
-import { DashboardResponse } from '../../../../types/dashboard';
+import { DashboardResponse } from '../../../modules/dashboard/types/dashboard';
 
 export function makeDashboard(
   overrides: Partial<DashboardResponse> = {},

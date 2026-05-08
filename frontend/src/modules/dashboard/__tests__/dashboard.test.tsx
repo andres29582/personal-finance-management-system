@@ -1,16 +1,16 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import DashboardScreen from '../app/dashboard';
-import * as authService from '../services/authService';
+import { DashboardScreen } from '../screens/DashboardScreen';
+import * as authService from '../../auth/services/authService';
 import * as dashboardService from '../services/dashboardService';
-import * as authStorage from '../storage/authStorage';
+import * as authStorage from '../../../../storage/authStorage';
 
 // Mock expo-router
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockRouter = { push: mockPush, replace: mockReplace };
 jest.mock('expo-router', () => {
-  const React = require('react');
+  const React = jest.requireActual<typeof import('react')>('react');
 
   return {
     useFocusEffect: (callback: () => void) => {
@@ -21,9 +21,9 @@ jest.mock('expo-router', () => {
 });
 
 // Mock services
-jest.mock('../services/authService');
+jest.mock('../../auth/services/authService');
 jest.mock('../services/dashboardService');
-jest.mock('../storage/authStorage');
+jest.mock('../../../../storage/authStorage');
 
 const mockGetUser = authStorage.getUser as jest.MockedFunction<typeof authStorage.getUser>;
 const mockGetDashboard = dashboardService.getDashboard as jest.MockedFunction<typeof dashboardService.getDashboard>;
