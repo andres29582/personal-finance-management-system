@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach, jest } from '@jest/globals';
-import * as authService from '../../services/authService';
-import { api } from '../../services/api';
+import * as authService from '../services/authService';
+import { api } from '../../../../services/api';
 
-jest.mock('../../services/api');
+jest.mock('../../../../services/api');
 
 describe('authService', () => {
   const mockApi = api as jest.Mocked<typeof api>;

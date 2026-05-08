@@ -62,7 +62,7 @@ Status usado:
 1. Criar testes de tela para os formularios sem cobertura dedicada: categorias, metas, orcamentos, alertas, usuario e previsao.
 2. Criar testes de service para `categoriaService`, `metaService`, `orcamentoService`, `alertaService`, `auditLogService`, `previsaoService`, `userService` e `cepService`.
 3. Expandir testes de telas financeiras de lista (`contas`, `transacoes`, `transferencias`, `dividas`) para cobrir carregamento, estado vazio, erro 401 e acoes de desativar/remover.
-4. Manter builders tipados em `__tests__/utils/builders.ts` como fonte unica de fixtures para evitar mocks desatualizados.
+4. Manter builders tipados em `src/shared/test/builders/` como fonte unica de fixtures para evitar mocks desatualizados.
 
 ## Evidencia tecnica atual
 

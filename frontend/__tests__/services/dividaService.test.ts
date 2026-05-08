@@ -7,7 +7,7 @@ import {
   updateDivida,
 } from '../../services/dividaService';
 import { CreateDividaRequestDto, Divida, UpdateDividaRequestDto } from '../../types/divida';
-import { makeDivida, TEST_DATE } from '../utils/builders';
+import { makeDivida, TEST_DATE } from '../../src/shared/test/builders';
 
 // Mock the API module
 jest.mock('../../services/api');

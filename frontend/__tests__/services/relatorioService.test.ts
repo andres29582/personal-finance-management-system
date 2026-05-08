@@ -1,7 +1,7 @@
 import { api } from '../../services/api';
 import { getRelatorio } from '../../services/relatorioService';
 import { GetRelatorioParams, RelatorioResponse } from '../../types/relatorio';
-import { makeRelatorio } from '../utils/builders';
+import { makeRelatorio } from '../../src/shared/test/builders';
 
 // Mock the API module
 jest.mock('../../services/api');

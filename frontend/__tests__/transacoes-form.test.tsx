@@ -4,7 +4,11 @@ import TransacaoFormScreen from '../app/transacoes-form';
 import * as categoriaService from '../services/categoriaService';
 import * as contaService from '../services/contaService';
 import * as transacaoService from '../services/transacaoService';
-import { makeCategoria, makeConta, makeTransacao } from './utils/builders';
+import {
+  makeCategoria,
+  makeConta,
+  makeTransacao,
+} from '../src/shared/test/builders';
 
 // Mock expo-router
 const mockBack = jest.fn();

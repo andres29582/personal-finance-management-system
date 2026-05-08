@@ -7,7 +7,7 @@ import {
   updateConta,
 } from '../../services/contaService';
 import { Conta, CreateContaRequestDto, UpdateContaRequestDto } from '../../types/conta';
-import { makeConta } from '../utils/builders';
+import { makeConta } from '../../src/shared/test/builders';
 
 // Mock the API module
 jest.mock('../../services/api');

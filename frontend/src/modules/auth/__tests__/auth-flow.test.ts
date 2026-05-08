@@ -1,9 +1,9 @@
 import { describe, expect, it, beforeEach, jest } from '@jest/globals';
-import * as authService from '../../services/authService';
-import * as authStorage from '../../storage/authStorage';
+import * as authService from '../services/authService';
+import * as authStorage from '../../../../storage/authStorage';
 
-jest.mock('../../services/authService');
-jest.mock('../../storage/authStorage');
+jest.mock('../services/authService');
+jest.mock('../../../../storage/authStorage');
 
 describe('Auth Flow - Login/Logout', () => {
   const mockAuthService = authService as jest.Mocked<typeof authService>;

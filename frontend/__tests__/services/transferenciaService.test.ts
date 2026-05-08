@@ -11,7 +11,7 @@ import {
   Transferencia,
   UpdateTransferenciaRequestDto,
 } from '../../types/transferencia';
-import { makeTransferencia, TEST_DATE } from '../utils/builders';
+import { makeTransferencia, TEST_DATE } from '../../src/shared/test/builders';
 
 // Mock the API module
 jest.mock('../../services/api');

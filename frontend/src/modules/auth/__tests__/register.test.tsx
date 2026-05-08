@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import RegisterScreen from '../../app/register';
-import * as authService from '../../services/authService';
+import { RegisterScreen } from '../screens/RegisterScreen';
+import * as authService from '../services/authService';
 
 // Mock expo-router
 const mockReplace = jest.fn();
@@ -14,8 +14,8 @@ jest.mock('expo-router', () => ({
 }));
 
 // Mock services
-jest.mock('../../services/authService');
-jest.mock('../../hooks/use-cep-autofill', () => ({
+jest.mock('../services/authService');
+jest.mock('../../../../hooks/use-cep-autofill', () => ({
   useCepAutofill: () => ({
     cepLookupLoading: false,
     cepLookupMessage: '',

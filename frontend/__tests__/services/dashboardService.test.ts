@@ -1,7 +1,7 @@
 import { api } from '../../services/api';
 import { getDashboard } from '../../services/dashboardService';
 import { DashboardResponse } from '../../types/dashboard';
-import { makeDashboard } from '../utils/builders';
+import { makeDashboard } from '../../src/shared/test/builders';
 
 // Mock the API module
 jest.mock('../../services/api');

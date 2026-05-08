@@ -1,8 +1,8 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import LoginScreen from '../../app/login';
-import * as authService from '../../services/authService';
-import * as authStorage from '../../storage/authStorage';
+import { LoginScreen } from '../screens/LoginScreen';
+import * as authService from '../services/authService';
+import * as authStorage from '../../../../storage/authStorage';
 
 // Mock expo-router
 const mockReplace = jest.fn();
@@ -13,8 +13,8 @@ jest.mock('expo-router', () => ({
 }));
 
 // Mock services
-jest.mock('../../services/authService');
-jest.mock('../../storage/authStorage');
+jest.mock('../services/authService');
+jest.mock('../../../../storage/authStorage');
 
 const mockLogin = authService.login as jest.MockedFunction<typeof authService.login>;
 const mockSaveToken = authStorage.saveToken as jest.MockedFunction<typeof authStorage.saveToken>;

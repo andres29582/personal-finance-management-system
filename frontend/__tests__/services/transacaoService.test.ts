@@ -12,7 +12,7 @@ import {
   Transacao,
   UpdateTransacaoRequestDto,
 } from '../../types/transacao';
-import { makeTransacao, TEST_DATE } from '../utils/builders';
+import { makeTransacao, TEST_DATE } from '../../src/shared/test/builders';
 
 // Mock the API module
 jest.mock('../../services/api');

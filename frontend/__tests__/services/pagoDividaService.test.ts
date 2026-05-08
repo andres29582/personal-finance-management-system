@@ -6,7 +6,7 @@ import {
   removePagoDivida,
 } from '../../services/pagoDividaService';
 import { CreatePagoDividaRequestDto, PagoDivida } from '../../types/pago-divida';
-import { makePagoDivida, TEST_DATE } from '../utils/builders';
+import { makePagoDivida, TEST_DATE } from '../../src/shared/test/builders';
 
 // Mock the API module
 jest.mock('../../services/api');
