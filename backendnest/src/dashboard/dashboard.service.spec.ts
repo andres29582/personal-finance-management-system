@@ -5,6 +5,10 @@ import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { DashboardService } from './dashboard.service';
 
+type FindArgs = {
+  where?: Record<string, unknown>;
+};
+
 describe('DashboardService', () => {
   let service: DashboardService;
   let contasService: jest.Mocked<Pick<ContasService, 'findAll'>>;
@@ -111,5 +115,97 @@ describe('DashboardService', () => {
       contaNome: 'Carteira',
       id: 'transacao-2',
     });
+  });
+
+  it('does not include soft-deleted transactions in dashboard totals or recent transactions', async () => {
+    const periodTransactions = [
+      {
+        categoriaId: 'categoria-1',
+        contaId: 'conta-1',
+        data: '2026-04-01',
+        excluidoEm: null,
+        id: 'receita-ativa',
+        tipo: TipoTransacao.RECEITA,
+        valor: 3000,
+      },
+      {
+        categoriaId: 'categoria-2',
+        contaId: 'conta-1',
+        data: '2026-04-05',
+        excluidoEm: null,
+        id: 'despesa-ativa',
+        tipo: TipoTransacao.DESPESA,
+        valor: 500,
+      },
+      {
+        categoriaId: 'categoria-2',
+        contaId: 'conta-1',
+        data: '2026-04-06',
+        excluidoEm: new Date('2026-04-07T10:00:00Z'),
+        id: 'despesa-excluida',
+        tipo: TipoTransacao.DESPESA,
+        valor: 900,
+      },
+    ] as Transacao[];
+    const recentTransactions = [
+      periodTransactions[1],
+      periodTransactions[2],
+    ] as Transacao[];
+
+    contasService.findAll.mockResolvedValue([
+      {
+        id: 'conta-1',
+        moeda: 'BRL',
+        nome: 'Banco',
+        saldoAtual: 2500,
+        tipo: 'banco',
+      },
+    ] as never);
+    transacoesRepository.find.mockImplementation(({ where }: FindArgs = {}) => {
+      const source = where?.data ? periodTransactions : recentTransactions;
+      const filteredSource =
+        where && 'excluidoEm' in where
+          ? source.filter((transaction) => transaction.excluidoEm === null)
+          : source;
+
+      return Promise.resolve(filteredSource);
+    });
+    categoriasRepository.find.mockResolvedValue([
+      {
+        id: 'categoria-1',
+        nome: 'Salario',
+      },
+      {
+        id: 'categoria-2',
+        nome: 'Alimentacao',
+      },
+    ] as Categoria[]);
+
+    const result = await service.getDashboard('user-1', { mes: '2026-04' });
+
+    expect(transacoesRepository.find).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          excluidoEm: expect.any(Object),
+          usuarioId: 'user-1',
+        }),
+      }),
+    );
+    expect(transacoesRepository.find).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          excluidoEm: expect.any(Object),
+          usuarioId: 'user-1',
+        }),
+      }),
+    );
+    expect(result.receitasMes).toBe(3000);
+    expect(result.despesasMes).toBe(500);
+    expect(result.economiaMes).toBe(2500);
+    expect(
+      result.transacoesRecentes.map((transaction) => transaction.id),
+    ).toEqual(['despesa-ativa']);
   });
 });

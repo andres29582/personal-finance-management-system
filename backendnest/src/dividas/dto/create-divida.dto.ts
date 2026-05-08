@@ -3,8 +3,10 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
+  Min,
 } from 'class-validator';
 import { Periodicidade } from '../enums/periodicidade.enum';
 
@@ -18,14 +20,17 @@ export class CreateDividaDto {
   nome: string;
 
   @IsNumber()
+  @IsPositive()
   montoTotal: number;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   tasaInteres?: number;
 
   @IsOptional()
   @IsNumber()
+  @IsPositive()
   cuotaMensual?: number;
 
   @IsString()

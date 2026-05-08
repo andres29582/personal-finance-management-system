@@ -2,6 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import {
+  assertNonNegativeFinancialValue,
+  assertPositiveFinancialValue,
+} from '../common/financial-validation.util';
 import { Divida } from './entities/divida.entity';
 import { CreateDividaDto } from './dto/create-divida.dto';
 import { UpdateDividaDto } from './dto/update-divida.dto';
@@ -18,6 +22,14 @@ export class DividasService {
   ) {}
 
   async create(usuarioId: string, dto: CreateDividaDto): Promise<Divida> {
+    assertPositiveFinancialValue(dto.montoTotal, 'Valor total da divida');
+    if (dto.cuotaMensual !== undefined) {
+      assertPositiveFinancialValue(dto.cuotaMensual, 'Parcela mensal');
+    }
+    if (dto.tasaInteres !== undefined) {
+      assertNonNegativeFinancialValue(dto.tasaInteres, 'Taxa de juros');
+    }
+
     if (dto.contaId) {
       await this.contasService.findOne(dto.contaId, usuarioId);
     }
@@ -67,7 +79,15 @@ export class DividasService {
     dto: UpdateDividaDto,
   ): Promise<Divida> {
     await this.findOne(id, usuarioId);
-    await this.dividasRepository.update(id, dto);
+
+    if (dto.cuotaMensual !== undefined) {
+      assertPositiveFinancialValue(dto.cuotaMensual, 'Parcela mensal');
+    }
+    if (dto.tasaInteres !== undefined) {
+      assertNonNegativeFinancialValue(dto.tasaInteres, 'Taxa de juros');
+    }
+
+    await this.dividasRepository.update({ id, usuarioId }, dto);
     const updatedDebt = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -88,7 +108,7 @@ export class DividasService {
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     const debt = await this.findOne(id, usuarioId);
-    await this.dividasRepository.update(id, { ativa: false });
+    await this.dividasRepository.update({ id, usuarioId }, { ativa: false });
     await this.logsService.logEntityEvent({
       event: 'DIVIDA_DEACTIVATED',
       module: 'dividas',

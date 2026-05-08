@@ -55,7 +55,7 @@ export class AlertasService {
     dto: UpdateAlertaDto,
   ): Promise<Alerta> {
     await this.findOne(id, usuarioId);
-    await this.alertasRepository.update(id, dto);
+    await this.alertasRepository.update({ id, usuarioId }, dto);
     const updated = await this.findOne(id, usuarioId);
     await this.logsService.logEntityEvent({
       event: 'ALERTA_UPDATED',
@@ -71,7 +71,7 @@ export class AlertasService {
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     await this.findOne(id, usuarioId);
-    await this.alertasRepository.update(id, { ativa: false });
+    await this.alertasRepository.update({ id, usuarioId }, { ativa: false });
     await this.logsService.logEntityEvent({
       event: 'ALERTA_DEACTIVATED',
       module: 'alertas',
@@ -85,9 +85,12 @@ export class AlertasService {
 
   async markNotified(id: string, usuarioId: string): Promise<void> {
     await this.findOne(id, usuarioId);
-    await this.alertasRepository.update(id, {
-      ultimaNotificacion: new Date(),
-    });
+    await this.alertasRepository.update(
+      { id, usuarioId },
+      {
+        ultimaNotificacion: new Date(),
+      },
+    );
     await this.logsService.logEntityEvent({
       event: 'ALERTA_NOTIFIED',
       module: 'alertas',

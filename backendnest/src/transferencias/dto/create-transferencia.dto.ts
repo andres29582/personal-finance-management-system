@@ -2,8 +2,10 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
+  Min,
 } from 'class-validator';
 
 export class CreateTransferenciaDto {
@@ -14,6 +16,7 @@ export class CreateTransferenciaDto {
   contaDestinoId: string;
 
   @IsNumber()
+  @IsPositive()
   valor: number;
 
   @IsString()
@@ -26,5 +29,6 @@ export class CreateTransferenciaDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   comissao?: number;
 }

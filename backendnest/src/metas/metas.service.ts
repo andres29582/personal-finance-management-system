@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import { assertPositiveFinancialValue } from '../common/financial-validation.util';
 import { Meta } from './entities/meta.entity';
 import { CreateMetaDto } from './dto/create-meta.dto';
 import { UpdateMetaDto } from './dto/update-meta.dto';
@@ -20,6 +21,7 @@ export class MetasService {
   ) {}
 
   async create(usuarioId: string, dto: CreateMetaDto): Promise<Meta> {
+    assertPositiveFinancialValue(dto.montoObjetivo, 'Valor objetivo');
     if (dto.contaId) {
       await this.contasService.findOne(dto.contaId, usuarioId);
     }
@@ -66,7 +68,15 @@ export class MetasService {
     dto: UpdateMetaDto,
   ): Promise<Meta> {
     await this.findOne(id, usuarioId);
-    await this.metasRepository.update(id, dto);
+
+    if (dto.montoObjetivo !== undefined) {
+      assertPositiveFinancialValue(dto.montoObjetivo, 'Valor objetivo');
+    }
+    if (dto.montoActual !== undefined) {
+      assertPositiveFinancialValue(dto.montoActual, 'Valor atual');
+    }
+
+    await this.metasRepository.update({ id, usuarioId }, dto);
     const updated = await this.findOne(id, usuarioId);
     await this.logsService.logEntityEvent({
       event: 'META_UPDATED',
@@ -82,7 +92,7 @@ export class MetasService {
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     await this.findOne(id, usuarioId);
-    await this.metasRepository.update(id, { ativa: false });
+    await this.metasRepository.update({ id, usuarioId }, { ativa: false });
     await this.logsService.logEntityEvent({
       event: 'META_DEACTIVATED',
       module: 'metas',

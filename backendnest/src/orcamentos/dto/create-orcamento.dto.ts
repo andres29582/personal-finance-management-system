@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, Matches } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsPositive, Matches } from 'class-validator';
 
 export class CreateOrcamentoDto {
   @Matches(/^\d{4}-\d{2}$/)
@@ -6,5 +6,6 @@ export class CreateOrcamentoDto {
   mesReferencia: string;
 
   @IsNumber()
+  @IsPositive()
   valorPlanejado: number;
 }

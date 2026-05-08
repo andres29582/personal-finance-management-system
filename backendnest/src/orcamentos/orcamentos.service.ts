@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { notSoftDeleted } from '../common/soft-delete.query';
 import { randomUUID } from 'crypto';
+import { assertPositiveFinancialValue } from '../common/financial-validation.util';
 import { resolveMonthRange } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
 import { Transacao } from '../transacoes/entities/transacao.entity';
@@ -28,6 +29,7 @@ export class OrcamentosService {
   ) {}
 
   async create(usuarioId: string, dto: CreateOrcamentoDto) {
+    assertPositiveFinancialValue(dto.valorPlanejado, 'Valor planejado');
     const existingBudget = await this.orcamentosRepository.findOneBy({
       usuarioId,
       mesReferencia: dto.mesReferencia,
@@ -91,7 +93,10 @@ export class OrcamentosService {
 
   async update(id: string, usuarioId: string, dto: UpdateOrcamentoDto) {
     await this.findOne(id, usuarioId);
-    await this.orcamentosRepository.update(id, dto);
+    if (dto.valorPlanejado !== undefined) {
+      assertPositiveFinancialValue(dto.valorPlanejado, 'Valor planejado');
+    }
+    await this.orcamentosRepository.update({ id, usuarioId }, dto);
     const updated = await this.findOne(id, usuarioId);
     await this.logsService.logEntityEvent({
       event: 'ORCAMENTO_UPDATED',

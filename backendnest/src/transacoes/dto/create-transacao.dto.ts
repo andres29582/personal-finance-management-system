@@ -4,6 +4,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -20,6 +21,7 @@ export class CreateTransacaoDto {
   tipo: TipoTransacao;
 
   @IsNumber()
+  @IsPositive()
   valor: number;
 
   @IsString()

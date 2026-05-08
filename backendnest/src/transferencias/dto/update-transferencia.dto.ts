@@ -1,8 +1,15 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class UpdateTransferenciaDto {
   @IsOptional()
   @IsNumber()
+  @IsPositive()
   valor?: number;
 
   @IsOptional()
@@ -15,5 +22,6 @@ export class UpdateTransferenciaDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   comissao?: number;
 }

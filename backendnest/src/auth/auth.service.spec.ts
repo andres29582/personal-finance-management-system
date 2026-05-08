@@ -104,6 +104,7 @@ describe('AuthService', () => {
   });
 
   afterEach(() => {
+    jest.clearAllMocks();
     jest.restoreAllMocks();
   });
 
@@ -243,6 +244,8 @@ describe('AuthService', () => {
     expect(result.access_token).toBe('access-token-1');
     expect(result.refresh_token).toBe('refresh-token-1');
     expect(result.usuario.email).toBe('ana@example.com');
+    expect(result.usuario).not.toHaveProperty('senha');
+    expect(result.usuario).not.toHaveProperty('senhaHash');
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'LOGIN_SUCCESS',
@@ -270,11 +273,51 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.objectContaining({
+        details: {
+          email: 'ana@example.com',
+          reason: 'invalid_credentials',
+        },
         event: 'LOGIN_FAILED',
         success: false,
         userId: 'user-1',
       }),
     );
+    expect(
+      JSON.stringify(logsService.logAuthEvent.mock.calls[0][0]),
+    ).not.toContain('segredo123');
+  });
+
+  it('rejects login for unknown emails without revealing which credential failed', async () => {
+    usersService.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.signIn('nao-existe@example.com', 'segredo123'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(bcrypt.compare).not.toHaveBeenCalled();
+    expect(logsService.logAuthEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: {
+          email: 'nao-existe@example.com',
+          reason: 'invalid_credentials',
+        },
+        event: 'LOGIN_FAILED',
+        success: false,
+      }),
+    );
+    expect(
+      JSON.stringify(logsService.logAuthEvent.mock.calls[0][0]),
+    ).not.toContain('segredo123');
+  });
+
+  it('rejects invalid refresh tokens before touching sessions', async () => {
+    jwtService.verifyAsync.mockRejectedValue(new Error('invalid token'));
+
+    await expect(
+      service.refreshSession('refresh-token-invalido'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(authSessionsService.findActiveById).not.toHaveBeenCalled();
   });
 
   it('rotates the refresh token and returns a new access token', async () => {
@@ -320,6 +363,36 @@ describe('AuthService', () => {
       access_token: 'access-token-2',
       refresh_token: 'refresh-token-2',
     });
+  });
+
+  it('does not expose password reset tokens by default', async () => {
+    usersService.findByEmail.mockResolvedValue({
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as never);
+    passwordResetTokenRepository.save.mockResolvedValue({} as never);
+
+    const result = await service.requestPasswordReset('ana@example.com');
+
+    expect(result).not.toHaveProperty('resetToken');
+    expect(passwordResetTokenRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        userId: 'user-1',
+      }),
+    );
+    expect(logsService.logAuthEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: {
+          email: 'ana@example.com',
+        },
+        event: 'PASSWORD_RESET_REQUESTED',
+        userId: 'user-1',
+      }),
+    );
+    expect(
+      JSON.stringify(logsService.logAuthEvent.mock.calls[0][0]),
+    ).not.toContain('resetToken');
   });
 
   it('revokes the current session on logout', async () => {

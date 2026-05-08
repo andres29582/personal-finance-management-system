@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { In, IsNull, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { toNumber } from '../common/number.util';
 import { notSoftDeleted } from '../common/soft-delete.query';
 import { LogsService } from '../logs/logs.service';
@@ -161,7 +161,7 @@ export class ContasService {
         where: { usuarioId, contaId: In(contaIds), ...notSoftDeleted },
       }),
       this.transferenciasRepository.find({
-        where: { usuarioId, excluidoEm: IsNull() },
+        where: { usuarioId, ...notSoftDeleted },
       }),
     ]);
 

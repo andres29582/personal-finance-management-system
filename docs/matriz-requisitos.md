@@ -1,35 +1,31 @@
-# Matriz de rastreabilidade: requisito -> endpoint -> tela -> teste
+# Matriz de rastreabilidade técnica do MVP
 
-Objetivo: mapear cada requisito funcional às rotas principais do backend, às telas envolvidas no frontend e ao cenário mínimo de validação ponta a ponta.
+Objetivo: relacionar os requisitos centrais do MVP financeiro com os endpoints, serviços e testes que hoje aumentam a confiança técnica do backend.
 
 Convenções:
-- A coluna Backend lista as rotas principais do fluxo, não todos os endpoints auxiliares.
-- A coluna Frontend aponta a tela principal e, quando aplicável, as telas de criação ou edição.
-- O teste sugerido descreve o cenário feliz mínimo; cenários de erro, permissão e borda devem ser derivados a partir dele.
+- A coluna `endpoint principal` lista o fluxo mais importante do requisito, não todos os endpoints auxiliares.
+- A coluna `teste e2e relacionado` aponta para o fluxo PostgreSQL em `backendnest/test/app.e2e-spec.ts` quando o requisito já aparece no teste integrado.
+- `Parcial` significa que existe cobertura relevante, mas ainda falta um e2e dedicado ou um cenário automatizado mais específico.
 
-| Requisito | Backend principal | Frontend | Teste sugerido | Observações |
-| --- | --- | --- | --- | --- |
-| Cadastro de usuário | `POST /auth/register` | `app/register.tsx` | Registrar novo usuário e validar criação do usuário e categorias iniciais | Fluxo público |
-| Login | `POST /auth/login` | `app/login.tsx` | Fazer login com credenciais válidas e abrir dashboard autenticado | Fluxo público |
-| Redefinição de senha | `POST /auth/reset-password` | `app/reset-password.tsx` | Alterar senha com sessão ativa e validar novo login | Exige sessão autenticada |
-| Perfil do usuário | `GET /users/me`, `PATCH /users/me` | `app/usuario.tsx` | Atualizar dados do perfil e confirmar persistência após recarregar a tela | Fluxo autenticado |
-| Contas | `POST /contas`, `GET /contas`, `PATCH /contas/:id` | `app/contas.tsx`, `app/contas-create.tsx`, `app/contas-edit.tsx` | Criar conta, editar dados e revisar saldo atual na listagem | Impacta saldos em outros módulos |
-| Categorias | `POST /categorias`, `GET /categorias`, `PATCH /categorias/:id` | `app/categorias.tsx`, `app/categorias-form.tsx` | Criar categoria e filtrá-la por tipo na listagem | Base para transações e relatórios |
-| Transações | `POST /transacoes`, `GET /transacoes`, `PATCH /transacoes/:id`, `DELETE /transacoes/:id` | `app/transacoes.tsx`, `app/transacoes-form.tsx` | Registrar uma receita e uma despesa e validar reflexo no saldo da conta | Fluxo central do domínio |
-| Dashboard | `GET /dashboard` | `app/dashboard.tsx` | Revisar saldos consolidados e últimas transações após movimentações | Depende de dados de contas e transações |
-| Orçamentos | `POST /orcamentos`, `GET /orcamentos`, `PATCH /orcamentos/:id` | `app/orcamentos.tsx`, `app/orcamentos-form.tsx` | Criar orçamento e revisar indicador/alerta de consumo | Relacionado a categorias e período |
-| Relatórios | `GET /relatorios` | `app/relatorios.tsx` | Filtrar relatório por mês e trimestre e validar totais agregados | Depende de transações consistentes |
-| Metas | `POST /metas`, `GET /metas`, `PATCH /metas/:id` | `app/metas.tsx`, `app/metas-form.tsx` | Criar meta e revisar progresso calculado após movimentações | Pode depender de conta ou dívida vinculada |
-| Alertas | `POST /alertas`, `GET /alertas`, `PATCH /alertas/:id`, `PATCH /alertas/:id/notificar` | `app/alertas.tsx`, `app/alertas-form.tsx` | Criar alerta in-app e validar mudança de status/notificação | Possui ações específicas além do CRUD básico |
-| Transferências | `POST /transferencias`, `GET /transferencias`, `PATCH /transferencias/:id`, `DELETE /transferencias/:id` | `app/transferencias.tsx`, `app/transferencias-form.tsx` | Transferir valor entre contas e revisar saldo de origem e destino | Deve preservar consistência entre duas contas |
-| Dívidas | `POST /dividas`, `GET /dividas`, `PATCH /dividas/:id` | `app/dividas.tsx`, `app/dividas-form.tsx` | Criar dívida e listar pagamentos vinculados | Integra com pagamentos de dívida |
-| Pagamentos de dívida | `POST /pagos-divida`, `GET /pagos-divida/divida/:dividaId`, `GET /pagos-divida/:id`, `DELETE /pagos-divida/:id` | `app/pagos-divida.tsx` | Registrar pagamento, validar vínculo com a dívida e confirmar transação associada | Depende de uma dívida previamente cadastrada |
-| Recuperação de senha (esqueci) | `POST /auth/forgot-password`, `POST /auth/reset-password-token` | `app/forgot-password.tsx`, `app/reset-password-token.tsx` | Pedir reset por e-mail, usar token (ou fluxo dev com `AUTH_RETURN_RESET_TOKEN`) e validar novo login | Complementa `POST /auth/reset-password` autenticado |
-| Log de auditoria (titular) | `GET /audit-logs` | `app/audit-logs.tsx` | Autenticado, listar eventos do próprio usuário com paginação | Dados sensíveis já mascarados no serviço de logs quando aplicável |
-| Privacidade / LGPD (resumo) | — | `app/privacidade.tsx` | Leitura do texto e aceite no cadastro (`aceitoPoliticaPrivacidade`) | Documentação orientada ao titular |
+| requisito | endpoint principal | serviço principal | teste unitário relacionado | teste e2e relacionado | risco coberto | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Auth: cadastro, login e JWT | `POST /auth/register`, `POST /auth/login`, rotas com `JwtAuthGuard` | `AuthService`, `JwtStrategy`, `AuthSessionsService` | `backendnest/src/auth/auth.service.spec.ts`, `backendnest/src/auth/auth.controller.spec.ts`, `backendnest/src/auth/strategies/jwt.strategy.spec.ts`, `backendnest/src/security/financial-controllers.security.spec.ts` | `Financial flow (e2e)` registra usuarios A/B, faz login, usa JWT e rejeita token invalido | Credenciais invalidas, rota financeira sem JWT, token invalido, exposicao de senha/token em response | Coberto |
+| Contas e saldo atual | `POST /contas`, `GET /contas`, `GET /contas/:id` | `ContasService` | `backendnest/src/contas/contas.service.spec.ts` | `Financial flow (e2e)` valida saldo via `GET /contas` apos receitas, despesas, soft delete, transferencias e pagamento de divida | Calculo de saldo incorreto, conta de outro usuario, conta inativa em listagem | Coberto |
+| Categorias por tipo | `POST /categorias`, `GET /categorias`, `GET /categorias/:id` | `CategoriasService` | `backendnest/src/categorias/categorias.service.spec.ts` | `Financial flow (e2e)` cria categorias de receita/despesa e usa categoria despesa no pagamento de divida | Categoria com usuario errado, categoria inativa, tipo incompatível com transacao/pagamento | Coberto |
+| Transacoes financeiras | `POST /transacoes`, `GET /transacoes`, `GET /transacoes/:id`, `DELETE /transacoes/:id` | `TransacoesService` | `backendnest/src/transacoes/transacoes.service.spec.ts` | `Financial flow (e2e)` cria receita/despesa, valida saldo, faz soft delete e confirma ausencia no saldo/listagem | Valores `<= 0`, categoria de tipo incorreto, soft delete ignorado, isolamento por usuario | Coberto |
+| Transferencias entre contas | `POST /transferencias`, `GET /transferencias`, `GET /transferencias/:id`, `DELETE /transferencias/:id` | `TransferenciasService`, `ContasService` | `backendnest/src/transferencias/transferencias.service.spec.ts`, `backendnest/src/contas/contas.service.spec.ts` | `Financial flow (e2e)` valida transferencia entre contas, comissao, saldo de origem/destino e bloqueio de conta alheia | Origem igual ao destino, conta de outro usuario, comissao negativa, saldo de transferencia errado, soft delete | Coberto |
+| Dividas | `POST /dividas`, `GET /dividas`, `GET /dividas/:id` | `DividasService` | `backendnest/src/dividas/dividas.service.spec.ts` | `Financial flow (e2e)` cria divida antes do pagamento associado | Valor total/parcela invalida, taxa negativa, conta de outro usuario, acesso indevido | Coberto parcialmente |
+| Pagamentos de divida | `POST /pagos-divida`, `GET /pagos-divida/divida/:dividaId`, `GET /pagos-divida/:id`, `DELETE /pagos-divida/:id` | `PagosDividaService` | `backendnest/src/pagos-divida/pagos-divida.service.spec.ts` | `Financial flow (e2e)` cria pagamento, valida `transacaoId`, transacao `DESPESA`, saldo e isolamento | Operacao nao atomica entre pagamento/transacao, categoria nao despesa, soft delete parcial, saldo incorreto | Coberto |
+| Dashboard financeiro | `GET /dashboard` | `DashboardService` | `backendnest/src/dashboard/dashboard.service.spec.ts` | Pendente e2e dedicado | Totais consolidados com dados excluidos, ultimas transacoes indevidas, mistura entre usuarios | Coberto parcialmente |
+| Relatorios | `GET /relatorios` | `RelatoriosService` | `backendnest/src/relatorios/relatorios.service.spec.ts` | Pendente e2e dedicado | Agregados por periodo incorretos, transacoes soft-deleted em totais, vazamento multiusuario | Coberto parcialmente |
+| Metas | `POST /metas`, `GET /metas`, `GET /metas/:id`, `PATCH /metas/:id` | `MetasService` | `backendnest/src/metas/metas.service.spec.ts` | Pendente e2e dedicado | Valores `<= 0`, conta/divida de outro usuario, meta inativa em listagem | Coberto parcialmente |
+| Alertas | `POST /alertas`, `GET /alertas`, `GET /alertas/:id`, `PATCH /alertas/:id/desativar` | `AlertasService` | `backendnest/src/alertas/alertas.service.spec.ts` | Pendente e2e dedicado | Alerta de outro usuario, alerta inativo em listagem, referencia financeira invalida | Coberto parcialmente |
+| Orcamentos | `POST /orcamentos`, `GET /orcamentos`, `GET /orcamentos/:id`, `PATCH /orcamentos/:id` | `OrcamentosService` | `backendnest/src/orcamentos/orcamentos.service.spec.ts` | Pendente e2e dedicado | Valor planejado `<= 0`, categoria de outro usuario, duplicidade por mes/categoria, acesso indevido | Coberto parcialmente |
+| Audit logs | `GET /audit-logs` | `LogsService`, `AuditLogsController` | `backendnest/src/security/logs.service.security.spec.ts` | Pendente e2e dedicado | Vazamento de senha/token em logs, listagem de eventos de outro usuario, auditoria incompleta | Coberto parcialmente |
 
-## Próximos refinamentos recomendados
+## Cobertura atual e limitações
 
-- Adicionar uma coluna de prioridade (`P0`, `P1`, `P2`) para ordenar execução de testes.
-- Adicionar uma coluna de automação (`manual`, `integração`, `e2e`) para transformar a matriz em backlog de testes.
-- Vincular cada linha ao arquivo de teste correspondente quando os testes começarem a ser implementados.
+- Os unit tests cobrem regras financeiras críticas: valores positivos, comissão não negativa, categoria `DESPESA` para pagamento de dívida, isolamento por `usuarioId`, cálculo de saldo e soft delete nos principais fluxos.
+- O e2e atual cobre um fluxo real com PostgreSQL de test: registro de dois usuários, login/JWT, contas, categorias, receita, despesa, saldo, isolamento multiusuário, soft delete de transação, transferência e pagamento de dívida com transação associada.
+- O frontend ainda não está coberto por tests automatizados; a matriz acima reflete principalmente confiança técnica do backend.
+- BigQuery, integração tufting e analytics avançado ficam como evolução futura, fora do escopo de estabilização do MVP atual.

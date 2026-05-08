@@ -3,7 +3,9 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
+  Min,
 } from 'class-validator';
 import { Periodicidade } from '../enums/periodicidade.enum';
 
@@ -14,10 +16,12 @@ export class UpdateDividaDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   tasaInteres?: number;
 
   @IsOptional()
   @IsNumber()
+  @IsPositive()
   cuotaMensual?: number;
 
   @IsOptional()

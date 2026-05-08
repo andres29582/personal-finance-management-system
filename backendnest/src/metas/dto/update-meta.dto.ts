@@ -1,4 +1,10 @@
-import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 
 export class UpdateMetaDto {
   @IsOptional()
@@ -7,10 +13,12 @@ export class UpdateMetaDto {
 
   @IsOptional()
   @IsNumber()
+  @IsPositive()
   montoObjetivo?: number;
 
   @IsOptional()
   @IsNumber()
+  @IsPositive()
   montoActual?: number;
 
   @IsOptional()

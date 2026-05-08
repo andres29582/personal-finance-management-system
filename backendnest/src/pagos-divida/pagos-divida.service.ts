@@ -1,7 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import { assertPositiveFinancialValue } from '../common/financial-validation.util';
+import { notSoftDeleted } from '../common/soft-delete.query';
+import { TipoCategoria } from '../categorias/enums/tipo-categoria.enum';
 import { PagoDivida } from './entities/pago-divida.entity';
 import { CreatePagoDividaDto } from './dto/create-pago-divida.dto';
 import { ContasService } from '../contas/contas.service';
@@ -27,9 +34,19 @@ export class PagosDividaService {
     usuarioId: string,
     dto: CreatePagoDividaDto,
   ): Promise<PagoDivida> {
+    assertPositiveFinancialValue(dto.valor, 'Valor do pagamento');
     await this.dividasService.findOne(dto.dividaId, usuarioId);
     await this.contasService.findOne(dto.contaId, usuarioId);
-    await this.categoriasService.findOne(dto.categoriaId, usuarioId);
+    const categoria = await this.categoriasService.findOne(
+      dto.categoriaId,
+      usuarioId,
+    );
+
+    if (categoria.tipo !== TipoCategoria.DESPESA) {
+      throw new BadRequestException(
+        'A categoria do pagamento de divida deve ser do tipo despesa.',
+      );
+    }
 
     const savedPayment = await this.dataSource.transaction(async (manager) => {
       const transacaoId = randomUUID();
@@ -87,7 +104,7 @@ export class PagosDividaService {
   ): Promise<PagoDivida[]> {
     await this.dividasService.findOne(dividaId, usuarioId);
     return this.pagosDividaRepository.find({
-      where: { dividaId, usuarioId, excluidoEm: IsNull() },
+      where: { dividaId, usuarioId, ...notSoftDeleted },
       order: { data: 'DESC' },
     });
   }
@@ -96,7 +113,7 @@ export class PagosDividaService {
     const pago = await this.pagosDividaRepository.findOneBy({
       id,
       usuarioId,
-      excluidoEm: IsNull(),
+      ...notSoftDeleted,
     });
     if (!pago) {
       throw new NotFoundException('Pagamento não encontrado');

@@ -4,8 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import {
+  assertNonNegativeFinancialValue,
+  assertPositiveFinancialValue,
+} from '../common/financial-validation.util';
+import { notSoftDeleted } from '../common/soft-delete.query';
+import { Conta } from '../contas/entities/conta.entity';
 import { Transferencia } from './entities/transferencia.entity';
 import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
 import { UpdateTransferenciaDto } from './dto/update-transferencia.dto';
@@ -25,14 +31,26 @@ export class TransferenciasService {
     usuarioId: string,
     dto: CreateTransferenciaDto,
   ): Promise<Transferencia> {
-    await this.contasService.findOne(dto.contaOrigemId, usuarioId);
-    await this.contasService.findOne(dto.contaDestinoId, usuarioId);
-
     if (dto.contaOrigemId === dto.contaDestinoId) {
       throw new BadRequestException(
         'Conta origem e destino devem ser diferentes',
       );
     }
+
+    assertPositiveFinancialValue(dto.valor, 'Valor da transferencia');
+    assertNonNegativeFinancialValue(dto.comissao ?? 0, 'Comissao');
+
+    const contaOrigem = await this.contasService.findOne(
+      dto.contaOrigemId,
+      usuarioId,
+    );
+    const contaDestino = await this.contasService.findOne(
+      dto.contaDestinoId,
+      usuarioId,
+    );
+
+    this.ensureAccountBelongsToUser(contaOrigem, usuarioId);
+    this.ensureAccountBelongsToUser(contaDestino, usuarioId);
 
     const transferencia = this.transferenciasRepository.create({
       id: randomUUID(),
@@ -62,7 +80,7 @@ export class TransferenciasService {
 
   async findAll(usuarioId: string): Promise<Transferencia[]> {
     return this.transferenciasRepository.find({
-      where: { usuarioId, excluidoEm: IsNull() },
+      where: { usuarioId, ...notSoftDeleted },
       order: { data: 'DESC', createdAt: 'DESC' },
     });
   }
@@ -71,7 +89,7 @@ export class TransferenciasService {
     const transferencia = await this.transferenciasRepository.findOneBy({
       id,
       usuarioId,
-      excluidoEm: IsNull(),
+      ...notSoftDeleted,
     });
     if (!transferencia) {
       throw new NotFoundException('Transferência não encontrada');
@@ -85,7 +103,16 @@ export class TransferenciasService {
     dto: UpdateTransferenciaDto,
   ): Promise<Transferencia> {
     await this.findOne(id, usuarioId);
-    await this.transferenciasRepository.update(id, dto);
+
+    if (dto.valor !== undefined) {
+      assertPositiveFinancialValue(dto.valor, 'Valor da transferencia');
+    }
+
+    if (dto.comissao !== undefined) {
+      assertNonNegativeFinancialValue(dto.comissao, 'Comissao');
+    }
+
+    await this.transferenciasRepository.update({ id, usuarioId }, dto);
     const updatedTransfer = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -130,5 +157,14 @@ export class TransferenciasService {
     return Object.entries(dto)
       .filter(([, value]) => value !== undefined)
       .map(([key]) => key);
+  }
+
+  private ensureAccountBelongsToUser(
+    conta: Pick<Conta, 'usuarioId'>,
+    usuarioId: string,
+  ): void {
+    if (conta.usuarioId !== usuarioId) {
+      throw new NotFoundException('Conta nao encontrada');
+    }
   }
 }

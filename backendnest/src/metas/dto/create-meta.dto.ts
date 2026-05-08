@@ -3,6 +3,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -17,6 +18,7 @@ export class CreateMetaDto {
   tipo: TipoMeta;
 
   @IsNumber()
+  @IsPositive()
   montoObjetivo: number;
 
   @IsString()

@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { CategoriasService } from '../categorias/categorias.service';
 import { TipoCategoria } from '../categorias/enums/tipo-categoria.enum';
@@ -109,5 +109,84 @@ describe('TransacoesService', () => {
         userId: 'user-1',
       }),
     );
+  });
+
+  it('updates a transaction using id and user criteria', async () => {
+    const transaction = {
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      id: 'transacao-1',
+      tipo: TipoTransacao.DESPESA,
+      usuarioId: 'user-1',
+      valor: 150,
+    } as Transacao;
+
+    repository.findOneBy.mockResolvedValue(transaction);
+    categoriasService.findOne.mockResolvedValue({
+      id: 'categoria-1',
+      tipo: TipoCategoria.DESPESA,
+    } as never);
+
+    await service.update('transacao-1', 'user-1', {
+      descricao: 'Mercado atualizado',
+    });
+
+    expect(repository.update).toHaveBeenCalledWith(
+      { id: 'transacao-1', usuarioId: 'user-1' },
+      { descricao: 'Mercado atualizado' },
+    );
+  });
+
+  it('lists only transactions that are not soft-deleted', async () => {
+    const activeTransaction = {
+      excluidoEm: null,
+      id: 'transacao-1',
+      usuarioId: 'user-1',
+    } as Transacao;
+
+    repository.find.mockResolvedValue([activeTransaction]);
+
+    const result = await service.findAll('user-1', {});
+
+    expect(repository.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          excluidoEm: expect.any(Object),
+          usuarioId: 'user-1',
+        }),
+      }),
+    );
+    expect(result).toEqual([activeTransaction]);
+  });
+
+  it('does not find a transaction when it is soft-deleted', async () => {
+    repository.findOneBy.mockResolvedValue(null);
+
+    await expect(
+      service.findOne('transacao-1', 'user-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(repository.findOneBy).toHaveBeenCalledWith({
+      excluidoEm: expect.any(Object),
+      id: 'transacao-1',
+      usuarioId: 'user-1',
+    });
+  });
+
+  it('rejects creation with a non-positive amount', async () => {
+    await expect(
+      service.create('user-1', {
+        categoriaId: 'categoria-1',
+        contaId: 'conta-1',
+        data: '2026-04-01',
+        descricao: 'Valor invalido',
+        ehAjuste: false,
+        tipo: TipoTransacao.DESPESA,
+        valor: 0,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(contasService.findOne).not.toHaveBeenCalled();
   });
 });

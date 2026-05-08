@@ -5,8 +5,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { Between, IsNull, Repository } from 'typeorm';
+import { Between, Repository } from 'typeorm';
 import { resolveMonthRange } from '../common/date-range.util';
+import { assertPositiveFinancialValue } from '../common/financial-validation.util';
 import { notSoftDeleted } from '../common/soft-delete.query';
 import { Transacao } from './entities/transacao.entity';
 import { CreateTransacaoDto } from './dto/create-transacao.dto';
@@ -27,6 +28,7 @@ export class TransacoesService {
   ) {}
 
   async create(usuarioId: string, dto: CreateTransacaoDto): Promise<Transacao> {
+    assertPositiveFinancialValue(dto.valor, 'Valor da transacao');
     await this.contasService.findOne(dto.contaId, usuarioId);
     const categoria = await this.categoriasService.findOne(
       dto.categoriaId,
@@ -94,7 +96,7 @@ export class TransacoesService {
     const transacao = await this.transacoesRepository.findOneBy({
       id,
       usuarioId,
-      excluidoEm: IsNull(),
+      ...notSoftDeleted,
     });
     if (!transacao) {
       throw new NotFoundException('Transação não encontrada');
@@ -109,6 +111,10 @@ export class TransacoesService {
   ): Promise<Transacao> {
     const currentTransaction = await this.findOne(id, usuarioId);
 
+    if (dto.valor !== undefined) {
+      assertPositiveFinancialValue(dto.valor, 'Valor da transacao');
+    }
+
     if (dto.contaId) {
       await this.contasService.findOne(dto.contaId, usuarioId);
     }
@@ -121,7 +127,7 @@ export class TransacoesService {
 
     this.ensureCategoryMatchesTransactionType(categoria.tipo, updatedType);
 
-    await this.transacoesRepository.update(id, dto);
+    await this.transacoesRepository.update({ id, usuarioId }, dto);
     const updatedTransaction = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({

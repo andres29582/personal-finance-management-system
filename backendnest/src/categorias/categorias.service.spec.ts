@@ -79,4 +79,38 @@ describe('CategoriasService', () => {
     expect(repository.save).not.toHaveBeenCalled();
     expect(result).toEqual(existingCategories);
   });
+
+  it('updates a category using id and user criteria', async () => {
+    repository.findOneBy.mockResolvedValue({
+      id: 'categoria-1',
+      nome: 'Mercado',
+      tipo: TipoCategoria.DESPESA,
+      usuarioId: 'user-1',
+    } as Categoria);
+
+    await service.update('categoria-1', 'user-1', {
+      nome: 'Supermercado',
+    });
+
+    expect(repository.update).toHaveBeenCalledWith(
+      { id: 'categoria-1', usuarioId: 'user-1' },
+      { nome: 'Supermercado' },
+    );
+  });
+
+  it('deactivates a category using id and user criteria', async () => {
+    repository.findOneBy.mockResolvedValue({
+      id: 'categoria-1',
+      nome: 'Mercado',
+      tipo: TipoCategoria.DESPESA,
+      usuarioId: 'user-1',
+    } as Categoria);
+
+    await service.deactivate('categoria-1', 'user-1');
+
+    expect(repository.update).toHaveBeenCalledWith(
+      { id: 'categoria-1', usuarioId: 'user-1' },
+      { ativa: false },
+    );
+  });
 });

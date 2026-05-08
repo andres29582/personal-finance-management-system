@@ -2,6 +2,7 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -22,6 +23,7 @@ export class UpdateTransacaoDto {
 
   @IsOptional()
   @IsNumber()
+  @IsPositive()
   valor?: number;
 
   @IsOptional()

@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { LogsService } from '../logs/logs.service';
 import { Transacao } from '../transacoes/entities/transacao.entity';
@@ -59,5 +60,35 @@ describe('OrcamentosService', () => {
     expect(result.percentualUtilizado).toBe(85);
     expect(result.statusAlerta).toBe('alerta_80');
     expect(result.restante).toBe(150);
+  });
+
+  it('rejects creation with a non-positive planned amount', async () => {
+    await expect(
+      service.create('user-1', {
+        mesReferencia: '2026-04',
+        valorPlanejado: 0,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(orcamentosRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('updates a budget using id and user criteria', async () => {
+    orcamentosRepository.findOneBy.mockResolvedValue({
+      id: 'orcamento-1',
+      mesReferencia: '2026-04',
+      usuarioId: 'user-1',
+      valorPlanejado: 1000,
+    } as Orcamento);
+    transacoesRepository.find.mockResolvedValue([]);
+
+    await service.update('orcamento-1', 'user-1', {
+      valorPlanejado: 1200,
+    });
+
+    expect(orcamentosRepository.update).toHaveBeenCalledWith(
+      { id: 'orcamento-1', usuarioId: 'user-1' },
+      { valorPlanejado: 1200 },
+    );
   });
 });

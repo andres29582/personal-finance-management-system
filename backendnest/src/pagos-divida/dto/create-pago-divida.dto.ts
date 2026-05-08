@@ -2,6 +2,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -17,6 +18,7 @@ export class CreatePagoDividaDto {
   categoriaId: string;
 
   @IsNumber()
+  @IsPositive()
   valor: number;
 
   @IsString()

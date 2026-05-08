@@ -66,7 +66,7 @@ export class CategoriasService {
     dto: UpdateCategoriaDto,
   ): Promise<Categoria> {
     await this.findOne(id, usuarioId);
-    await this.categoriasRepository.update(id, dto);
+    await this.categoriasRepository.update({ id, usuarioId }, dto);
     const updatedCategory = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -87,7 +87,7 @@ export class CategoriasService {
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     const category = await this.findOne(id, usuarioId);
-    await this.categoriasRepository.update(id, { ativa: false });
+    await this.categoriasRepository.update({ id, usuarioId }, { ativa: false });
     await this.logsService.logEntityEvent({
       event: 'CATEGORIA_DEACTIVATED',
       module: 'categorias',
