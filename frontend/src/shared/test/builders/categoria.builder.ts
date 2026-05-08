@@ -1,4 +1,4 @@
-import { Categoria } from '../../../../types/categoria';
+import { Categoria } from '../../../modules/categorias/types/categoria';
 
 import { TEST_TIMESTAMP } from './constants';
 
