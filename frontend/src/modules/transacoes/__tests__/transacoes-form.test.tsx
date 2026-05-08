@@ -1,14 +1,14 @@
 import { describe, expect, it, jest } from '@jest/globals';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
-import TransacaoFormScreen from '../app/transacoes-form';
-import * as categoriaService from '../services/categoriaService';
-import * as contaService from '../services/contaService';
+import { TransacaoFormScreen } from '../screens/TransacaoFormScreen';
+import * as categoriaService from '../../categorias/services/categoriaService';
+import * as contaService from '../../contas/services/contaService';
 import * as transacaoService from '../services/transacaoService';
 import {
   makeCategoria,
   makeConta,
   makeTransacao,
-} from '../src/shared/test/builders';
+} from '../../../shared/test/builders';
 
 // Mock expo-router
 const mockBack = jest.fn();
@@ -25,8 +25,8 @@ jest.mock('expo-router', () => ({
 }));
 
 // Mock services
-jest.mock('../services/categoriaService');
-jest.mock('../services/contaService');
+jest.mock('../../categorias/services/categoriaService');
+jest.mock('../../contas/services/contaService');
 jest.mock('../services/transacaoService');
 
 const mockListContas = contaService.listContas as jest.MockedFunction<typeof contaService.listContas>;

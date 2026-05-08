@@ -1,4 +1,4 @@
-import { Transacao } from '../../../../types/transacao';
+import { Transacao } from '../../../modules/transacoes/types/transacao';
 
 import { TEST_DATE, TEST_TIMESTAMP } from './constants';
 

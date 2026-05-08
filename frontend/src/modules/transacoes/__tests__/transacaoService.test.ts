@@ -1,21 +1,21 @@
-import { api } from '../../services/api';
+import { api } from '../../../shared/services/api';
 import {
   createTransacao,
   getTransacaoById,
   listTransacoes,
   removeTransacao,
   updateTransacao,
-} from '../../services/transacaoService';
+} from '../services/transacaoService';
 import {
   CreateTransacaoRequestDto,
   FindTransacoesParams,
   Transacao,
   UpdateTransacaoRequestDto,
-} from '../../types/transacao';
-import { makeTransacao, TEST_DATE } from '../../src/shared/test/builders';
+} from '../types/transacao';
+import { makeTransacao, TEST_DATE } from '../../../shared/test/builders';
 
 // Mock the API module
-jest.mock('../../services/api');
+jest.mock('../../../shared/services/api');
 const mockedApi = api as jest.Mocked<typeof api>;
 
 describe('transacaoService', () => {
