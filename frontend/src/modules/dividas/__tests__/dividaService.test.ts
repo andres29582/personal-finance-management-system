@@ -1,16 +1,16 @@
-import { api } from '../../services/api';
+import { api } from '../../../shared/services/api';
 import {
   createDivida,
   deactivateDivida,
   getDividaById,
   listDividas,
   updateDivida,
-} from '../../services/dividaService';
-import { CreateDividaRequestDto, Divida, UpdateDividaRequestDto } from '../../types/divida';
-import { makeDivida, TEST_DATE } from '../../src/shared/test/builders';
+} from '../services/dividaService';
+import { makeDivida, TEST_DATE } from '../../../shared/test/builders';
+import { CreateDividaRequestDto, Divida, UpdateDividaRequestDto } from '../types/divida';
 
 // Mock the API module
-jest.mock('../../services/api');
+jest.mock('../../../shared/services/api');
 const mockedApi = api as jest.Mocked<typeof api>;
 
 describe('dividaService', () => {

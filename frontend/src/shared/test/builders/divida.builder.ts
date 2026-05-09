@@ -1,4 +1,4 @@
-import { Divida } from '../../../../types/divida';
+import { Divida } from '../../../modules/dividas/types/divida';
 
 import { TEST_DATE, TEST_TIMESTAMP } from './constants';
 
