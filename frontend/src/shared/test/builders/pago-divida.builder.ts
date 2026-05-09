@@ -1,4 +1,4 @@
-import { PagoDivida } from '../../../../types/pago-divida';
+import { PagoDivida } from '../../../modules/pagos-divida/types/pago-divida';
 
 import { TEST_DATE } from './constants';
 
