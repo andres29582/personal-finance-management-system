@@ -1,10 +1,10 @@
-import { api } from '../../services/api';
-import { getRelatorio } from '../../services/relatorioService';
-import { GetRelatorioParams, RelatorioResponse } from '../../types/relatorio';
-import { makeRelatorio } from '../../src/shared/test/builders';
+import { api } from '../../../shared/services/api';
+import { makeRelatorio } from '../../../shared/test/builders';
+import { getRelatorio } from '../services/relatorioService';
+import { GetRelatorioParams, RelatorioResponse } from '../types/relatorio';
 
 // Mock the API module
-jest.mock('../../services/api');
+jest.mock('../../../shared/services/api');
 const mockedApi = api as jest.Mocked<typeof api>;
 
 describe('relatorioService', () => {

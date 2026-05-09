@@ -1,4 +1,4 @@
-import { RelatorioResponse } from '../../../../types/relatorio';
+import { RelatorioResponse } from '../../../modules/relatorios/types/relatorio';
 
 export function makeRelatorio(
   overrides: Partial<RelatorioResponse> = {},
