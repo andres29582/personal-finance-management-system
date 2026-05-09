@@ -74,8 +74,8 @@ async function loadApi(adapter: AxiosAdapter) {
   const axiosModule = jest.requireActual<typeof import('axios')>('axios');
   axiosModule.default.defaults.adapter = adapter;
 
-  return jest.requireActual<typeof import('../../services/api')>(
-    '../../services/api',
+  return jest.requireActual<typeof import('../../src/shared/services/api')>(
+    '../../src/shared/services/api',
   );
 }
 

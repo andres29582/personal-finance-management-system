@@ -6,9 +6,9 @@ import { AppMessage } from '../../../../components/app-message';
 import { AppField, appInputStyles } from '../../../../components/app-screen';
 import { AuthScreen } from '../../../../components/auth-screen';
 import { ContaTheme } from '../../../../constants/contas-theme';
-import { useCepAutofill } from '../../../../hooks/use-cep-autofill';
+import { useCepAutofill } from '../../../shared/hooks/use-cep-autofill';
 import { register } from '../services/authService';
-import { CepLookupResponse } from '../../../../types/cep';
+import { CepLookupResponse } from '../../../shared/types/cep';
 import { resolveApiError } from '../../../../utils/api-error';
 import {
   formatCpfInput,

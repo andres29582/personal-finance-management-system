@@ -15,7 +15,7 @@ jest.mock('expo-router', () => ({
 
 // Mock services
 jest.mock('../services/authService');
-jest.mock('../../../../hooks/use-cep-autofill', () => ({
+jest.mock('../../../shared/hooks/use-cep-autofill', () => ({
   useCepAutofill: () => ({
     cepLookupLoading: false,
     cepLookupMessage: '',

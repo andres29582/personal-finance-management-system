@@ -11,13 +11,13 @@ import {
   appInputStyles,
 } from '../../../../components/app-screen';
 import { ContaTheme } from '../../../../constants/contas-theme';
-import { useCepAutofill } from '../../../../hooks/use-cep-autofill';
+import { useCepAutofill } from '../../../shared/hooks/use-cep-autofill';
 import {
   getCurrentUserProfile,
   updateCurrentUserProfile,
 } from '../services/userService';
 import { saveUser } from '../../../../storage/authStorage';
-import { CepLookupResponse } from '../../../../types/cep';
+import { CepLookupResponse } from '../../../shared/types/cep';
 import { UserProfile } from '../types/user';
 import { resolveApiError } from '../../../../utils/api-error';
 import {

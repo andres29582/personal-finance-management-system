@@ -1,5 +1,1 @@
-export type CepLookupResponse = {
-  cep: string;
-  cidade: string;
-  endereco: string;
-};
+export * from '../src/shared/types/cep';

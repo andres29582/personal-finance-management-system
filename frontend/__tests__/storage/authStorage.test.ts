@@ -20,7 +20,7 @@ import {
   saveUser,
   subscribeAuthState,
 } from '../../storage/authStorage';
-import { UsuarioLogado } from '../../types/auth';
+import { UsuarioLogado } from '../../src/modules/auth/types/auth';
 
 jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),

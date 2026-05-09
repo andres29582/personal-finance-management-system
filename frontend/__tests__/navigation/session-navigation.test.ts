@@ -1,11 +1,11 @@
 import { describe, expect, it, beforeEach, jest } from '@jest/globals';
 import * as authStorage from '../../storage/authStorage';
-import * as authService from '../../services/authService';
+import * as authService from '../../src/modules/auth/services/authService';
 
 type NavigationState = { key?: string } | null;
 
 jest.mock('../../storage/authStorage');
-jest.mock('../../services/authService');
+jest.mock('../../src/modules/auth/services/authService');
 
 describe('F2 - Session Navigation & Consistency', () => {
   const mockAuthStorage = authStorage as jest.Mocked<typeof authStorage>;

@@ -1,5 +1,5 @@
-import { TipoConta } from '../../../../types/conta';
-import { TipoTransacao } from '../../../../types/transacao';
+import { TipoConta } from '../../contas/types/conta';
+import { TipoTransacao } from '../../transacoes/types/transacao';
 
 export type DashboardContaResumo = {
   id: string;
