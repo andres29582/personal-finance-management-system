@@ -1,20 +1,20 @@
-import { api } from '../../services/api';
+import { api } from '../../../shared/services/api';
 import {
   createTransferencia,
   getTransferenciaById,
   listTransferencias,
   removeTransferencia,
   updateTransferencia,
-} from '../../services/transferenciaService';
+} from '../services/transferenciaService';
 import {
   CreateTransferenciaRequestDto,
   Transferencia,
   UpdateTransferenciaRequestDto,
-} from '../../types/transferencia';
-import { makeTransferencia, TEST_DATE } from '../../src/shared/test/builders';
+} from '../types/transferencia';
+import { makeTransferencia, TEST_DATE } from '../../../shared/test/builders';
 
 // Mock the API module
-jest.mock('../../services/api');
+jest.mock('../../../shared/services/api');
 const mockedApi = api as jest.Mocked<typeof api>;
 
 describe('transferenciaService', () => {

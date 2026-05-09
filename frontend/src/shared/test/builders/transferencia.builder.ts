@@ -1,4 +1,4 @@
-import { Transferencia } from '../../../../types/transferencia';
+import { Transferencia } from '../../../modules/transferencias/types/transferencia';
 
 import { TEST_DATE, TEST_TIMESTAMP } from './constants';
 
