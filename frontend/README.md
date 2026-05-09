@@ -1,52 +1,29 @@
-# Welcome to your Expo app 👋
+# Frontend Expo
 
-> Documento de referencia rapido del proyecto: ver `../README.md`, `../docs/manual-usuario.md` y `../docs/guion-demo.md`.
+Frontend em Expo Router, React Native, TypeScript e axios.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Documento de referencia rapido do projeto: ver `../README.md`, `../docs/manual-do-usuario.md`, `../docs/roteiro-demo.md` e `../docs/resumo-arquitetura.md`.
 
-## Get started
+## Arquitetura local
 
-1. Install dependencies
+- `app/`: somente rotas finas do Expo Router.
+- `src/modules/`: telas, services, types e testes por dominio.
+- `src/shared/`: API client, hooks/tipos compartilhados e builders de teste.
+- `src/navigation/`: layout raiz, guard de sessao e rota inicial.
+- `services/`, `types/`, `hooks/`: shims temporarios para compatibilidade com imports antigos.
 
-   ```bash
-   npm install
-   ```
+Novas regras de tela, service ou tipo devem entrar em `src/modules` ou `src/shared`, nao nos shims raiz.
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Comandos principais
 
 ```bash
-npm run reset-project
+npm install
+npm test -- --runInBand
+npm run lint
+npx tsc --noEmit
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Desenvolvimento
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Este projeto usa file-based routing do Expo Router, mas os arquivos em `app/` devem permanecer como adaptadores finos. A implementacao real fica em `src/modules`, `src/shared` ou `src/navigation`.
