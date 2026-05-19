@@ -1,5 +1,5 @@
 import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { AppException } from '../exceptions/app.exception';
 import { ErrorResponse } from '../dto/api-response.dto';
@@ -13,7 +13,7 @@ export class AppExceptionFilter implements ExceptionFilter {
   catch(exception: AppException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest();
+    const request = ctx.getRequest<Request>();
 
     const requestId = request.id || uuid();
 

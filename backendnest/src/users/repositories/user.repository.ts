@@ -41,7 +41,6 @@ export class UserRepository extends BaseRepository<User> {
    */
   async findActive(skip = 0, take = 100): Promise<User[]> {
     return this.userRepository.find({
-      where: { deletedAt: null } as any,
       skip,
       take,
     });
@@ -51,8 +50,6 @@ export class UserRepository extends BaseRepository<User> {
    * Contar usuarios activos
    */
   async countActive(): Promise<number> {
-    return this.userRepository.count({
-      where: { deletedAt: null } as any,
-    });
+    return this.userRepository.count();
   }
 }
