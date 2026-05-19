@@ -1,14 +1,15 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
 import {
-  AppCard,
-  AppScreen,
-  AppStatusCard,
-} from '../../../../components/app-screen';
-import { AppMessage } from '../../../../components/app-message';
-import { ContaTheme } from '../../../../constants/contas-theme';
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+  GlassStatusCard,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateConta, listContas } from '../services/contaService';
 import { Conta } from '../types/conta';
 import { confirmAction } from '../../../../utils/confirm-action';
@@ -87,22 +88,38 @@ export function ContasScreen() {
   }
 
   return (
-    <AppScreen
-      title="Contas"
-      subtitle="Gerencie contas e acompanhe o saldo atual."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard')}
-      actionLabel="Nova"
-      onActionPress={() => router.push('/contas-create')}
+    <FinanceAppShell
+      activeRoute="/contas"
+      header={
+        <FinanceAppHeader
+          action={
+            <GlassButton
+              label="Nova"
+              onPress={() => router.push('/contas-create' as never)}
+            />
+          }
+          eyebrow="Gestao financeira"
+          subtitle="Gerencie contas e acompanhe o saldo atual."
+          title="Contas"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppButton label="Atualizar lista" onPress={loadContas} variant="ghost" />
-      </AppCard>
+      <GlassPanel>
+        <GlassButton
+          label="Atualizar lista"
+          onPress={loadContas}
+          variant="ghost"
+        />
+      </GlassPanel>
 
-      {message && contas.length ? <AppMessage tone="error" value={message} /> : null}
+      {message && contas.length ? (
+        <Text style={styles.errorMessage}>{message}</Text>
+      ) : null}
 
       {loading && !contas.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Carregando contas"
           description="Estamos buscando as contas cadastradas."
           loading
@@ -110,7 +127,7 @@ export function ContasScreen() {
       ) : null}
 
       {!loading && !!message && !contas.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nao foi possivel carregar as contas"
           description={message}
           tone="error"
@@ -120,17 +137,17 @@ export function ContasScreen() {
       ) : null}
 
       {!loading && !message && !contas.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nenhuma conta encontrada"
           description="Crie a primeira conta para comecar a organizar seu saldo."
           actionLabel="Criar conta"
-          onActionPress={() => router.push('/contas-create')}
+          onActionPress={() => router.push('/contas-create' as never)}
         />
       ) : null}
 
       {!loading && contas.length
         ? contas.map((conta) => (
-            <AppCard key={conta.id}>
+            <GlassPanel key={conta.id} accent="cyan">
               <View style={styles.cardTop}>
                 <Text style={styles.cardTitle}>{conta.nome}</Text>
                 <View style={styles.badge}>
@@ -144,7 +161,7 @@ export function ContasScreen() {
               <Text style={styles.cardMeta}>Moeda: {conta.moeda || 'BRL'}</Text>
               <View style={styles.actionsRow}>
                 <View style={styles.actionCell}>
-                  <AppButton
+                  <GlassButton
                     label="Editar"
                     variant="ghost"
                     onPress={() =>
@@ -157,7 +174,7 @@ export function ContasScreen() {
                   />
                 </View>
                 <View style={styles.actionCell}>
-                  <AppButton
+                  <GlassButton
                     label={deactivatingId === conta.id ? 'Desativando...' : 'Desativar'}
                     variant="danger"
                     onPress={() => handleDeactivateConta(conta)}
@@ -165,10 +182,10 @@ export function ContasScreen() {
                   />
                 </View>
               </View>
-            </AppCard>
+            </GlassPanel>
           ))
         : null}
-    </AppScreen>
+    </FinanceAppShell>
   );
 }
 
@@ -180,42 +197,51 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.md,
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
   },
   badge: {
-    backgroundColor: '#DFF2E0',
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
     borderRadius: 999,
-    paddingHorizontal: ContaTheme.spacing.sm,
-    paddingVertical: ContaTheme.spacing.xxs,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xxs,
   },
   badgeText: {
-    color: ContaTheme.colors.primaryStrong,
+    color: FinanceTheme.colors.cyanMuted,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   cardMeta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   cardTitle: {
-    color: ContaTheme.colors.title,
+    color: FinanceTheme.colors.text,
     flex: 1,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
-    marginRight: ContaTheme.spacing.sm,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
+    marginRight: FinanceTheme.spacing.sm,
   },
   cardTop: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: ContaTheme.spacing.xs,
+    marginBottom: FinanceTheme.spacing.xs,
   },
   cardValue: {
-    color: ContaTheme.colors.title,
+    color: FinanceTheme.colors.text,
     fontSize: 24,
+    fontWeight: '900',
+    marginBottom: FinanceTheme.spacing.xxs,
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
-    marginBottom: ContaTheme.spacing.xxs,
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
 });
