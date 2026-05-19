@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { ValidationAppException } from './exceptions';
 import { toNumber } from './number.util';
 
 export function assertPositiveFinancialValue(
@@ -6,7 +6,10 @@ export function assertPositiveFinancialValue(
   fieldName = 'Valor',
 ): void {
   if (toNumber(value) <= 0) {
-    throw new BadRequestException(`${fieldName} deve ser maior que zero.`);
+    throw new ValidationAppException(
+      'FINANCIAL_VALUE_MUST_BE_POSITIVE',
+      `${fieldName} deve ser maior que zero.`,
+    );
   }
 }
 
@@ -15,6 +18,9 @@ export function assertNonNegativeFinancialValue(
   fieldName = 'Valor',
 ): void {
   if (toNumber(value) < 0) {
-    throw new BadRequestException(`${fieldName} nao pode ser negativo.`);
+    throw new ValidationAppException(
+      'FINANCIAL_VALUE_MUST_BE_NON_NEGATIVE',
+      `${fieldName} nao pode ser negativo.`,
+    );
   }
 }

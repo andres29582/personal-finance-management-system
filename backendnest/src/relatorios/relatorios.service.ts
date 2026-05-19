@@ -1,44 +1,26 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
-import { notSoftDeleted } from '../common/soft-delete.query';
 import {
   resolveCustomRange,
   resolveMonthRange,
   resolveQuarterRange,
 } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
-import { Categoria } from '../categorias/entities/categoria.entity';
-import { Conta } from '../contas/entities/conta.entity';
-import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { GetRelatorioDto } from './dto/get-relatorio.dto';
 import { PeriodoRelatorio } from './enums/periodo-relatorio.enum';
+import { RelatorioRepository } from './repositories/relatorio.repository';
 
 @Injectable()
 export class RelatoriosService {
-  constructor(
-    @InjectRepository(Transacao)
-    private readonly transacoesRepository: Repository<Transacao>,
-    @InjectRepository(Categoria)
-    private readonly categoriasRepository: Repository<Categoria>,
-    @InjectRepository(Conta)
-    private readonly contasRepository: Repository<Conta>,
-  ) {}
+  constructor(private readonly relatorioRepository: RelatorioRepository) {}
 
   async getRelatorio(usuarioId: string, query: GetRelatorioDto) {
     const dateRange = this.resolveDateRange(query);
-    const transacoes = await this.transacoesRepository.find({
-      where: {
-        usuarioId,
-        data: Between(dateRange.startDate, dateRange.endDate),
-        ...notSoftDeleted,
-      },
-      order: {
-        data: 'DESC',
-        createdAt: 'DESC',
-      },
-    });
+    const transacoes = await this.relatorioRepository.findTransactionsByPeriod(
+      usuarioId,
+      dateRange.startDate,
+      dateRange.endDate,
+    );
     const filteredTransactions = transacoes.filter((transaction) => {
       if (query.tipo && transaction.tipo !== query.tipo) {
         return false;
@@ -55,8 +37,8 @@ export class RelatoriosService {
       return true;
     });
     const [categorias, contas] = await Promise.all([
-      this.categoriasRepository.find({ where: { usuarioId } }),
-      this.contasRepository.find({ where: { usuarioId } }),
+      this.relatorioRepository.findCategoriesByUser(usuarioId),
+      this.relatorioRepository.findAccountsByUser(usuarioId),
     ]);
     const categoriasById = new Map(
       categorias.map((categoria) => [categoria.id, categoria]),

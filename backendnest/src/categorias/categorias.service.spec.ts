@@ -1,35 +1,41 @@
-import { Repository } from 'typeorm';
 import { CategoriasService } from './categorias.service';
 import { Categoria } from './entities/categoria.entity';
 import { DEFAULT_CATEGORIAS } from './default-categorias';
 import { TipoCategoria } from './enums/tipo-categoria.enum';
 import { LogsService } from '../logs/logs.service';
+import { ResourceNotFoundException } from '../common/exceptions';
+import { CategoriaRepository } from './repositories/categoria.repository';
 
 describe('CategoriasService', () => {
   let service: CategoriasService;
   let repository: jest.Mocked<
     Pick<
-      Repository<Categoria>,
-      'countBy' | 'create' | 'find' | 'findOneBy' | 'save' | 'update'
+      CategoriaRepository,
+      | 'countByUser'
+      | 'create'
+      | 'createMany'
+      | 'findActiveByUser'
+      | 'findByIdAndUser'
+      | 'updateByIdAndUser'
     >
   >;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
 
   beforeEach(() => {
     repository = {
-      countBy: jest.fn(),
+      countByUser: jest.fn(),
       create: jest.fn(),
-      find: jest.fn(),
-      findOneBy: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
+      createMany: jest.fn(),
+      findActiveByUser: jest.fn(),
+      findByIdAndUser: jest.fn(),
+      updateByIdAndUser: jest.fn(),
     };
     logsService = {
       logEntityEvent: jest.fn(),
     };
 
     service = new CategoriasService(
-      repository as unknown as Repository<Categoria>,
+      repository as unknown as CategoriaRepository,
       logsService as unknown as LogsService,
     );
   });
@@ -45,15 +51,16 @@ describe('CategoriasService', () => {
       usuarioId: 'user-1',
     })) as Categoria[];
 
-    repository.countBy.mockResolvedValue(0);
-    repository.create.mockImplementation((entity) => entity as Categoria);
-    repository.save.mockResolvedValue(seededCategories as never);
-    repository.find.mockResolvedValue(seededCategories);
+    repository.countByUser.mockResolvedValue(0);
+    repository.createMany.mockResolvedValue(seededCategories);
+    repository.findActiveByUser.mockResolvedValue(seededCategories);
 
     const result = await service.seedDefaultCategories('user-1');
 
-    expect(repository.create).toHaveBeenCalledTimes(DEFAULT_CATEGORIAS.length);
-    expect(repository.save).toHaveBeenCalledTimes(1);
+    expect(repository.createMany).toHaveBeenCalledTimes(1);
+    expect(repository.createMany.mock.calls[0][0]).toHaveLength(
+      DEFAULT_CATEGORIAS.length,
+    );
     expect(result).toHaveLength(DEFAULT_CATEGORIAS.length);
     expect(result.some((item) => item.tipo === TipoCategoria.DESPESA)).toBe(
       true,
@@ -71,17 +78,17 @@ describe('CategoriasService', () => {
       },
     ] as Categoria[];
 
-    repository.countBy.mockResolvedValue(1);
-    repository.find.mockResolvedValue(existingCategories);
+    repository.countByUser.mockResolvedValue(1);
+    repository.findActiveByUser.mockResolvedValue(existingCategories);
 
     const result = await service.seedDefaultCategories('user-1');
 
-    expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.createMany).not.toHaveBeenCalled();
     expect(result).toEqual(existingCategories);
   });
 
   it('updates a category using id and user criteria', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findByIdAndUser.mockResolvedValue({
       id: 'categoria-1',
       nome: 'Mercado',
       tipo: TipoCategoria.DESPESA,
@@ -92,14 +99,15 @@ describe('CategoriasService', () => {
       nome: 'Supermercado',
     });
 
-    expect(repository.update).toHaveBeenCalledWith(
-      { id: 'categoria-1', usuarioId: 'user-1' },
+    expect(repository.updateByIdAndUser).toHaveBeenCalledWith(
+      'categoria-1',
+      'user-1',
       { nome: 'Supermercado' },
     );
   });
 
   it('deactivates a category using id and user criteria', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findByIdAndUser.mockResolvedValue({
       id: 'categoria-1',
       nome: 'Mercado',
       tipo: TipoCategoria.DESPESA,
@@ -108,9 +116,25 @@ describe('CategoriasService', () => {
 
     await service.deactivate('categoria-1', 'user-1');
 
-    expect(repository.update).toHaveBeenCalledWith(
-      { id: 'categoria-1', usuarioId: 'user-1' },
+    expect(repository.updateByIdAndUser).toHaveBeenCalledWith(
+      'categoria-1',
+      'user-1',
       { ativa: false },
     );
+  });
+
+  it('throws a typed not found error when category does not exist', async () => {
+    repository.findByIdAndUser.mockResolvedValue(null);
+
+    await expect(
+      service.findOne('categoria-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(
+      service.findOne('categoria-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'CATEGORIA_NOT_FOUND',
+      message: 'Categoria não encontrada',
+      statusCode: 404,
+    });
   });
 });

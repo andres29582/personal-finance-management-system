@@ -1,24 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
-import { notSoftDeleted } from '../common/soft-delete.query';
 import { resolveMonthRange } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
-import { Categoria } from '../categorias/entities/categoria.entity';
 import { Conta } from '../contas/entities/conta.entity';
 import { ContasService } from '../contas/contas.service';
-import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { GetDashboardDto } from './dto/get-dashboard.dto';
+import { DashboardRepository } from './repositories/dashboard.repository';
 
 @Injectable()
 export class DashboardService {
   constructor(
     private readonly contasService: ContasService,
-    @InjectRepository(Transacao)
-    private readonly transacoesRepository: Repository<Transacao>,
-    @InjectRepository(Categoria)
-    private readonly categoriasRepository: Repository<Categoria>,
+    private readonly dashboardRepository: DashboardRepository,
   ) {}
 
   async getDashboard(usuarioId: string, query: GetDashboardDto) {
@@ -26,28 +19,13 @@ export class DashboardService {
     const [contas, transacoesPeriodo, transacoesRecentes, categorias] =
       await Promise.all([
         this.contasService.findAll(usuarioId),
-        this.transacoesRepository.find({
-          where: {
-            usuarioId,
-            data: Between(periodRange.startDate, periodRange.endDate),
-            ...notSoftDeleted,
-          },
-          order: {
-            data: 'DESC',
-            createdAt: 'DESC',
-          },
-        }),
-        this.transacoesRepository.find({
-          where: { usuarioId, ...notSoftDeleted },
-          order: {
-            data: 'DESC',
-            createdAt: 'DESC',
-          },
-          take: 5,
-        }),
-        this.categoriasRepository.find({
-          where: { usuarioId },
-        }),
+        this.dashboardRepository.findTransactionsByPeriod(
+          usuarioId,
+          periodRange.startDate,
+          periodRange.endDate,
+        ),
+        this.dashboardRepository.findRecentTransactions(usuarioId, 5),
+        this.dashboardRepository.findCategoriesByUser(usuarioId),
       ]);
 
     const categoriasById = new Map(

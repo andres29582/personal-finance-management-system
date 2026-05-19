@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { ResourceNotFoundException } from '../common/exceptions';
 import { LogsService } from '../logs/logs.service';
 import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
@@ -6,19 +6,20 @@ import { Transferencia } from '../transferencias/entities/transferencia.entity';
 import { Conta } from './entities/conta.entity';
 import { TipoConta } from './enums/tipo-conta.enum';
 import { ContasService } from './contas.service';
-
-type FindArgs = {
-  where?: Record<string, unknown>;
-};
+import { ContaRepository } from './repositories/conta.repository';
 
 describe('ContasService', () => {
   let service: ContasService;
   let contasRepository: jest.Mocked<
-    Pick<Repository<Conta>, 'create' | 'find' | 'findOneBy' | 'save' | 'update'>
-  >;
-  let transacoesRepository: jest.Mocked<Pick<Repository<Transacao>, 'find'>>;
-  let transferenciasRepository: jest.Mocked<
-    Pick<Repository<Transferencia>, 'find'>
+    Pick<
+      ContaRepository,
+      | 'create'
+      | 'findActiveByUser'
+      | 'findByIdAndUser'
+      | 'findTransactionsForAccounts'
+      | 'findTransfersByUser'
+      | 'updateByIdAndUser'
+    >
   >;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
 
@@ -150,71 +151,46 @@ describe('ContasService', () => {
   beforeEach(() => {
     contasRepository = {
       create: jest.fn(),
-      find: jest.fn(({ where }: FindArgs = {}) =>
+      findActiveByUser: jest.fn((usuarioId: string) =>
         Promise.resolve(
           contas.filter(
-            (conta) =>
-              conta.usuarioId === where?.usuarioId &&
-              (where?.ativa === undefined || conta.ativa === where.ativa),
+            (conta) => conta.usuarioId === usuarioId && conta.ativa === true,
           ),
         ),
       ),
-      findOneBy: jest.fn((where: Record<string, unknown>) =>
+      findByIdAndUser: jest.fn((id: string, usuarioId: string) =>
         Promise.resolve(
           contas.find(
-            (conta) =>
-              conta.id === where.id && conta.usuarioId === where.usuarioId,
+            (conta) => conta.id === id && conta.usuarioId === usuarioId,
           ) ?? null,
         ),
       ),
-      save: jest.fn(),
-      update: jest.fn(),
-    };
-    transacoesRepository = {
-      find: jest.fn(({ where }: FindArgs = {}) => {
-        expect(where).toEqual(
-          expect.objectContaining({
-            contaId: expect.any(Object),
-            excluidoEm: expect.any(Object),
-            usuarioId: 'user-1',
-          }),
-        );
-
-        return Promise.resolve(
+      findTransactionsForAccounts: jest.fn((usuarioId: string) =>
+        Promise.resolve(
           transacoes.filter(
             (transacao) =>
-              transacao.usuarioId === where?.usuarioId &&
+              transacao.usuarioId === usuarioId &&
               transacao.excluidoEm === null,
           ),
-        );
-      }),
-    };
-    transferenciasRepository = {
-      find: jest.fn(({ where }: FindArgs = {}) => {
-        expect(where).toEqual(
-          expect.objectContaining({
-            excluidoEm: expect.any(Object),
-            usuarioId: 'user-1',
-          }),
-        );
-
-        return Promise.resolve(
+        ),
+      ),
+      findTransfersByUser: jest.fn((usuarioId: string) =>
+        Promise.resolve(
           transferencias.filter(
             (transferencia) =>
-              transferencia.usuarioId === where?.usuarioId &&
+              transferencia.usuarioId === usuarioId &&
               transferencia.excluidoEm === null,
           ),
-        );
-      }),
+        ),
+      ),
+      updateByIdAndUser: jest.fn(),
     };
     logsService = {
       logEntityEvent: jest.fn(),
     };
 
     service = new ContasService(
-      contasRepository as unknown as Repository<Conta>,
-      transacoesRepository as unknown as Repository<Transacao>,
-      transferenciasRepository as unknown as Repository<Transferencia>,
+      contasRepository as unknown as ContaRepository,
       logsService as unknown as LogsService,
     );
   });
@@ -222,11 +198,7 @@ describe('ContasService', () => {
   it('calculates current balances from initial balance, transactions, transfers and fees', async () => {
     const result = await service.findAll('user-1');
 
-    expect(contasRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { usuarioId: 'user-1', ativa: true },
-      }),
-    );
+    expect(contasRepository.findActiveByUser).toHaveBeenCalledWith('user-1');
     expect(result).toHaveLength(2);
     expect(result.map((conta) => conta.id)).toEqual(['conta-1', 'conta-2']);
     expect(result.find((conta) => conta.id === 'conta-1')?.saldoAtual).toBe(
@@ -242,14 +214,7 @@ describe('ContasService', () => {
     const contaOrigem = result.find((conta) => conta.id === 'conta-1');
     const contaDestino = result.find((conta) => conta.id === 'conta-2');
 
-    expect(transferenciasRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
-    );
+    expect(contasRepository.findTransfersByUser).toHaveBeenCalledWith('user-1');
     expect(contaOrigem?.saldoAtual).toBe(1000 + 500 - 150 - 200 - 5 + 75);
     expect(contaDestino?.saldoAtual).toBe(200 + 100 - 20 + 200 - 75 - 2);
   });
@@ -259,5 +224,18 @@ describe('ContasService', () => {
 
     expect(result.some((conta) => conta.id === 'conta-inativa')).toBe(false);
     expect(result.every((conta) => conta.ativa)).toBe(true);
+  });
+
+  it('throws a typed not found error when account does not exist', async () => {
+    await expect(
+      service.findOne('conta-inexistente', 'user-1'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(
+      service.findOne('conta-inexistente', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'CONTA_NOT_FOUND',
+      message: 'Conta não encontrada',
+      statusCode: 404,
+    });
   });
 });

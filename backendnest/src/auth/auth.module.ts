@@ -12,6 +12,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { CategoriasModule } from '../categorias/categorias.module';
 import { UsersModule } from '../users/users.module';
+import { AuthSessionRepository } from './repositories/auth-session.repository';
+import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 
 @Module({
   imports: [
@@ -38,7 +40,14 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthSessionsService, JwtStrategy, JwtAuthGuard],
+  providers: [
+    AuthService,
+    AuthSessionsService,
+    JwtStrategy,
+    JwtAuthGuard,
+    AuthSessionRepository,
+    PasswordResetTokenRepository,
+  ],
   exports: [AuthService, JwtModule, JwtAuthGuard],
 })
 export class AuthModule {}

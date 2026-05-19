@@ -1,35 +1,35 @@
-import { Repository } from 'typeorm';
 import { Categoria } from '../categorias/entities/categoria.entity';
 import { ContasService } from '../contas/contas.service';
 import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { DashboardService } from './dashboard.service';
-
-type FindArgs = {
-  where?: Record<string, unknown>;
-};
+import { DashboardRepository } from './repositories/dashboard.repository';
 
 describe('DashboardService', () => {
   let service: DashboardService;
   let contasService: jest.Mocked<Pick<ContasService, 'findAll'>>;
-  let transacoesRepository: jest.Mocked<Pick<Repository<Transacao>, 'find'>>;
-  let categoriasRepository: jest.Mocked<Pick<Repository<Categoria>, 'find'>>;
+  let dashboardRepository: jest.Mocked<
+    Pick<
+      DashboardRepository,
+      | 'findCategoriesByUser'
+      | 'findRecentTransactions'
+      | 'findTransactionsByPeriod'
+    >
+  >;
 
   beforeEach(() => {
     contasService = {
       findAll: jest.fn(),
     };
-    transacoesRepository = {
-      find: jest.fn(),
-    };
-    categoriasRepository = {
-      find: jest.fn(),
+    dashboardRepository = {
+      findCategoriesByUser: jest.fn(),
+      findRecentTransactions: jest.fn(),
+      findTransactionsByPeriod: jest.fn(),
     };
 
     service = new DashboardService(
       contasService as unknown as ContasService,
-      transacoesRepository as unknown as Repository<Transacao>,
-      categoriasRepository as unknown as Repository<Categoria>,
+      dashboardRepository as unknown as DashboardRepository,
     );
   });
 
@@ -50,42 +50,41 @@ describe('DashboardService', () => {
         tipo: 'banco',
       },
     ] as never);
-    transacoesRepository.find
-      .mockResolvedValueOnce([
-        {
-          categoriaId: 'categoria-1',
-          contaId: 'conta-2',
-          createdAt: new Date('2026-04-02T10:00:00Z'),
-          data: '2026-04-02',
-          descricao: 'Salario',
-          id: 'transacao-1',
-          tipo: TipoTransacao.RECEITA,
-          valor: 3000,
-        },
-        {
-          categoriaId: 'categoria-2',
-          contaId: 'conta-1',
-          createdAt: new Date('2026-04-03T10:00:00Z'),
-          data: '2026-04-03',
-          descricao: 'Mercado',
-          id: 'transacao-2',
-          tipo: TipoTransacao.DESPESA,
-          valor: 500,
-        },
-      ] as Transacao[])
-      .mockResolvedValueOnce([
-        {
-          categoriaId: 'categoria-2',
-          contaId: 'conta-1',
-          createdAt: new Date('2026-04-03T10:00:00Z'),
-          data: '2026-04-03',
-          descricao: 'Mercado',
-          id: 'transacao-2',
-          tipo: TipoTransacao.DESPESA,
-          valor: 500,
-        },
-      ] as Transacao[]);
-    categoriasRepository.find.mockResolvedValue([
+    dashboardRepository.findTransactionsByPeriod.mockResolvedValue([
+      {
+        categoriaId: 'categoria-1',
+        contaId: 'conta-2',
+        createdAt: new Date('2026-04-02T10:00:00Z'),
+        data: '2026-04-02',
+        descricao: 'Salario',
+        id: 'transacao-1',
+        tipo: TipoTransacao.RECEITA,
+        valor: 3000,
+      },
+      {
+        categoriaId: 'categoria-2',
+        contaId: 'conta-1',
+        createdAt: new Date('2026-04-03T10:00:00Z'),
+        data: '2026-04-03',
+        descricao: 'Mercado',
+        id: 'transacao-2',
+        tipo: TipoTransacao.DESPESA,
+        valor: 500,
+      },
+    ] as Transacao[]);
+    dashboardRepository.findRecentTransactions.mockResolvedValue([
+      {
+        categoriaId: 'categoria-2',
+        contaId: 'conta-1',
+        createdAt: new Date('2026-04-03T10:00:00Z'),
+        data: '2026-04-03',
+        descricao: 'Mercado',
+        id: 'transacao-2',
+        tipo: TipoTransacao.DESPESA,
+        valor: 500,
+      },
+    ] as Transacao[]);
+    dashboardRepository.findCategoriesByUser.mockResolvedValue([
       {
         id: 'categoria-1',
         nome: 'Salario',
@@ -161,16 +160,17 @@ describe('DashboardService', () => {
         tipo: 'banco',
       },
     ] as never);
-    transacoesRepository.find.mockImplementation(({ where }: FindArgs = {}) => {
-      const source = where?.data ? periodTransactions : recentTransactions;
-      const filteredSource =
-        where && 'excluidoEm' in where
-          ? source.filter((transaction) => transaction.excluidoEm === null)
-          : source;
-
-      return Promise.resolve(filteredSource);
-    });
-    categoriasRepository.find.mockResolvedValue([
+    dashboardRepository.findTransactionsByPeriod.mockResolvedValue(
+      periodTransactions.filter(
+        (transaction) => transaction.excluidoEm === null,
+      ),
+    );
+    dashboardRepository.findRecentTransactions.mockResolvedValue(
+      recentTransactions.filter(
+        (transaction) => transaction.excluidoEm === null,
+      ),
+    );
+    dashboardRepository.findCategoriesByUser.mockResolvedValue([
       {
         id: 'categoria-1',
         nome: 'Salario',
@@ -183,23 +183,14 @@ describe('DashboardService', () => {
 
     const result = await service.getDashboard('user-1', { mes: '2026-04' });
 
-    expect(transacoesRepository.find).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        where: expect.objectContaining({
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
+    expect(dashboardRepository.findTransactionsByPeriod).toHaveBeenCalledWith(
+      'user-1',
+      '2026-04-01',
+      '2026-04-30',
     );
-    expect(transacoesRepository.find).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: expect.objectContaining({
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
+    expect(dashboardRepository.findRecentTransactions).toHaveBeenCalledWith(
+      'user-1',
+      5,
     );
     expect(result.receitasMes).toBe(3000);
     expect(result.despesasMes).toBe(500);

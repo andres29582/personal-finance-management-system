@@ -1,28 +1,25 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import {
   assertNonNegativeFinancialValue,
   assertPositiveFinancialValue,
 } from '../common/financial-validation.util';
-import { notSoftDeleted } from '../common/soft-delete.query';
 import { Conta } from '../contas/entities/conta.entity';
 import { Transferencia } from './entities/transferencia.entity';
 import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
 import { UpdateTransferenciaDto } from './dto/update-transferencia.dto';
 import { ContasService } from '../contas/contas.service';
 import { LogsService } from '../logs/logs.service';
+import { TransferenciaRepository } from './repositories/transferencia.repository';
 
 @Injectable()
 export class TransferenciasService {
   constructor(
-    @InjectRepository(Transferencia)
-    private readonly transferenciasRepository: Repository<Transferencia>,
+    private readonly transferenciaRepository: TransferenciaRepository,
     private readonly contasService: ContasService,
     private readonly logsService: LogsService,
   ) {}
@@ -32,7 +29,8 @@ export class TransferenciasService {
     dto: CreateTransferenciaDto,
   ): Promise<Transferencia> {
     if (dto.contaOrigemId === dto.contaDestinoId) {
-      throw new BadRequestException(
+      throw new BusinessRuleException(
+        'TRANSFERENCIA_SAME_ACCOUNT',
         'Conta origem e destino devem ser diferentes',
       );
     }
@@ -52,13 +50,11 @@ export class TransferenciasService {
     this.ensureAccountBelongsToUser(contaOrigem, usuarioId);
     this.ensureAccountBelongsToUser(contaDestino, usuarioId);
 
-    const transferencia = this.transferenciasRepository.create({
+    const savedTransfer = await this.transferenciaRepository.create({
       id: randomUUID(),
       usuarioId,
       ...dto,
     });
-    const savedTransfer =
-      await this.transferenciasRepository.save(transferencia);
 
     await this.logsService.logEntityEvent({
       event: 'TRANSFERENCIA_CREATED',
@@ -79,20 +75,19 @@ export class TransferenciasService {
   }
 
   async findAll(usuarioId: string): Promise<Transferencia[]> {
-    return this.transferenciasRepository.find({
-      where: { usuarioId, ...notSoftDeleted },
-      order: { data: 'DESC', createdAt: 'DESC' },
-    });
+    return this.transferenciaRepository.findByUser(usuarioId);
   }
 
   async findOne(id: string, usuarioId: string): Promise<Transferencia> {
-    const transferencia = await this.transferenciasRepository.findOneBy({
+    const transferencia = await this.transferenciaRepository.findByIdAndUser(
       id,
       usuarioId,
-      ...notSoftDeleted,
-    });
+    );
     if (!transferencia) {
-      throw new NotFoundException('Transferência não encontrada');
+      throw new ResourceNotFoundException(
+        'TRANSFERENCIA_NOT_FOUND',
+        'Transferência não encontrada',
+      );
     }
     return transferencia;
   }
@@ -112,7 +107,7 @@ export class TransferenciasService {
       assertNonNegativeFinancialValue(dto.comissao, 'Comissao');
     }
 
-    await this.transferenciasRepository.update({ id, usuarioId }, dto);
+    await this.transferenciaRepository.updateByIdAndUser(id, usuarioId, dto);
     const updatedTransfer = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -133,10 +128,7 @@ export class TransferenciasService {
 
   async remove(id: string, usuarioId: string): Promise<void> {
     const transfer = await this.findOne(id, usuarioId);
-    await this.transferenciasRepository.update(
-      { id, usuarioId },
-      { excluidoEm: new Date() },
-    );
+    await this.transferenciaRepository.softDeleteByIdAndUser(id, usuarioId);
     await this.logsService.logEntityEvent({
       event: 'TRANSFERENCIA_SOFT_DELETED',
       module: 'transferencias',
@@ -164,7 +156,10 @@ export class TransferenciasService {
     usuarioId: string,
   ): void {
     if (conta.usuarioId !== usuarioId) {
-      throw new NotFoundException('Conta nao encontrada');
+      throw new ResourceNotFoundException(
+        'TRANSFERENCIA_ACCOUNT_NOT_FOUND',
+        'Conta nao encontrada',
+      );
     }
   }
 }

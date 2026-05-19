@@ -14,6 +14,7 @@ import { AuditLog } from './logs/entities/audit-log.entity';
 import { LogsExceptionFilter } from './logs/logs-exception.filter';
 import { LogsModule } from './logs/logs.module';
 import { RequestContextMiddleware } from './logs/request-context.middleware';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -128,9 +129,16 @@ import { Orcamento } from './orcamentos/entities/orcamento.entity';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestContextMiddleware).forRoutes({
-      path: '*',
-      method: RequestMethod.ALL,
-    });
+    consumer
+      .apply(RequestIdMiddleware) // Agregar ID único a cada request
+      .forRoutes({
+        path: '*',
+        method: RequestMethod.ALL,
+      })
+      .apply(RequestContextMiddleware) // Contexto existente
+      .forRoutes({
+        path: '*',
+        method: RequestMethod.ALL,
+      });
   }
 }

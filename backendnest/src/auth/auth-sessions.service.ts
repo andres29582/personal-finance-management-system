@@ -1,15 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { IsNull, Repository } from 'typeorm';
 import { AuthSession } from './entities/auth-session.entity';
+import { AuthSessionRepository } from './repositories/auth-session.repository';
 
 @Injectable()
 export class AuthSessionsService {
-  constructor(
-    @InjectRepository(AuthSession)
-    private readonly authSessionsRepository: Repository<AuthSession>,
-  ) {}
+  constructor(private readonly authSessionRepository: AuthSessionRepository) {}
 
   async create(session: {
     expiresAt: Date;
@@ -17,7 +13,7 @@ export class AuthSessionsService {
     refreshToken: string;
     userId: string;
   }) {
-    const entity = this.authSessionsRepository.create({
+    return this.authSessionRepository.createSession({
       id: session.id,
       userId: session.userId,
       refreshTokenHash: this.hashToken(session.refreshToken),
@@ -25,23 +21,16 @@ export class AuthSessionsService {
       revokedAt: null,
       lastUsedAt: null,
     });
-
-    return this.authSessionsRepository.save(entity);
   }
 
   async findActiveById(sessionId: string) {
-    return this.authSessionsRepository.findOne({
-      where: {
-        id: sessionId,
-        revokedAt: IsNull(),
-      },
-    });
+    return this.authSessionRepository.findActiveById(sessionId);
   }
 
   async rotate(sessionId: string, refreshToken: string, expiresAt: Date) {
     const now = new Date();
 
-    await this.authSessionsRepository.update(sessionId, {
+    await this.authSessionRepository.rotate(sessionId, {
       refreshTokenHash: this.hashToken(refreshToken),
       expiresAt,
       lastUsedAt: now,
@@ -52,32 +41,13 @@ export class AuthSessionsService {
   async revoke(sessionId: string, userId: string) {
     const now = new Date();
 
-    await this.authSessionsRepository.update(
-      {
-        id: sessionId,
-        userId,
-        revokedAt: IsNull(),
-      },
-      {
-        revokedAt: now,
-        updatedAt: now,
-      },
-    );
+    await this.authSessionRepository.revoke(sessionId, userId, now);
   }
 
   async revokeAllByUser(userId: string) {
     const now = new Date();
 
-    await this.authSessionsRepository.update(
-      {
-        userId,
-        revokedAt: IsNull(),
-      },
-      {
-        revokedAt: now,
-        updatedAt: now,
-      },
-    );
+    await this.authSessionRepository.revokeAllByUser(userId, now);
   }
 
   hasMatchingRefreshToken(session: AuthSession, refreshToken: string) {

@@ -1,28 +1,27 @@
-﻿import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes, randomUUID } from 'crypto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { CategoriasService } from '../categorias/categorias.service';
 import {
   isValidCep,
   isValidCpf,
   normalizeDigits,
 } from '../common/br-documents.util';
+import {
+  AppConflictException,
+  AppUnauthorizedException,
+  BusinessRuleException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import { LogsService } from '../logs/logs.service';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { AuthSessionsService } from './auth-sessions.service';
 import { RegisterDto } from './dto/register.dto';
-import { PasswordResetToken } from './entities/password-reset-token.entity';
+import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 
 type AuthTokens = {
   access_token: string;
@@ -42,8 +41,7 @@ export class AuthService {
     private readonly authSessionsService: AuthSessionsService,
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
-    @InjectRepository(PasswordResetToken)
-    private readonly passwordResetTokenRepository: Repository<PasswordResetToken>,
+    private readonly passwordResetTokenRepository: PasswordResetTokenRepository,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -55,21 +53,35 @@ export class AuthService {
     const senha = dto.senha;
 
     if (!isValidCpf(normalizedCpf)) {
-      throw new BadRequestException('CPF deve ter 11 digitos.');
+      throw new ValidationAppException(
+        'AUTH_INVALID_CPF',
+        'CPF deve ter 11 digitos.',
+        { field: 'cpf' },
+      );
     }
 
     if (!isValidCep(normalizedCep)) {
-      throw new BadRequestException('CEP invalido.');
+      throw new ValidationAppException('AUTH_INVALID_CEP', 'CEP invalido.', {
+        field: 'cep',
+      });
     }
 
     const existing = await this.usersService.findByEmail(email);
     if (existing) {
-      throw new ConflictException('E-mail ja cadastrado');
+      throw new AppConflictException(
+        'AUTH_EMAIL_ALREADY_EXISTS',
+        'E-mail ja cadastrado',
+        { field: 'email' },
+      );
     }
 
     const existingByCpf = await this.usersService.findByCpf(normalizedCpf);
     if (existingByCpf) {
-      throw new ConflictException('CPF ja cadastrado');
+      throw new AppConflictException(
+        'AUTH_CPF_ALREADY_EXISTS',
+        'CPF ja cadastrado',
+        { field: 'cpf' },
+      );
     }
 
     const senhaHash = await bcrypt.hash(senha, 10);
@@ -109,7 +121,10 @@ export class AuthService {
           reason: 'invalid_credentials',
         },
       });
-      throw new UnauthorizedException('E-mail ou senha invalidos');
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_CREDENTIALS',
+        'E-mail ou senha invalidos',
+      );
     }
 
     const senhaCorreta = await bcrypt.compare(senha, user.senhaHash);
@@ -126,7 +141,10 @@ export class AuthService {
           reason: 'invalid_credentials',
         },
       });
-      throw new UnauthorizedException('E-mail ou senha invalidos');
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_CREDENTIALS',
+        'E-mail ou senha invalidos',
+      );
     }
 
     const tokens = await this.createTokensForUser(user);
@@ -161,13 +179,19 @@ export class AuthService {
         await this.authSessionsService.revoke(session.id, session.userId);
       }
 
-      throw new UnauthorizedException('Refresh token invalido');
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_REFRESH_TOKEN',
+        'Refresh token invalido',
+      );
     }
 
     const user = await this.usersService.findById(payload.sub);
 
     if (!user) {
-      throw new UnauthorizedException('Sessao invalida');
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_SESSION',
+        'Sessao invalida',
+      );
     }
 
     const nextRefreshToken = await this.buildRefreshToken(user, session.id);
@@ -207,7 +231,10 @@ export class AuthService {
     const user = await this.usersService.findById(userId);
 
     if (!user) {
-      throw new NotFoundException('Usuario nao encontrado');
+      throw new ResourceNotFoundException(
+        'AUTH_USER_NOT_FOUND',
+        'Usuario nao encontrado',
+      );
     }
 
     const newPasswordHash = await bcrypt.hash(novaSenha, 10);
@@ -256,7 +283,7 @@ export class AuthService {
     );
     const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
 
-    await this.passwordResetTokenRepository.save({
+    await this.passwordResetTokenRepository.createToken({
       id: randomUUID(),
       userId: user.id,
       tokenHash,
@@ -283,10 +310,8 @@ export class AuthService {
 
   async resetPasswordWithToken(plainToken: string, novaSenha: string) {
     const tokenHash = createHash('sha256').update(plainToken).digest('hex');
-    const record = await this.passwordResetTokenRepository.findOne({
-      where: { tokenHash },
-      order: { createdAt: 'DESC' },
-    });
+    const record =
+      await this.passwordResetTokenRepository.findLatestByHash(tokenHash);
 
     if (
       !record ||
@@ -299,22 +324,25 @@ export class AuthService {
         success: false,
         message: 'Token de recuperacao invalido ou expirado.',
       });
-      throw new BadRequestException('Token invalido ou expirado.');
+      throw new BusinessRuleException(
+        'AUTH_PASSWORD_RESET_TOKEN_INVALID',
+        'Token invalido ou expirado.',
+      );
     }
 
     const user = await this.usersService.findById(record.userId);
 
     if (!user) {
-      throw new BadRequestException('Token invalido ou expirado.');
+      throw new BusinessRuleException(
+        'AUTH_PASSWORD_RESET_TOKEN_INVALID',
+        'Token invalido ou expirado.',
+      );
     }
 
     const newPasswordHash = await bcrypt.hash(novaSenha, 10);
     await this.usersService.updatePassword(user.id, newPasswordHash);
     await this.authSessionsService.revokeAllByUser(user.id);
-    await this.passwordResetTokenRepository.update(
-      { id: record.id },
-      { usedAt: new Date() },
-    );
+    await this.passwordResetTokenRepository.markUsed(record.id, new Date());
 
     await this.logsService.logAuthEvent({
       event: 'PASSWORD_RESET_TOKEN_SUCCESS',
@@ -383,7 +411,10 @@ export class AuthService {
         secret: this.getRefreshTokenSecret(),
       });
     } catch {
-      throw new UnauthorizedException('Refresh token invalido');
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_REFRESH_TOKEN',
+        'Refresh token invalido',
+      );
     }
   }
 
@@ -391,7 +422,10 @@ export class AuthService {
     const decoded: unknown = this.jwtService.decode(token);
 
     if (!this.hasExpiration(decoded)) {
-      throw new UnauthorizedException('Token invalido');
+      throw new AppUnauthorizedException(
+        'AUTH_TOKEN_INVALID',
+        'Token invalido',
+      );
     }
 
     return new Date(decoded.exp * 1000);

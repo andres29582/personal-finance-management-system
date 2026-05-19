@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import { Repository } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { RequestContextService } from './request-context.service';
+import { AuditLogRepository } from './repositories/audit-log.repository';
 import {
   CreateAuditLogInput,
   LogAccessDeniedInput,
@@ -19,15 +18,14 @@ export class LogsService {
   private readonly logger = new Logger(LogsService.name);
 
   constructor(
-    @InjectRepository(AuditLog)
-    private readonly auditLogRepository: Repository<AuditLog>,
+    private readonly auditLogRepository: AuditLogRepository,
     private readonly requestContextService: RequestContextService,
     private readonly configService: ConfigService,
   ) {}
 
   async create(input: CreateAuditLogInput): Promise<void> {
     const context = this.resolveContext(input.context);
-    const entity = this.auditLogRepository.create({
+    const entity = this.auditLogRepository.createAuditLog({
       id: randomUUID(),
       level: input.level,
       event: input.event,
@@ -111,12 +109,11 @@ export class LogsService {
   }> {
     const take = Math.min(Math.max(limit, 1), 100);
     const skip = Math.max(offset, 0);
-    const [rows, total] = await this.auditLogRepository.findAndCount({
-      where: { userId },
-      order: { createdAt: 'DESC' },
+    const [rows, total] = await this.auditLogRepository.findAndCountByUser(
+      userId,
       take,
       skip,
-    });
+    );
 
     return {
       total,
@@ -163,7 +160,7 @@ export class LogsService {
 
   private async persistSafely(entity: AuditLog): Promise<void> {
     try {
-      await this.auditLogRepository.save(entity);
+      await this.auditLogRepository.saveAuditLog(entity);
     } catch (error) {
       const trace =
         error instanceof Error ? (error.stack ?? error.message) : String(error);

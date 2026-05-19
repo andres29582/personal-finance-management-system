@@ -1,7 +1,11 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { CategoriasService } from '../categorias/categorias.service';
 import { TipoCategoria } from '../categorias/enums/tipo-categoria.enum';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import { ContasService } from '../contas/contas.service';
 import { DividasService } from '../dividas/dividas.service';
 import { LogsService } from '../logs/logs.service';
@@ -9,6 +13,7 @@ import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { PagoDivida } from './entities/pago-divida.entity';
 import { PagosDividaService } from './pagos-divida.service';
+import { PagoDividaRepository } from './repositories/pago-divida.repository';
 
 type TestTransactionManager = {
   create?: jest.Mock;
@@ -19,7 +24,7 @@ type TestTransactionManager = {
 describe('PagosDividaService', () => {
   let service: PagosDividaService;
   let repository: jest.Mocked<
-    Pick<Repository<PagoDivida>, 'find' | 'findOneBy'>
+    Pick<PagoDividaRepository, 'findActiveById' | 'findByDivida'>
   >;
   let contasService: jest.Mocked<Pick<ContasService, 'findOne'>>;
   let dividasService: jest.Mocked<Pick<DividasService, 'findOne'>>;
@@ -29,8 +34,8 @@ describe('PagosDividaService', () => {
 
   beforeEach(() => {
     repository = {
-      find: jest.fn(),
-      findOneBy: jest.fn(),
+      findActiveById: jest.fn(),
+      findByDivida: jest.fn(),
     };
     contasService = {
       findOne: jest.fn(),
@@ -49,7 +54,7 @@ describe('PagosDividaService', () => {
     };
 
     service = new PagosDividaService(
-      repository as unknown as Repository<PagoDivida>,
+      repository as unknown as PagoDividaRepository,
       contasService as unknown as ContasService,
       dividasService as unknown as DividasService,
       categoriasService as unknown as CategoriasService,
@@ -184,7 +189,7 @@ describe('PagosDividaService', () => {
         dividaId: 'divida-1',
         valor: 0,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationAppException);
 
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
@@ -205,7 +210,20 @@ describe('PagosDividaService', () => {
         dividaId: 'divida-1',
         valor: 350,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(BusinessRuleException);
+    await expect(
+      service.create('user-1', {
+        categoriaId: 'categoria-1',
+        contaId: 'conta-1',
+        data: '2026-04-01',
+        dividaId: 'divida-1',
+        valor: 350,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PAGAMENTO_DIVIDA_CATEGORY_MUST_BE_EXPENSE',
+      message: 'A categoria do pagamento de divida deve ser do tipo despesa.',
+      statusCode: 400,
+    });
 
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
@@ -215,7 +233,7 @@ describe('PagosDividaService', () => {
       update: jest.fn().mockResolvedValue(undefined),
     };
 
-    repository.findOneBy.mockResolvedValue({
+    repository.findActiveById.mockResolvedValue({
       id: 'pago-1',
       transacaoId: 'transacao-1',
       usuarioId: 'user-1',
@@ -257,7 +275,7 @@ describe('PagosDividaService', () => {
         .mockRejectedValueOnce(transactionError),
     };
 
-    repository.findOneBy.mockResolvedValue({
+    repository.findActiveById.mockResolvedValue({
       id: 'pago-1',
       transacaoId: 'transacao-1',
       usuarioId: 'user-1',
@@ -291,33 +309,26 @@ describe('PagosDividaService', () => {
     } as PagoDivida;
 
     dividasService.findOne.mockResolvedValue({ id: 'divida-1' } as never);
-    repository.find.mockResolvedValue([activePayment]);
+    repository.findByDivida.mockResolvedValue([activePayment]);
 
     const result = await service.findAllByDivida('divida-1', 'user-1');
 
-    expect(repository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          dividaId: 'divida-1',
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
-    );
+    expect(repository.findByDivida).toHaveBeenCalledWith('divida-1', 'user-1');
     expect(result).toEqual([activePayment]);
   });
 
   it('does not find a debt payment when it is soft-deleted', async () => {
-    repository.findOneBy.mockResolvedValue(null);
+    repository.findActiveById.mockResolvedValue(null);
 
     await expect(service.findOne('pago-1', 'user-1')).rejects.toBeInstanceOf(
-      NotFoundException,
+      ResourceNotFoundException,
     );
-
-    expect(repository.findOneBy).toHaveBeenCalledWith({
-      excluidoEm: expect.any(Object),
-      id: 'pago-1',
-      usuarioId: 'user-1',
+    await expect(service.findOne('pago-1', 'user-1')).rejects.toMatchObject({
+      code: 'PAGAMENTO_DIVIDA_NOT_FOUND',
+      message: 'Pagamento não encontrado',
+      statusCode: 404,
     });
+
+    expect(repository.findActiveById).toHaveBeenCalledWith('pago-1', 'user-1');
   });
 });

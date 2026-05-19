@@ -1,19 +1,23 @@
 import { ConfigService } from '@nestjs/config';
-import { Repository } from 'typeorm';
 import { AuditLog } from '../logs/entities/audit-log.entity';
 import { LogsService } from '../logs/logs.service';
 import { RequestContextService } from '../logs/request-context.service';
+import { AuditLogRepository } from '../logs/repositories/audit-log.repository';
 
 describe('LogsService security', () => {
   let service: LogsService;
-  let repository: jest.Mocked<Pick<Repository<AuditLog>, 'create' | 'save'>>;
+  let repository: jest.Mocked<
+    Pick<AuditLogRepository, 'createAuditLog' | 'saveAuditLog'>
+  >;
   let requestContextService: jest.Mocked<Pick<RequestContextService, 'get'>>;
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
 
   beforeEach(() => {
     repository = {
-      create: jest.fn((entity: Partial<AuditLog>) => entity as AuditLog),
-      save: jest.fn().mockResolvedValue(undefined),
+      createAuditLog: jest.fn(
+        (entity: Partial<AuditLog>) => entity as AuditLog,
+      ),
+      saveAuditLog: jest.fn().mockResolvedValue({} as AuditLog),
     };
     requestContextService = {
       get: jest.fn(() => ({
@@ -28,7 +32,7 @@ describe('LogsService security', () => {
     };
 
     service = new LogsService(
-      repository as unknown as Repository<AuditLog>,
+      repository as unknown as AuditLogRepository,
       requestContextService as unknown as RequestContextService,
       configService as unknown as ConfigService,
     );
@@ -54,7 +58,7 @@ describe('LogsService security', () => {
       userId: 'user-1',
     });
 
-    const createdLog = repository.create.mock.calls[0][0] as AuditLog;
+    const createdLog = repository.createAuditLog.mock.calls[0][0] as AuditLog;
 
     expect(createdLog.details).toEqual({
       access_token: '[REDACTED]',

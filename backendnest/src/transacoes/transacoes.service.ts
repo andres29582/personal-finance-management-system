@@ -1,14 +1,10 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { Between, Repository } from 'typeorm';
-import { resolveMonthRange } from '../common/date-range.util';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { assertPositiveFinancialValue } from '../common/financial-validation.util';
-import { notSoftDeleted } from '../common/soft-delete.query';
 import { Transacao } from './entities/transacao.entity';
 import { CreateTransacaoDto } from './dto/create-transacao.dto';
 import { FindTransacoesDto } from './dto/find-transacoes.dto';
@@ -16,12 +12,12 @@ import { UpdateTransacaoDto } from './dto/update-transacao.dto';
 import { ContasService } from '../contas/contas.service';
 import { CategoriasService } from '../categorias/categorias.service';
 import { LogsService } from '../logs/logs.service';
+import { TransacaoRepository } from './repositories/transacao.repository';
 
 @Injectable()
 export class TransacoesService {
   constructor(
-    @InjectRepository(Transacao)
-    private readonly transacoesRepository: Repository<Transacao>,
+    private readonly transacaoRepository: TransacaoRepository,
     private readonly contasService: ContasService,
     private readonly categoriasService: CategoriasService,
     private readonly logsService: LogsService,
@@ -37,12 +33,11 @@ export class TransacoesService {
 
     this.ensureCategoryMatchesTransactionType(categoria.tipo, dto.tipo);
 
-    const transacao = this.transacoesRepository.create({
+    const savedTransaction = await this.transacaoRepository.create({
       id: randomUUID(),
       usuarioId,
       ...dto,
     });
-    const savedTransaction = await this.transacoesRepository.save(transacao);
 
     await this.logsService.logEntityEvent({
       event: 'TRANSACAO_CREATED',
@@ -67,39 +62,19 @@ export class TransacoesService {
     usuarioId: string,
     query: FindTransacoesDto,
   ): Promise<Transacao[]> {
-    const whereClause: Record<string, unknown> = { usuarioId };
-
-    if (query.mes) {
-      const monthRange = resolveMonthRange(query.mes);
-      whereClause.data = Between(monthRange.startDate, monthRange.endDate);
-    }
-
-    if (query.tipo) {
-      whereClause.tipo = query.tipo;
-    }
-
-    if (query.contaId) {
-      whereClause.contaId = query.contaId;
-    }
-
-    if (query.categoriaId) {
-      whereClause.categoriaId = query.categoriaId;
-    }
-
-    return this.transacoesRepository.find({
-      where: { ...whereClause, ...notSoftDeleted },
-      order: { data: 'DESC', createdAt: 'DESC' },
-    });
+    return this.transacaoRepository.findByUser(usuarioId, query);
   }
 
   async findOne(id: string, usuarioId: string): Promise<Transacao> {
-    const transacao = await this.transacoesRepository.findOneBy({
+    const transacao = await this.transacaoRepository.findByIdAndUser(
       id,
       usuarioId,
-      ...notSoftDeleted,
-    });
+    );
     if (!transacao) {
-      throw new NotFoundException('Transação não encontrada');
+      throw new ResourceNotFoundException(
+        'TRANSACAO_NOT_FOUND',
+        'Transação não encontrada',
+      );
     }
     return transacao;
   }
@@ -127,7 +102,7 @@ export class TransacoesService {
 
     this.ensureCategoryMatchesTransactionType(categoria.tipo, updatedType);
 
-    await this.transacoesRepository.update({ id, usuarioId }, dto);
+    await this.transacaoRepository.updateByIdAndUser(id, usuarioId, dto);
     const updatedTransaction = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -148,10 +123,7 @@ export class TransacoesService {
 
   async remove(id: string, usuarioId: string): Promise<void> {
     const transaction = await this.findOne(id, usuarioId);
-    await this.transacoesRepository.update(
-      { id, usuarioId },
-      { excluidoEm: new Date() },
-    );
+    await this.transacaoRepository.softDeleteByIdAndUser(id, usuarioId);
     await this.logsService.logEntityEvent({
       event: 'TRANSACAO_SOFT_DELETED',
       module: 'transacoes',
@@ -174,7 +146,8 @@ export class TransacoesService {
     transactionType: string,
   ): void {
     if (categoryType !== transactionType) {
-      throw new BadRequestException(
+      throw new BusinessRuleException(
+        'TRANSACAO_CATEGORY_TYPE_MISMATCH',
         'O tipo da categoria precisa coincidir com o tipo da transacao.',
       );
     }

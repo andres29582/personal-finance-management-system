@@ -1,41 +1,34 @@
-import { Repository } from 'typeorm';
 import { Categoria } from '../categorias/entities/categoria.entity';
 import { Conta } from '../contas/entities/conta.entity';
 import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { RelatoriosService } from './relatorios.service';
 import { PeriodoRelatorio } from './enums/periodo-relatorio.enum';
-
-type FindArgs = {
-  where?: Record<string, unknown>;
-};
+import { RelatorioRepository } from './repositories/relatorio.repository';
 
 describe('RelatoriosService', () => {
   let service: RelatoriosService;
-  let transacoesRepository: jest.Mocked<Pick<Repository<Transacao>, 'find'>>;
-  let categoriasRepository: jest.Mocked<Pick<Repository<Categoria>, 'find'>>;
-  let contasRepository: jest.Mocked<Pick<Repository<Conta>, 'find'>>;
+  let repository: jest.Mocked<
+    Pick<
+      RelatorioRepository,
+      'findAccountsByUser' | 'findCategoriesByUser' | 'findTransactionsByPeriod'
+    >
+  >;
 
   beforeEach(() => {
-    transacoesRepository = {
-      find: jest.fn(),
-    };
-    categoriasRepository = {
-      find: jest.fn(),
-    };
-    contasRepository = {
-      find: jest.fn(),
+    repository = {
+      findAccountsByUser: jest.fn(),
+      findCategoriesByUser: jest.fn(),
+      findTransactionsByPeriod: jest.fn(),
     };
 
     service = new RelatoriosService(
-      transacoesRepository as unknown as Repository<Transacao>,
-      categoriasRepository as unknown as Repository<Categoria>,
-      contasRepository as unknown as Repository<Conta>,
+      repository as unknown as RelatorioRepository,
     );
   });
 
   it('builds a filtered monthly report from transactions only', async () => {
-    transacoesRepository.find.mockResolvedValue([
+    repository.findTransactionsByPeriod.mockResolvedValue([
       {
         categoriaId: 'categoria-1',
         contaId: 'conta-1',
@@ -57,7 +50,7 @@ describe('RelatoriosService', () => {
         valor: 700,
       },
     ] as Transacao[]);
-    categoriasRepository.find.mockResolvedValue([
+    repository.findCategoriesByUser.mockResolvedValue([
       {
         id: 'categoria-1',
         nome: 'Salario',
@@ -67,7 +60,7 @@ describe('RelatoriosService', () => {
         nome: 'Alimentacao',
       },
     ] as Categoria[]);
-    contasRepository.find.mockResolvedValue([
+    repository.findAccountsByUser.mockResolvedValue([
       {
         id: 'conta-1',
         nome: 'Banco',
@@ -122,17 +115,10 @@ describe('RelatoriosService', () => {
       },
     ] as Transacao[];
 
-    transacoesRepository.find.mockImplementation(({ where }: FindArgs = {}) => {
-      const filteredTransactions =
-        where && 'excluidoEm' in where
-          ? transactions.filter(
-              (transaction) => transaction.excluidoEm === null,
-            )
-          : transactions;
-
-      return Promise.resolve(filteredTransactions);
-    });
-    categoriasRepository.find.mockResolvedValue([
+    repository.findTransactionsByPeriod.mockResolvedValue(
+      transactions.filter((transaction) => transaction.excluidoEm === null),
+    );
+    repository.findCategoriesByUser.mockResolvedValue([
       {
         id: 'categoria-1',
         nome: 'Salario',
@@ -142,7 +128,7 @@ describe('RelatoriosService', () => {
         nome: 'Alimentacao',
       },
     ] as Categoria[]);
-    contasRepository.find.mockResolvedValue([
+    repository.findAccountsByUser.mockResolvedValue([
       {
         id: 'conta-1',
         nome: 'Banco',
@@ -154,13 +140,10 @@ describe('RelatoriosService', () => {
       periodo: PeriodoRelatorio.MENSAL,
     });
 
-    expect(transacoesRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
+    expect(repository.findTransactionsByPeriod).toHaveBeenCalledWith(
+      'user-1',
+      '2026-04-01',
+      '2026-04-30',
     );
     expect(result.resumo.totalReceitas).toBe(3000);
     expect(result.resumo.totalDespesas).toBe(700);

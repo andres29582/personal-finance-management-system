@@ -1,8 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
+import { AppUnauthorizedException } from '../../common/exceptions';
 import { RequestContextService } from '../../logs/request-context.service';
 import { AuthSessionsService } from '../auth-sessions.service';
 
@@ -33,7 +34,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     },
   ) {
     if (!payload.sid) {
-      throw new UnauthorizedException('Sessao invalida');
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_SESSION',
+        'Sessao invalida',
+      );
     }
 
     const session = await this.authSessionsService.findActiveById(payload.sid);
@@ -43,7 +47,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       session.userId !== payload.sub ||
       session.expiresAt.getTime() <= Date.now()
     ) {
-      throw new UnauthorizedException('Sessao invalida');
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_SESSION',
+        'Sessao invalida',
+      );
     }
 
     this.requestContextService.setUserId(payload.sub);

@@ -7,11 +7,17 @@ import { PrevisoesController } from './previsoes.controller';
 import { PrevisoesService } from './previsoes.service';
 import { DeficitFeaturesService } from './services/deficit-features.service';
 import { MlPredictClientService } from './services/ml-predict-client.service';
+import { PrevisaoRepository } from './repositories/previsao.repository';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Conta, Transacao, Transferencia])],
   controllers: [PrevisoesController],
-  providers: [PrevisoesService, DeficitFeaturesService, MlPredictClientService],
+  providers: [
+    PrevisoesService,
+    DeficitFeaturesService,
+    MlPredictClientService,
+    PrevisaoRepository,
+  ],
   exports: [PrevisoesService],
 })
 export class PrevisoesModule {}

@@ -1,53 +1,45 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
-import { notSoftDeleted } from '../common/soft-delete.query';
+import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import {
+  AppConflictException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { assertPositiveFinancialValue } from '../common/financial-validation.util';
 import { resolveMonthRange } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
-import { Transacao } from '../transacoes/entities/transacao.entity';
-import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { CreateOrcamentoDto } from './dto/create-orcamento.dto';
 import { FindOrcamentosDto } from './dto/find-orcamentos.dto';
 import { UpdateOrcamentoDto } from './dto/update-orcamento.dto';
 import { Orcamento } from './entities/orcamento.entity';
 import { LogsService } from '../logs/logs.service';
+import { OrcamentoRepository } from './repositories/orcamento.repository';
 
 @Injectable()
 export class OrcamentosService {
   constructor(
-    @InjectRepository(Orcamento)
-    private readonly orcamentosRepository: Repository<Orcamento>,
-    @InjectRepository(Transacao)
-    private readonly transacoesRepository: Repository<Transacao>,
+    private readonly orcamentoRepository: OrcamentoRepository,
     private readonly logsService: LogsService,
   ) {}
 
   async create(usuarioId: string, dto: CreateOrcamentoDto) {
     assertPositiveFinancialValue(dto.valorPlanejado, 'Valor planejado');
-    const existingBudget = await this.orcamentosRepository.findOneBy({
+    const existingBudget = await this.orcamentoRepository.findByUserAndMonth(
       usuarioId,
-      mesReferencia: dto.mesReferencia,
-    });
+      dto.mesReferencia,
+    );
 
     if (existingBudget) {
-      throw new ConflictException(
+      throw new AppConflictException(
+        'ORCAMENTO_ALREADY_EXISTS',
         'Ja existe um orcamento cadastrado para este mes.',
       );
     }
 
-    const budget = this.orcamentosRepository.create({
+    const budget = await this.orcamentoRepository.create({
       id: randomUUID(),
       usuarioId,
       ...dto,
     });
-
-    await this.orcamentosRepository.save(budget);
 
     const created = await this.findOne(budget.id, usuarioId);
     await this.logsService.logEntityEvent({
@@ -64,17 +56,9 @@ export class OrcamentosService {
   }
 
   async findAll(usuarioId: string, query: FindOrcamentosDto) {
-    const where = query.ano
-      ? {
-          usuarioId,
-          mesReferencia: Between(`${query.ano}-01`, `${query.ano}-12`),
-        }
-      : { usuarioId };
-
-    const budgets = await this.orcamentosRepository.find({
-      where,
-      order: { mesReferencia: 'ASC' },
-    });
+    const budgets = query.ano
+      ? await this.orcamentoRepository.findByUserAndYear(usuarioId, query.ano)
+      : await this.orcamentoRepository.findByUser(usuarioId);
 
     return Promise.all(
       budgets.map((budget) => this.enrichBudgetWithProgress(budget, usuarioId)),
@@ -82,10 +66,16 @@ export class OrcamentosService {
   }
 
   async findOne(id: string, usuarioId: string) {
-    const budget = await this.orcamentosRepository.findOneBy({ id, usuarioId });
+    const budget = await this.orcamentoRepository.findByIdAndUser(
+      id,
+      usuarioId,
+    );
 
     if (!budget) {
-      throw new NotFoundException('Orcamento nao encontrado.');
+      throw new ResourceNotFoundException(
+        'ORCAMENTO_NOT_FOUND',
+        'Orcamento nao encontrado.',
+      );
     }
 
     return this.enrichBudgetWithProgress(budget, usuarioId);
@@ -96,7 +86,7 @@ export class OrcamentosService {
     if (dto.valorPlanejado !== undefined) {
       assertPositiveFinancialValue(dto.valorPlanejado, 'Valor planejado');
     }
-    await this.orcamentosRepository.update({ id, usuarioId }, dto);
+    await this.orcamentoRepository.updateByIdAndUser(id, usuarioId, dto);
     const updated = await this.findOne(id, usuarioId);
     await this.logsService.logEntityEvent({
       event: 'ORCAMENTO_UPDATED',
@@ -115,14 +105,12 @@ export class OrcamentosService {
     usuarioId: string,
   ) {
     const monthRange = resolveMonthRange(orcamento.mesReferencia);
-    const expenseTransactions = await this.transacoesRepository.find({
-      where: {
+    const expenseTransactions =
+      await this.orcamentoRepository.findExpenseTransactionsByPeriod(
         usuarioId,
-        tipo: TipoTransacao.DESPESA,
-        data: Between(monthRange.startDate, monthRange.endDate),
-        ...notSoftDeleted,
-      },
-    });
+        monthRange.startDate,
+        monthRange.endDate,
+      );
     const gastoAtual = expenseTransactions.reduce(
       (sum, transaction) => sum + toNumber(transaction.valor),
       0,

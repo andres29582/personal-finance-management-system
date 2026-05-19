@@ -1,20 +1,29 @@
-import { Repository } from 'typeorm';
+import {
+  AppConflictException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import { LogsService } from '../logs/logs.service';
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
+import { UserRepository } from './repositories/user.repository';
 
 describe('UsersService', () => {
   let service: UsersService;
   let repository: jest.Mocked<
-    Pick<Repository<User>, 'create' | 'findOneBy' | 'save' | 'update'>
+    Pick<
+      UserRepository,
+      'create' | 'findByEmail' | 'findByCpf' | 'findById' | 'update'
+    >
   >;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
 
   beforeEach(() => {
     repository = {
       create: jest.fn(),
-      findOneBy: jest.fn(),
-      save: jest.fn(),
+      findByEmail: jest.fn(),
+      findByCpf: jest.fn(),
+      findById: jest.fn(),
       update: jest.fn(),
     };
     logsService = {
@@ -22,7 +31,7 @@ describe('UsersService', () => {
     };
 
     service = new UsersService(
-      repository as unknown as Repository<User>,
+      repository as unknown as UserRepository,
       logsService as unknown as LogsService,
     );
   });
@@ -40,46 +49,40 @@ describe('UsersService', () => {
     };
     const entity = { id: 'user-1', ...payload } as User;
 
-    repository.create.mockReturnValue(entity);
-    repository.save.mockResolvedValue(entity);
+    repository.create.mockResolvedValue(entity);
 
     const result = await service.create(payload);
 
     expect(repository.create).toHaveBeenCalledWith(payload);
-    expect(repository.save).toHaveBeenCalledWith(entity);
     expect(result.id).toBe('user-1');
   });
 
   it('finds a user by email', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findByEmail.mockResolvedValue({
       email: 'ana@example.com',
       id: 'user-1',
     } as User);
 
     const result = await service.findByEmail('ana@example.com');
 
-    expect(repository.findOneBy).toHaveBeenCalledWith({
-      email: 'ana@example.com',
-    });
+    expect(repository.findByEmail).toHaveBeenCalledWith('ana@example.com');
     expect(result?.id).toBe('user-1');
   });
 
   it('finds a user by cpf', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findByCpf.mockResolvedValue({
       cpf: '52998224725',
       id: 'user-1',
     } as User);
 
     const result = await service.findByCpf('52998224725');
 
-    expect(repository.findOneBy).toHaveBeenCalledWith({
-      cpf: '52998224725',
-    });
+    expect(repository.findByCpf).toHaveBeenCalledWith('52998224725');
     expect(result?.id).toBe('user-1');
   });
 
   it('updates the stored password hash', async () => {
-    repository.update.mockResolvedValue({} as never);
+    repository.update.mockResolvedValue({ id: 'user-1' } as User);
 
     await service.updatePassword('user-1', 'new-hash');
 
@@ -89,7 +92,7 @@ describe('UsersService', () => {
   });
 
   it('returns the public profile for an existing user', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findById.mockResolvedValue({
       cep: '01001000',
       cidade: 'Sao Paulo',
       cpf: '52998224725',
@@ -113,8 +116,21 @@ describe('UsersService', () => {
     );
   });
 
+  it('rejects profile lookup when user does not exist', async () => {
+    repository.findById.mockResolvedValue(null);
+
+    const promise = service.getProfile('user-1');
+
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      message: 'Usuario nao encontrado.',
+      statusCode: 404,
+    });
+  });
+
   it('updates the profile and normalizes cpf and cep', async () => {
-    repository.findOneBy
+    repository.findById
       .mockResolvedValueOnce({
         cep: '01001000',
         cidade: 'Sao Paulo',
@@ -126,7 +142,6 @@ describe('UsersService', () => {
         nome: 'Ana',
         numero: '123',
       } as User)
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         cep: '01310930',
         cidade: 'Sao Paulo',
@@ -139,7 +154,10 @@ describe('UsersService', () => {
         nome: 'Ana Maria',
         numero: '1000',
       } as User);
-    repository.update.mockResolvedValue({} as never);
+    repository.findByCpf.mockResolvedValueOnce(null);
+    repository.update.mockResolvedValue({
+      id: 'user-1',
+    } as User);
 
     const result = await service.updateProfile('user-1', {
       cep: '01310-930',
@@ -167,5 +185,112 @@ describe('UsersService', () => {
         userId: 'user-1',
       }),
     );
+  });
+
+  it('rejects profile update when user does not exist', async () => {
+    repository.findById.mockResolvedValue(null);
+
+    const promise = service.updateProfile('user-1', {
+      nome: 'Ana Maria',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+      message: 'Usuario nao encontrado.',
+      statusCode: 404,
+    });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects profile update when email already belongs to another user', async () => {
+    repository.findById.mockResolvedValue({
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as User);
+    repository.findByEmail.mockResolvedValue({
+      email: 'maria@example.com',
+      id: 'user-2',
+    } as User);
+
+    const promise = service.updateProfile('user-1', {
+      email: 'maria@example.com',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(AppConflictException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'USER_EMAIL_ALREADY_EXISTS',
+      field: 'email',
+      message: 'E-mail ja cadastrado.',
+      statusCode: 409,
+    });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects profile update with an invalid cpf', async () => {
+    repository.findById.mockResolvedValue({
+      cpf: '52998224725',
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as User);
+
+    const promise = service.updateProfile('user-1', {
+      cpf: '123',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(ValidationAppException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'USER_INVALID_CPF',
+      field: 'cpf',
+      message: 'CPF deve ter 11 digitos.',
+      statusCode: 422,
+    });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects profile update when cpf already belongs to another user', async () => {
+    repository.findById.mockResolvedValue({
+      cpf: '11144477735',
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as User);
+    repository.findByCpf.mockResolvedValue({
+      cpf: '52998224725',
+      id: 'user-2',
+    } as User);
+
+    const promise = service.updateProfile('user-1', {
+      cpf: '529.982.247-25',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(AppConflictException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'USER_CPF_ALREADY_EXISTS',
+      field: 'cpf',
+      message: 'CPF ja cadastrado.',
+      statusCode: 409,
+    });
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects profile update with an invalid cep', async () => {
+    repository.findById.mockResolvedValue({
+      cpf: '52998224725',
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as User);
+
+    const promise = service.updateProfile('user-1', {
+      cep: '123',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(ValidationAppException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'USER_INVALID_CEP',
+      field: 'cep',
+      message: 'CEP invalido.',
+      statusCode: 422,
+    });
+    expect(repository.update).not.toHaveBeenCalled();
   });
 });
