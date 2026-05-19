@@ -1,5 +1,6 @@
 import axios, {
   AxiosHeaders,
+  AxiosResponse,
   InternalAxiosRequestConfig,
   isAxiosError,
 } from 'axios';
@@ -18,6 +19,11 @@ type RetriableRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
 };
 
+type ApiSuccessResponse<T = unknown> = {
+  data: T;
+  success: true;
+};
+
 export const api = axios.create({
   baseURL,
 });
@@ -27,6 +33,26 @@ const refreshApi = axios.create({
 });
 
 let refreshPromise: Promise<RefreshTokenResponseDto | null> | null = null;
+
+function isApiSuccessResponse(value: unknown): value is ApiSuccessResponse {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'success' in value &&
+    'data' in value &&
+    (value as { success?: unknown }).success === true
+  );
+}
+
+function unwrapApiResponse<T>(
+  response: AxiosResponse<T | ApiSuccessResponse<T>>,
+) {
+  if (isApiSuccessResponse(response.data)) {
+    response.data = response.data.data as T;
+  }
+
+  return response as AxiosResponse<T>;
+}
 
 function isAuthRefreshExcluded(url?: string) {
   if (!url) {
@@ -104,32 +130,31 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   return await attachBearerToken(config);
 });
 
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    if (!isAxiosError(error) || error.response?.status !== 401 || !error.config) {
-      return Promise.reject(error);
+refreshApi.interceptors.response.use(unwrapApiResponse);
+
+api.interceptors.response.use(unwrapApiResponse, async (error) => {
+  if (!isAxiosError(error) || error.response?.status !== 401 || !error.config) {
+    return Promise.reject(error);
+  }
+
+  const originalRequest = error.config as RetriableRequestConfig;
+
+  if (originalRequest._retry || isAuthRefreshExcluded(originalRequest.url)) {
+    if (originalRequest.url?.includes('/auth/refresh')) {
+      await clearSession();
     }
 
-    const originalRequest = error.config as RetriableRequestConfig;
+    return Promise.reject(error);
+  }
 
-    if (originalRequest._retry || isAuthRefreshExcluded(originalRequest.url)) {
-      if (originalRequest.url?.includes('/auth/refresh')) {
-        await clearSession();
-      }
+  const refreshedSession = await refreshAccessToken();
 
-      return Promise.reject(error);
-    }
+  if (!refreshedSession) {
+    return Promise.reject(error);
+  }
 
-    const refreshedSession = await refreshAccessToken();
+  originalRequest._retry = true;
+  await attachBearerToken(originalRequest, refreshedSession.access_token);
 
-    if (!refreshedSession) {
-      return Promise.reject(error);
-    }
-
-    originalRequest._retry = true;
-    await attachBearerToken(originalRequest, refreshedSession.access_token);
-
-    return api(originalRequest);
-  },
-);
+  return api(originalRequest);
+});
