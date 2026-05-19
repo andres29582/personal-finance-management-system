@@ -1,8 +1,8 @@
 import {
-  BadGatewayException,
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+  ExternalServiceException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import { CepService } from './cep.service';
 
 describe('CepService', () => {
@@ -21,8 +21,13 @@ describe('CepService', () => {
 
   it('rejects invalid CEP values', async () => {
     await expect(service.lookup('123')).rejects.toBeInstanceOf(
-      BadRequestException,
+      ValidationAppException,
     );
+    await expect(service.lookup('123')).rejects.toMatchObject({
+      code: 'INVALID_CEP',
+      field: 'cep',
+      statusCode: 422,
+    });
   });
 
   it('maps ViaCEP data to the app response', async () => {
@@ -51,8 +56,12 @@ describe('CepService', () => {
     } as Partial<Response>);
 
     await expect(service.lookup('01001000')).rejects.toBeInstanceOf(
-      NotFoundException,
+      ResourceNotFoundException,
     );
+    await expect(service.lookup('01001000')).rejects.toMatchObject({
+      code: 'CEP_NOT_FOUND',
+      statusCode: 404,
+    });
   });
 
   it('throws a gateway error when the external service fails', async () => {
@@ -62,7 +71,11 @@ describe('CepService', () => {
     } as Partial<Response>);
 
     await expect(service.lookup('01001000')).rejects.toBeInstanceOf(
-      BadGatewayException,
+      ExternalServiceException,
     );
+    await expect(service.lookup('01001000')).rejects.toMatchObject({
+      code: 'CEP_LOOKUP_UNAVAILABLE',
+      statusCode: 502,
+    });
   });
 });

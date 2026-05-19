@@ -1,33 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { In, Repository } from 'typeorm';
+import { ResourceNotFoundException } from '../common/exceptions';
 import { toNumber } from '../common/number.util';
-import { notSoftDeleted } from '../common/soft-delete.query';
 import { LogsService } from '../logs/logs.service';
-import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
-import { Transferencia } from '../transferencias/entities/transferencia.entity';
 import { CreateContaDto } from './dto/create-conta.dto';
 import { UpdateContaDto } from './dto/update-conta.dto';
 import { Conta } from './entities/conta.entity';
+import { ContaRepository } from './repositories/conta.repository';
 
 type ContaComSaldo = Conta & { saldoAtual: number };
 
 @Injectable()
 export class ContasService {
   constructor(
-    @InjectRepository(Conta)
-    private readonly contasRepository: Repository<Conta>,
-    @InjectRepository(Transacao)
-    private readonly transacoesRepository: Repository<Transacao>,
-    @InjectRepository(Transferencia)
-    private readonly transferenciasRepository: Repository<Transferencia>,
+    private readonly contaRepository: ContaRepository,
     private readonly logsService: LogsService,
   ) {}
 
   async create(usuarioId: string, dto: CreateContaDto): Promise<ContaComSaldo> {
-    const conta = this.contasRepository.create({
+    const conta = await this.contaRepository.create({
       id: randomUUID(),
       usuarioId,
       nome: dto.nome,
@@ -38,7 +30,6 @@ export class ContasService {
       dataPagamento: dto.dataPagamento ?? null,
     });
 
-    await this.contasRepository.save(conta);
     const createdAccount = await this.findOne(conta.id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -59,19 +50,19 @@ export class ContasService {
   }
 
   async findAll(usuarioId: string): Promise<ContaComSaldo[]> {
-    const contas = await this.contasRepository.find({
-      where: { usuarioId, ativa: true },
-      order: { createdAt: 'DESC' },
-    });
+    const contas = await this.contaRepository.findActiveByUser(usuarioId);
 
     return this.attachCurrentBalances(contas, usuarioId);
   }
 
   async findOne(id: string, usuarioId: string): Promise<ContaComSaldo> {
-    const conta = await this.contasRepository.findOneBy({ id, usuarioId });
+    const conta = await this.contaRepository.findByIdAndUser(id, usuarioId);
 
     if (!conta) {
-      throw new NotFoundException('Conta não encontrada');
+      throw new ResourceNotFoundException(
+        'CONTA_NOT_FOUND',
+        'Conta não encontrada',
+      );
     }
 
     const [enrichedAccount] = await this.attachCurrentBalances(
@@ -107,7 +98,11 @@ export class ContasService {
       dadosAtualizacao.ativa = dto.ativa;
     }
 
-    await this.contasRepository.update({ id, usuarioId }, dadosAtualizacao);
+    await this.contaRepository.updateByIdAndUser(
+      id,
+      usuarioId,
+      dadosAtualizacao,
+    );
     const updatedAccount = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -128,7 +123,9 @@ export class ContasService {
 
   async desativar(id: string, usuarioId: string): Promise<void> {
     const account = await this.findOne(id, usuarioId);
-    await this.contasRepository.update({ id, usuarioId }, { ativa: false });
+    await this.contaRepository.updateByIdAndUser(id, usuarioId, {
+      ativa: false,
+    });
     await this.logsService.logEntityEvent({
       event: 'CONTA_DEACTIVATED',
       module: 'contas',
@@ -157,12 +154,8 @@ export class ContasService {
 
     const contaIds = contas.map((conta) => conta.id);
     const [transacoes, transferencias] = await Promise.all([
-      this.transacoesRepository.find({
-        where: { usuarioId, contaId: In(contaIds), ...notSoftDeleted },
-      }),
-      this.transferenciasRepository.find({
-        where: { usuarioId, ...notSoftDeleted },
-      }),
+      this.contaRepository.findTransactionsForAccounts(usuarioId, contaIds),
+      this.contaRepository.findTransfersByUser(usuarioId),
     ]);
 
     return contas.map((conta) => {

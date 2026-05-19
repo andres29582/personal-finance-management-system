@@ -1,13 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, LessThanOrEqual, Repository } from 'typeorm';
-import { notSoftDeleted } from '../../common/soft-delete.query';
 import { resolveMonthRange } from '../../common/date-range.util';
 import { toNumber } from '../../common/number.util';
 import { Conta } from '../../contas/entities/conta.entity';
 import { Transacao } from '../../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../../transacoes/enums/tipo-transacao.enum';
 import { Transferencia } from '../../transferencias/entities/transferencia.entity';
+import { PrevisaoRepository } from '../repositories/previsao.repository';
 import type { DeficitFeatures } from '../types/deficit-features.type';
 
 type BuildDeficitFeaturesResult = {
@@ -17,14 +15,7 @@ type BuildDeficitFeaturesResult = {
 
 @Injectable()
 export class DeficitFeaturesService {
-  constructor(
-    @InjectRepository(Conta)
-    private readonly contasRepository: Repository<Conta>,
-    @InjectRepository(Transacao)
-    private readonly transacoesRepository: Repository<Transacao>,
-    @InjectRepository(Transferencia)
-    private readonly transferenciasRepository: Repository<Transferencia>,
-  ) {}
+  constructor(private readonly previsaoRepository: PrevisaoRepository) {}
 
   async build(
     usuarioId: string,
@@ -35,28 +26,14 @@ export class DeficitFeaturesService {
 
     const [contas, transacoesMes, transacoesAteCorte, transferenciasAteCorte] =
       await Promise.all([
-        this.contasRepository.find({ where: { usuarioId, ativa: true } }),
-        this.transacoesRepository.find({
-          where: {
-            usuarioId,
-            data: Between(monthRange.startDate, monthRange.endDate),
-            ...notSoftDeleted,
-          },
-        }),
-        this.transacoesRepository.find({
-          where: {
-            usuarioId,
-            data: LessThanOrEqual(cutoffDate),
-            ...notSoftDeleted,
-          },
-        }),
-        this.transferenciasRepository.find({
-          where: {
-            usuarioId,
-            data: LessThanOrEqual(cutoffDate),
-            excluidoEm: IsNull(),
-          },
-        }),
+        this.previsaoRepository.findActiveAccountsByUser(usuarioId),
+        this.previsaoRepository.findTransactionsByPeriod(
+          usuarioId,
+          monthRange.startDate,
+          monthRange.endDate,
+        ),
+        this.previsaoRepository.findTransactionsUntil(usuarioId, cutoffDate),
+        this.previsaoRepository.findTransfersUntil(usuarioId, cutoffDate),
       ]);
 
     const activeAccountIds = new Set(contas.map((conta) => conta.id));

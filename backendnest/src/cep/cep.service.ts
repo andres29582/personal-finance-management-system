@@ -1,10 +1,10 @@
-import {
-  BadGatewayException,
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { isValidCep, normalizeDigits } from '../common/br-documents.util';
+import {
+  ExternalServiceException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 
 type ViaCepResponse = {
   cep?: string;
@@ -19,7 +19,9 @@ export class CepService {
     const normalizedCep = normalizeDigits(cep);
 
     if (!isValidCep(normalizedCep)) {
-      throw new BadRequestException('CEP invalido.');
+      throw new ValidationAppException('INVALID_CEP', 'CEP invalido.', {
+        field: 'cep',
+      });
     }
 
     const response = await fetch(
@@ -30,17 +32,26 @@ export class CepService {
         },
       },
     ).catch(() => {
-      throw new BadGatewayException('Nao foi possivel consultar o CEP.');
+      throw new ExternalServiceException(
+        'CEP_LOOKUP_UNAVAILABLE',
+        'Nao foi possivel consultar o CEP.',
+      );
     });
 
     if (!response.ok) {
-      throw new BadGatewayException('Nao foi possivel consultar o CEP.');
+      throw new ExternalServiceException(
+        'CEP_LOOKUP_UNAVAILABLE',
+        'Nao foi possivel consultar o CEP.',
+      );
     }
 
     const data = (await response.json()) as ViaCepResponse;
 
     if (data.erro) {
-      throw new NotFoundException('CEP nao encontrado.');
+      throw new ResourceNotFoundException(
+        'CEP_NOT_FOUND',
+        'CEP nao encontrado.',
+      );
     }
 
     return {

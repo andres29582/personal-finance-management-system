@@ -1,5 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import { CategoriasService } from '../categorias/categorias.service';
 import { TipoCategoria } from '../categorias/enums/tipo-categoria.enum';
 import { ContasService } from '../contas/contas.service';
@@ -7,13 +10,18 @@ import { LogsService } from '../logs/logs.service';
 import { Transacao } from './entities/transacao.entity';
 import { TipoTransacao } from './enums/tipo-transacao.enum';
 import { TransacoesService } from './transacoes.service';
+import { TransacaoRepository } from './repositories/transacao.repository';
 
 describe('TransacoesService', () => {
   let service: TransacoesService;
   let repository: jest.Mocked<
     Pick<
-      Repository<Transacao>,
-      'create' | 'delete' | 'find' | 'findOneBy' | 'save' | 'update'
+      TransacaoRepository,
+      | 'create'
+      | 'findByIdAndUser'
+      | 'findByUser'
+      | 'softDeleteByIdAndUser'
+      | 'updateByIdAndUser'
     >
   >;
   let contasService: jest.Mocked<Pick<ContasService, 'findOne'>>;
@@ -23,11 +31,10 @@ describe('TransacoesService', () => {
   beforeEach(() => {
     repository = {
       create: jest.fn(),
-      delete: jest.fn(),
-      find: jest.fn(),
-      findOneBy: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
+      findByIdAndUser: jest.fn(),
+      findByUser: jest.fn(),
+      softDeleteByIdAndUser: jest.fn(),
+      updateByIdAndUser: jest.fn(),
     };
     contasService = {
       findOne: jest.fn(),
@@ -40,7 +47,7 @@ describe('TransacoesService', () => {
     };
 
     service = new TransacoesService(
-      repository as unknown as Repository<Transacao>,
+      repository as unknown as TransacaoRepository,
       contasService as unknown as ContasService,
       categoriasService as unknown as CategoriasService,
       logsService as unknown as LogsService,
@@ -54,19 +61,24 @@ describe('TransacoesService', () => {
       tipo: TipoCategoria.RECEITA,
     } as never);
 
-    await expect(
-      service.create('user-1', {
-        categoriaId: 'categoria-1',
-        contaId: 'conta-1',
-        data: '2026-04-01',
-        descricao: 'Mercado',
-        ehAjuste: false,
-        tipo: TipoTransacao.DESPESA,
-        valor: 150,
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    const promise = service.create('user-1', {
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      data: '2026-04-01',
+      descricao: 'Mercado',
+      ehAjuste: false,
+      tipo: TipoTransacao.DESPESA,
+      valor: 150,
+    });
 
-    expect(repository.save).not.toHaveBeenCalled();
+    await expect(promise).rejects.toBeInstanceOf(BusinessRuleException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'TRANSACAO_CATEGORY_TYPE_MISMATCH',
+      message: 'O tipo da categoria precisa coincidir com o tipo da transacao.',
+      statusCode: 400,
+    });
+
+    expect(repository.create).not.toHaveBeenCalled();
   });
 
   it('creates a transaction when category type matches', async () => {
@@ -87,8 +99,7 @@ describe('TransacoesService', () => {
       id: 'categoria-1',
       tipo: TipoCategoria.RECEITA,
     } as never);
-    repository.create.mockReturnValue(transaction);
-    repository.save.mockResolvedValue(transaction);
+    repository.create.mockResolvedValue(transaction);
 
     const result = await service.create('user-1', {
       categoriaId: 'categoria-1',
@@ -100,7 +111,15 @@ describe('TransacoesService', () => {
       valor: 2000,
     });
 
-    expect(repository.save).toHaveBeenCalledWith(transaction);
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoriaId: 'categoria-1',
+        contaId: 'conta-1',
+        tipo: TipoTransacao.RECEITA,
+        usuarioId: 'user-1',
+        valor: 2000,
+      }),
+    );
     expect(result.id).toBe('transacao-1');
     expect(logsService.logEntityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -121,7 +140,7 @@ describe('TransacoesService', () => {
       valor: 150,
     } as Transacao;
 
-    repository.findOneBy.mockResolvedValue(transaction);
+    repository.findByIdAndUser.mockResolvedValue(transaction);
     categoriasService.findOne.mockResolvedValue({
       id: 'categoria-1',
       tipo: TipoCategoria.DESPESA,
@@ -131,8 +150,9 @@ describe('TransacoesService', () => {
       descricao: 'Mercado atualizado',
     });
 
-    expect(repository.update).toHaveBeenCalledWith(
-      { id: 'transacao-1', usuarioId: 'user-1' },
+    expect(repository.updateByIdAndUser).toHaveBeenCalledWith(
+      'transacao-1',
+      'user-1',
       { descricao: 'Mercado atualizado' },
     );
   });
@@ -144,33 +164,30 @@ describe('TransacoesService', () => {
       usuarioId: 'user-1',
     } as Transacao;
 
-    repository.find.mockResolvedValue([activeTransaction]);
+    repository.findByUser.mockResolvedValue([activeTransaction]);
 
     const result = await service.findAll('user-1', {});
 
-    expect(repository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
-    );
+    expect(repository.findByUser).toHaveBeenCalledWith('user-1', {});
     expect(result).toEqual([activeTransaction]);
   });
 
   it('does not find a transaction when it is soft-deleted', async () => {
-    repository.findOneBy.mockResolvedValue(null);
+    repository.findByIdAndUser.mockResolvedValue(null);
 
-    await expect(
-      service.findOne('transacao-1', 'user-1'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    const promise = service.findOne('transacao-1', 'user-1');
 
-    expect(repository.findOneBy).toHaveBeenCalledWith({
-      excluidoEm: expect.any(Object),
-      id: 'transacao-1',
-      usuarioId: 'user-1',
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'TRANSACAO_NOT_FOUND',
+      message: 'Transação não encontrada',
+      statusCode: 404,
     });
+
+    expect(repository.findByIdAndUser).toHaveBeenCalledWith(
+      'transacao-1',
+      'user-1',
+    );
   });
 
   it('rejects creation with a non-positive amount', async () => {
@@ -184,9 +201,9 @@ describe('TransacoesService', () => {
         tipo: TipoTransacao.DESPESA,
         valor: 0,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationAppException);
 
-    expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.create).not.toHaveBeenCalled();
     expect(contasService.findOne).not.toHaveBeenCalled();
   });
 });

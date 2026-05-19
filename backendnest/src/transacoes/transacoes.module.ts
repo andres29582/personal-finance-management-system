@@ -5,6 +5,7 @@ import { TransacoesService } from './transacoes.service';
 import { Transacao } from './entities/transacao.entity';
 import { ContasModule } from '../contas/contas.module';
 import { CategoriasModule } from '../categorias/categorias.module';
+import { TransacaoRepository } from './repositories/transacao.repository';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { CategoriasModule } from '../categorias/categorias.module';
     CategoriasModule,
   ],
   controllers: [TransacoesController],
-  providers: [TransacoesService],
+  providers: [TransacoesService, TransacaoRepository],
   exports: [TransacoesService],
 })
 export class TransacoesModule {}

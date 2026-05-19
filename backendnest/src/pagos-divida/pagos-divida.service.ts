@@ -1,16 +1,15 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { randomUUID } from 'crypto';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { assertPositiveFinancialValue } from '../common/financial-validation.util';
-import { notSoftDeleted } from '../common/soft-delete.query';
 import { TipoCategoria } from '../categorias/enums/tipo-categoria.enum';
 import { PagoDivida } from './entities/pago-divida.entity';
 import { CreatePagoDividaDto } from './dto/create-pago-divida.dto';
+import { PagoDividaRepository } from './repositories/pago-divida.repository';
 import { ContasService } from '../contas/contas.service';
 import { DividasService } from '../dividas/dividas.service';
 import { CategoriasService } from '../categorias/categorias.service';
@@ -21,8 +20,7 @@ import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 @Injectable()
 export class PagosDividaService {
   constructor(
-    @InjectRepository(PagoDivida)
-    private readonly pagosDividaRepository: Repository<PagoDivida>,
+    private readonly pagoDividaRepository: PagoDividaRepository,
     private readonly contasService: ContasService,
     private readonly dividasService: DividasService,
     private readonly categoriasService: CategoriasService,
@@ -43,7 +41,8 @@ export class PagosDividaService {
     );
 
     if (categoria.tipo !== TipoCategoria.DESPESA) {
-      throw new BadRequestException(
+      throw new BusinessRuleException(
+        'PAGAMENTO_DIVIDA_CATEGORY_MUST_BE_EXPENSE',
         'A categoria do pagamento de divida deve ser do tipo despesa.',
       );
     }
@@ -103,20 +102,16 @@ export class PagosDividaService {
     usuarioId: string,
   ): Promise<PagoDivida[]> {
     await this.dividasService.findOne(dividaId, usuarioId);
-    return this.pagosDividaRepository.find({
-      where: { dividaId, usuarioId, ...notSoftDeleted },
-      order: { data: 'DESC' },
-    });
+    return this.pagoDividaRepository.findByDivida(dividaId, usuarioId);
   }
 
   async findOne(id: string, usuarioId: string): Promise<PagoDivida> {
-    const pago = await this.pagosDividaRepository.findOneBy({
-      id,
-      usuarioId,
-      ...notSoftDeleted,
-    });
+    const pago = await this.pagoDividaRepository.findActiveById(id, usuarioId);
     if (!pago) {
-      throw new NotFoundException('Pagamento não encontrado');
+      throw new ResourceNotFoundException(
+        'PAGAMENTO_DIVIDA_NOT_FOUND',
+        'Pagamento não encontrado',
+      );
     }
     return pago;
   }

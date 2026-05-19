@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { ValidationAppException } from './exceptions';
 
 export type DateRange = {
   endDate: string;
@@ -18,8 +18,10 @@ export function normalizeMonthReference(monthReference?: string): string {
   }
 
   if (!MONTH_REFERENCE_PATTERN.test(monthReference)) {
-    throw new BadRequestException(
+    throw new ValidationAppException(
+      'INVALID_MONTH_REFERENCE',
       'Mes de referencia invalido. Use o formato YYYY-MM.',
+      { field: 'mes' },
     );
   }
 
@@ -41,12 +43,18 @@ export function resolveMonthRange(monthReference?: string): DateRange {
 
 export function resolveQuarterRange(year: number, quarter: number): DateRange {
   if (!Number.isInteger(year) || year < 2000) {
-    throw new BadRequestException('Ano invalido para relatorio trimestral.');
+    throw new ValidationAppException(
+      'INVALID_REPORT_YEAR',
+      'Ano invalido para relatorio trimestral.',
+      { field: 'ano' },
+    );
   }
 
   if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
-    throw new BadRequestException(
+    throw new ValidationAppException(
+      'INVALID_REPORT_QUARTER',
       'Trimestre invalido. Use valores entre 1 e 4.',
+      { field: 'trimestre' },
     );
   }
 
@@ -66,7 +74,8 @@ export function resolveCustomRange(
   endDate: string,
 ): DateRange {
   if (!startDate || !endDate) {
-    throw new BadRequestException(
+    throw new ValidationAppException(
+      'CUSTOM_RANGE_REQUIRES_DATES',
       'Periodo por intervalo exige dataInicio e dataFim.',
     );
   }
@@ -78,11 +87,15 @@ export function resolveCustomRange(
     Number.isNaN(parsedStartDate.getTime()) ||
     Number.isNaN(parsedEndDate.getTime())
   ) {
-    throw new BadRequestException('Datas invalidas para o relatorio.');
+    throw new ValidationAppException(
+      'INVALID_REPORT_DATES',
+      'Datas invalidas para o relatorio.',
+    );
   }
 
   if (parsedStartDate > parsedEndDate) {
-    throw new BadRequestException(
+    throw new ValidationAppException(
+      'INVALID_REPORT_DATE_ORDER',
       'Data inicial nao pode ser maior que a data final.',
     );
   }

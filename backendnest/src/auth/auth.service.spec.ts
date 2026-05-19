@@ -1,11 +1,14 @@
-﻿import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  AppConflictException,
+  AppUnauthorizedException,
+  ValidationAppException,
+} from '../common/exceptions';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { AuthSessionsService } from './auth-sessions.service';
 import { AuthService } from './auth.service';
+import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 import { CategoriasService } from '../categorias/categorias.service';
 import { LogsService } from '../logs/logs.service';
 import { UsersService } from '../users/users.service';
@@ -43,7 +46,10 @@ describe('AuthService', () => {
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
   let logsService: jest.Mocked<Pick<LogsService, 'logAuthEvent'>>;
   let passwordResetTokenRepository: jest.Mocked<
-    Pick<Repository<PasswordResetToken>, 'findOne' | 'save' | 'update'>
+    Pick<
+      PasswordResetTokenRepository,
+      'createToken' | 'findLatestByHash' | 'markUsed'
+    >
   >;
 
   beforeEach(() => {
@@ -87,9 +93,9 @@ describe('AuthService', () => {
       logAuthEvent: jest.fn(),
     };
     passwordResetTokenRepository = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
+      createToken: jest.fn(),
+      findLatestByHash: jest.fn(),
+      markUsed: jest.fn(),
     };
 
     service = new AuthService(
@@ -99,7 +105,7 @@ describe('AuthService', () => {
       authSessionsService as unknown as AuthSessionsService,
       configService as unknown as ConfigService,
       logsService as unknown as LogsService,
-      passwordResetTokenRepository as unknown as Repository<PasswordResetToken>,
+      passwordResetTokenRepository as unknown as PasswordResetTokenRepository,
     );
   });
 
@@ -169,25 +175,77 @@ describe('AuthService', () => {
     });
   });
 
+  it('rejects registration with an invalid cpf', async () => {
+    const promise = service.register({
+      aceitoPoliticaPrivacidade: true,
+      cep: '01001-000',
+      cidade: 'Sao Paulo',
+      cpf: '123',
+      email: 'ana@example.com',
+      endereco: 'Rua das Flores',
+      nome: 'Ana',
+      numero: '123',
+      senha: 'segredo123',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(ValidationAppException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_INVALID_CPF',
+      field: 'cpf',
+      message: 'CPF deve ter 11 digitos.',
+      statusCode: 422,
+    });
+    expect(usersService.findByEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects registration with an invalid cep', async () => {
+    const promise = service.register({
+      aceitoPoliticaPrivacidade: true,
+      cep: '123',
+      cidade: 'Sao Paulo',
+      cpf: '529.982.247-25',
+      email: 'ana@example.com',
+      endereco: 'Rua das Flores',
+      nome: 'Ana',
+      numero: '123',
+      senha: 'segredo123',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(ValidationAppException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_INVALID_CEP',
+      field: 'cep',
+      message: 'CEP invalido.',
+      statusCode: 422,
+    });
+    expect(usersService.findByEmail).not.toHaveBeenCalled();
+  });
+
   it('rejects registration when the email already exists', async () => {
     usersService.findByEmail.mockResolvedValue({
       email: 'ana@example.com',
       id: 'user-1',
     } as never);
 
-    await expect(
-      service.register({
-        aceitoPoliticaPrivacidade: true,
-        cep: '01001-000',
-        cidade: 'Sao Paulo',
-        cpf: '529.982.247-25',
-        email: 'ana@example.com',
-        endereco: 'Rua das Flores',
-        nome: 'Ana',
-        numero: '123',
-        senha: 'segredo123',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    const promise = service.register({
+      aceitoPoliticaPrivacidade: true,
+      cep: '01001-000',
+      cidade: 'Sao Paulo',
+      cpf: '529.982.247-25',
+      email: 'ana@example.com',
+      endereco: 'Rua das Flores',
+      nome: 'Ana',
+      numero: '123',
+      senha: 'segredo123',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(AppConflictException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_EMAIL_ALREADY_EXISTS',
+      field: 'email',
+      message: 'E-mail ja cadastrado',
+      statusCode: 409,
+    });
   });
 
   it('rejects registration when the cpf already exists', async () => {
@@ -197,19 +255,25 @@ describe('AuthService', () => {
       id: 'user-1',
     } as never);
 
-    await expect(
-      service.register({
-        aceitoPoliticaPrivacidade: true,
-        cep: '01001-000',
-        cidade: 'Sao Paulo',
-        cpf: '529.982.247-25',
-        email: 'ana@example.com',
-        endereco: 'Rua das Flores',
-        nome: 'Ana',
-        numero: '123',
-        senha: 'segredo123',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    const promise = service.register({
+      aceitoPoliticaPrivacidade: true,
+      cep: '01001-000',
+      cidade: 'Sao Paulo',
+      cpf: '529.982.247-25',
+      email: 'ana@example.com',
+      endereco: 'Rua das Flores',
+      nome: 'Ana',
+      numero: '123',
+      senha: 'segredo123',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(AppConflictException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_CPF_ALREADY_EXISTS',
+      field: 'cpf',
+      message: 'CPF ja cadastrado',
+      statusCode: 409,
+    });
   });
 
   it('returns access and refresh tokens on valid sign in', async () => {
@@ -268,9 +332,14 @@ describe('AuthService', () => {
     } as never);
     (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-    await expect(
-      service.signIn('ana@example.com', 'segredo123'),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const promise = service.signIn('ana@example.com', 'segredo123');
+
+    await expect(promise).rejects.toBeInstanceOf(AppUnauthorizedException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_INVALID_CREDENTIALS',
+      message: 'E-mail ou senha invalidos',
+      statusCode: 401,
+    });
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         details: {
@@ -290,9 +359,14 @@ describe('AuthService', () => {
   it('rejects login for unknown emails without revealing which credential failed', async () => {
     usersService.findByEmail.mockResolvedValue(null);
 
-    await expect(
-      service.signIn('nao-existe@example.com', 'segredo123'),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const promise = service.signIn('nao-existe@example.com', 'segredo123');
+
+    await expect(promise).rejects.toBeInstanceOf(AppUnauthorizedException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_INVALID_CREDENTIALS',
+      message: 'E-mail ou senha invalidos',
+      statusCode: 401,
+    });
 
     expect(bcrypt.compare).not.toHaveBeenCalled();
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
@@ -313,9 +387,14 @@ describe('AuthService', () => {
   it('rejects invalid refresh tokens before touching sessions', async () => {
     jwtService.verifyAsync.mockRejectedValue(new Error('invalid token'));
 
-    await expect(
-      service.refreshSession('refresh-token-invalido'),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const promise = service.refreshSession('refresh-token-invalido');
+
+    await expect(promise).rejects.toBeInstanceOf(AppUnauthorizedException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_INVALID_REFRESH_TOKEN',
+      message: 'Refresh token invalido',
+      statusCode: 401,
+    });
 
     expect(authSessionsService.findActiveById).not.toHaveBeenCalled();
   });
@@ -370,12 +449,12 @@ describe('AuthService', () => {
       email: 'ana@example.com',
       id: 'user-1',
     } as never);
-    passwordResetTokenRepository.save.mockResolvedValue({} as never);
+    passwordResetTokenRepository.createToken.mockResolvedValue({} as never);
 
     const result = await service.requestPasswordReset('ana@example.com');
 
     expect(result).not.toHaveProperty('resetToken');
-    expect(passwordResetTokenRepository.save).toHaveBeenCalledWith(
+    expect(passwordResetTokenRepository.createToken).toHaveBeenCalledWith(
       expect.objectContaining({
         tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         userId: 'user-1',

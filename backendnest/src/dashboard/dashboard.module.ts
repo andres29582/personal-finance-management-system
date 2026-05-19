@@ -6,6 +6,7 @@ import { ContasModule } from '../contas/contas.module';
 import { Transacao } from '../transacoes/entities/transacao.entity';
 import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
+import { DashboardRepository } from './repositories/dashboard.repository';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { DashboardService } from './dashboard.service';
     ContasModule,
   ],
   controllers: [DashboardController],
-  providers: [DashboardService],
+  providers: [DashboardService, DashboardRepository],
   exports: [DashboardService],
 })
 export class DashboardModule {}

@@ -1,6 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Categoria } from './entities/categoria.entity';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
@@ -8,22 +6,22 @@ import { UpdateCategoriaDto } from './dto/update-categoria.dto';
 import { DEFAULT_CATEGORIAS } from './default-categorias';
 import { TipoCategoria } from './enums/tipo-categoria.enum';
 import { LogsService } from '../logs/logs.service';
+import { ResourceNotFoundException } from '../common/exceptions';
+import { CategoriaRepository } from './repositories/categoria.repository';
 
 @Injectable()
 export class CategoriasService {
   constructor(
-    @InjectRepository(Categoria)
-    private readonly categoriasRepository: Repository<Categoria>,
+    private readonly categoriaRepository: CategoriaRepository,
     private readonly logsService: LogsService,
   ) {}
 
   async create(usuarioId: string, dto: CreateCategoriaDto): Promise<Categoria> {
-    const categoria = this.categoriasRepository.create({
+    const savedCategory = await this.categoriaRepository.create({
       id: randomUUID(),
       usuarioId,
       ...dto,
     });
-    const savedCategory = await this.categoriasRepository.save(categoria);
 
     await this.logsService.logEntityEvent({
       event: 'CATEGORIA_CREATED',
@@ -43,19 +41,19 @@ export class CategoriasService {
   }
 
   async findAll(usuarioId: string, tipo?: TipoCategoria): Promise<Categoria[]> {
-    return this.categoriasRepository.find({
-      where: { usuarioId, ativa: true, ...(tipo ? { tipo } : {}) },
-      order: { tipo: 'ASC', nome: 'ASC' },
-    });
+    return this.categoriaRepository.findActiveByUser(usuarioId, tipo);
   }
 
   async findOne(id: string, usuarioId: string): Promise<Categoria> {
-    const categoria = await this.categoriasRepository.findOneBy({
+    const categoria = await this.categoriaRepository.findByIdAndUser(
       id,
       usuarioId,
-    });
+    );
     if (!categoria) {
-      throw new NotFoundException('Categoria não encontrada');
+      throw new ResourceNotFoundException(
+        'CATEGORIA_NOT_FOUND',
+        'Categoria não encontrada',
+      );
     }
     return categoria;
   }
@@ -66,7 +64,7 @@ export class CategoriasService {
     dto: UpdateCategoriaDto,
   ): Promise<Categoria> {
     await this.findOne(id, usuarioId);
-    await this.categoriasRepository.update({ id, usuarioId }, dto);
+    await this.categoriaRepository.updateByIdAndUser(id, usuarioId, dto);
     const updatedCategory = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -87,7 +85,9 @@ export class CategoriasService {
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     const category = await this.findOne(id, usuarioId);
-    await this.categoriasRepository.update({ id, usuarioId }, { ativa: false });
+    await this.categoriaRepository.updateByIdAndUser(id, usuarioId, {
+      ativa: false,
+    });
     await this.logsService.logEntityEvent({
       event: 'CATEGORIA_DEACTIVATED',
       module: 'categorias',
@@ -103,23 +103,20 @@ export class CategoriasService {
   }
 
   async seedDefaultCategories(usuarioId: string): Promise<Categoria[]> {
-    const existingCategoriesCount = await this.categoriasRepository.countBy({
-      usuarioId,
-    });
+    const existingCategoriesCount =
+      await this.categoriaRepository.countByUser(usuarioId);
 
     if (existingCategoriesCount > 0) {
       return this.findAll(usuarioId);
     }
 
-    const categories = DEFAULT_CATEGORIAS.map((defaultCategory) =>
-      this.categoriasRepository.create({
-        id: randomUUID(),
-        usuarioId,
-        ...defaultCategory,
-      }),
-    );
+    const categories = DEFAULT_CATEGORIAS.map((defaultCategory) => ({
+      id: randomUUID(),
+      usuarioId,
+      ...defaultCategory,
+    }));
 
-    await this.categoriasRepository.save(categories);
+    await this.categoriaRepository.createMany(categories);
 
     return this.findAll(usuarioId);
   }

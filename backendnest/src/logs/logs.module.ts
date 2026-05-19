@@ -4,11 +4,17 @@ import { AuditLog } from './entities/audit-log.entity';
 import { LogsService } from './logs.service';
 import { RequestContextMiddleware } from './request-context.middleware';
 import { RequestContextService } from './request-context.service';
+import { AuditLogRepository } from './repositories/audit-log.repository';
 
 @Global()
 @Module({
   imports: [TypeOrmModule.forFeature([AuditLog])],
-  providers: [LogsService, RequestContextService, RequestContextMiddleware],
+  providers: [
+    LogsService,
+    RequestContextService,
+    RequestContextMiddleware,
+    AuditLogRepository,
+  ],
   exports: [LogsService, RequestContextService, RequestContextMiddleware],
 })
 export class LogsModule {}

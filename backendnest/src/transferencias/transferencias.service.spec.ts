@@ -1,17 +1,25 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import { Conta } from '../contas/entities/conta.entity';
 import { ContasService } from '../contas/contas.service';
 import { LogsService } from '../logs/logs.service';
 import { Transferencia } from './entities/transferencia.entity';
 import { TransferenciasService } from './transferencias.service';
+import { TransferenciaRepository } from './repositories/transferencia.repository';
 
 describe('TransferenciasService', () => {
   let service: TransferenciasService;
   let repository: jest.Mocked<
     Pick<
-      Repository<Transferencia>,
-      'create' | 'find' | 'findOneBy' | 'save' | 'update'
+      TransferenciaRepository,
+      | 'create'
+      | 'findByIdAndUser'
+      | 'findByUser'
+      | 'softDeleteByIdAndUser'
+      | 'updateByIdAndUser'
     >
   >;
   let contasService: jest.Mocked<Pick<ContasService, 'findOne'>>;
@@ -20,10 +28,10 @@ describe('TransferenciasService', () => {
   beforeEach(() => {
     repository = {
       create: jest.fn(),
-      find: jest.fn(),
-      findOneBy: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
+      findByIdAndUser: jest.fn(),
+      findByUser: jest.fn(),
+      softDeleteByIdAndUser: jest.fn(),
+      updateByIdAndUser: jest.fn(),
     };
     contasService = {
       findOne: jest.fn(),
@@ -33,23 +41,28 @@ describe('TransferenciasService', () => {
     };
 
     service = new TransferenciasService(
-      repository as unknown as Repository<Transferencia>,
+      repository as unknown as TransferenciaRepository,
       contasService as unknown as ContasService,
       logsService as unknown as LogsService,
     );
   });
 
   it('rejects transfer between the same account', async () => {
-    await expect(
-      service.create('user-1', {
-        contaDestinoId: 'conta-1',
-        contaOrigemId: 'conta-1',
-        data: '2026-04-01',
-        valor: 100,
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    const promise = service.create('user-1', {
+      contaDestinoId: 'conta-1',
+      contaOrigemId: 'conta-1',
+      data: '2026-04-01',
+      valor: 100,
+    });
 
-    expect(repository.save).not.toHaveBeenCalled();
+    await expect(promise).rejects.toBeInstanceOf(BusinessRuleException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'TRANSFERENCIA_SAME_ACCOUNT',
+      message: 'Conta origem e destino devem ser diferentes',
+      statusCode: 400,
+    });
+
+    expect(repository.create).not.toHaveBeenCalled();
   });
 
   it('rejects transfer with a non-positive amount', async () => {
@@ -60,7 +73,7 @@ describe('TransferenciasService', () => {
         data: '2026-04-01',
         valor: 0,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationAppException);
 
     expect(contasService.findOne).not.toHaveBeenCalled();
   });
@@ -74,13 +87,13 @@ describe('TransferenciasService', () => {
         data: '2026-04-01',
         valor: 100,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationAppException);
 
     expect(contasService.findOne).not.toHaveBeenCalled();
   });
 
   it('rejects transfer update with a non-positive amount', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findByIdAndUser.mockResolvedValue({
       id: 'transferencia-1',
       usuarioId: 'user-1',
       valor: 100,
@@ -90,13 +103,13 @@ describe('TransferenciasService', () => {
       service.update('transferencia-1', 'user-1', {
         valor: 0,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationAppException);
 
-    expect(repository.update).not.toHaveBeenCalled();
+    expect(repository.updateByIdAndUser).not.toHaveBeenCalled();
   });
 
   it('rejects transfer update with a negative commission', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findByIdAndUser.mockResolvedValue({
       id: 'transferencia-1',
       usuarioId: 'user-1',
       valor: 100,
@@ -106,9 +119,9 @@ describe('TransferenciasService', () => {
       service.update('transferencia-1', 'user-1', {
         comissao: -1,
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationAppException);
 
-    expect(repository.update).not.toHaveBeenCalled();
+    expect(repository.updateByIdAndUser).not.toHaveBeenCalled();
   });
 
   it('rejects transfer when a loaded account does not belong to the user', async () => {
@@ -122,16 +135,21 @@ describe('TransferenciasService', () => {
         usuarioId: 'user-2',
       } as Conta);
 
-    await expect(
-      service.create('user-1', {
-        contaDestinoId: 'conta-2',
-        contaOrigemId: 'conta-1',
-        data: '2026-04-01',
-        valor: 100,
-      }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    const promise = service.create('user-1', {
+      contaDestinoId: 'conta-2',
+      contaOrigemId: 'conta-1',
+      data: '2026-04-01',
+      valor: 100,
+    });
 
-    expect(repository.save).not.toHaveBeenCalled();
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'TRANSFERENCIA_ACCOUNT_NOT_FOUND',
+      message: 'Conta nao encontrada',
+      statusCode: 404,
+    });
+
+    expect(repository.create).not.toHaveBeenCalled();
   });
 
   it('creates a transfer when both accounts belong to the user', async () => {
@@ -153,8 +171,7 @@ describe('TransferenciasService', () => {
         id: 'conta-2',
         usuarioId: 'user-1',
       } as Conta);
-    repository.create.mockReturnValue(transferencia);
-    repository.save.mockResolvedValue(transferencia);
+    repository.create.mockResolvedValue(transferencia);
 
     const result = await service.create('user-1', {
       contaDestinoId: 'conta-2',
@@ -165,7 +182,14 @@ describe('TransferenciasService', () => {
 
     expect(contasService.findOne).toHaveBeenCalledWith('conta-1', 'user-1');
     expect(contasService.findOne).toHaveBeenCalledWith('conta-2', 'user-1');
-    expect(repository.save).toHaveBeenCalledWith(transferencia);
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contaDestinoId: 'conta-2',
+        contaOrigemId: 'conta-1',
+        usuarioId: 'user-1',
+        valor: 100,
+      }),
+    );
     expect(result.id).toBe('transferencia-1');
   });
 
@@ -189,8 +213,7 @@ describe('TransferenciasService', () => {
         id: 'conta-2',
         usuarioId: 'user-1',
       } as Conta);
-    repository.create.mockReturnValue(transferencia);
-    repository.save.mockResolvedValue(transferencia);
+    repository.create.mockResolvedValue(transferencia);
 
     await service.create('user-1', {
       comissao: 3.5,
@@ -218,14 +241,15 @@ describe('TransferenciasService', () => {
       valor: 100,
     } as Transferencia;
 
-    repository.findOneBy.mockResolvedValue(transferencia);
+    repository.findByIdAndUser.mockResolvedValue(transferencia);
 
     await service.update('transferencia-1', 'user-1', {
       descricao: 'Pix ajustado',
     });
 
-    expect(repository.update).toHaveBeenCalledWith(
-      { id: 'transferencia-1', usuarioId: 'user-1' },
+    expect(repository.updateByIdAndUser).toHaveBeenCalledWith(
+      'transferencia-1',
+      'user-1',
       { descricao: 'Pix ajustado' },
     );
   });
@@ -237,18 +261,11 @@ describe('TransferenciasService', () => {
       usuarioId: 'user-1',
     } as Transferencia;
 
-    repository.find.mockResolvedValue([activeTransfer]);
+    repository.findByUser.mockResolvedValue([activeTransfer]);
 
     const result = await service.findAll('user-1');
 
-    expect(repository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
-    );
+    expect(repository.findByUser).toHaveBeenCalledWith('user-1');
     expect(result).toEqual([activeTransfer]);
   });
 
@@ -259,15 +276,14 @@ describe('TransferenciasService', () => {
       usuarioId: 'user-1',
     } as Transferencia;
 
-    repository.findOneBy.mockResolvedValue(activeTransfer);
+    repository.findByIdAndUser.mockResolvedValue(activeTransfer);
 
     const result = await service.findOne('transferencia-1', 'user-1');
 
-    expect(repository.findOneBy).toHaveBeenCalledWith({
-      excluidoEm: expect.any(Object),
-      id: 'transferencia-1',
-      usuarioId: 'user-1',
-    });
+    expect(repository.findByIdAndUser).toHaveBeenCalledWith(
+      'transferencia-1',
+      'user-1',
+    );
     expect(result).toBe(activeTransfer);
   });
 
@@ -278,37 +294,34 @@ describe('TransferenciasService', () => {
       usuarioId: 'user-1',
     } as Transferencia;
 
-    repository.find.mockResolvedValue([activeTransfer]);
+    repository.findByUser.mockResolvedValue([activeTransfer]);
 
     const result = await service.findAll('user-1');
 
-    expect(repository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          excluidoEm: expect.any(Object),
-          usuarioId: 'user-1',
-        }),
-      }),
-    );
+    expect(repository.findByUser).toHaveBeenCalledWith('user-1');
     expect(result).toEqual([activeTransfer]);
   });
 
   it('does not find a transfer when it is soft-deleted', async () => {
-    repository.findOneBy.mockResolvedValue(null);
+    repository.findByIdAndUser.mockResolvedValue(null);
 
-    await expect(
-      service.findOne('transferencia-1', 'user-1'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    const promise = service.findOne('transferencia-1', 'user-1');
 
-    expect(repository.findOneBy).toHaveBeenCalledWith({
-      excluidoEm: expect.any(Object),
-      id: 'transferencia-1',
-      usuarioId: 'user-1',
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'TRANSFERENCIA_NOT_FOUND',
+      message: 'Transferência não encontrada',
+      statusCode: 404,
     });
+
+    expect(repository.findByIdAndUser).toHaveBeenCalledWith(
+      'transferencia-1',
+      'user-1',
+    );
   });
 
   it('soft-deletes a transfer using id and user criteria', async () => {
-    repository.findOneBy.mockResolvedValue({
+    repository.findByIdAndUser.mockResolvedValue({
       contaDestinoId: 'conta-2',
       contaOrigemId: 'conta-1',
       id: 'transferencia-1',
@@ -318,9 +331,9 @@ describe('TransferenciasService', () => {
 
     await service.remove('transferencia-1', 'user-1');
 
-    expect(repository.update).toHaveBeenCalledWith(
-      { id: 'transferencia-1', usuarioId: 'user-1' },
-      { excluidoEm: expect.any(Date) as Date },
+    expect(repository.softDeleteByIdAndUser).toHaveBeenCalledWith(
+      'transferencia-1',
+      'user-1',
     );
     expect(logsService.logEntityEvent).toHaveBeenCalledWith(
       expect.objectContaining({

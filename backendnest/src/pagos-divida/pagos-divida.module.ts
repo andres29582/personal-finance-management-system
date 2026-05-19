@@ -6,6 +6,7 @@ import { PagoDivida } from './entities/pago-divida.entity';
 import { ContasModule } from '../contas/contas.module';
 import { DividasModule } from '../dividas/dividas.module';
 import { CategoriasModule } from '../categorias/categorias.module';
+import { PagoDividaRepository } from './repositories/pago-divida.repository';
 
 @Module({
   imports: [
@@ -15,6 +16,6 @@ import { CategoriasModule } from '../categorias/categorias.module';
     CategoriasModule,
   ],
   controllers: [PagosDividaController],
-  providers: [PagosDividaService],
+  providers: [PagosDividaService, PagoDividaRepository],
 })
 export class PagosDividaModule {}

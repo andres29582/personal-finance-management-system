@@ -1,27 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Alerta } from './entities/alerta.entity';
 import { CreateAlertaDto } from './dto/create-alerta.dto';
 import { UpdateAlertaDto } from './dto/update-alerta.dto';
 import { LogsService } from '../logs/logs.service';
+import { ResourceNotFoundException } from '../common/exceptions';
+import { AlertaRepository } from './repositories/alerta.repository';
 
 @Injectable()
 export class AlertasService {
   constructor(
-    @InjectRepository(Alerta)
-    private readonly alertasRepository: Repository<Alerta>,
+    private readonly alertaRepository: AlertaRepository,
     private readonly logsService: LogsService,
   ) {}
 
   async create(usuarioId: string, dto: CreateAlertaDto): Promise<Alerta> {
-    const alerta = this.alertasRepository.create({
+    const saved = await this.alertaRepository.create({
       id: randomUUID(),
       usuarioId,
       ...dto,
     });
-    const saved = await this.alertasRepository.save(alerta);
     await this.logsService.logEntityEvent({
       event: 'ALERTA_CREATED',
       module: 'alertas',
@@ -35,16 +33,16 @@ export class AlertasService {
   }
 
   async findAll(usuarioId: string): Promise<Alerta[]> {
-    return this.alertasRepository.find({
-      where: { usuarioId, ativa: true },
-      order: { createdAt: 'DESC' },
-    });
+    return this.alertaRepository.findActiveByUser(usuarioId);
   }
 
   async findOne(id: string, usuarioId: string): Promise<Alerta> {
-    const alerta = await this.alertasRepository.findOneBy({ id, usuarioId });
+    const alerta = await this.alertaRepository.findByIdAndUser(id, usuarioId);
     if (!alerta) {
-      throw new NotFoundException('Alerta não encontrado');
+      throw new ResourceNotFoundException(
+        'ALERTA_NOT_FOUND',
+        'Alerta não encontrado',
+      );
     }
     return alerta;
   }
@@ -55,7 +53,7 @@ export class AlertasService {
     dto: UpdateAlertaDto,
   ): Promise<Alerta> {
     await this.findOne(id, usuarioId);
-    await this.alertasRepository.update({ id, usuarioId }, dto);
+    await this.alertaRepository.updateByIdAndUser(id, usuarioId, dto);
     const updated = await this.findOne(id, usuarioId);
     await this.logsService.logEntityEvent({
       event: 'ALERTA_UPDATED',
@@ -71,7 +69,9 @@ export class AlertasService {
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     await this.findOne(id, usuarioId);
-    await this.alertasRepository.update({ id, usuarioId }, { ativa: false });
+    await this.alertaRepository.updateByIdAndUser(id, usuarioId, {
+      ativa: false,
+    });
     await this.logsService.logEntityEvent({
       event: 'ALERTA_DEACTIVATED',
       module: 'alertas',
@@ -85,12 +85,9 @@ export class AlertasService {
 
   async markNotified(id: string, usuarioId: string): Promise<void> {
     await this.findOne(id, usuarioId);
-    await this.alertasRepository.update(
-      { id, usuarioId },
-      {
-        ultimaNotificacion: new Date(),
-      },
-    );
+    await this.alertaRepository.updateByIdAndUser(id, usuarioId, {
+      ultimaNotificacion: new Date(),
+    });
     await this.logsService.logEntityEvent({
       event: 'ALERTA_NOTIFIED',
       module: 'alertas',

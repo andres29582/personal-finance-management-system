@@ -1,5 +1,5 @@
-import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AppUnauthorizedException } from '../../common/exceptions';
 import { AuthSessionsService } from '../auth-sessions.service';
 import { JwtStrategy } from './jwt.strategy';
 import { RequestContextService } from '../../logs/request-context.service';
@@ -35,13 +35,18 @@ describe('JwtStrategy', () => {
   });
 
   it('rejects payloads without a session id', async () => {
-    await expect(
-      strategy.validate({} as never, {
-        email: 'ana@example.com',
-        nome: 'Ana',
-        sub: 'user-1',
-      }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const promise = strategy.validate({} as never, {
+      email: 'ana@example.com',
+      nome: 'Ana',
+      sub: 'user-1',
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(AppUnauthorizedException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_INVALID_SESSION',
+      message: 'Sessao invalida',
+      statusCode: 401,
+    });
 
     expect(authSessionsService.findActiveById).not.toHaveBeenCalled();
   });
@@ -56,7 +61,7 @@ describe('JwtStrategy', () => {
         sid: 'session-1',
         sub: 'user-1',
       }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(AppUnauthorizedException);
   });
 
   it('rejects tokens whose session belongs to another user', async () => {
@@ -73,7 +78,7 @@ describe('JwtStrategy', () => {
         sid: 'session-1',
         sub: 'user-1',
       }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(AppUnauthorizedException);
   });
 
   it('rejects tokens whose session is expired', async () => {
@@ -90,7 +95,7 @@ describe('JwtStrategy', () => {
         sid: 'session-1',
         sub: 'user-1',
       }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(AppUnauthorizedException);
   });
 
   it('accepts a valid token and stores the user id in request context', async () => {

@@ -1,7 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { ResourceNotFoundException } from '../common/exceptions';
 import {
   assertNonNegativeFinancialValue,
   assertPositiveFinancialValue,
@@ -11,12 +10,12 @@ import { CreateDividaDto } from './dto/create-divida.dto';
 import { UpdateDividaDto } from './dto/update-divida.dto';
 import { ContasService } from '../contas/contas.service';
 import { LogsService } from '../logs/logs.service';
+import { DividaRepository } from './repositories/divida.repository';
 
 @Injectable()
 export class DividasService {
   constructor(
-    @InjectRepository(Divida)
-    private readonly dividasRepository: Repository<Divida>,
+    private readonly dividaRepository: DividaRepository,
     private readonly contasService: ContasService,
     private readonly logsService: LogsService,
   ) {}
@@ -34,12 +33,11 @@ export class DividasService {
       await this.contasService.findOne(dto.contaId, usuarioId);
     }
 
-    const divida = this.dividasRepository.create({
+    const savedDebt = await this.dividaRepository.create({
       id: randomUUID(),
       usuarioId,
       ...dto,
     });
-    const savedDebt = await this.dividasRepository.save(divida);
 
     await this.logsService.logEntityEvent({
       event: 'DIVIDA_CREATED',
@@ -59,16 +57,16 @@ export class DividasService {
   }
 
   async findAll(usuarioId: string): Promise<Divida[]> {
-    return this.dividasRepository.find({
-      where: { usuarioId, ativa: true },
-      order: { proximoVencimiento: 'ASC' },
-    });
+    return this.dividaRepository.findActiveByUser(usuarioId);
   }
 
   async findOne(id: string, usuarioId: string): Promise<Divida> {
-    const divida = await this.dividasRepository.findOneBy({ id, usuarioId });
+    const divida = await this.dividaRepository.findByIdAndUser(id, usuarioId);
     if (!divida) {
-      throw new NotFoundException('Dívida não encontrada');
+      throw new ResourceNotFoundException(
+        'DIVIDA_NOT_FOUND',
+        'Dívida não encontrada',
+      );
     }
     return divida;
   }
@@ -87,7 +85,7 @@ export class DividasService {
       assertNonNegativeFinancialValue(dto.tasaInteres, 'Taxa de juros');
     }
 
-    await this.dividasRepository.update({ id, usuarioId }, dto);
+    await this.dividaRepository.updateByIdAndUser(id, usuarioId, dto);
     const updatedDebt = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -108,7 +106,9 @@ export class DividasService {
 
   async deactivate(id: string, usuarioId: string): Promise<void> {
     const debt = await this.findOne(id, usuarioId);
-    await this.dividasRepository.update({ id, usuarioId }, { ativa: false });
+    await this.dividaRepository.updateByIdAndUser(id, usuarioId, {
+      ativa: false,
+    });
     await this.logsService.logEntityEvent({
       event: 'DIVIDA_DEACTIVATED',
       module: 'dividas',

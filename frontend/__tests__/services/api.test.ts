@@ -124,6 +124,21 @@ describe('api', () => {
     expect(mockGetToken).toHaveBeenCalledTimes(1);
   });
 
+  it('desembrulha respostas no formato padrao da API', async () => {
+    const { api } = await loadApi(async (config) => {
+      return buildResponse(config, {
+        data: { ok: true },
+        requestId: 'request-1',
+        success: true,
+        timestamp: '2026-05-18T00:00:00.000Z',
+      });
+    });
+
+    const response = await api.get('/dashboard');
+
+    expect(response.data).toEqual({ ok: true });
+  });
+
   it('nao adiciona token Bearer nas rotas publicas de autenticacao', async () => {
     currentAccessToken = 'access-token-expirado';
     const requests: Array<{ authorization: unknown; url?: string }> = [];
@@ -175,8 +190,13 @@ describe('api', () => {
         refreshBodies.push(parseRequestData(config.data));
 
         return buildResponse(config, {
-          access_token: 'access-token-renovado',
-          refresh_token: 'refresh-token-renovado',
+          data: {
+            access_token: 'access-token-renovado',
+            refresh_token: 'refresh-token-renovado',
+          },
+          requestId: 'request-refresh',
+          success: true,
+          timestamp: '2026-05-18T00:00:00.000Z',
         });
       }
 
@@ -300,7 +320,7 @@ describe('api', () => {
     });
 
     await expect(
-      api.post('/auth/refresh', { refreshToken: 'token' })
+      api.post('/auth/refresh', { refreshToken: 'token' }),
     ).rejects.toBeDefined();
     expect(mockClearSession).toHaveBeenCalled();
   });
