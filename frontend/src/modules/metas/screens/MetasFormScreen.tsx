@@ -1,19 +1,25 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { TextInput } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppOptionGroup } from '../../../../components/app-option-group';
-import { AppCard, AppField, AppScreen, appInputStyles } from '../../../../components/app-screen';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
 import { listDividas } from '../../dividas/services/dividaService';
 import { Divida } from '../../dividas/types/divida';
-import { createMeta, getMetaById, updateMeta } from '../services/metaService';
-import { TipoMeta } from '../types/meta';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassOptionGroup,
+  GlassPanel,
+  GlassTextInput,
+} from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
 import { parseDecimalInput } from '../../../../utils/number-input';
+import { createMeta, getMetaById, updateMeta } from '../services/metaService';
+import { TipoMeta } from '../types/meta';
 
 export function MetasFormScreen() {
   const router = useRouter();
@@ -56,13 +62,16 @@ export function MetasFormScreen() {
       } catch (error) {
         const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar a meta.');
         setMessage(resolvedError.message);
+        if (resolvedError.unauthorized) {
+          router.replace('/login');
+        }
       } finally {
         setLoading(false);
       }
     }
 
-    loadData();
-  }, [metaId]);
+    void loadData();
+  }, [metaId, router]);
 
   async function handleSave() {
     const objetivo = parseDecimalInput(montoObjetivo);
@@ -104,94 +113,130 @@ export function MetasFormScreen() {
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel salvar a meta.');
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return <AppLoading label="Carregando meta..." />;
-  }
-
   return (
-    <AppScreen
-      title={metaId ? 'Editar meta' : 'Nova meta'}
-      actionLabel="Voltar"
-      onActionPress={() => router.back()}
+    <FinanceAppShell
+      activeRoute="/metas"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          eyebrow="Planejamento"
+          subtitle="Defina objetivos e acompanhe progresso financeiro."
+          title={metaId ? 'Editar meta' : 'Nova meta'}
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppField label="Nome">
-          <TextInput style={appInputStyles.input} value={nome} onChangeText={setNome} />
-        </AppField>
+      {loading ? (
+        <GlassPanel>
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={FinanceTheme.colors.cyan} />
+            <Text style={styles.loadingText}>Carregando meta...</Text>
+          </View>
+        </GlassPanel>
+      ) : (
+        <GlassPanel>
+          <GlassField label="Nome">
+            <GlassTextInput value={nome} onChangeText={setNome} />
+          </GlassField>
 
-        <AppField label="Tipo">
-          <AppOptionGroup
-            options={[
-              { label: 'Economia', value: 'economia' },
-              { label: 'Reducao divida', value: 'reducao_divida' },
-            ]}
-            selectedValue={tipo}
-            onChange={(value) => setTipo(value as TipoMeta)}
-          />
-        </AppField>
-
-        <AppField label="Valor objetivo">
-          <TextInput
-            style={appInputStyles.input}
-            value={montoObjetivo}
-            onChangeText={setMontoObjetivo}
-            keyboardType="decimal-pad"
-          />
-        </AppField>
-
-        {metaId ? (
-          <AppField label="Valor atual">
-            <TextInput
-              style={appInputStyles.input}
-              value={montoActual}
-              onChangeText={setMontoActual}
-              keyboardType="decimal-pad"
+          <GlassField label="Tipo">
+            <GlassOptionGroup
+              options={[
+                { label: 'Economia', value: 'economia' },
+                { label: 'Reducao divida', value: 'reducao_divida' },
+              ]}
+              value={tipo}
+              onChange={(value) => setTipo(value as TipoMeta)}
             />
-          </AppField>
-        ) : null}
+          </GlassField>
 
-        <AppField label="Data limite">
-          <TextInput
-            style={appInputStyles.input}
-            value={fechaLimite}
-            onChangeText={setFechaLimite}
-            placeholder="2026-12-31"
-            placeholderTextColor="#8A8A8A"
+          <GlassField label="Valor objetivo">
+            <GlassTextInput
+              keyboardType="decimal-pad"
+              value={montoObjetivo}
+              onChangeText={setMontoObjetivo}
+            />
+          </GlassField>
+
+          {metaId ? (
+            <GlassField label="Valor atual">
+              <GlassTextInput
+                keyboardType="decimal-pad"
+                value={montoActual}
+                onChangeText={setMontoActual}
+              />
+            </GlassField>
+          ) : null}
+
+          <GlassField label="Data limite">
+            <GlassTextInput
+              placeholder="2026-12-31"
+              value={fechaLimite}
+              onChangeText={setFechaLimite}
+            />
+          </GlassField>
+
+          <GlassField label="Conta vinculada">
+            <GlassOptionGroup
+              options={[
+                { label: 'Nenhuma', value: '' },
+                ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
+              ]}
+              value={contaId}
+              onChange={setContaId}
+            />
+          </GlassField>
+
+          <GlassField label="Divida vinculada">
+            <GlassOptionGroup
+              options={[
+                { label: 'Nenhuma', value: '' },
+                ...dividas.map((divida) => ({ label: divida.nome, value: divida.id })),
+              ]}
+              value={dividaId}
+              onChange={setDividaId}
+            />
+          </GlassField>
+
+          {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+          <GlassButton
+            label={saving ? 'Salvando...' : 'Salvar meta'}
+            onPress={handleSave}
+            disabled={saving}
           />
-        </AppField>
-
-        <AppField label="Conta vinculada">
-          <AppOptionGroup
-            options={[
-              { label: 'Nenhuma', value: '' },
-              ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
-            ]}
-            selectedValue={contaId}
-            onChange={setContaId}
-          />
-        </AppField>
-
-        <AppField label="Divida vinculada">
-          <AppOptionGroup
-            options={[
-              { label: 'Nenhuma', value: '' },
-              ...dividas.map((divida) => ({ label: divida.nome, value: divida.id })),
-            ]}
-            selectedValue={dividaId}
-            onChange={setDividaId}
-          />
-        </AppField>
-
-        <AppMessage tone="error" value={message} />
-        <AppButton label={saving ? 'Salvando...' : 'Salvar meta'} onPress={handleSave} disabled={saving} />
-      </AppCard>
-    </AppScreen>
+        </GlassPanel>
+      )}
+    </FinanceAppShell>
   );
 }
 
 export default MetasFormScreen;
+
+const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  loadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+  },
+  loadingText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+  },
+});

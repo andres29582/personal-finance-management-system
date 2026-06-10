@@ -1,31 +1,32 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, TextInput } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import {
-  AppCard,
-  AppField,
-  AppScreen,
-  AppStatusCard,
-  appInputStyles,
-} from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
-import { useCepAutofill } from '../../../shared/hooks/use-cep-autofill';
-import {
-  getCurrentUserProfile,
-  updateCurrentUserProfile,
-} from '../services/userService';
+import { StyleSheet, Text, View } from 'react-native';
 import { saveUser } from '../../../../storage/authStorage';
-import { CepLookupResponse } from '../../../shared/types/cep';
-import { UserProfile } from '../types/user';
-import { resolveApiError } from '../../../../utils/api-error';
 import {
   formatCpfInput,
   isValidCep,
   isValidCpf,
 } from '../../../../utils/br-input';
+import { resolveApiError } from '../../../../utils/api-error';
 import { formatDate } from '../../../../utils/formatters';
+import { useCepAutofill } from '../../../shared/hooks/use-cep-autofill';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassPanel,
+  GlassStatusCard,
+  GlassTextInput,
+} from '../../../shared/ui';
+import { CepLookupResponse } from '../../../shared/types/cep';
+import {
+  getCurrentUserProfile,
+  updateCurrentUserProfile,
+} from '../services/userService';
+import { UserProfile } from '../types/user';
 
 type UserField =
   | 'cep'
@@ -111,7 +112,7 @@ export function UsuarioScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadProfile();
+      void loadProfile();
     }, [loadProfile]),
   );
 
@@ -203,16 +204,30 @@ export function UsuarioScreen() {
   }
 
   return (
-    <AppScreen
-      title="Meu perfil"
-      subtitle={profile?.dataRegistro ? `Cadastro em ${formatDate(profile.dataRegistro)}` : 'Atualize seus dados pessoais'}
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
-      actionLabel="Atualizar"
-      onActionPress={loadProfile}
+    <FinanceAppShell
+      activeRoute="/usuario"
+      header={
+        <FinanceAppHeader
+          action={
+            <View style={styles.headerActions}>
+              <GlassButton label="Voltar" onPress={() => router.replace('/dashboard' as never)} variant="ghost" />
+              <GlassButton label="Atualizar" onPress={loadProfile} variant="ghost" />
+            </View>
+          }
+          eyebrow="Conta e privacidade"
+          subtitle={
+            profile?.dataRegistro
+              ? `Cadastro em ${formatDate(profile.dataRegistro)}`
+              : 'Atualize seus dados pessoais'
+          }
+          title="Meu perfil"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
       {loading && !profile ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Carregando perfil"
           description="Estamos buscando seus dados mais recentes."
           loading
@@ -220,7 +235,7 @@ export function UsuarioScreen() {
       ) : null}
 
       {!loading && !!message && !profile ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nao foi possivel carregar o perfil"
           description={message}
           tone="error"
@@ -230,7 +245,7 @@ export function UsuarioScreen() {
       ) : null}
 
       {!loading && !message && !profile ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Perfil indisponivel"
           description="Nao encontramos informacoes suficientes para montar esta tela."
           actionLabel="Atualizar"
@@ -240,12 +255,11 @@ export function UsuarioScreen() {
 
       {profile ? (
         <>
-          <AppCard>
+          <GlassPanel>
             <Text style={styles.sectionTitle}>Informacoes pessoais</Text>
 
-            <AppField label="Nome completo" error={errors.nome}>
-              <TextInput
-                style={[appInputStyles.input, errors.nome ? appInputStyles.inputError : null]}
+            <GlassField label="Nome completo" error={errors.nome}>
+              <GlassTextInput
                 value={nome}
                 onChangeText={(value) => {
                   setNome(value);
@@ -254,11 +268,10 @@ export function UsuarioScreen() {
                 editable={!loading && !saving}
                 placeholder="Seu nome completo"
               />
-            </AppField>
+            </GlassField>
 
-            <AppField label="E-mail" error={errors.email}>
-              <TextInput
-                style={[appInputStyles.input, errors.email ? appInputStyles.inputError : null]}
+            <GlassField label="E-mail" error={errors.email}>
+              <GlassTextInput
                 value={email}
                 onChangeText={(value) => {
                   setEmail(value);
@@ -269,11 +282,10 @@ export function UsuarioScreen() {
                 autoCapitalize="none"
                 placeholder="voce@exemplo.com"
               />
-            </AppField>
+            </GlassField>
 
-            <AppField label="CPF" error={errors.cpf}>
-              <TextInput
-                style={[appInputStyles.input, errors.cpf ? appInputStyles.inputError : null]}
+            <GlassField label="CPF" error={errors.cpf}>
+              <GlassTextInput
                 value={cpf}
                 onChangeText={(value) => {
                   setCpf(formatCpfInput(value));
@@ -284,15 +296,14 @@ export function UsuarioScreen() {
                 maxLength={14}
                 placeholder="000.000.000-00"
               />
-            </AppField>
-          </AppCard>
+            </GlassField>
+          </GlassPanel>
 
-          <AppCard>
+          <GlassPanel>
             <Text style={styles.sectionTitle}>Endereco</Text>
 
-            <AppField label="CEP" error={errors.cep}>
-              <TextInput
-                style={[appInputStyles.input, errors.cep ? appInputStyles.inputError : null]}
+            <GlassField label="CEP" error={errors.cep}>
+              <GlassTextInput
                 value={cep}
                 onChangeText={(value) => {
                   setCep(handleCepValueChange(value));
@@ -303,15 +314,15 @@ export function UsuarioScreen() {
                 maxLength={9}
                 placeholder="00000-000"
               />
-            </AppField>
-            <AppMessage
-              tone={cepLookupTone}
-              value={cepLookupLoading || cepLookupMessage ? cepLookupMessage : undefined}
-            />
+            </GlassField>
+            {cepLookupLoading || cepLookupMessage ? (
+              <Text style={[styles.lookupMessage, lookupStyles[cepLookupTone]]}>
+                {cepLookupMessage}
+              </Text>
+            ) : null}
 
-            <AppField label="Endereco" error={errors.endereco}>
-              <TextInput
-                style={[appInputStyles.input, errors.endereco ? appInputStyles.inputError : null]}
+            <GlassField label="Endereco" error={errors.endereco}>
+              <GlassTextInput
                 value={endereco}
                 onChangeText={(value) => {
                   setEndereco(value);
@@ -320,11 +331,10 @@ export function UsuarioScreen() {
                 editable={!loading && !saving}
                 placeholder="Rua, avenida ou logradouro"
               />
-            </AppField>
+            </GlassField>
 
-            <AppField label="Numero" error={errors.numero}>
-              <TextInput
-                style={[appInputStyles.input, errors.numero ? appInputStyles.inputError : null]}
+            <GlassField label="Numero" error={errors.numero}>
+              <GlassTextInput
                 value={numero}
                 onChangeText={(value) => {
                   setNumero(value);
@@ -333,11 +343,10 @@ export function UsuarioScreen() {
                 editable={!loading && !saving}
                 placeholder="123 ou S/N"
               />
-            </AppField>
+            </GlassField>
 
-            <AppField label="Cidade" error={errors.cidade}>
-              <TextInput
-                style={[appInputStyles.input, errors.cidade ? appInputStyles.inputError : null]}
+            <GlassField label="Cidade" error={errors.cidade}>
+              <GlassTextInput
                 value={cidade}
                 onChangeText={(value) => {
                   setCidade(value);
@@ -346,39 +355,76 @@ export function UsuarioScreen() {
                 editable={!loading && !saving}
                 placeholder="Sua cidade"
               />
-            </AppField>
-          </AppCard>
+            </GlassField>
+          </GlassPanel>
 
-          <AppCard>
+          <GlassPanel>
             <Text style={styles.metaLabel}>
               Moeda padrao: {profile.moedaPadrao ?? 'BRL'}
             </Text>
-            <AppMessage tone="error" value={message} />
-            <AppMessage tone="success" value={successMessage} />
-            <AppButton
+            {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+            {successMessage ? <Text style={styles.successMessage}>{successMessage}</Text> : null}
+            <GlassButton
               label={saving ? 'Salvando...' : 'Salvar alteracoes'}
               onPress={handleSave}
               disabled={loading || saving}
             />
-          </AppCard>
+          </GlassPanel>
         </>
       ) : null}
-    </AppScreen>
+    </FinanceAppShell>
   );
 }
 
 const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.sm,
+  },
+  lookupMessage: {
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    marginTop: -FinanceTheme.spacing.xs,
+  },
   metaLabel: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: '600',
-    marginBottom: ContaTheme.spacing.sm,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
   },
   sectionTitle: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
+    marginBottom: FinanceTheme.spacing.sm,
+  },
+  successMessage: {
+    color: FinanceTheme.colors.success,
+    fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
-    marginBottom: ContaTheme.spacing.sm,
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+});
+
+const lookupStyles = StyleSheet.create({
+  error: {
+    color: FinanceTheme.colors.danger,
+  },
+  muted: {
+    color: FinanceTheme.colors.textMuted,
+  },
+  success: {
+    color: FinanceTheme.colors.success,
   },
 });
 

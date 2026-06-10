@@ -1,60 +1,61 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "expo-router";
-import { StyleSheet, Text, TextInput, View } from "react-native";
-import { AppButton } from "../../../../components/app-button";
-import { AppMessage } from "../../../../components/app-message";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { StyleSheet, Text, View } from 'react-native';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
-  AppCard,
-  AppField,
-  AppScreen,
-  AppStatusCard,
-  appInputStyles,
-} from "../../../../components/app-screen";
-import { ContaTheme } from "../../../../constants/contas-theme";
-import { getPrevisaoDeficit } from "../services/previsaoService";
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassPanel,
+  GlassStatusCard,
+  GlassTextInput,
+} from '../../../shared/ui';
+import { resolveApiError } from '../../../../utils/api-error';
+import { formatCurrency, getCurrentMonthReference } from '../../../../utils/formatters';
+import { getPrevisaoDeficit } from '../services/previsaoService';
 import {
   DeficitFeatures,
   PrevisaoDeficitResponse,
   RiscoDeficit,
-} from "../types/previsao";
-import { resolveApiError } from "../../../../utils/api-error";
-import { formatCurrency, getCurrentMonthReference } from "../../../../utils/formatters";
+} from '../types/previsao';
 
 type FeatureRow = {
-  format: "currency" | "integer" | "number";
+  format: 'currency' | 'integer' | 'number';
   key: keyof DeficitFeatures;
   label: string;
 };
 
 const featureRows: FeatureRow[] = [
-  { key: "receita_mes", label: "Receita do mes", format: "currency" },
-  { key: "despesa_mes", label: "Despesa do mes", format: "currency" },
+  { key: 'receita_mes', label: 'Receita do mes', format: 'currency' },
+  { key: 'despesa_mes', label: 'Despesa do mes', format: 'currency' },
   {
-    key: "saldo_inicial_mes",
-    label: "Saldo inicial do mes",
-    format: "currency",
+    key: 'saldo_inicial_mes',
+    label: 'Saldo inicial do mes',
+    format: 'currency',
   },
   {
-    key: "num_transacoes_despesa",
-    label: "Transacoes de despesa",
-    format: "integer",
+    key: 'num_transacoes_despesa',
+    label: 'Transacoes de despesa',
+    format: 'integer',
   },
   {
-    key: "num_transacoes_receita",
-    label: "Transacoes de receita",
-    format: "integer",
+    key: 'num_transacoes_receita',
+    label: 'Transacoes de receita',
+    format: 'integer',
   },
   {
-    key: "volatilidade_despesa",
-    label: "Volatilidade da despesa",
-    format: "number",
+    key: 'volatilidade_despesa',
+    label: 'Volatilidade da despesa',
+    format: 'number',
   },
 ];
 
 const riskLabels: Record<RiscoDeficit, string> = {
-  alto: "Alto",
-  baixo: "Baixo",
-  moderado: "Moderado",
+  alto: 'Alto',
+  baixo: 'Baixo',
+  moderado: 'Moderado',
 };
 
 export function PrevisaoDeficitScreen() {
@@ -64,25 +65,28 @@ export function PrevisaoDeficitScreen() {
     null,
   );
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState('');
   const primeiraCargaRef = useRef(false);
 
   const handleGenerate = useCallback(async () => {
     try {
       setLoading(true);
-      setMessage("");
+      setMessage('');
       const data = await getPrevisaoDeficit(mes);
       setPrevisao(data);
     } catch (error) {
       const resolvedError = await resolveApiError(
         error,
-        "Nao foi possivel gerar a previsao.",
+        'Nao foi possivel gerar a previsao.',
       );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setLoading(false);
     }
-  }, [mes]);
+  }, [mes, router]);
 
   useEffect(() => {
     if (primeiraCargaRef.current) {
@@ -95,45 +99,49 @@ export function PrevisaoDeficitScreen() {
 
   const probabilityLabel = useMemo(() => {
     if (!previsao) {
-      return "-";
+      return '-';
     }
 
-    return new Intl.NumberFormat("pt-BR", {
+    return new Intl.NumberFormat('pt-BR', {
       maximumFractionDigits: 1,
-      style: "percent",
+      style: 'percent',
     }).format(previsao.probability);
   }, [previsao]);
 
   return (
-    <AppScreen
-      title="Previsao de deficit"
-      subtitle="Analise mensal com Machine Learning"
-      backLabel="Voltar"
-      onBackPress={() => router.replace("/dashboard" as never)}
+    <FinanceAppShell
+      activeRoute="/previsao-deficit"
+      header={
+        <FinanceAppHeader
+          eyebrow="Machine Learning"
+          subtitle="Analise mensal de risco de deficit."
+          title="Previsao de deficit"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppField label="Mes (YYYY-MM)">
-          <TextInput
-            style={appInputStyles.input}
+      <GlassPanel>
+        <GlassField label="Mes (YYYY-MM)">
+          <GlassTextInput
+            placeholder="2026-05"
             value={mes}
             onChangeText={setMes}
-            placeholder="2026-05"
-            placeholderTextColor="#8A8A8A"
           />
-        </AppField>
+        </GlassField>
 
-        <AppButton
+        <GlassButton
           disabled={loading}
-          label={loading ? "Gerando..." : "Gerar previsao"}
+          label={loading ? 'Gerando...' : 'Gerar previsao'}
           onPress={handleGenerate}
           variant="ghost"
         />
-      </AppCard>
+      </GlassPanel>
 
-      {message && previsao ? <AppMessage tone="error" value={message} /> : null}
+      {message && previsao ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
       {loading && !previsao ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Gerando previsao"
           description="Estamos calculando os dados do mes selecionado."
           loading
@@ -141,7 +149,7 @@ export function PrevisaoDeficitScreen() {
       ) : null}
 
       {!loading && !!message && !previsao ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nao foi possivel gerar a previsao"
           description={message}
           tone="error"
@@ -152,16 +160,14 @@ export function PrevisaoDeficitScreen() {
 
       {previsao ? (
         <>
-          <AppCard>
+          <GlassPanel accent={previsao.risco === 'baixo' ? 'cyan' : 'magenta'}>
             <View style={styles.resultHeader}>
               <View style={styles.resultTextBox}>
                 <Text style={styles.sectionTitle}>Resultado</Text>
                 <Text style={styles.resultMessage}>{previsao.mensagem}</Text>
               </View>
               <View style={[styles.riskBadge, riskBadgeStyles[previsao.risco]]}>
-                <Text style={[styles.riskText, riskTextStyles[previsao.risco]]}>
-                  {riskLabels[previsao.risco]}
-                </Text>
+                <Text style={styles.riskText}>{riskLabels[previsao.risco]}</Text>
               </View>
             </View>
 
@@ -173,13 +179,13 @@ export function PrevisaoDeficitScreen() {
               <View style={styles.metricBox}>
                 <Text style={styles.metricLabel}>Classe prevista</Text>
                 <Text style={styles.metricValue}>
-                  {previsao.deficitPrevisto ? "Deficit" : "Sem deficit"}
+                  {previsao.deficitPrevisto ? 'Deficit' : 'Sem deficit'}
                 </Text>
               </View>
             </View>
-          </AppCard>
+          </GlassPanel>
 
-          <AppCard>
+          <GlassPanel>
             <Text style={styles.sectionTitle}>Dados do modelo</Text>
             <Text style={styles.periodText}>
               Periodo: {previsao.mesReferencia}
@@ -192,138 +198,135 @@ export function PrevisaoDeficitScreen() {
                 </Text>
               </View>
             ))}
-          </AppCard>
+          </GlassPanel>
         </>
       ) : null}
-    </AppScreen>
+    </FinanceAppShell>
   );
 }
 
 function formatFeatureValue(
   value: number,
-  format: FeatureRow["format"],
+  format: FeatureRow['format'],
 ): string {
-  if (format === "currency") {
+  if (format === 'currency') {
     return formatCurrency(value);
   }
 
-  if (format === "integer") {
+  if (format === 'integer') {
     return Math.trunc(value).toString();
   }
 
-  return new Intl.NumberFormat("pt-BR", {
+  return new Intl.NumberFormat('pt-BR', {
     maximumFractionDigits: 4,
   }).format(value);
 }
 
 const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
   featureLabel: {
-    color: ContaTheme.colors.title,
+    color: FinanceTheme.colors.text,
     flex: 1,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: "600",
-    marginRight: ContaTheme.spacing.sm,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '700',
+    marginRight: FinanceTheme.spacing.sm,
   },
   featureRow: {
-    alignItems: "center",
-    borderBottomColor: ContaTheme.colors.border,
-    borderBottomWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: ContaTheme.spacing.sm,
+    alignItems: 'center',
+    borderBottomColor: FinanceTheme.colors.border,
+    borderBottomWidth: FinanceTheme.borderWidth.hairline,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: FinanceTheme.spacing.sm,
   },
   featureValue: {
-    color: ContaTheme.colors.primaryStrong,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: "700",
-    textAlign: "right",
+    color: FinanceTheme.colors.cyanMuted,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
+    textAlign: 'right',
   },
   metricBox: {
-    backgroundColor: "#F6FBF4",
-    borderColor: ContaTheme.colors.border,
-    borderRadius: ContaTheme.radius.md,
-    borderWidth: 1,
+    backgroundColor: FinanceTheme.colors.glassSubtle,
+    borderColor: FinanceTheme.colors.border,
+    borderRadius: FinanceTheme.radius.md,
+    borderWidth: FinanceTheme.borderWidth.hairline,
     flex: 1,
-    minWidth: 140,
-    padding: ContaTheme.spacing.sm,
+    minWidth: 150,
+    padding: FinanceTheme.spacing.sm,
   },
   metricLabel: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: "600",
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
   },
   metricValue: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.heading,
-    fontWeight: "700",
-    marginTop: ContaTheme.spacing.xs,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.heading,
+    fontWeight: '900',
+    marginTop: FinanceTheme.spacing.xs,
   },
   metricsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
   },
   periodText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginBottom: ContaTheme.spacing.xs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginBottom: FinanceTheme.spacing.xs,
   },
   resultHeader: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+    justifyContent: 'space-between',
   },
   resultMessage: {
-    color: ContaTheme.colors.text,
-    fontSize: ContaTheme.typography.body,
-    marginTop: ContaTheme.spacing.xs,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    marginTop: FinanceTheme.spacing.xs,
   },
   resultTextBox: {
     flex: 1,
-    marginRight: ContaTheme.spacing.sm,
+    minWidth: 0,
   },
   riskBadge: {
-    borderRadius: ContaTheme.radius.md,
-    borderWidth: 1,
-    paddingHorizontal: ContaTheme.spacing.sm,
-    paddingVertical: ContaTheme.spacing.xs,
+    borderRadius: 999,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xs,
   },
   riskText: {
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: "700",
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '900',
   },
   sectionTitle: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: "700",
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
 });
 
 const riskBadgeStyles = StyleSheet.create({
   alto: {
-    backgroundColor: "#FCE9E8",
-    borderColor: "#F3C0BE",
+    backgroundColor: 'rgba(255, 122, 144, 0.16)',
+    borderColor: 'rgba(255, 122, 144, 0.42)',
   },
   baixo: {
-    backgroundColor: "#EFF8EF",
-    borderColor: "#CBE3CD",
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
   },
   moderado: {
-    backgroundColor: "#FFF6D8",
-    borderColor: "#E6D389",
-  },
-});
-
-const riskTextStyles = StyleSheet.create({
-  alto: {
-    color: ContaTheme.colors.error,
-  },
-  baixo: {
-    color: ContaTheme.colors.success,
-  },
-  moderado: {
-    color: "#7A5B00",
+    backgroundColor: 'rgba(255, 209, 102, 0.14)',
+    borderColor: 'rgba(255, 209, 102, 0.36)',
   },
 });
 

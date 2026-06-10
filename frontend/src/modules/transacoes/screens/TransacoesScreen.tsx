@@ -1,17 +1,18 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppOptionGroup } from '../../../../components/app-option-group';
+import { StyleSheet, Text, View } from 'react-native';
 import {
-  AppCard,
-  AppField,
-  AppScreen,
-  AppStatusCard,
-  appInputStyles,
-} from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassOptionGroup,
+  GlassPanel,
+  GlassStatusCard,
+  GlassTextInput,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
 import { listContas } from '../../contas/services/contaService';
@@ -96,48 +97,55 @@ export function TransacoesScreen() {
         'Nao foi possivel excluir a transacao.',
       );
       setMessage(resolvedError.message);
+
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     }
   }
 
   return (
-    <AppScreen
-      title="Transacoes"
-      subtitle="Registre receitas e despesas."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
-      actionLabel="Nova"
-      onActionPress={() => router.push('/transacoes-form' as never)}
+    <FinanceAppShell
+      activeRoute="/transacoes"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Nova" onPress={() => router.push('/transacoes-form' as never)} />}
+          eyebrow="Movimentacoes"
+          subtitle="Registre receitas e despesas."
+          title="Transacoes"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppField label="Mes (YYYY-MM)">
-          <TextInput
-            style={appInputStyles.input}
+      <GlassPanel>
+        <GlassField label="Mes (YYYY-MM)">
+          <GlassTextInput
             value={mes}
             onChangeText={setMes}
             placeholder="2026-04"
-            placeholderTextColor="#8A8A8A"
           />
-        </AppField>
+        </GlassField>
 
-        <AppField label="Tipo">
-          <AppOptionGroup
+        <GlassField label="Tipo">
+          <GlassOptionGroup
             options={[
               { label: 'Todos', value: '' },
               { label: 'Receitas', value: 'receita' },
               { label: 'Despesas', value: 'despesa' },
             ]}
-            selectedValue={tipo}
+            value={tipo}
             onChange={setTipo}
           />
-        </AppField>
+        </GlassField>
 
-        <AppButton label="Aplicar filtros" onPress={loadData} variant="ghost" />
-      </AppCard>
+        <GlassButton label="Aplicar filtros" onPress={loadData} variant="ghost" />
+      </GlassPanel>
 
-      {message && transacoes.length ? <AppMessage tone="error" value={message} /> : null}
+      {message && transacoes.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
       {loading && !transacoes.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Carregando transacoes"
           description="Estamos buscando as transacoes do periodo selecionado."
           loading
@@ -145,7 +153,7 @@ export function TransacoesScreen() {
       ) : null}
 
       {!loading && !!message && !transacoes.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nao foi possivel carregar as transacoes"
           description={message}
           tone="error"
@@ -155,7 +163,7 @@ export function TransacoesScreen() {
       ) : null}
 
       {!loading && !message && !transacoes.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nenhuma transacao encontrada"
           description="Registre uma receita ou despesa para preencher o historico."
           actionLabel="Nova transacao"
@@ -165,14 +173,26 @@ export function TransacoesScreen() {
 
       {!loading && transacoes.length
         ? transacoes.map((transacao) => (
-            <AppCard key={transacao.id}>
-              <Text style={styles.title}>
-                {transacao.descricao ||
-                  categoriaMap.get(transacao.categoriaId)?.nome ||
-                  'Transacao'}
-              </Text>
+            <GlassPanel key={transacao.id} accent={transacao.tipo === 'receita' ? 'cyan' : 'magenta'}>
+              <View style={styles.cardTop}>
+                <Text style={styles.title}>
+                  {transacao.descricao ||
+                    categoriaMap.get(transacao.categoriaId)?.nome ||
+                    'Transacao'}
+                </Text>
+                <View
+                  style={[
+                    styles.badge,
+                    transacao.tipo === 'receita' ? styles.badgeIncome : styles.badgeExpense,
+                  ]}
+                >
+                  <Text style={styles.badgeText}>
+                    {transacao.tipo === 'receita' ? 'Receita' : 'Despesa'}
+                  </Text>
+                </View>
+              </View>
               <Text style={styles.meta}>
-                {formatDate(transacao.data)} - {transacao.tipo}
+                {formatDate(transacao.data)} - {categoriaMap.get(transacao.categoriaId)?.nome || 'Categoria'}
               </Text>
               <Text style={styles.meta}>
                 Conta: {contaMap.get(transacao.contaId)?.nome || '-'}
@@ -180,7 +200,7 @@ export function TransacoesScreen() {
               <Text style={styles.value}>{formatCurrency(transacao.valor)}</Text>
               <View style={styles.actions}>
                 <View style={styles.actionCell}>
-                  <AppButton
+                  <GlassButton
                     label="Editar"
                     variant="ghost"
                     onPress={() =>
@@ -192,17 +212,17 @@ export function TransacoesScreen() {
                   />
                 </View>
                 <View style={styles.actionCell}>
-                  <AppButton
+                  <GlassButton
                     label="Excluir"
                     variant="danger"
                     onPress={() => handleRemove(transacao.id)}
                   />
                 </View>
               </View>
-            </AppCard>
+            </GlassPanel>
           ))
         : null}
-    </AppScreen>
+    </FinanceAppShell>
   );
 }
 
@@ -214,23 +234,57 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.sm,
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
+  },
+  badge: {
+    borderRadius: 999,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xxs,
+  },
+  badgeExpense: {
+    backgroundColor: FinanceTheme.colors.magentaSoft,
+    borderColor: FinanceTheme.neon.magenta.borderColor,
+  },
+  badgeIncome: {
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
+  },
+  badgeText: {
+    color: FinanceTheme.colors.text,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  cardTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+    justifyContent: 'space-between',
+    marginBottom: FinanceTheme.spacing.xs,
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   meta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   title: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    flex: 1,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
   value: {
-    color: ContaTheme.colors.primaryStrong,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
-    marginTop: ContaTheme.spacing.sm,
+    color: FinanceTheme.colors.text,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: FinanceTheme.spacing.sm,
   },
 });

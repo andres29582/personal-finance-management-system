@@ -1,17 +1,23 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { TextInput } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppOptionGroup } from '../../../../components/app-option-group';
-import { AppCard, AppField, AppScreen, appInputStyles } from '../../../../components/app-screen';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
-import { createDivida, getDividaById, updateDivida } from '../services/dividaService';
-import { Periodicidade } from '../types/divida';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassOptionGroup,
+  GlassPanel,
+  GlassTextInput,
+} from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
 import { parseDecimalInput } from '../../../../utils/number-input';
+import { createDivida, getDividaById, updateDivida } from '../services/dividaService';
+import { Periodicidade } from '../types/divida';
 
 type DividaField =
   | 'cuotaMensual'
@@ -93,13 +99,16 @@ export function DividasFormScreen() {
       } catch (error) {
         const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar a divida.');
         setMessage(resolvedError.message);
+        if (resolvedError.unauthorized) {
+          router.replace('/login');
+        }
       } finally {
         setLoading(false);
       }
     }
 
-    loadData();
-  }, [dividaId]);
+    void loadData();
+  }, [dividaId, router]);
 
   async function handleSave() {
     const total = parseDecimalInput(montoTotal);
@@ -188,171 +197,173 @@ export function DividasFormScreen() {
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel salvar a divida.');
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return <AppLoading label="Carregando divida..." />;
-  }
-
   return (
-    <AppScreen
-      title={dividaId ? 'Editar divida' : 'Nova divida'}
-      actionLabel="Voltar"
-      onActionPress={() => router.back()}
+    <FinanceAppShell
+      activeRoute="/dividas"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          eyebrow="Compromissos"
+          subtitle="Cadastre valores, vencimentos e periodicidade."
+          title={dividaId ? 'Editar divida' : 'Nova divida'}
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppField label="Nome" error={fieldErrors.nome}>
-          <TextInput
-            style={[appInputStyles.input, fieldErrors.nome ? appInputStyles.inputError : null]}
-            value={nome}
-            onChangeText={(value) => {
-              setNome(value);
-              clearFieldError('nome');
-            }}
-          />
-        </AppField>
+      {loading ? (
+        <GlassPanel>
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={FinanceTheme.colors.cyan} />
+            <Text style={styles.loadingText}>Carregando divida...</Text>
+          </View>
+        </GlassPanel>
+      ) : (
+        <GlassPanel>
+          <GlassField label="Nome" error={fieldErrors.nome}>
+            <GlassTextInput
+              value={nome}
+              onChangeText={(value) => {
+                setNome(value);
+                clearFieldError('nome');
+              }}
+            />
+          </GlassField>
 
-        <AppField label="Conta vinculada">
-          <AppOptionGroup
-            options={[
-              { label: 'Nenhuma', value: '' },
-              ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
-            ]}
-            selectedValue={contaId}
-            onChange={setContaId}
-          />
-        </AppField>
+          <GlassField label="Conta vinculada">
+            <GlassOptionGroup
+              options={[
+                { label: 'Nenhuma', value: '' },
+                ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
+              ]}
+              value={contaId}
+              onChange={setContaId}
+            />
+          </GlassField>
 
-        <AppField label="Valor total" error={fieldErrors.montoTotal}>
-          <TextInput
-            style={[
-              appInputStyles.input,
-              fieldErrors.montoTotal ? appInputStyles.inputError : null,
-            ]}
-            value={montoTotal}
-            onChangeText={(value) => {
-              setMontoTotal(value);
-              clearFieldError('montoTotal');
-            }}
-            keyboardType="decimal-pad"
-            placeholder="Ex.: 15000,00"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
+          <GlassField label="Valor total" error={fieldErrors.montoTotal}>
+            <GlassTextInput
+              keyboardType="decimal-pad"
+              placeholder="Ex.: 15000,00"
+              value={montoTotal}
+              onChangeText={(value) => {
+                setMontoTotal(value);
+                clearFieldError('montoTotal');
+              }}
+            />
+          </GlassField>
 
-        <AppField label="Taxa de interesse" error={fieldErrors.tasaInteres}>
-          <TextInput
-            style={[
-              appInputStyles.input,
-              fieldErrors.tasaInteres ? appInputStyles.inputError : null,
-            ]}
-            value={tasaInteres}
-            onChangeText={(value) => {
-              setTasaInteres(value);
-              clearFieldError('tasaInteres');
-            }}
-            keyboardType="decimal-pad"
-            placeholder="Opcional. Ex.: 2,5"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
+          <GlassField label="Taxa de interesse" error={fieldErrors.tasaInteres}>
+            <GlassTextInput
+              keyboardType="decimal-pad"
+              placeholder="Opcional. Ex.: 2,5"
+              value={tasaInteres}
+              onChangeText={(value) => {
+                setTasaInteres(value);
+                clearFieldError('tasaInteres');
+              }}
+            />
+          </GlassField>
 
-        <AppField label="Cuota mensal" error={fieldErrors.cuotaMensual}>
-          <TextInput
-            style={[
-              appInputStyles.input,
-              fieldErrors.cuotaMensual ? appInputStyles.inputError : null,
-            ]}
-            value={cuotaMensual}
-            onChangeText={(value) => {
-              setCuotaMensual(value);
-              clearFieldError('cuotaMensual');
-            }}
-            keyboardType="decimal-pad"
-            placeholder="Opcional. Ex.: 450,00"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
+          <GlassField label="Cuota mensal" error={fieldErrors.cuotaMensual}>
+            <GlassTextInput
+              keyboardType="decimal-pad"
+              placeholder="Opcional. Ex.: 450,00"
+              value={cuotaMensual}
+              onChangeText={(value) => {
+                setCuotaMensual(value);
+                clearFieldError('cuotaMensual');
+              }}
+            />
+          </GlassField>
 
-        <AppField label="Data inicio" error={fieldErrors.fechaInicio}>
-          <TextInput
-            style={[
-              appInputStyles.input,
-              fieldErrors.fechaInicio ? appInputStyles.inputError : null,
-            ]}
-            value={fechaInicio}
-            onChangeText={(value) => {
-              setFechaInicio(value);
-              clearFieldError('fechaInicio');
-            }}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
+          <GlassField label="Data inicio" error={fieldErrors.fechaInicio}>
+            <GlassTextInput
+              placeholder="YYYY-MM-DD"
+              value={fechaInicio}
+              onChangeText={(value) => {
+                setFechaInicio(value);
+                clearFieldError('fechaInicio');
+              }}
+            />
+          </GlassField>
 
-        <AppField
-          label="Data vencimento"
-          error={fieldErrors.fechaVencimiento}
-        >
-          <TextInput
-            style={[
-              appInputStyles.input,
-              fieldErrors.fechaVencimiento
-                ? appInputStyles.inputError
-                : null,
-            ]}
-            value={fechaVencimiento}
-            onChangeText={(value) => {
-              setFechaVencimiento(value);
-              clearFieldError('fechaVencimiento');
-            }}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
+          <GlassField label="Data vencimento" error={fieldErrors.fechaVencimiento}>
+            <GlassTextInput
+              placeholder="YYYY-MM-DD"
+              value={fechaVencimiento}
+              onChangeText={(value) => {
+                setFechaVencimiento(value);
+                clearFieldError('fechaVencimiento');
+              }}
+            />
+          </GlassField>
 
-        <AppField
-          label="Proximo vencimento"
-          error={fieldErrors.proximoVencimiento}
-        >
-          <TextInput
-            style={[
-              appInputStyles.input,
-              fieldErrors.proximoVencimiento
-                ? appInputStyles.inputError
-                : null,
-            ]}
-            value={proximoVencimiento}
-            onChangeText={(value) => {
-              setProximoVencimiento(value);
-              clearFieldError('proximoVencimiento');
-            }}
-            placeholder="Opcional. Ex.: 2026-05-07"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
+          <GlassField
+            label="Proximo vencimento"
+            error={fieldErrors.proximoVencimiento}
+          >
+            <GlassTextInput
+              placeholder="Opcional. Ex.: 2026-05-07"
+              value={proximoVencimiento}
+              onChangeText={(value) => {
+                setProximoVencimiento(value);
+                clearFieldError('proximoVencimiento');
+              }}
+            />
+          </GlassField>
 
-        <AppField label="Periodicidade">
-          <AppOptionGroup
-            options={[
-              { label: 'Semanal', value: 'semanal' },
-              { label: 'Quinzenal', value: 'quinzenal' },
-              { label: 'Mensal', value: 'mensal' },
-              { label: 'Anual', value: 'anual' },
-            ]}
-            selectedValue={periodicidade}
-            onChange={(value) => setPeriodicidade(value as Periodicidade)}
-          />
-        </AppField>
+          <GlassField label="Periodicidade">
+            <GlassOptionGroup
+              options={[
+                { label: 'Semanal', value: 'semanal' },
+                { label: 'Quinzenal', value: 'quinzenal' },
+                { label: 'Mensal', value: 'mensal' },
+                { label: 'Anual', value: 'anual' },
+              ]}
+              value={periodicidade}
+              onChange={(value) => setPeriodicidade(value as Periodicidade)}
+            />
+          </GlassField>
 
-        <AppMessage tone="error" value={message} />
-        <AppButton label={saving ? 'Salvando...' : 'Salvar divida'} onPress={handleSave} disabled={saving} />
-      </AppCard>
-    </AppScreen>
+          {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+          <GlassButton
+            label={saving ? 'Salvando...' : 'Salvar divida'}
+            onPress={handleSave}
+            disabled={saving}
+          />
+        </GlassPanel>
+      )}
+    </FinanceAppShell>
   );
 }
 
 export default DividasFormScreen;
+
+const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  loadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+  },
+  loadingText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+  },
+});

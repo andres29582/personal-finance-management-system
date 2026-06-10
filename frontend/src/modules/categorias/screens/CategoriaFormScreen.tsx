@@ -1,11 +1,17 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { TextInput } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppOptionGroup } from '../../../../components/app-option-group';
-import { AppCard, AppField, AppScreen, appInputStyles } from '../../../../components/app-screen';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassOptionGroup,
+  GlassPanel,
+  GlassTextInput,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import {
   createCategoria,
   getCategoriaById,
@@ -89,66 +95,116 @@ export function CategoriaFormScreen() {
   }
 
   if (loading) {
-    return <AppLoading label="Carregando categoria..." />;
+    return (
+      <FinanceAppShell
+        activeRoute="/categorias"
+        header={
+          <FinanceAppHeader
+            eyebrow="Classificacao"
+            subtitle="Carregando dados da categoria."
+            title="Categorias"
+          />
+        }
+        onNavigate={(route) => router.push(route as never)}
+        sidebarItems={financeSidebarItems}
+      >
+        <GlassPanel>
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={FinanceTheme.colors.cyan} />
+            <Text style={styles.loadingText}>Carregando categoria...</Text>
+          </View>
+        </GlassPanel>
+      </FinanceAppShell>
+    );
   }
 
   return (
-    <AppScreen
-      title={categoriaId ? 'Editar categoria' : 'Nova categoria'}
-      actionLabel="Voltar"
-      onActionPress={() => router.back()}
+    <FinanceAppShell
+      activeRoute="/categorias"
+      header={
+        <FinanceAppHeader
+          action={
+            <GlassButton
+              label="Voltar"
+              onPress={() => router.back()}
+              variant="ghost"
+            />
+          }
+          eyebrow="Classificacao"
+          subtitle="Defina como suas receitas e despesas serao agrupadas."
+          title={categoriaId ? 'Editar categoria' : 'Nova categoria'}
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppField label="Nome">
-          <TextInput
-            style={appInputStyles.input}
+      <GlassPanel>
+        <GlassField label="Nome">
+          <GlassTextInput
             value={nome}
             onChangeText={setNome}
             placeholder="Ex.: Alimentacao"
-            placeholderTextColor="#8A8A8A"
           />
-        </AppField>
+        </GlassField>
 
-        <AppField label="Tipo">
-          <AppOptionGroup
+        <GlassField label="Tipo">
+          <GlassOptionGroup
             options={[
               { label: 'Despesa', value: 'despesa' },
               { label: 'Receita', value: 'receita' },
             ]}
-            selectedValue={tipo}
+            value={tipo}
             onChange={(value) => setTipo(value as TipoCategoria)}
           />
-        </AppField>
+        </GlassField>
 
-        <AppField label="Cor">
-          <TextInput
-            style={appInputStyles.input}
+        <GlassField label="Cor">
+          <GlassTextInput
             value={cor}
             onChangeText={setCor}
             placeholder="#0B6B34"
-            placeholderTextColor="#8A8A8A"
+            autoCapitalize="none"
           />
-        </AppField>
+        </GlassField>
 
-        <AppField label="Icone">
-          <TextInput
-            style={appInputStyles.input}
+        <GlassField label="Icone">
+          <GlassTextInput
             value={icone}
             onChangeText={setIcone}
             placeholder="wallet"
-            placeholderTextColor="#8A8A8A"
+            autoCapitalize="none"
           />
-        </AppField>
+        </GlassField>
 
-        <AppMessage tone="error" value={message} />
-        <AppButton
+        {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+        <GlassButton
           label={saving ? 'Salvando...' : 'Salvar categoria'}
           onPress={handleSave}
           disabled={saving}
         />
-      </AppCard>
-    </AppScreen>
+      </GlassPanel>
+    </FinanceAppShell>
   );
 }
 
 export default CategoriaFormScreen;
+
+const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  loadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+  },
+  loadingText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+  },
+});

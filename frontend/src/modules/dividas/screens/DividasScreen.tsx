@@ -1,11 +1,15 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppCard, AppScreen } from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+  GlassStatusCard,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateDivida, listDividas } from '../services/dividaService';
 import { Divida } from '../types/divida';
 import { confirmAction } from '../../../../utils/confirm-action';
@@ -26,10 +30,13 @@ export function DividasScreen() {
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar as dividas.');
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -56,34 +63,65 @@ export function DividasScreen() {
         'Nao foi possivel desativar a divida.',
       );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     }
   }
 
-  if (loading && !dividas.length) {
-    return <AppLoading label="Carregando dividas..." />;
-  }
-
   return (
-    <AppScreen
-      title="Dividas"
-      subtitle="Acompanhe vencimentos e pagamentos."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
-      actionLabel="Nova"
-      onActionPress={() => router.push('/dividas-form' as never)}
+    <FinanceAppShell
+      activeRoute="/dividas"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Nova" onPress={() => router.push('/dividas-form' as never)} />}
+          eyebrow="Compromissos"
+          subtitle="Acompanhe vencimentos e pagamentos."
+          title="Dividas"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppMessage tone="error" value={message} />
+      {message && dividas.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
-      {dividas.length ? (
+      {loading && !dividas.length ? (
+        <GlassStatusCard
+          title="Carregando dividas"
+          description="Estamos buscando seus compromissos cadastrados."
+          loading
+        />
+      ) : null}
+
+      {!loading && !!message && !dividas.length ? (
+        <GlassStatusCard
+          title="Nao foi possivel carregar as dividas"
+          description={message}
+          tone="error"
+          actionLabel="Tentar novamente"
+          onActionPress={loadDividas}
+        />
+      ) : null}
+
+      {!loading && !message && !dividas.length ? (
+        <GlassStatusCard
+          title="Nenhuma divida cadastrada"
+          description="Cadastre uma divida para acompanhar vencimentos e pagamentos."
+          actionLabel="Nova divida"
+          onActionPress={() => router.push('/dividas-form' as never)}
+        />
+      ) : null}
+
+      {!loading && dividas.length ? (
         dividas.map((divida) => (
-          <AppCard key={divida.id}>
+          <GlassPanel key={divida.id} accent="magenta">
             <Text style={styles.title}>{divida.nome}</Text>
             <Text style={styles.meta}>Valor total: {formatCurrency(divida.montoTotal)}</Text>
             <Text style={styles.meta}>Inicio: {formatDate(divida.fechaInicio)}</Text>
             <Text style={styles.meta}>Vencimento: {formatDate(divida.fechaVencimiento)}</Text>
             <View style={styles.actions}>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Editar"
                   variant="ghost"
                   onPress={() =>
@@ -95,7 +133,7 @@ export function DividasScreen() {
                 />
               </View>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Pagamentos"
                   variant="ghost"
                   onPress={() =>
@@ -107,21 +145,17 @@ export function DividasScreen() {
                 />
               </View>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Desativar"
                   variant="danger"
                   onPress={() => handleDeactivate(divida)}
                 />
               </View>
             </View>
-          </AppCard>
+          </GlassPanel>
         ))
-      ) : (
-        <AppCard>
-          <Text style={styles.emptyText}>Nenhuma divida cadastrada.</Text>
-        </AppCard>
-      )}
-    </AppScreen>
+      ) : null}
+    </FinanceAppShell>
   );
 }
 
@@ -131,21 +165,25 @@ const styles = StyleSheet.create({
   actionCell: { flex: 1 },
   actions: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.sm,
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
   },
-  emptyText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   meta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   title: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
 });

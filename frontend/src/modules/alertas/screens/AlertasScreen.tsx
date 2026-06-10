@@ -1,11 +1,15 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppCard, AppScreen } from '../../../../components/app-screen';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+  GlassStatusCard,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import {
   deactivateAlerta,
   listAlertas,
@@ -29,10 +33,13 @@ export function AlertasScreen() {
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar os alertas.');
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -47,6 +54,9 @@ export function AlertasScreen() {
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel marcar o alerta.');
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     }
   }
 
@@ -69,33 +79,64 @@ export function AlertasScreen() {
         'Nao foi possivel desativar o alerta.',
       );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     }
   }
 
-  if (loading && !alertas.length) {
-    return <AppLoading label="Carregando alertas..." />;
-  }
-
   return (
-    <AppScreen
-      title="Alertas"
-      subtitle="Alertas in-app para metas, dividas e limite de gasto."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
-      actionLabel="Novo"
-      onActionPress={() => router.push('/alertas-form' as never)}
+    <FinanceAppShell
+      activeRoute="/alertas"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Novo" onPress={() => router.push('/alertas-form' as never)} />}
+          eyebrow="Monitoramento"
+          subtitle="Alertas in-app para metas, dividas e limite de gasto."
+          title="Alertas"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppMessage tone="error" value={message} />
+      {message && alertas.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
-      {alertas.length ? (
+      {loading && !alertas.length ? (
+        <GlassStatusCard
+          title="Carregando alertas"
+          description="Estamos buscando os alertas cadastrados."
+          loading
+        />
+      ) : null}
+
+      {!loading && !!message && !alertas.length ? (
+        <GlassStatusCard
+          title="Nao foi possivel carregar os alertas"
+          description={message}
+          tone="error"
+          actionLabel="Tentar novamente"
+          onActionPress={loadAlertas}
+        />
+      ) : null}
+
+      {!loading && !message && !alertas.length ? (
+        <GlassStatusCard
+          title="Nenhum alerta cadastrado"
+          description="Crie alertas para acompanhar metas, dividas e limites."
+          actionLabel="Novo alerta"
+          onActionPress={() => router.push('/alertas-form' as never)}
+        />
+      ) : null}
+
+      {!loading && alertas.length ? (
         alertas.map((alerta) => (
-          <AppCard key={alerta.id}>
+          <GlassPanel key={alerta.id} accent="mixed">
             <Text style={styles.title}>{alerta.tipo}</Text>
             <Text style={styles.meta}>Referencia: {alerta.referenciaId}</Text>
             <Text style={styles.meta}>Antecipacao: {alerta.diasAnticipacion} dias</Text>
             <View style={styles.actions}>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Editar"
                   variant="ghost"
                   onPress={() =>
@@ -107,28 +148,24 @@ export function AlertasScreen() {
                 />
               </View>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Notificado"
                   variant="ghost"
                   onPress={() => handleMarkNotified(alerta.id)}
                 />
               </View>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Desativar"
                   variant="danger"
                   onPress={() => handleDeactivate(alerta)}
                 />
               </View>
             </View>
-          </AppCard>
+          </GlassPanel>
         ))
-      ) : (
-        <AppCard>
-          <Text style={styles.emptyText}>Nenhum alerta cadastrado.</Text>
-        </AppCard>
-      )}
-    </AppScreen>
+      ) : null}
+    </FinanceAppShell>
   );
 }
 
@@ -136,22 +173,26 @@ const styles = StyleSheet.create({
   actionCell: { flex: 1 },
   actions: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.sm,
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
   },
-  emptyText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   meta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   title: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
 });
 

@@ -1,20 +1,18 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppField, appInputStyles } from '../../../../components/app-screen';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AuthScreen } from '../../../../components/auth-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
-import { useCepAutofill } from '../../../shared/hooks/use-cep-autofill';
-import { register } from '../services/authService';
-import { CepLookupResponse } from '../../../shared/types/cep';
-import { resolveApiError } from '../../../../utils/api-error';
 import {
   formatCpfInput,
   isValidCep,
   isValidCpf,
 } from '../../../../utils/br-input';
+import { resolveApiError } from '../../../../utils/api-error';
+import { useCepAutofill } from '../../../shared/hooks/use-cep-autofill';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
+import { CepLookupResponse } from '../../../shared/types/cep';
+import { register } from '../services/authService';
 
 type RegisterField =
   | 'cep'
@@ -164,11 +162,9 @@ export function RegisterScreen() {
       title="Cadastro"
       subtitle="Preencha seus dados para criar uma conta completa e segura."
     >
-      <AppField label="Nome completo" error={errors.nome}>
-        <TextInput
-          style={[appInputStyles.input, errors.nome ? appInputStyles.inputError : null]}
+      <GlassField label="Nome completo" error={errors.nome}>
+        <GlassTextInput
           placeholder="Seu nome completo"
-          placeholderTextColor="#8A8A8A"
           value={nome}
           onChangeText={(value) => {
             setNome(value);
@@ -177,13 +173,11 @@ export function RegisterScreen() {
           editable={!loading}
           autoCapitalize="words"
         />
-      </AppField>
+      </GlassField>
 
-      <AppField label="E-mail" error={errors.email}>
-        <TextInput
-          style={[appInputStyles.input, errors.email ? appInputStyles.inputError : null]}
+      <GlassField label="E-mail" error={errors.email}>
+        <GlassTextInput
           placeholder="voce@exemplo.com"
-          placeholderTextColor="#8A8A8A"
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
@@ -193,15 +187,13 @@ export function RegisterScreen() {
           }}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
       <View style={styles.inlineFields}>
         <View style={styles.inlineField}>
-          <AppField label="CPF" error={errors.cpf}>
-            <TextInput
-              style={[appInputStyles.input, errors.cpf ? appInputStyles.inputError : null]}
+          <GlassField label="CPF" error={errors.cpf}>
+            <GlassTextInput
               placeholder="000.000.000-00"
-              placeholderTextColor="#8A8A8A"
               keyboardType="number-pad"
               maxLength={14}
               value={cpf}
@@ -211,15 +203,13 @@ export function RegisterScreen() {
               }}
               editable={!loading}
             />
-          </AppField>
+          </GlassField>
         </View>
 
         <View style={styles.inlineField}>
-          <AppField label="CEP" error={errors.cep}>
-            <TextInput
-              style={[appInputStyles.input, errors.cep ? appInputStyles.inputError : null]}
+          <GlassField label="CEP" error={errors.cep}>
+            <GlassTextInput
               placeholder="00000-000"
-              placeholderTextColor="#8A8A8A"
               keyboardType="number-pad"
               maxLength={9}
               value={cep}
@@ -229,19 +219,18 @@ export function RegisterScreen() {
               }}
               editable={!loading}
             />
-          </AppField>
-          <AppMessage
-            tone={cepLookupTone}
-            value={cepLookupLoading || cepLookupMessage ? cepLookupMessage : undefined}
-          />
+          </GlassField>
+          {cepLookupLoading || cepLookupMessage ? (
+            <Text style={[styles.lookupMessage, lookupStyles[cepLookupTone]]}>
+              {cepLookupMessage}
+            </Text>
+          ) : null}
         </View>
       </View>
 
-      <AppField label="Endereco" error={errors.endereco}>
-        <TextInput
-          style={[appInputStyles.input, errors.endereco ? appInputStyles.inputError : null]}
+      <GlassField label="Endereco" error={errors.endereco}>
+        <GlassTextInput
           placeholder="Rua, avenida ou logradouro"
-          placeholderTextColor="#8A8A8A"
           value={endereco}
           onChangeText={(value) => {
             setEndereco(value);
@@ -250,15 +239,13 @@ export function RegisterScreen() {
           editable={!loading}
           autoCapitalize="words"
         />
-      </AppField>
+      </GlassField>
 
       <View style={styles.inlineFields}>
         <View style={styles.inlineField}>
-          <AppField label="Numero" error={errors.numero}>
-            <TextInput
-              style={[appInputStyles.input, errors.numero ? appInputStyles.inputError : null]}
+          <GlassField label="Numero" error={errors.numero}>
+            <GlassTextInput
               placeholder="123 ou S/N"
-              placeholderTextColor="#8A8A8A"
               value={numero}
               onChangeText={(value) => {
                 setNumero(value);
@@ -266,15 +253,13 @@ export function RegisterScreen() {
               }}
               editable={!loading}
             />
-          </AppField>
+          </GlassField>
         </View>
 
         <View style={styles.inlineField}>
-          <AppField label="Cidade" error={errors.cidade}>
-            <TextInput
-              style={[appInputStyles.input, errors.cidade ? appInputStyles.inputError : null]}
+          <GlassField label="Cidade" error={errors.cidade}>
+            <GlassTextInput
               placeholder="Sua cidade"
-              placeholderTextColor="#8A8A8A"
               value={cidade}
               onChangeText={(value) => {
                 setCidade(value);
@@ -283,15 +268,13 @@ export function RegisterScreen() {
               editable={!loading}
               autoCapitalize="words"
             />
-          </AppField>
+          </GlassField>
         </View>
       </View>
 
-      <AppField label="Senha" error={errors.senha}>
-        <TextInput
-          style={[appInputStyles.input, errors.senha ? appInputStyles.inputError : null]}
+      <GlassField label="Senha" error={errors.senha}>
+        <GlassTextInput
           placeholder="Crie uma senha"
-          placeholderTextColor="#8A8A8A"
           secureTextEntry
           value={senha}
           onChangeText={(value) => {
@@ -300,16 +283,11 @@ export function RegisterScreen() {
           }}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
-      <AppField label="Confirmar senha" error={errors.confirmarSenha}>
-        <TextInput
-          style={[
-            appInputStyles.input,
-            errors.confirmarSenha ? appInputStyles.inputError : null,
-          ]}
+      <GlassField label="Confirmar senha" error={errors.confirmarSenha}>
+        <GlassTextInput
           placeholder="Repita a senha"
-          placeholderTextColor="#8A8A8A"
           secureTextEntry
           value={confirmarSenha}
           onChangeText={(value) => {
@@ -321,9 +299,9 @@ export function RegisterScreen() {
           }}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
-      <AppField label="Privacidade" error={errors.politica}>
+      <GlassField label="Privacidade" error={errors.politica}>
         <TouchableOpacity
           style={styles.politicaRow}
           onPress={() => {
@@ -354,12 +332,12 @@ export function RegisterScreen() {
             .
           </Text>
         </TouchableOpacity>
-      </AppField>
+      </GlassField>
 
-      <AppMessage tone="error" value={message} />
+      {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
       <View style={styles.actions}>
-        <AppButton
+        <GlassButton
           label={loading ? 'Criando...' : 'Criar conta'}
           onPress={handleRegister}
           disabled={loading}
@@ -381,54 +359,46 @@ export default RegisterScreen;
 
 const styles = StyleSheet.create({
   actions: {
-    marginTop: ContaTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.sm,
+  },
+  backButton: {
+    alignItems: 'center',
+    marginTop: FinanceTheme.spacing.md,
+  },
+  backButtonText: {
+    color: FinanceTheme.colors.cyanMuted,
+    fontSize: 15,
+    fontWeight: '800',
   },
   checkbox: {
     alignItems: 'center',
-    borderColor: ContaTheme.colors.border,
+    borderColor: FinanceTheme.colors.border,
     borderRadius: 4,
     borderWidth: 2,
     height: 22,
     justifyContent: 'center',
-    marginRight: ContaTheme.spacing.sm,
+    marginRight: FinanceTheme.spacing.sm,
     marginTop: 2,
     width: 22,
   },
   checkboxError: {
-    borderColor: ContaTheme.colors.error,
+    borderColor: FinanceTheme.colors.danger,
   },
   checkboxMark: {
-    color: ContaTheme.colors.white,
+    color: FinanceTheme.colors.black,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '900',
   },
   checkboxOn: {
-    backgroundColor: ContaTheme.colors.primary,
-    borderColor: ContaTheme.colors.primary,
+    backgroundColor: FinanceTheme.colors.cyan,
+    borderColor: FinanceTheme.colors.cyan,
   },
-  politicaLink: {
-    color: ContaTheme.colors.primaryStrong,
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
-    textDecorationLine: 'underline',
-  },
-  politicaRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  politicaText: {
-    color: ContaTheme.colors.text,
-    flex: 1,
-    fontSize: ContaTheme.typography.caption,
-    lineHeight: 20,
-  },
-  backButton: {
-    alignItems: 'center',
-    marginTop: ContaTheme.spacing.md,
-  },
-  backButtonText: {
-    color: ContaTheme.colors.title,
-    fontSize: 15,
-    fontWeight: '600',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   inlineField: {
     width: '48%',
@@ -436,6 +406,39 @@ const styles = StyleSheet.create({
   inlineFields: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  lookupMessage: {
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    marginTop: -FinanceTheme.spacing.xs,
+  },
+  politicaLink: {
+    color: FinanceTheme.colors.cyanMuted,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
+  politicaRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+  },
+  politicaText: {
+    color: FinanceTheme.colors.text,
+    flex: 1,
+    fontSize: FinanceTheme.typography.caption,
+    lineHeight: 20,
+  },
+});
+
+const lookupStyles = StyleSheet.create({
+  error: {
+    color: FinanceTheme.colors.danger,
+  },
+  muted: {
+    color: FinanceTheme.colors.textMuted,
+  },
+  success: {
+    color: FinanceTheme.colors.success,
   },
 });
 

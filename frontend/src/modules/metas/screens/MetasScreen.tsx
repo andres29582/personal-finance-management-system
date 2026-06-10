@@ -1,11 +1,15 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppCard, AppScreen } from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+  GlassStatusCard,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateMeta, listMetas } from '../services/metaService';
 import { Meta } from '../types/meta';
 import { confirmAction } from '../../../../utils/confirm-action';
@@ -26,10 +30,13 @@ export function MetasScreen() {
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar as metas.');
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -56,27 +63,58 @@ export function MetasScreen() {
         'Nao foi possivel desativar a meta.',
       );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     }
   }
 
-  if (loading && !metas.length) {
-    return <AppLoading label="Carregando metas..." />;
-  }
-
   return (
-    <AppScreen
-      title="Metas"
-      subtitle="Acompanhe objetivos de economia e reducao de divida."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
-      actionLabel="Nova"
-      onActionPress={() => router.push('/metas-form' as never)}
+    <FinanceAppShell
+      activeRoute="/metas"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Nova" onPress={() => router.push('/metas-form' as never)} />}
+          eyebrow="Planejamento"
+          subtitle="Acompanhe objetivos de economia e reducao de divida."
+          title="Metas"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppMessage tone="error" value={message} />
+      {message && metas.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
-      {metas.length ? (
+      {loading && !metas.length ? (
+        <GlassStatusCard
+          title="Carregando metas"
+          description="Estamos buscando seus objetivos financeiros."
+          loading
+        />
+      ) : null}
+
+      {!loading && !!message && !metas.length ? (
+        <GlassStatusCard
+          title="Nao foi possivel carregar as metas"
+          description={message}
+          tone="error"
+          actionLabel="Tentar novamente"
+          onActionPress={loadMetas}
+        />
+      ) : null}
+
+      {!loading && !message && !metas.length ? (
+        <GlassStatusCard
+          title="Nenhuma meta cadastrada"
+          description="Crie uma meta para acompanhar progresso e prazos."
+          actionLabel="Nova meta"
+          onActionPress={() => router.push('/metas-form' as never)}
+        />
+      ) : null}
+
+      {!loading && metas.length ? (
         metas.map((meta) => (
-          <AppCard key={meta.id}>
+          <GlassPanel key={meta.id} accent="cyan">
             <Text style={styles.title}>{meta.nome}</Text>
             <Text style={styles.meta}>Tipo: {meta.tipo}</Text>
             <Text style={styles.meta}>
@@ -85,7 +123,7 @@ export function MetasScreen() {
             <Text style={styles.meta}>Limite: {formatDate(meta.fechaLimite)}</Text>
             <View style={styles.actions}>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Editar"
                   variant="ghost"
                   onPress={() =>
@@ -97,21 +135,17 @@ export function MetasScreen() {
                 />
               </View>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Desativar"
                   variant="danger"
                   onPress={() => handleDeactivate(meta)}
                 />
               </View>
             </View>
-          </AppCard>
+          </GlassPanel>
         ))
-      ) : (
-        <AppCard>
-          <Text style={styles.emptyText}>Nenhuma meta cadastrada.</Text>
-        </AppCard>
-      )}
-    </AppScreen>
+      ) : null}
+    </FinanceAppShell>
   );
 }
 
@@ -121,21 +155,24 @@ const styles = StyleSheet.create({
   actionCell: { flex: 1 },
   actions: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.sm,
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
   },
-  emptyText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   meta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   title: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
 });

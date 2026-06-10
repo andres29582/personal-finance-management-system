@@ -1,13 +1,18 @@
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppCard, AppScreen, AppStatusCard } from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+  GlassStatusCard,
+} from '../../../shared/ui';
+import { resolveApiError } from '../../../../utils/api-error';
 import { listMyAuditLogs } from '../services/auditLogService';
 import { AuditLogItem } from '../types/audit-log';
-import { resolveApiError } from '../../../../utils/api-error';
 
 function formatWhen(iso: string) {
   try {
@@ -57,72 +62,126 @@ export function AuditLogsScreen() {
   const hasNext = offset + items.length < total;
 
   return (
-    <AppScreen
-      title="Log de auditoria"
-      subtitle={`${total} registro(s) vinculados a sua conta`}
-      backLabel="Voltar"
-      onBackPress={() => router.back()}
+    <FinanceAppShell
+      activeRoute="/audit-logs"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Atualizar" onPress={() => void load(offset)} variant="ghost" />}
+          eyebrow="Seguranca e LGPD"
+          subtitle={`${total} registro(s) vinculados a sua conta`}
+          title="Log de auditoria"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      {message ? <AppMessage tone="error" value={message} /> : null}
+      {message && items.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
       {loading && !items.length ? (
-        <AppStatusCard title="Carregando" description="Buscando eventos..." loading />
+        <GlassStatusCard title="Carregando" description="Buscando eventos..." loading />
+      ) : null}
+
+      {!loading && !items.length && message ? (
+        <GlassStatusCard
+          title="Nao foi possivel carregar o log"
+          description={message}
+          tone="error"
+          actionLabel="Tentar novamente"
+          onActionPress={() => void load(offset)}
+        />
       ) : null}
 
       {!loading && !items.length && !message ? (
-        <AppStatusCard title="Sem registros" description="Ainda nao ha eventos de auditoria." />
+        <GlassStatusCard title="Sem registros" description="Ainda nao ha eventos de auditoria." />
       ) : null}
 
       {items.map((item) => (
-        <AppCard key={item.id}>
-          <Text style={styles.event}>{item.event}</Text>
+        <GlassPanel key={item.id} accent={item.success ? 'mixed' : 'magenta'}>
+          <View style={styles.cardTop}>
+            <Text style={styles.event}>{item.event}</Text>
+            <View style={[styles.badge, item.success ? styles.badgeSuccess : styles.badgeFailure]}>
+              <Text style={styles.badgeText}>{item.success ? 'Sucesso' : 'Falha'}</Text>
+            </View>
+          </View>
           <Text style={styles.meta}>
-            {formatWhen(item.createdAt)} · {item.module}.{item.action}
-            {item.success ? '' : ' · falha'}
+            {formatWhen(item.createdAt)} - {item.module}.{item.action}
           </Text>
           {item.message ? <Text style={styles.msg}>{item.message}</Text> : null}
-        </AppCard>
+        </GlassPanel>
       ))}
 
       <View style={styles.pagination}>
-        <AppButton
+        <GlassButton
           label="Anterior"
           variant="ghost"
           disabled={!hasPrev || loading}
           onPress={() => void load(Math.max(0, offset - pageSize))}
         />
-        <AppButton
+        <GlassButton
           label="Proxima"
           variant="ghost"
           disabled={!hasNext || loading}
           onPress={() => void load(offset + pageSize)}
         />
       </View>
-    </AppScreen>
+    </FinanceAppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  event: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
+  badge: {
+    borderRadius: 999,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xxs,
+  },
+  badgeFailure: {
+    backgroundColor: 'rgba(255, 122, 144, 0.10)',
+    borderColor: 'rgba(255, 122, 144, 0.34)',
+  },
+  badgeSuccess: {
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
+  },
+  badgeText: {
+    color: FinanceTheme.colors.text,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  cardTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+    justifyContent: 'space-between',
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  event: {
+    color: FinanceTheme.colors.text,
+    flex: 1,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
   meta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xs,
   },
   msg: {
-    color: ContaTheme.colors.text,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xs,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xs,
   },
   pagination: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
+    gap: FinanceTheme.spacing.sm,
     justifyContent: 'space-between',
-    marginTop: ContaTheme.spacing.md,
+    marginTop: FinanceTheme.spacing.md,
   },
 });
 
