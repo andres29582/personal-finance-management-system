@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AuthScreen } from '../../../../components/auth-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
 
 const BULLETS = [
   'Dados cadastrais e financeiros sao usados apenas para operar o sistema (finalidade legitima do servico).',
@@ -24,7 +24,7 @@ export function PrivacidadeScreen() {
         </Text>
         {BULLETS.map((line) => (
           <View key={line} style={styles.bulletRow}>
-            <Text style={styles.bullet}>•</Text>
+            <Text style={styles.bullet}>*</Text>
             <Text style={styles.bulletText}>{line}</Text>
           </View>
         ))}
@@ -46,38 +46,38 @@ export function PrivacidadeScreen() {
 }
 
 const styles = StyleSheet.create({
-  footerLinks: {
-    flexDirection: 'row',
-    gap: ContaTheme.spacing.lg,
-    justifyContent: 'center',
-    marginTop: ContaTheme.spacing.md,
-  },
   backText: {
-    color: ContaTheme.colors.primaryStrong,
+    color: FinanceTheme.colors.cyanMuted,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   bullet: {
-    color: ContaTheme.colors.primary,
-    marginRight: ContaTheme.spacing.xs,
+    color: FinanceTheme.colors.cyanMuted,
+    marginRight: FinanceTheme.spacing.xs,
     marginTop: 2,
   },
   bulletRow: {
     flexDirection: 'row',
-    marginTop: ContaTheme.spacing.sm,
-    paddingRight: ContaTheme.spacing.xs,
+    marginTop: FinanceTheme.spacing.sm,
+    paddingRight: FinanceTheme.spacing.xs,
   },
   bulletText: {
-    color: ContaTheme.colors.text,
+    color: FinanceTheme.colors.text,
     flex: 1,
-    fontSize: ContaTheme.typography.caption,
+    fontSize: FinanceTheme.typography.caption,
     lineHeight: 20,
   },
+  footerLinks: {
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.lg,
+    justifyContent: 'center',
+    marginTop: FinanceTheme.spacing.md,
+  },
   p: {
-    color: ContaTheme.colors.text,
-    fontSize: ContaTheme.typography.body,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
     lineHeight: 22,
-    marginBottom: ContaTheme.spacing.sm,
+    marginBottom: FinanceTheme.spacing.sm,
   },
   scroll: {
     maxHeight: 420,

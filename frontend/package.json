@@ -3,11 +3,13 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
+    "start": "node scripts/start-expo-onedrive-safe.js",
+    "start:standard": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
+    "web": "node scripts/start-expo-onedrive-safe.js --web",
+    "web:standard": "expo start --web",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "expo lint"

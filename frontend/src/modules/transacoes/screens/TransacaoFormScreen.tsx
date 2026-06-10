@@ -1,26 +1,33 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { TextInput } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppOptionGroup } from '../../../../components/app-option-group';
-import { AppCard, AppField, AppScreen, appInputStyles } from '../../../../components/app-screen';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassOptionGroup,
+  GlassPanel,
+  GlassTextInput,
+} from '../../../shared/ui';
+import { resolveApiError } from '../../../../utils/api-error';
+import { parseDecimalInput } from '../../../../utils/number-input';
 import {
   createTransacao,
   getTransacaoById,
   updateTransacao,
 } from '../services/transacaoService';
 import { TipoTransacao } from '../types/transacao';
-import { resolveApiError } from '../../../../utils/api-error';
-import { parseDecimalInput } from '../../../../utils/number-input';
 
 export function TransacaoFormScreen() {
   const router = useRouter();
+  const { replace } = router;
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const transacaoId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [tipo, setTipo] = useState<TipoTransacao>('despesa');
@@ -63,13 +70,16 @@ export function TransacaoFormScreen() {
           'Nao foi possivel carregar o formulario de transacao.',
         );
         setMessage(resolvedError.message);
+        if (resolvedError.unauthorized) {
+          replace('/login');
+        }
       } finally {
         setLoading(false);
       }
     }
 
-    loadData();
-  }, [transacaoId]);
+    void loadData();
+  }, [replace, transacaoId]);
 
   const categoriasFiltradas = useMemo(
     () => categorias.filter((categoria) => categoria.tipo === tipo),
@@ -90,11 +100,6 @@ export function TransacaoFormScreen() {
       return;
     }
 
-    if (!categoriaId) {
-      setMessage('Selecione uma categoria para continuar.');
-      return;
-    }
-
     if (!Number.isFinite(parsedValor)) {
       setMessage('Informe um valor valido. Ex.: 150,90');
       return;
@@ -102,6 +107,11 @@ export function TransacaoFormScreen() {
 
     if (parsedValor <= 0) {
       setMessage('O valor deve ser maior que zero.');
+      return;
+    }
+
+    if (!categoriaId) {
+      setMessage('Selecione uma categoria para continuar.');
       return;
     }
 
@@ -136,93 +146,129 @@ export function TransacaoFormScreen() {
         'Nao foi possivel salvar a transacao.',
       );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return <AppLoading label="Carregando transacao..." />;
-  }
-
   return (
-    <AppScreen
-      title={transacaoId ? 'Editar transacao' : 'Nova transacao'}
-      actionLabel="Voltar"
-      onActionPress={() => router.back()}
-    >
-      <AppCard>
-        <AppField label="Tipo">
-          <AppOptionGroup
-            options={[
-              { label: 'Despesa', value: 'despesa' },
-              { label: 'Receita', value: 'receita' },
-            ]}
-            selectedValue={tipo}
-            onChange={(value) => setTipo(value as TipoTransacao)}
-          />
-        </AppField>
-
-        <AppField label="Conta">
-          <AppOptionGroup
-            options={contas.map((conta) => ({ label: conta.nome, value: conta.id }))}
-            selectedValue={contaId}
-            onChange={setContaId}
-          />
-        </AppField>
-
-        <AppField label="Categoria">
-          <AppOptionGroup
-            options={categoriasFiltradas.map((categoria) => ({
-              label: categoria.nome,
-              value: categoria.id,
-            }))}
-            selectedValue={categoriaId}
-            onChange={setCategoriaId}
-          />
-        </AppField>
-
-        <AppField label="Valor">
-          <TextInput
-            style={appInputStyles.input}
-            value={valor}
-            onChangeText={setValor}
-            keyboardType="decimal-pad"
-            placeholder="0,00"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
-
-        <AppField label="Data (YYYY-MM-DD)">
-          <TextInput
-            style={appInputStyles.input}
-            value={data}
-            onChangeText={setData}
-            placeholder="2026-04-07"
-            placeholderTextColor="#8A8A8A"
-          />
-        </AppField>
-
-        <AppField label="Descricao">
-          <TextInput
-            style={[appInputStyles.input, appInputStyles.multiline]}
-            value={descricao}
-            onChangeText={setDescricao}
-            placeholder="Descricao da transacao"
-            placeholderTextColor="#8A8A8A"
-            multiline
-          />
-        </AppField>
-
-        <AppMessage tone="error" value={message} />
-        <AppButton
-          label={saving ? 'Salvando...' : 'Salvar transacao'}
-          onPress={handleSave}
-          disabled={saving}
+    <FinanceAppShell
+      activeRoute="/transacoes"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          eyebrow="Movimentacoes"
+          subtitle="Registre receitas e despesas com conta e categoria."
+          title={transacaoId ? 'Editar transacao' : 'Nova transacao'}
         />
-      </AppCard>
-    </AppScreen>
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
+    >
+      {loading ? (
+        <GlassPanel>
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={FinanceTheme.colors.cyan} />
+            <Text style={styles.loadingText}>Carregando transacao...</Text>
+          </View>
+        </GlassPanel>
+      ) : (
+        <GlassPanel>
+          <GlassField label="Tipo">
+            <GlassOptionGroup
+              options={[
+                { label: 'Despesa', value: 'despesa' },
+                { label: 'Receita', value: 'receita' },
+              ]}
+              value={tipo}
+              onChange={(value) => setTipo(value as TipoTransacao)}
+            />
+          </GlassField>
+
+          <GlassField label="Conta">
+            <GlassOptionGroup
+              options={contas.map((conta) => ({ label: conta.nome, value: conta.id }))}
+              value={contaId}
+              onChange={setContaId}
+            />
+          </GlassField>
+
+          <GlassField label="Categoria">
+            <GlassOptionGroup
+              options={categoriasFiltradas.map((categoria) => ({
+                label: categoria.nome,
+                value: categoria.id,
+              }))}
+              value={categoriaId}
+              onChange={setCategoriaId}
+            />
+          </GlassField>
+
+          <GlassField label="Valor">
+            <GlassTextInput
+              keyboardType="decimal-pad"
+              placeholder="0,00"
+              value={valor}
+              onChangeText={setValor}
+            />
+          </GlassField>
+
+          <GlassField label="Data (YYYY-MM-DD)">
+            <GlassTextInput
+              placeholder="2026-04-07"
+              value={data}
+              onChangeText={setData}
+            />
+          </GlassField>
+
+          <GlassField label="Descricao">
+            <GlassTextInput
+              multiline
+              placeholder="Descricao da transacao"
+              style={styles.multiline}
+              value={descricao}
+              onChangeText={setDescricao}
+            />
+          </GlassField>
+
+          {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+          <GlassButton
+            label={saving ? 'Salvando...' : 'Salvar transacao'}
+            onPress={handleSave}
+            disabled={saving}
+          />
+        </GlassPanel>
+      )}
+    </FinanceAppShell>
   );
 }
 
 export default TransacaoFormScreen;
+
+const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  loadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+  },
+  loadingText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+  },
+  multiline: {
+    minHeight: 92,
+    paddingTop: FinanceTheme.spacing.sm,
+    textAlignVertical: 'top',
+  },
+});

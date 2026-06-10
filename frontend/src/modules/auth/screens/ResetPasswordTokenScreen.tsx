@@ -1,13 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppField, appInputStyles } from '../../../../components/app-screen';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AuthScreen } from '../../../../components/auth-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
-import { resetPasswordWithToken } from '../services/authService';
 import { resolveApiError } from '../../../../utils/api-error';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
+import { resetPasswordWithToken } from '../services/authService';
 
 export function ResetPasswordTokenScreen() {
   const router = useRouter();
@@ -70,47 +68,41 @@ export function ResetPasswordTokenScreen() {
       subtitle="Use o token recebido apos o pedido de recuperacao (ou o link com token)."
       cardMaxWidth={400}
     >
-      <AppField label="Token">
-        <TextInput
-          style={appInputStyles.input}
+      <GlassField label="Token">
+        <GlassTextInput
           placeholder="Cole o token completo"
-          placeholderTextColor="#8A8A8A"
           autoCapitalize="none"
           value={token}
           onChangeText={setToken}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
-      <AppField label="Nova senha">
-        <TextInput
-          style={appInputStyles.input}
+      <GlassField label="Nova senha">
+        <GlassTextInput
           placeholder="Minimo 6 caracteres"
-          placeholderTextColor="#8A8A8A"
           secureTextEntry
           value={novaSenha}
           onChangeText={setNovaSenha}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
-      <AppField label="Confirmar senha">
-        <TextInput
-          style={appInputStyles.input}
+      <GlassField label="Confirmar senha">
+        <GlassTextInput
           placeholder="Repita a nova senha"
-          placeholderTextColor="#8A8A8A"
           secureTextEntry
           value={confirmar}
           onChangeText={setConfirmar}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
-      {message ? <AppMessage tone="muted" value={message} /> : null}
-      {error ? <AppMessage tone="error" value={error} /> : null}
+      {message ? <Text style={styles.infoMessage}>{message}</Text> : null}
+      {error ? <Text style={styles.errorMessage}>{error}</Text> : null}
 
       <View style={styles.actions}>
-        <AppButton
+        <GlassButton
           label={loading ? 'Salvando...' : 'Redefinir senha'}
           onPress={handleSubmit}
           disabled={loading}
@@ -132,15 +124,29 @@ export default ResetPasswordTokenScreen;
 
 const styles = StyleSheet.create({
   actions: {
-    marginTop: ContaTheme.spacing.md,
+    marginTop: FinanceTheme.spacing.md,
   },
   back: {
     alignItems: 'center',
-    marginTop: ContaTheme.spacing.lg,
+    marginTop: FinanceTheme.spacing.lg,
   },
   backText: {
-    color: ContaTheme.colors.title,
+    color: FinanceTheme.colors.cyanMuted,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '800',
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  infoMessage: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
 });

@@ -1,14 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppField, appInputStyles } from '../../../../components/app-screen';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AuthScreen } from '../../../../components/auth-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
-import { login } from '../services/authService';
 import { saveRefreshToken, saveToken, saveUser } from '../../../../storage/authStorage';
 import { resolveApiError } from '../../../../utils/api-error';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
+import { login } from '../services/authService';
 
 type LoginField = 'email' | 'senha';
 type LoginErrors = Partial<Record<LoginField, string>>;
@@ -81,11 +79,9 @@ export function LoginScreen() {
       subtitle="Entre para acompanhar seu resumo financeiro e continuar de onde parou."
       cardMaxWidth={360}
     >
-      <AppField label="E-mail" error={errors.email}>
-        <TextInput
-          style={[appInputStyles.input, errors.email ? appInputStyles.inputError : null]}
+      <GlassField label="E-mail" error={errors.email}>
+        <GlassTextInput
           placeholder="voce@exemplo.com"
-          placeholderTextColor="#8A8A8A"
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
@@ -95,13 +91,11 @@ export function LoginScreen() {
           }}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
-      <AppField label="Senha" error={errors.senha}>
-        <TextInput
-          style={[appInputStyles.input, errors.senha ? appInputStyles.inputError : null]}
+      <GlassField label="Senha" error={errors.senha}>
+        <GlassTextInput
           placeholder="Sua senha"
-          placeholderTextColor="#8A8A8A"
           secureTextEntry
           value={senha}
           onChangeText={(value) => {
@@ -110,23 +104,21 @@ export function LoginScreen() {
           }}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
       <TouchableOpacity
         onPress={() => router.push('/forgot-password' as never)}
         disabled={loading}
         style={styles.forgotWrap}
       >
-        <Text style={styles.forgotLink}>Esqueci minha senha</Text>
+        <Text style={styles.link}>Esqueci minha senha</Text>
       </TouchableOpacity>
-      <AppMessage
-        tone="muted"
-        value="Logado, voce pode alterar a senha em Configuracoes > Senha."
-      />
-      <AppMessage tone="error" value={message} />
+
+      <Text style={styles.hint}>Logado, voce pode alterar a senha em Configuracoes &gt; Senha.</Text>
+      {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
       <View style={styles.actions}>
-        <AppButton
+        <GlassButton
           label={loading ? 'Entrando...' : 'Entrar'}
           onPress={handleLogin}
           disabled={loading}
@@ -149,36 +141,48 @@ export default LoginScreen;
 
 const styles = StyleSheet.create({
   actions: {
-    marginTop: ContaTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.sm,
   },
-  forgotLink: {
-    color: ContaTheme.colors.primaryStrong,
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  forgotWrap: {
-    marginTop: ContaTheme.spacing.xs,
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: ContaTheme.spacing.md,
+    marginTop: FinanceTheme.spacing.md,
   },
   footerLink: {
-    color: '#123524',
+    color: FinanceTheme.colors.cyanMuted,
     fontSize: 15,
-    fontWeight: '700',
-    marginLeft: ContaTheme.spacing.xs,
+    fontWeight: '800',
+    marginLeft: FinanceTheme.spacing.xs,
   },
   footerText: {
-    color: '#2F4136',
+    color: FinanceTheme.colors.textMuted,
     fontSize: 15,
   },
+  forgotWrap: {
+    marginTop: FinanceTheme.spacing.xs,
+  },
+  hint: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.sm,
+  },
+  link: {
+    color: FinanceTheme.colors.cyanMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
   secureText: {
-    color: '#2F4136',
+    color: FinanceTheme.colors.textMuted,
     fontSize: 14,
-    marginTop: ContaTheme.spacing.md,
+    marginTop: FinanceTheme.spacing.md,
     textAlign: 'center',
   },
 });

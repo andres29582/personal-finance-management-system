@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
-import { AppMessage } from "../../../../components/app-message";
-import { AppStatusCard } from "../../../../components/app-screen";
+import { StyleSheet, Text } from "react-native";
+import { FinanceTheme } from "../../../shared/styles/financeTheme";
+import { GlassStatusCard } from "../../../shared/ui";
 import { AccountsOverviewCard } from "../components/AccountsOverviewCard";
 import { CategoryBarsCard } from "../components/CategoryBarsCard";
 import { DashboardHeader } from "../components/DashboardHeader";
@@ -52,11 +53,11 @@ export function DashboardScreen() {
       sidebarItems={dashboardSidebarItems}
     >
       {message && dashboard ? (
-        <AppMessage tone="error" value={message} />
+        <Text style={styles.errorMessage}>{message}</Text>
       ) : null}
 
       {loading && !dashboard ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Carregando dashboard"
           description="Estamos reunindo seu resumo financeiro mais recente."
           loading
@@ -64,7 +65,7 @@ export function DashboardScreen() {
       ) : null}
 
       {!loading && !!message && !dashboard ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nao foi possivel carregar o dashboard"
           description={message}
           tone="error"
@@ -74,7 +75,7 @@ export function DashboardScreen() {
       ) : null}
 
       {!loading && !message && !dashboard ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Dashboard indisponivel"
           description="Nao encontramos dados para montar o painel neste momento."
           actionLabel="Atualizar"
@@ -114,3 +115,13 @@ export function DashboardScreen() {
 }
 
 export default DashboardScreen;
+
+const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: "700",
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: "center",
+  },
+});

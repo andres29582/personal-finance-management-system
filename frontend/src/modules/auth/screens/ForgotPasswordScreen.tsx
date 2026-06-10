@@ -1,13 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppField, appInputStyles } from '../../../../components/app-screen';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AuthScreen } from '../../../../components/auth-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
-import { forgotPassword } from '../services/authService';
 import { resolveApiError } from '../../../../utils/api-error';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
+import { forgotPassword } from '../services/authService';
 
 export function ForgotPasswordScreen() {
   const router = useRouter();
@@ -48,21 +46,19 @@ export function ForgotPasswordScreen() {
       subtitle="Informe o e-mail cadastrado. Se existir conta, geramos um link interno de redefinicao."
       cardMaxWidth={400}
     >
-      <AppField label="E-mail" error={error && !info ? error : undefined}>
-        <TextInput
-          style={[appInputStyles.input, error && !info ? appInputStyles.inputError : null]}
+      <GlassField label="E-mail" error={error && !info ? error : undefined}>
+        <GlassTextInput
           placeholder="voce@exemplo.com"
-          placeholderTextColor="#8A8A8A"
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
           onChangeText={setEmail}
           editable={!loading}
         />
-      </AppField>
+      </GlassField>
 
-      {info ? <AppMessage tone="muted" value={info} /> : null}
-      {error && !info ? <AppMessage tone="error" value={error} /> : null}
+      {info ? <Text style={styles.infoMessage}>{info}</Text> : null}
+      {error && !info ? <Text style={styles.errorMessage}>{error}</Text> : null}
       {devToken ? (
         <View style={styles.devBox}>
           <Text style={styles.devTitle}>Token (ambiente de desenvolvimento)</Text>
@@ -76,7 +72,7 @@ export function ForgotPasswordScreen() {
       ) : null}
 
       <View style={styles.actions}>
-        <AppButton
+        <GlassButton
           label={loading ? 'Enviando...' : 'Enviar instrucoes'}
           onPress={handleSubmit}
           disabled={loading}
@@ -98,38 +94,52 @@ export default ForgotPasswordScreen;
 
 const styles = StyleSheet.create({
   actions: {
-    marginTop: ContaTheme.spacing.md,
-  },
-  devBox: {
-    backgroundColor: ContaTheme.colors.surface,
-    borderColor: ContaTheme.colors.border,
-    borderRadius: ContaTheme.radius.sm,
-    borderWidth: 1,
-    marginTop: ContaTheme.spacing.sm,
-    padding: ContaTheme.spacing.sm,
-  },
-  devHint: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xs,
-  },
-  devTitle: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: '700',
-  },
-  devToken: {
-    color: ContaTheme.colors.text,
-    fontSize: 12,
-    marginTop: ContaTheme.spacing.xs,
+    marginTop: FinanceTheme.spacing.md,
   },
   back: {
     alignItems: 'center',
-    marginTop: ContaTheme.spacing.lg,
+    marginTop: FinanceTheme.spacing.lg,
   },
   backText: {
-    color: ContaTheme.colors.title,
+    color: FinanceTheme.colors.cyanMuted,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '800',
+  },
+  devBox: {
+    backgroundColor: FinanceTheme.colors.glassSubtle,
+    borderColor: FinanceTheme.colors.border,
+    borderRadius: FinanceTheme.radius.sm,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    marginTop: FinanceTheme.spacing.sm,
+    padding: FinanceTheme.spacing.sm,
+  },
+  devHint: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xs,
+  },
+  devTitle: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+  },
+  devToken: {
+    color: FinanceTheme.colors.text,
+    fontSize: 12,
+    marginTop: FinanceTheme.spacing.xs,
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  infoMessage: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
 });

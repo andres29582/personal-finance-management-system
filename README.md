@@ -71,6 +71,9 @@ ml-finance-tcc/  # pipeline, modelo e API de previsão de déficit
 
 ## Como executar localmente
 
+Para una rutina de entrega local reproducible, use tambien
+`docs/estabilizacion-local.md`.
+
 ### Backend
 
 1. Configure `backendnest/.env` com base em `backendnest/.env.example`.

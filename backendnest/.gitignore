@@ -1,5 +1,8 @@
 # compiled output
 /dist
+/.dev-dist
+/.nest-onedrive-safe.tsconfig.json
+/tsconfig.onedrive-safe.json
 /node_modules
 /build
 

@@ -1,26 +1,35 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppOptionGroup } from '../../../../components/app-option-group';
-import {
-  AppCard,
-  AppField,
-  AppScreen,
-  AppStatusCard,
-  appInputStyles,
-} from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
-import { resolveApiError } from '../../../../utils/api-error';
-import { formatCurrency, formatDate, getCurrentMonthReference } from '../../../../utils/formatters';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassOptionGroup,
+  GlassPanel,
+  GlassStatusCard,
+  GlassTextInput,
+} from '../../../shared/ui';
+import { resolveApiError } from '../../../../utils/api-error';
+import {
+  formatCurrency,
+  formatDate,
+  getCurrentMonthReference,
+} from '../../../../utils/formatters';
 import { RelatorioGestaoCharts } from '../components/RelatorioGestaoCharts';
 import { getRelatorio } from '../services/relatorioService';
-import { GetRelatorioParams, PeriodoRelatorio, RelatorioResponse } from '../types/relatorio';
+import {
+  GetRelatorioParams,
+  PeriodoRelatorio,
+  RelatorioResponse,
+} from '../types/relatorio';
 
 export function RelatoriosScreen() {
   const router = useRouter();
@@ -55,11 +64,14 @@ export function RelatoriosScreen() {
           'Nao foi possivel carregar filtros do relatorio.',
         );
         setMessage(resolvedError.message);
+        if (resolvedError.unauthorized) {
+          router.replace('/login');
+        }
       }
     }
 
-    loadSelectors();
-  }, []);
+    void loadSelectors();
+  }, [router]);
 
   const filtros = useMemo<GetRelatorioParams>(() => {
     const base: GetRelatorioParams = { periodo };
@@ -105,10 +117,13 @@ export function RelatoriosScreen() {
         'Nao foi possivel gerar o relatorio.',
       );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setLoading(false);
     }
-  }, [filtros]);
+  }, [filtros, router]);
 
   useEffect(() => {
     if (primeiraCargaRef.current) {
@@ -120,108 +135,106 @@ export function RelatoriosScreen() {
   }, [handleGenerate]);
 
   return (
-    <AppScreen
-      title="Relatorios"
-      subtitle="Analise receitas, despesas e economia."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
+    <FinanceAppShell
+      activeRoute="/relatorios"
+      header={
+        <FinanceAppHeader
+          eyebrow="Analise financeira"
+          subtitle="Analise receitas, despesas e economia."
+          title="Relatorios"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppField label="Periodo">
-          <AppOptionGroup
+      <GlassPanel>
+        <GlassField label="Periodo">
+          <GlassOptionGroup
             options={[
               { label: 'Mensal', value: 'mensal' },
               { label: 'Trimestral', value: 'trimestral' },
               { label: 'Intervalo', value: 'intervalo' },
             ]}
-            selectedValue={periodo}
+            value={periodo}
             onChange={(value) => setPeriodo(value as PeriodoRelatorio)}
           />
-        </AppField>
+        </GlassField>
 
         {periodo === 'mensal' ? (
-          <AppField label="Mes (YYYY-MM)">
-            <TextInput
-              style={appInputStyles.input}
+          <GlassField label="Mes (YYYY-MM)">
+            <GlassTextInput
+              placeholder="2026-04"
               value={mes}
               onChangeText={setMes}
-              placeholder="2026-04"
-              placeholderTextColor="#8A8A8A"
             />
-          </AppField>
+          </GlassField>
         ) : null}
 
         {periodo === 'trimestral' ? (
           <>
-            <AppField label="Ano">
-              <TextInput
-                style={appInputStyles.input}
+            <GlassField label="Ano">
+              <GlassTextInput
+                keyboardType="number-pad"
+                placeholder="2026"
                 value={ano}
                 onChangeText={setAno}
-                placeholder="2026"
-                placeholderTextColor="#8A8A8A"
               />
-            </AppField>
-            <AppField label="Trimestre">
-              <TextInput
-                style={appInputStyles.input}
+            </GlassField>
+            <GlassField label="Trimestre">
+              <GlassTextInput
+                keyboardType="number-pad"
+                placeholder="1"
                 value={trimestre}
                 onChangeText={setTrimestre}
-                placeholder="1"
-                placeholderTextColor="#8A8A8A"
               />
-            </AppField>
+            </GlassField>
           </>
         ) : null}
 
         {periodo === 'intervalo' ? (
           <>
-            <AppField label="Data inicial">
-              <TextInput
-                style={appInputStyles.input}
+            <GlassField label="Data inicial">
+              <GlassTextInput
+                placeholder="2026-04-01"
                 value={dataInicio}
                 onChangeText={setDataInicio}
-                placeholder="2026-04-01"
-                placeholderTextColor="#8A8A8A"
               />
-            </AppField>
-            <AppField label="Data final">
-              <TextInput
-                style={appInputStyles.input}
+            </GlassField>
+            <GlassField label="Data final">
+              <GlassTextInput
+                placeholder="2026-04-30"
                 value={dataFim}
                 onChangeText={setDataFim}
-                placeholder="2026-04-30"
-                placeholderTextColor="#8A8A8A"
               />
-            </AppField>
+            </GlassField>
           </>
         ) : null}
 
-        <AppField label="Tipo">
-          <AppOptionGroup
+        <GlassField label="Tipo">
+          <GlassOptionGroup
             options={[
               { label: 'Todos', value: '' },
               { label: 'Receitas', value: 'receita' },
               { label: 'Despesas', value: 'despesa' },
             ]}
-            selectedValue={tipo}
+            value={tipo}
             onChange={setTipo}
           />
-        </AppField>
+        </GlassField>
 
-        <AppField label="Conta">
-          <AppOptionGroup
+        <GlassField label="Conta">
+          <GlassOptionGroup
             options={[
               { label: 'Todas', value: '' },
               ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
             ]}
-            selectedValue={contaId}
+            value={contaId}
             onChange={setContaId}
           />
-        </AppField>
+        </GlassField>
 
-        <AppField label="Categoria">
-          <AppOptionGroup
+        <GlassField label="Categoria">
+          <GlassOptionGroup
             options={[
               { label: 'Todas', value: '' },
               ...categorias.map((categoria) => ({
@@ -229,18 +242,23 @@ export function RelatoriosScreen() {
                 value: categoria.id,
               })),
             ]}
-            selectedValue={categoriaId}
+            value={categoriaId}
             onChange={setCategoriaId}
           />
-        </AppField>
+        </GlassField>
 
-        <AppButton label="Gerar relatorio" onPress={handleGenerate} variant="ghost" />
-      </AppCard>
+        <GlassButton
+          label={loading ? 'Gerando...' : 'Gerar relatorio'}
+          onPress={handleGenerate}
+          variant="ghost"
+          disabled={loading}
+        />
+      </GlassPanel>
 
-      {message && relatorio ? <AppMessage tone="error" value={message} /> : null}
+      {message && relatorio ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
       {loading && !relatorio ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Carregando relatorio"
           description="Estamos reunindo os dados para o periodo selecionado."
           loading
@@ -248,7 +266,7 @@ export function RelatoriosScreen() {
       ) : null}
 
       {!loading && !!message && !relatorio ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nao foi possivel gerar o relatorio"
           description={message}
           tone="error"
@@ -259,29 +277,40 @@ export function RelatoriosScreen() {
 
       {!loading && relatorio ? (
         <>
-          <AppCard>
-            <Text style={styles.sectionTitle}>Resumo</Text>
-            <Text style={styles.summaryText}>Periodo: {relatorio.periodoReferencia}</Text>
-            <Text style={styles.summaryText}>
-              Receitas: {formatCurrency(relatorio.resumo.totalReceitas)}
-            </Text>
-            <Text style={styles.summaryText}>
-              Despesas: {formatCurrency(relatorio.resumo.totalDespesas)}
-            </Text>
-            <Text style={styles.summaryValue}>
-              Economia: {formatCurrency(relatorio.resumo.economia)}
-            </Text>
-          </AppCard>
+          <View style={styles.summaryGrid}>
+            <GlassPanel accent="mixed" style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Periodo</Text>
+              <Text style={styles.metricValue}>{relatorio.periodoReferencia}</Text>
+            </GlassPanel>
+            <GlassPanel accent="cyan" style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Receitas</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(relatorio.resumo.totalReceitas)}
+              </Text>
+            </GlassPanel>
+            <GlassPanel accent="magenta" style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Despesas</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(relatorio.resumo.totalDespesas)}
+              </Text>
+            </GlassPanel>
+            <GlassPanel accent="cyan" style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Economia</Text>
+              <Text style={styles.metricValue}>
+                {formatCurrency(relatorio.resumo.economia)}
+              </Text>
+            </GlassPanel>
+          </View>
 
-          <AppCard>
+          <GlassPanel>
             <RelatorioGestaoCharts
               despesasPorCategoria={relatorio.despesasPorCategoria}
               totalDespesas={relatorio.resumo.totalDespesas}
               totalReceitas={relatorio.resumo.totalReceitas}
             />
-          </AppCard>
+          </GlassPanel>
 
-          <AppCard>
+          <GlassPanel>
             <Text style={styles.sectionTitle}>Despesas por categoria</Text>
             {relatorio.despesasPorCategoria.length ? (
               relatorio.despesasPorCategoria.map((item) => (
@@ -292,11 +321,11 @@ export function RelatoriosScreen() {
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>Sem despesas para o filtro actual.</Text>
+              <Text style={styles.emptyText}>Sem despesas para o filtro atual.</Text>
             )}
-          </AppCard>
+          </GlassPanel>
 
-          <AppCard>
+          <GlassPanel>
             <Text style={styles.sectionTitle}>Transacoes</Text>
             {relatorio.transacoes.length ? (
               relatorio.transacoes.map((item) => (
@@ -313,60 +342,78 @@ export function RelatoriosScreen() {
             ) : (
               <Text style={styles.emptyText}>Nenhuma transacao encontrada.</Text>
             )}
-          </AppCard>
+          </GlassPanel>
         </>
       ) : null}
-    </AppScreen>
+    </FinanceAppShell>
   );
 }
 
 const styles = StyleSheet.create({
   emptyText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.body,
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  metricCard: {
+    flex: 1,
+    minWidth: 190,
+  },
+  metricLabel: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+  },
+  metricValue: {
+    color: FinanceTheme.colors.text,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: FinanceTheme.spacing.xs,
   },
   rowItem: {
-    marginTop: ContaTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.sm,
   },
   rowText: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
   },
   sectionTitle: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
-    marginBottom: ContaTheme.spacing.sm,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
+    marginBottom: FinanceTheme.spacing.sm,
   },
-  summaryText: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    marginBottom: ContaTheme.spacing.xs,
-  },
-  summaryValue: {
-    color: ContaTheme.colors.primaryStrong,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
-    marginTop: ContaTheme.spacing.xs,
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.md,
   },
   transactionItem: {
-    marginTop: ContaTheme.spacing.sm,
+    borderBottomColor: FinanceTheme.colors.border,
+    borderBottomWidth: FinanceTheme.borderWidth.hairline,
+    paddingVertical: FinanceTheme.spacing.sm,
   },
   transactionMeta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   transactionTitle: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
   transactionValue: {
-    color: ContaTheme.colors.primaryStrong,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
-    marginTop: ContaTheme.spacing.xs,
+    color: FinanceTheme.colors.cyanMuted,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
+    marginTop: FinanceTheme.spacing.xs,
   },
 });
 

@@ -1,20 +1,26 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { TextInput } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppOptionGroup } from '../../../../components/app-option-group';
-import { AppCard, AppField, AppScreen, appInputStyles } from '../../../../components/app-screen';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassOptionGroup,
+  GlassPanel,
+  GlassTextInput,
+} from '../../../shared/ui';
+import { resolveApiError } from '../../../../utils/api-error';
+import { parseDecimalInput } from '../../../../utils/number-input';
 import {
   createTransferencia,
   getTransferenciaById,
   updateTransferencia,
 } from '../services/transferenciaService';
-import { resolveApiError } from '../../../../utils/api-error';
-import { parseDecimalInput } from '../../../../utils/number-input';
 
 export function TransferenciaFormScreen() {
   const router = useRouter();
@@ -50,15 +56,21 @@ export function TransferenciaFormScreen() {
           setDescricao(transferencia.descricao || '');
         }
       } catch (error) {
-        const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar a transferencia.');
+        const resolvedError = await resolveApiError(
+          error,
+          'Nao foi possivel carregar a transferencia.',
+        );
         setMessage(resolvedError.message);
+        if (resolvedError.unauthorized) {
+          router.replace('/login');
+        }
       } finally {
         setLoading(false);
       }
     }
 
-    loadData();
-  }, [transferenciaId]);
+    void loadData();
+  }, [router, transferenciaId]);
 
   async function handleSave() {
     const parsedValor = parseDecimalInput(valor);
@@ -100,61 +112,114 @@ export function TransferenciaFormScreen() {
 
       router.replace('/transferencias' as never);
     } catch (error) {
-      const resolvedError = await resolveApiError(error, 'Nao foi possivel salvar a transferencia.');
+      const resolvedError = await resolveApiError(
+        error,
+        'Nao foi possivel salvar a transferencia.',
+      );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return <AppLoading label="Carregando transferencia..." />;
-  }
+  const contaOptions = contas.map((conta) => ({ label: conta.nome, value: conta.id }));
 
   return (
-    <AppScreen
-      title={transferenciaId ? 'Editar transferencia' : 'Nova transferencia'}
-      actionLabel="Voltar"
-      onActionPress={() => router.back()}
+    <FinanceAppShell
+      activeRoute="/transferencias"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          eyebrow="Movimentacoes"
+          subtitle="Registre transferencias entre contas."
+          title={transferenciaId ? 'Editar transferencia' : 'Nova transferencia'}
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppField label="Conta origem">
-          <AppOptionGroup
-            options={contas.map((conta) => ({ label: conta.nome, value: conta.id }))}
-            selectedValue={contaOrigemId}
-            onChange={setContaOrigemId}
+      {loading ? (
+        <GlassPanel>
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={FinanceTheme.colors.cyan} />
+            <Text style={styles.loadingText}>Carregando transferencia...</Text>
+          </View>
+        </GlassPanel>
+      ) : (
+        <GlassPanel>
+          <GlassField label="Conta origem">
+            <GlassOptionGroup
+              options={contaOptions}
+              value={contaOrigemId}
+              onChange={setContaOrigemId}
+            />
+          </GlassField>
+
+          <GlassField label="Conta destino">
+            <GlassOptionGroup
+              options={contaOptions}
+              value={contaDestinoId}
+              onChange={setContaDestinoId}
+            />
+          </GlassField>
+
+          <GlassField label="Valor">
+            <GlassTextInput
+              keyboardType="decimal-pad"
+              value={valor}
+              onChangeText={setValor}
+            />
+          </GlassField>
+
+          <GlassField label="Comissao">
+            <GlassTextInput
+              keyboardType="decimal-pad"
+              value={comissao}
+              onChangeText={setComissao}
+            />
+          </GlassField>
+
+          <GlassField label="Data">
+            <GlassTextInput value={data} onChangeText={setData} />
+          </GlassField>
+
+          <GlassField label="Descricao">
+            <GlassTextInput value={descricao} onChangeText={setDescricao} />
+          </GlassField>
+
+          {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+          <GlassButton
+            label={saving ? 'Salvando...' : 'Salvar transferencia'}
+            onPress={handleSave}
+            disabled={saving}
           />
-        </AppField>
-
-        <AppField label="Conta destino">
-          <AppOptionGroup
-            options={contas.map((conta) => ({ label: conta.nome, value: conta.id }))}
-            selectedValue={contaDestinoId}
-            onChange={setContaDestinoId}
-          />
-        </AppField>
-
-        <AppField label="Valor">
-          <TextInput style={appInputStyles.input} value={valor} onChangeText={setValor} keyboardType="decimal-pad" />
-        </AppField>
-
-        <AppField label="Comissao">
-          <TextInput style={appInputStyles.input} value={comissao} onChangeText={setComissao} keyboardType="decimal-pad" />
-        </AppField>
-
-        <AppField label="Data">
-          <TextInput style={appInputStyles.input} value={data} onChangeText={setData} />
-        </AppField>
-
-        <AppField label="Descricao">
-          <TextInput style={appInputStyles.input} value={descricao} onChangeText={setDescricao} />
-        </AppField>
-
-        <AppMessage tone="error" value={message} />
-        <AppButton label={saving ? 'Salvando...' : 'Salvar transferencia'} onPress={handleSave} disabled={saving} />
-      </AppCard>
-    </AppScreen>
+        </GlassPanel>
+      )}
+    </FinanceAppShell>
   );
 }
 
 export default TransferenciaFormScreen;
+
+const styles = StyleSheet.create({
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  loadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+  },
+  loadingText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+  },
+});

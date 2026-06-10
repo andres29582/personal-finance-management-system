@@ -24,6 +24,7 @@ type UseDashboardDataResult = {
 
 export function useDashboardData(): UseDashboardDataResult {
   const router = useRouter();
+  const { replace } = router;
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,12 +69,12 @@ export function useDashboardData(): UseDashboardDataResult {
       setMessage(resolvedError.message);
 
       if (resolvedError.unauthorized) {
-        router.replace('/login');
+        replace('/login');
       }
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [replace]);
 
   useFocusEffect(
     useCallback(() => {
@@ -86,9 +87,9 @@ export function useDashboardData(): UseDashboardDataResult {
       await logoutSession();
     } finally {
       await clearSession();
-      router.replace('/login');
+      replace('/login');
     }
-  }, [router]);
+  }, [replace]);
 
   return {
     dashboard,

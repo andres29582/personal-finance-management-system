@@ -1,10 +1,17 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import { StyleSheet, Text } from 'react-native';
 import { clearSession, getUser } from '../../../../storage/authStorage';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+} from '../../../shared/ui';
 import { logoutSession } from '../../auth/services/authService';
 import { UsuarioLogado } from '../../auth/types/auth';
+import { dashboardSidebarItems } from '../utils/dashboardMappers';
 
 export function HomeScreen() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -15,7 +22,7 @@ export function HomeScreen() {
       setUsuario(user);
     }
 
-    loadUser();
+    void loadUser();
   }, []);
 
   async function handleLogout() {
@@ -28,83 +35,46 @@ export function HomeScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Home</Text>
-
-      <Text style={styles.text}>
-        Bem-vindo{usuario?.nome ? `, ${usuario.nome}` : ''}.
-      </Text>
-
-      <Text style={styles.text}>
-        {usuario?.email ? `Email: ${usuario.email}` : 'Usuário não carregado.'}
-      </Text>
-
-      <TouchableOpacity
-        style={styles.secondaryButton}
-        onPress={() => router.push('/contas')}
-      >
-        <Text style={styles.secondaryButtonText}>Minhas contas</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.secondaryButton}
-        onPress={() => router.push('/reset-password')}
-      >
-        <Text style={styles.secondaryButtonText}>Alterar senha</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.button} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Sair</Text>
-      </TouchableOpacity>
-    </View>
+    <FinanceAppShell
+      activeRoute="/home"
+      header={
+        <FinanceAppHeader
+          eyebrow="Inicio"
+          subtitle={usuario?.email ? `Email: ${usuario.email}` : 'Usuario nao carregado.'}
+          title={`Bem-vindo${usuario?.nome ? `, ${usuario.nome}` : ''}`}
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={dashboardSidebarItems}
+    >
+      <GlassPanel>
+        <Text style={styles.title}>Atalhos</Text>
+        <Text style={styles.text}>
+          Acesse rapidamente suas contas, altere a senha ou encerre a sessao.
+        </Text>
+        <GlassButton label="Minhas contas" onPress={() => router.push('/contas')} />
+        <GlassButton
+          label="Alterar senha"
+          onPress={() => router.push('/reset-password')}
+          variant="ghost"
+        />
+        <GlassButton label="Sair" onPress={handleLogout} variant="danger" />
+      </GlassPanel>
+    </FinanceAppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: ContaTheme.spacing.lg,
-    backgroundColor: ContaTheme.colors.screenBg,
+  text: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.body,
+    marginBottom: FinanceTheme.spacing.md,
   },
   title: {
-    fontSize: ContaTheme.typography.title,
-    fontWeight: 'bold',
-    color: ContaTheme.colors.title,
-    marginBottom: ContaTheme.spacing.lg,
-    textAlign: 'center',
-  },
-  text: {
-    color: ContaTheme.colors.text,
-    fontSize: ContaTheme.typography.body,
-    marginBottom: ContaTheme.spacing.sm,
-    textAlign: 'center',
-  },
-  secondaryButton: {
-    height: 50,
-    backgroundColor: ContaTheme.colors.title,
-    borderRadius: ContaTheme.radius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: ContaTheme.spacing.lg,
-  },
-  secondaryButtonText: {
-    color: ContaTheme.colors.white,
-    fontSize: ContaTheme.typography.button,
-    fontWeight: 'bold',
-  },
-  button: {
-    height: 50,
-    backgroundColor: ContaTheme.colors.error,
-    borderRadius: ContaTheme.radius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: ContaTheme.spacing.sm,
-  },
-  buttonText: {
-    color: ContaTheme.colors.white,
-    fontSize: ContaTheme.typography.button,
-    fontWeight: 'bold',
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.heading,
+    fontWeight: '900',
+    marginBottom: FinanceTheme.spacing.xs,
   },
 });
 

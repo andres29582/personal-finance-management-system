@@ -1,11 +1,15 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppLoading } from '../../../../components/app-loading';
-import { AppMessage } from '../../../../components/app-message';
-import { AppCard, AppScreen } from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+  GlassStatusCard,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
 import {
@@ -42,10 +46,13 @@ export function TransferenciasScreen() {
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar transferencias.');
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -72,27 +79,65 @@ export function TransferenciasScreen() {
         'Nao foi possivel excluir a transferencia.',
       );
       setMessage(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     }
   }
 
-  if (loading && !transferencias.length) {
-    return <AppLoading label="Carregando transferencias..." />;
-  }
-
   return (
-    <AppScreen
-      title="Transferencias"
-      subtitle="Movimente valores entre contas sem afetar receitas e despesas."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
-      actionLabel="Nova"
-      onActionPress={() => router.push('/transferencias-form' as never)}
+    <FinanceAppShell
+      activeRoute="/transferencias"
+      header={
+        <FinanceAppHeader
+          action={
+            <GlassButton
+              label="Nova"
+              onPress={() => router.push('/transferencias-form' as never)}
+            />
+          }
+          eyebrow="Movimentacoes"
+          subtitle="Movimente valores entre contas sem afetar receitas e despesas."
+          title="Transferencias"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppMessage tone="error" value={message} />
+      {message && transferencias.length ? (
+        <Text style={styles.errorMessage}>{message}</Text>
+      ) : null}
 
-      {transferencias.length ? (
+      {loading && !transferencias.length ? (
+        <GlassStatusCard
+          title="Carregando transferencias"
+          description="Estamos buscando as movimentacoes entre contas."
+          loading
+        />
+      ) : null}
+
+      {!loading && !!message && !transferencias.length ? (
+        <GlassStatusCard
+          title="Nao foi possivel carregar transferencias"
+          description={message}
+          tone="error"
+          actionLabel="Tentar novamente"
+          onActionPress={loadTransferencias}
+        />
+      ) : null}
+
+      {!loading && !message && !transferencias.length ? (
+        <GlassStatusCard
+          title="Nenhuma transferencia cadastrada"
+          description="Crie uma transferencia para registrar movimentacoes internas."
+          actionLabel="Nova transferencia"
+          onActionPress={() => router.push('/transferencias-form' as never)}
+        />
+      ) : null}
+
+      {!loading && transferencias.length ? (
         transferencias.map((transferencia) => (
-          <AppCard key={transferencia.id}>
+          <GlassPanel key={transferencia.id} accent="mixed">
             <Text style={styles.title}>{transferencia.descricao || 'Transferencia interna'}</Text>
             <Text style={styles.meta}>
               {`${contaMap.get(transferencia.contaOrigemId)?.nome || '-'} -> ${contaMap.get(transferencia.contaDestinoId)?.nome || '-'}`}
@@ -102,7 +147,7 @@ export function TransferenciasScreen() {
             <Text style={styles.value}>{formatCurrency(transferencia.valor)}</Text>
             <View style={styles.actions}>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Editar"
                   variant="ghost"
                   onPress={() =>
@@ -114,17 +159,13 @@ export function TransferenciasScreen() {
                 />
               </View>
               <View style={styles.actionCell}>
-                <AppButton label="Excluir" variant="danger" onPress={() => handleRemove(transferencia.id)} />
+                <GlassButton label="Excluir" variant="danger" onPress={() => handleRemove(transferencia.id)} />
               </View>
             </View>
-          </AppCard>
+          </GlassPanel>
         ))
-      ) : (
-        <AppCard>
-          <Text style={styles.emptyText}>Nenhuma transferencia cadastrada.</Text>
-        </AppCard>
-      )}
-    </AppScreen>
+      ) : null}
+    </FinanceAppShell>
   );
 }
 
@@ -134,27 +175,30 @@ const styles = StyleSheet.create({
   actionCell: { flex: 1 },
   actions: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.sm,
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
   },
-  emptyText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   meta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   title: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
   value: {
-    color: ContaTheme.colors.primaryStrong,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
-    marginTop: ContaTheme.spacing.sm,
+    color: FinanceTheme.colors.cyanMuted,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: FinanceTheme.spacing.sm,
   },
 });

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import { formatCurrency } from '../../../../utils/formatters';
 
 type DespesaCategoria = {
@@ -85,82 +85,82 @@ export function RelatorioGestaoCharts({
 
 const styles = StyleSheet.create({
   barFill: {
-    backgroundColor: ContaTheme.colors.primaryStrong,
+    backgroundColor: FinanceTheme.colors.magenta,
     borderRadius: 4,
     height: '100%',
     minWidth: 4,
   },
   barLabel: {
-    color: ContaTheme.colors.title,
+    color: FinanceTheme.colors.text,
     flex: 1,
-    fontSize: ContaTheme.typography.caption,
-    marginRight: ContaTheme.spacing.xs,
+    fontSize: FinanceTheme.typography.caption,
+    marginRight: FinanceTheme.spacing.xs,
   },
   barRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    marginTop: ContaTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.sm,
   },
   barTrack: {
-    backgroundColor: ContaTheme.colors.border,
+    backgroundColor: FinanceTheme.colors.glassSubtle,
     borderRadius: 4,
     flex: 2,
     height: 10,
-    marginRight: ContaTheme.spacing.xs,
+    marginRight: FinanceTheme.spacing.xs,
     overflow: 'hidden',
   },
   barValue: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
     minWidth: 88,
     textAlign: 'right',
   },
   empty: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
-    marginTop: ContaTheme.spacing.xs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.body,
+    marginTop: FinanceTheme.spacing.xs,
   },
   legendDespesa: {
-    color: ContaTheme.colors.primaryStrong,
+    color: FinanceTheme.colors.magenta,
     flex: 1,
-    fontSize: ContaTheme.typography.caption,
+    fontSize: FinanceTheme.typography.caption,
     textAlign: 'right',
   },
   legendReceita: {
-    color: ContaTheme.colors.primary,
+    color: FinanceTheme.colors.cyanMuted,
     flex: 1,
-    fontSize: ContaTheme.typography.caption,
+    fontSize: FinanceTheme.typography.caption,
   },
   legendRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: ContaTheme.spacing.xs,
+    marginTop: FinanceTheme.spacing.xs,
   },
   marginTop: {
-    marginTop: ContaTheme.spacing.lg,
+    marginTop: FinanceTheme.spacing.lg,
   },
   sectionTitle: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
   segmentDespesa: {
-    backgroundColor: ContaTheme.colors.primaryStrong,
+    backgroundColor: FinanceTheme.colors.magenta,
   },
   segmentReceita: {
-    backgroundColor: ContaTheme.colors.primary,
+    backgroundColor: FinanceTheme.colors.cyan,
   },
   stackedBar: {
     borderRadius: 8,
     flexDirection: 'row',
     height: 22,
-    marginTop: ContaTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.sm,
     overflow: 'hidden',
   },
   stackedSegment: {
     height: '100%',
   },
   wrap: {
-    marginTop: ContaTheme.spacing.md,
+    marginTop: FinanceTheme.spacing.md,
   },
 });

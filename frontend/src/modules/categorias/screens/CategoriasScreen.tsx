@@ -1,19 +1,30 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { AppButton } from '../../../../components/app-button';
-import { AppMessage } from '../../../../components/app-message';
-import { AppCard, AppScreen, AppStatusCard } from '../../../../components/app-screen';
-import { ContaTheme } from '../../../../constants/contas-theme';
+import {
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassPanel,
+  GlassStatusCard,
+} from '../../../shared/ui';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateCategoria, listCategorias } from '../services/categoriaService';
 import { Categoria } from '../types/categoria';
 import { confirmAction } from '../../../../utils/confirm-action';
 import { resolveApiError } from '../../../../utils/api-error';
 
+const tipoLabel: Record<Categoria['tipo'], string> = {
+  despesa: 'Despesa',
+  receita: 'Receita',
+};
+
 export function CategoriasScreen() {
   const router = useRouter();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
 
   const loadCategorias = useCallback(async () => {
@@ -54,6 +65,8 @@ export function CategoriasScreen() {
     }
 
     try {
+      setDeactivatingId(id);
+      setMessage('');
       await deactivateCategoria(id);
       await loadCategorias();
     } catch (error) {
@@ -62,26 +75,44 @@ export function CategoriasScreen() {
         'Nao foi possivel desativar a categoria.',
       );
       setMessage(resolvedError.message);
+
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
+    } finally {
+      setDeactivatingId(null);
     }
   }
 
   return (
-    <AppScreen
-      title="Categorias"
-      subtitle="Organize receitas e despesas por tipo."
-      backLabel="Voltar"
-      onBackPress={() => router.replace('/dashboard' as never)}
-      actionLabel="Nova"
-      onActionPress={() => router.push('/categorias-form' as never)}
+    <FinanceAppShell
+      activeRoute="/categorias"
+      header={
+        <FinanceAppHeader
+          action={
+            <GlassButton
+              label="Nova"
+              onPress={() => router.push('/categorias-form' as never)}
+            />
+          }
+          eyebrow="Classificacao"
+          subtitle="Organize receitas e despesas por tipo."
+          title="Categorias"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
     >
-      <AppCard>
-        <AppButton label="Atualizar lista" onPress={loadCategorias} variant="ghost" />
-      </AppCard>
+      <GlassPanel>
+        <GlassButton label="Atualizar lista" onPress={loadCategorias} variant="ghost" />
+      </GlassPanel>
 
-      {message && categorias.length ? <AppMessage tone="error" value={message} /> : null}
+      {message && categorias.length ? (
+        <Text style={styles.errorMessage}>{message}</Text>
+      ) : null}
 
       {loading && !categorias.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Carregando categorias"
           description="Estamos buscando as categorias cadastradas."
           loading
@@ -89,7 +120,7 @@ export function CategoriasScreen() {
       ) : null}
 
       {!loading && !!message && !categorias.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nao foi possivel carregar as categorias"
           description={message}
           tone="error"
@@ -99,7 +130,7 @@ export function CategoriasScreen() {
       ) : null}
 
       {!loading && !message && !categorias.length ? (
-        <AppStatusCard
+        <GlassStatusCard
           title="Nenhuma categoria cadastrada"
           description="Crie categorias para classificar receitas e despesas."
           actionLabel="Nova categoria"
@@ -109,13 +140,23 @@ export function CategoriasScreen() {
 
       {!loading && categorias.length ? (
         categorias.map((categoria) => (
-          <AppCard key={categoria.id}>
-            <Text style={styles.title}>{categoria.nome}</Text>
-            <Text style={styles.meta}>Tipo: {categoria.tipo}</Text>
+          <GlassPanel key={categoria.id} accent={categoria.tipo === 'receita' ? 'cyan' : 'magenta'}>
+            <View style={styles.cardTop}>
+              <Text style={styles.title}>{categoria.nome}</Text>
+              <View
+                style={[
+                  styles.badge,
+                  categoria.tipo === 'receita' ? styles.badgeIncome : styles.badgeExpense,
+                ]}
+              >
+                <Text style={styles.badgeText}>{tipoLabel[categoria.tipo]}</Text>
+              </View>
+            </View>
             <Text style={styles.meta}>Cor: {categoria.cor || '-'}</Text>
+            <Text style={styles.meta}>Icone: {categoria.icone || '-'}</Text>
             <View style={styles.actions}>
               <View style={styles.actionCell}>
-                <AppButton
+                <GlassButton
                   label="Editar"
                   variant="ghost"
                   onPress={() =>
@@ -124,20 +165,22 @@ export function CategoriasScreen() {
                       params: { id: categoria.id },
                     } as never)
                   }
+                  disabled={deactivatingId === categoria.id}
                 />
               </View>
               <View style={styles.actionCell}>
-                <AppButton
-                  label="Desativar"
+                <GlassButton
+                  label={deactivatingId === categoria.id ? 'Desativando...' : 'Desativar'}
                   variant="danger"
                   onPress={() => handleDeactivate(categoria.id, categoria.nome)}
+                  disabled={deactivatingId === categoria.id}
                 />
               </View>
             </View>
-          </AppCard>
+          </GlassPanel>
         ))
       ) : null}
-    </AppScreen>
+    </FinanceAppShell>
   );
 }
 
@@ -149,21 +192,51 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
-    marginTop: ContaTheme.spacing.sm,
+    gap: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
   },
-  emptyText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
+  badge: {
+    borderRadius: 999,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xxs,
+  },
+  badgeExpense: {
+    backgroundColor: FinanceTheme.colors.magentaSoft,
+    borderColor: FinanceTheme.neon.magenta.borderColor,
+  },
+  badgeIncome: {
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
+  },
+  badgeText: {
+    color: FinanceTheme.colors.text,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  cardTop: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+    justifyContent: 'space-between',
+    marginBottom: FinanceTheme.spacing.xs,
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
   meta: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginTop: ContaTheme.spacing.xxs,
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
   },
   title: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    fontWeight: '700',
+    color: FinanceTheme.colors.text,
+    flex: 1,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '800',
   },
 });

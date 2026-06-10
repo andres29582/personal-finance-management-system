@@ -1,4 +1,4 @@
-import { AppStatusCard } from '../../../../components/app-screen';
+import { GlassStatusCard } from '../../../shared/ui';
 
 type AccountsOverviewCardProps = {
   onCreateAccount: () => void;
@@ -11,7 +11,7 @@ export function AccountsOverviewCard({
 }: AccountsOverviewCardProps) {
   if (totalContas === 0) {
     return (
-      <AppStatusCard
+      <GlassStatusCard
         title="Comece criando sua primeira conta"
         description="As contas sao a base para registrar transacoes, orcamentos e relatorios."
         actionLabel="Nova conta"

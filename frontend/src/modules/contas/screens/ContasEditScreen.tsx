@@ -1,27 +1,25 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
-import { ContaTheme } from '../../../../constants/contas-theme';
-import { getContaById, updateConta } from '../services/contaService';
-import { Conta } from '../types/conta';
+  FinanceAppHeader,
+  FinanceAppShell,
+  GlassButton,
+  GlassField,
+  GlassPanel,
+  GlassStatusCard,
+  GlassTextInput,
+} from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
 import { parseDecimalInput } from '../../../../utils/number-input';
+import { getContaById, updateConta } from '../services/contaService';
+import { Conta } from '../types/conta';
 
 export function ContasEditScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
-
   const contaId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [conta, setConta] = useState<Conta | null>(null);
@@ -49,19 +47,22 @@ export function ContasEditScreen() {
         setLimiteCredito(data.limiteCredito != null ? String(data.limiteCredito) : '');
         setDataCorte(data.dataCorte != null ? String(data.dataCorte) : '');
         setDataPagamento(data.dataPagamento != null ? String(data.dataPagamento) : '');
-      } catch (requestError: any) {
+      } catch (requestError) {
         const resolvedError = await resolveApiError(
           requestError,
           'Nao foi possivel carregar a conta.',
         );
         setError(resolvedError.message);
+        if (resolvedError.unauthorized) {
+          router.replace('/login');
+        }
       } finally {
         setLoadingConta(false);
       }
     }
 
-    loadConta();
-  }, [contaId]);
+    void loadConta();
+  }, [contaId, router]);
 
   const isCartaoCredito = conta?.tipo === 'cartao_credito';
 
@@ -127,216 +128,136 @@ export function ContasEditScreen() {
       });
 
       router.replace('/contas');
-    } catch (requestError: any) {
+    } catch (requestError) {
       const resolvedError = await resolveApiError(
         requestError,
         'Nao foi possivel atualizar a conta.',
       );
       setError(resolvedError.message);
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {loadingConta ? (
-          <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color={ContaTheme.colors.primary} />
-            <Text style={styles.helperText}>Carregando conta...</Text>
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.content}>
-            <View style={styles.headerRow}>
-              <Text style={styles.title}>Editar conta</Text>
-              <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
-                <Text style={styles.headerButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-            </View>
+    <FinanceAppShell
+      activeRoute="/contas"
+      header={
+        <FinanceAppHeader
+          action={<GlassButton label="Cancelar" onPress={() => router.back()} variant="ghost" />}
+          eyebrow="Gestao financeira"
+          subtitle="Atualize os dados operacionais da conta."
+          title="Editar conta"
+        />
+      }
+      onNavigate={(route) => router.push(route as never)}
+      sidebarItems={financeSidebarItems}
+    >
+      {loadingConta ? (
+        <GlassStatusCard
+          title="Carregando conta"
+          description="Estamos buscando os dados mais recentes."
+          loading
+        />
+      ) : null}
 
-            <View style={styles.card}>
-              <Text style={styles.infoText}>Tipo: {conta?.tipo ?? '-'}</Text>
-              <Text style={styles.infoText}>Saldo inicial: {conta?.saldoInicial ?? 0}</Text>
+      {!loadingConta && error && !conta ? (
+        <GlassStatusCard
+          title="Nao foi possivel carregar a conta"
+          description={error}
+          tone="error"
+        />
+      ) : null}
 
-              <Text style={styles.label}>Nome da conta</Text>
-              <TextInput
-                style={styles.input}
-                value={nome}
-                onChangeText={setNome}
-                placeholder="Ex.: Carteira principal"
-                placeholderTextColor="#8A8A8A"
-                editable={!saving}
-              />
+      {!loadingConta && conta ? (
+        <GlassPanel>
+          <Text style={styles.infoText}>Tipo: {conta.tipo}</Text>
+          <Text style={styles.infoText}>Saldo inicial: {conta.saldoInicial}</Text>
 
-              {isCartaoCredito ? (
-                <>
-                  <Text style={styles.label}>Limite de credito</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={limiteCredito}
-                    onChangeText={setLimiteCredito}
-                    placeholder="0,00"
-                    placeholderTextColor="#8A8A8A"
-                    keyboardType="decimal-pad"
-                    editable={!saving}
-                  />
+          <GlassField label="Nome da conta">
+            <GlassTextInput
+              value={nome}
+              onChangeText={setNome}
+              placeholder="Ex.: Carteira principal"
+              editable={!saving}
+            />
+          </GlassField>
 
-                  <View style={styles.row}>
-                    <View style={styles.half}>
-                      <Text style={styles.label}>Dia corte</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={dataCorte}
-                        onChangeText={setDataCorte}
-                        placeholder="1-31"
-                        placeholderTextColor="#8A8A8A"
-                        keyboardType="number-pad"
-                        editable={!saving}
-                      />
-                    </View>
-                    <View style={styles.half}>
-                      <Text style={styles.label}>Dia pagamento</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={dataPagamento}
-                        onChangeText={setDataPagamento}
-                        placeholder="1-31"
-                        placeholderTextColor="#8A8A8A"
-                        keyboardType="number-pad"
-                        editable={!saving}
-                      />
-                    </View>
-                  </View>
-                </>
-              ) : null}
+          {isCartaoCredito ? (
+            <>
+              <GlassField label="Limite de credito">
+                <GlassTextInput
+                  value={limiteCredito}
+                  onChangeText={setLimiteCredito}
+                  placeholder="0,00"
+                  keyboardType="decimal-pad"
+                  editable={!saving}
+                />
+              </GlassField>
 
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              <View style={styles.row}>
+                <View style={styles.half}>
+                  <GlassField label="Dia corte">
+                    <GlassTextInput
+                      value={dataCorte}
+                      onChangeText={setDataCorte}
+                      placeholder="1-31"
+                      keyboardType="number-pad"
+                      editable={!saving}
+                    />
+                  </GlassField>
+                </View>
+                <View style={styles.half}>
+                  <GlassField label="Dia pagamento">
+                    <GlassTextInput
+                      value={dataPagamento}
+                      onChangeText={setDataPagamento}
+                      placeholder="1-31"
+                      keyboardType="number-pad"
+                      editable={!saving}
+                    />
+                  </GlassField>
+                </View>
+              </View>
+            </>
+          ) : null}
 
-              <TouchableOpacity
-                style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-                onPress={handleSave}
-                disabled={saving || !conta}
-              >
-                <Text style={styles.saveButtonText}>{saving ? 'Salvando...' : 'Salvar alteracoes'}</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        )}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <GlassButton
+            label={saving ? 'Salvando...' : 'Salvar alteracoes'}
+            onPress={handleSave}
+            disabled={saving || !conta}
+          />
+        </GlassPanel>
+      ) : null}
+    </FinanceAppShell>
   );
 }
 
 export default ContasEditScreen;
 
 const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: ContaTheme.colors.screenBg,
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    padding: ContaTheme.spacing.lg,
-    paddingBottom: ContaTheme.spacing.xl,
-  },
-  centerBox: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: ContaTheme.spacing.lg,
-  },
-  helperText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.body,
-    marginTop: ContaTheme.spacing.sm,
+  errorText: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginBottom: FinanceTheme.spacing.sm,
     textAlign: 'center',
-  },
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: ContaTheme.spacing.md,
-  },
-  title: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.heading,
-    fontWeight: '700',
-  },
-  headerButton: {
-    borderColor: ContaTheme.colors.border,
-    borderRadius: ContaTheme.radius.md,
-    borderWidth: 1,
-    paddingHorizontal: ContaTheme.spacing.md,
-    paddingVertical: ContaTheme.spacing.xs,
-  },
-  headerButtonText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: '600',
-  },
-  card: {
-    backgroundColor: ContaTheme.colors.surface,
-    borderColor: ContaTheme.colors.border,
-    borderRadius: ContaTheme.radius.lg,
-    borderWidth: 1,
-    padding: ContaTheme.spacing.md,
-  },
-  infoText: {
-    color: ContaTheme.colors.muted,
-    fontSize: ContaTheme.typography.caption,
-    marginBottom: ContaTheme.spacing.xs,
-  },
-  label: {
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: '700',
-    marginBottom: ContaTheme.spacing.xs,
-    marginTop: ContaTheme.spacing.sm,
-  },
-  input: {
-    backgroundColor: '#FAFAFA',
-    borderColor: ContaTheme.colors.border,
-    borderRadius: ContaTheme.radius.md,
-    borderWidth: 1,
-    color: ContaTheme.colors.title,
-    fontSize: ContaTheme.typography.body,
-    height: 48,
-    paddingHorizontal: ContaTheme.spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: ContaTheme.spacing.sm,
   },
   half: {
     flex: 1,
   },
-  errorText: {
-    color: ContaTheme.colors.error,
-    fontSize: ContaTheme.typography.caption,
-    fontWeight: '600',
-    marginTop: ContaTheme.spacing.md,
-    textAlign: 'center',
+  infoText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginBottom: FinanceTheme.spacing.xs,
   },
-  saveButton: {
-    alignItems: 'center',
-    backgroundColor: ContaTheme.colors.primary,
-    borderRadius: ContaTheme.radius.md,
-    height: 50,
-    justifyContent: 'center',
-    marginTop: ContaTheme.spacing.md,
-  },
-  saveButtonDisabled: {
-    opacity: 0.7,
-  },
-  saveButtonText: {
-    color: ContaTheme.colors.white,
-    fontSize: ContaTheme.typography.button,
-    fontWeight: '700',
+  row: {
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
   },
 });
