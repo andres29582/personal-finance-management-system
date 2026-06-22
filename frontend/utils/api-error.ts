@@ -3,6 +3,11 @@ import { clearSession } from '../storage/authStorage';
 type ApiLikeError = {
   response?: {
     data?: {
+      error?: {
+        code?: string;
+        details?: Record<string, unknown>;
+        message?: string;
+      };
       message?: string | string[];
     };
     status?: number;
@@ -16,6 +21,7 @@ export async function resolveApiError(
 ) {
   const status = (error as ApiLikeError)?.response?.status;
   const backendMessage = (error as ApiLikeError)?.response?.data?.message;
+  const typedError = (error as ApiLikeError)?.response?.data?.error;
   const resolvedBackendMessage = Array.isArray(backendMessage)
     ? backendMessage[0]
     : backendMessage;
@@ -31,8 +37,13 @@ export async function resolveApiError(
   }
 
   return {
+    code: typedError?.code,
+    details: typedError?.details,
     message: status
-      ? messagesByStatus[status] ?? resolvedBackendMessage ?? fallbackMessage
+      ? messagesByStatus[status] ??
+        typedError?.message ??
+        resolvedBackendMessage ??
+        fallbackMessage
       : fallbackMessage,
     unauthorized: false,
   };

@@ -14,14 +14,16 @@ function makePrevisao(
   overrides: Partial<PrevisaoDeficitResponse> = {},
 ): PrevisaoDeficitResponse {
   return {
+    schemaVersion: 2,
     deficitPrevisto: false,
-    features: {
-      despesa_mes: 800,
-      num_transacoes_despesa: 10,
-      num_transacoes_receita: 2,
-      receita_mes: 1000,
-      saldo_inicial_mes: 500,
-      volatilidade_despesa: 0.1,
+    indicadores: {
+      historicoMeses: 3,
+      saldoInicialMes: 500,
+      mediaReceitas3Meses: 1000,
+      mediaDespesas3Meses: 800,
+      tendenciaReceitas3Meses: 50,
+      tendenciaDespesas3Meses: -20,
+      taxaDeficit3Meses: 0.3333,
     },
     mensagem: "Sem deficit previsto.",
     mesReferencia: "2026-05",
