@@ -1,116 +1,70 @@
-# ML Finance TCC (`ml-finance-tcc/`)
+# ML Finance TCC — contrato temporal V2
 
-Projeto **autocontido** de Machine Learning em Python, alinhado à *Especificação do Sistema — Programação Avançada*: ingestão e validação de CSV, EDA, pré-processamento (imputação por **mediana** + **StandardScaler**), treino **80/20**, **RandomForest** para classificação binária, métricas (acurácia, precisão, recall, F1, ROC-AUC), matriz de confusão e curva ROC, importância por **Random Forest** e **informação mútua**, persistência com **joblib** (`modelo.pkl`, `scaler.pkl`) e lista de features em `features.json`, API **FastAPI** com **`POST /predict`**.
+Serviço FastAPI e pipeline de classificação para estimar se o mês objetivo
+`M` terminará em déficit. O modelo usa apenas informação conhecida antes do
+início de `M`; receitas e despesas observadas em `M` existem somente como alvo
+de treinamento.
 
-**Problema:** prever se o mês apresenta **déficit** (`deficit_mes = 1`) com base em agregados mensais fictícios (receita, despesa, saldo inicial, contagens de transações, volatilidade). O CSV é **sintético e reprodutível** (`random_state=42`), inspirado no contexto de finanças pessoais, **sem acoplamento** ao backend Nest/Expo do monorepo.
+## Regra temporal
 
-> **Powershap:** não está incluído (dependência e tempo extras). O relatório cobre **RF** + **mutual information**, conforme alternativas citadas na especificação.
+- Janela: `M-3`, `M-2` e `M-1`.
+- Cutoff de inferência: `data < inicio_de_M`.
+- Histórico mínimo: três meses completos.
+- Split: primeiros 80% dos meses únicos para treino e últimos 20% para teste.
+- Dados: painel sintético, reproduzível e sem dados pessoais reais.
 
-- **Dicionário de dados (colunas ↔ entidades Nest):** [docs/DICIONARIO_DE_DADOS.md](docs/DICIONARIO_DE_DADOS.md)
-- **Nota para a professora** (objetivo, estrutura, rastreio da especificação): [docs/README-para-a-professora.md](docs/README-para-a-professora.md)
+As features V2 são:
 
-## Estrutura
+`receita_lag_1`, `despesa_lag_1`, médias e tendências de receita/despesa em
+três meses, volatilidade mensal de despesa, médias de contagens, taxa recente
+de déficit, saldo no início de `M` e mês do ano.
 
-```
-ml-finance-tcc/
-├── main.py                 # Orquestração: train
-├── requirements.txt
-├── domain/data_loader.py   # CSV, validação, geração sintética
-├── ml/
-│   ├── preprocessing.py
-│   ├── training.py
-│   ├── evaluation.py
-│   ├── eda.py
-│   └── feature_stats.py    # Informação mútua
-├── persistence/model_repository.py
-├── api/app.py              # FastAPI + /predict
-├── data/                   # monthly_finance_sample.csv (gerado no 1º train)
-├── docs/                   # Dicionário de dados ↔ backendnest
-├── models/                 # modelo.pkl, scaler.pkl, features.json (após train)
-├── reports/                # PNGs de EDA + métricas.json
-└── examples/predict_request.json
-```
+`receita_mes` e `despesa_mes` do mês objetivo são proibidas no input.
 
-## Ambiente (Windows / macOS / Linux)
-
-Na raiz do monorepo ou diretamente nesta pasta:
-
-```bash
-cd ml-finance-tcc
-python -m venv .venv
-```
-
-**Windows (PowerShell):**
+## Treino e avaliação
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-**Linux / macOS:**
-
-```bash
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-## Treinar (gera dados, EDA, métricas e artefatos)
-
-```bash
 cd ml-finance-tcc
+.\.venv\Scripts\Activate.ps1
 python main.py train
 ```
 
-Saídas principais:
+O comando regenera:
 
-- `data/monthly_finance_sample.csv` — dataset sintético (se ainda não existir).
-- `reports/` — histogramas, boxplots, heatmap de correlação de Pearson, `confusion_matrix.png`, `roc_curve.png`, `precision_recall_curve.png`, `metrics.json`.
-- `models/modelo.pkl`, `models/scaler.pkl`, `models/features.json`.
+- `data/monthly_finance_sample.csv`;
+- `models/modelo.pkl`, `scaler.pkl` e manifesto `features.json`;
+- gráficos e `reports/metrics.json`.
 
-## Subir a API
+O relatório compara Random Forest com baseline majoritário e baseline de
+persistência (`deficit_M-1`).
 
-Na mesma pasta, com o venv ativo e **após** o `train`:
-
-```bash
-cd ml-finance-tcc
-python -m uvicorn api.app:app --reload --host 0.0.0.0 --port 8000
-```
-
-Documentação interativa: `http://127.0.0.1:8000/docs`
-
-## Teste rápido de `POST /predict`
-
-Corpo JSON: todas as chaves listadas em `models/features.json` (ordem livre). Resposta: `prediction` (0 ou 1) e `probability` (probabilidade da classe **déficit**).
-
-**Exemplo com `curl`** (Linux / macOS / Git Bash), usando o arquivo de exemplo:
-
-```bash
-cd ml-finance-tcc
-curl -s -X POST http://127.0.0.1:8000/predict \
-  -H "Content-Type: application/json" \
-  -d @examples/predict_request.json
-```
-
-**Windows PowerShell** (evita problemas de escape do `curl`):
+## API
 
 ```powershell
-cd ml-finance-tcc
-Get-Content .\examples\predict_request.json -Raw | Invoke-RestMethod -Uri http://127.0.0.1:8000/predict -Method Post -ContentType "application/json"
+python -m uvicorn api.app:app --host 0.0.0.0 --port 8000
 ```
 
-Resposta esperada (valores aproximados):
+`POST /predict` exige o contrato estrito V2 mostrado em
+`examples/predict_request.json`. Campos ausentes, extras, não numéricos,
+infinitos ou uma versão diferente são rejeitados.
+
+Resposta:
 
 ```json
-{"prediction":1,"probability":0.74}
+{
+  "schema_version": 2,
+  "prediction": 0,
+  "probability": 0.2431
+}
 ```
 
-## Integração futura com o app financeiro (opcional)
+## Limitações
 
-Este pacote **não altera** `backendnest/` nem `frontend/`. Para ligar depois:
+As métricas medem comportamento em dados sintéticos. Elas não demonstram
+qualidade em produção. Alterações retroativas de movimentos também modificam
+o histórico reconstruído, pois esta fase não cria snapshots.
 
-1. Expor esta API em uma URL fixa (ex.: `http://localhost:8000`).
-2. No cliente (outro projeto), chamar `POST /predict` com os mesmos nomes de campos ou gerar um CSV mensal compatível e treinar de novo com dados reais exportados por você.
-
-CORS está liberado para `*` apenas para facilitar testes locais com qualquer origem.
+O modelo é treinado de forma manual e controlada com dataset sintético. O
+sistema não realiza reentrenamento automático com dados reais dos usuários em
+produção. Qualquer uso futuro de dados reais exigiria política específica de
+privacidade, anonimização, base legal e validação de qualidade.
