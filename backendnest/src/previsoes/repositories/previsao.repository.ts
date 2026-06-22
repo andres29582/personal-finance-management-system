@@ -1,14 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 import { notSoftDeleted } from '../../common/soft-delete.query';
 import { Conta } from '../../contas/entities/conta.entity';
 import { Transacao } from '../../transacoes/entities/transacao.entity';
 import { Transferencia } from '../../transferencias/entities/transferencia.entity';
+import { User } from '../../users/entities/user.entity';
 
 @Injectable()
 export class PrevisaoRepository {
   constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     @InjectRepository(Conta)
     private readonly contaRepository: Repository<Conta>,
     @InjectRepository(Transacao)
@@ -17,46 +20,56 @@ export class PrevisaoRepository {
     private readonly transferenciaRepository: Repository<Transferencia>,
   ) {}
 
-  async findActiveAccountsByUser(usuarioId: string): Promise<Conta[]> {
-    return this.contaRepository.find({ where: { usuarioId, ativa: true } });
+  async findUserById(usuarioId: string): Promise<User | null> {
+    return this.userRepository.findOneBy({ id: usuarioId });
   }
 
-  async findTransactionsByPeriod(
+  async findTransactionsInHistoricalWindow(
     usuarioId: string,
     startDate: string,
-    endDate: string,
+    targetStartDate: string,
+  ): Promise<Transacao[]> {
+    return this.transacaoRepository
+      .createQueryBuilder('transacao')
+      .where('transacao.usuario_id = :usuarioId', { usuarioId })
+      .andWhere('transacao.data >= :startDate', { startDate })
+      .andWhere('transacao.data < :targetStartDate', { targetStartDate })
+      .andWhere('transacao.excluido_em IS NULL')
+      .orderBy('transacao.data', 'ASC')
+      .getMany();
+  }
+
+  async findAccountsCreatedBefore(
+    usuarioId: string,
+    targetStart: Date,
+  ): Promise<Conta[]> {
+    return this.contaRepository.find({
+      where: { usuarioId, createdAt: LessThan(targetStart) },
+    });
+  }
+
+  async findTransactionsBefore(
+    usuarioId: string,
+    targetStartDate: string,
   ): Promise<Transacao[]> {
     return this.transacaoRepository.find({
       where: {
         usuarioId,
-        data: Between(startDate, endDate),
+        data: LessThan(targetStartDate),
         ...notSoftDeleted,
       },
     });
   }
 
-  async findTransactionsUntil(
+  async findTransfersBefore(
     usuarioId: string,
-    cutoffDate: string,
-  ): Promise<Transacao[]> {
-    return this.transacaoRepository.find({
-      where: {
-        usuarioId,
-        data: LessThanOrEqual(cutoffDate),
-        ...notSoftDeleted,
-      },
-    });
-  }
-
-  async findTransfersUntil(
-    usuarioId: string,
-    cutoffDate: string,
+    targetStartDate: string,
   ): Promise<Transferencia[]> {
     return this.transferenciaRepository.find({
       where: {
         usuarioId,
-        data: LessThanOrEqual(cutoffDate),
-        excluidoEm: IsNull(),
+        data: LessThan(targetStartDate),
+        ...notSoftDeleted,
       },
     });
   }

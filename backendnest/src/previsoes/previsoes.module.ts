@@ -8,9 +8,10 @@ import { PrevisoesService } from './previsoes.service';
 import { DeficitFeaturesService } from './services/deficit-features.service';
 import { MlPredictClientService } from './services/ml-predict-client.service';
 import { PrevisaoRepository } from './repositories/previsao.repository';
+import { User } from '../users/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Conta, Transacao, Transferencia])],
+  imports: [TypeOrmModule.forFeature([User, Conta, Transacao, Transferencia])],
   controllers: [PrevisoesController],
   providers: [
     PrevisoesService,
