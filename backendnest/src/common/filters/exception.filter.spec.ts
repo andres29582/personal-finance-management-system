@@ -1,6 +1,6 @@
 import { ArgumentsHost } from '@nestjs/common';
 import { Response } from 'express';
-import { AppConflictException } from '../exceptions';
+import { AppConflictException, ValidationAppException } from '../exceptions';
 import { AppExceptionFilter } from './exception.filter';
 
 describe('AppExceptionFilter', () => {
@@ -35,5 +35,40 @@ describe('AppExceptionFilter', () => {
       success: false,
       timestamp: expect.any(String) as string,
     });
+  });
+
+  it('serializes structured error details when present', () => {
+    const filter = new AppExceptionFilter();
+    const json = jest.fn();
+    const status = jest.fn(() => ({ json }));
+    const response = { status } as unknown as Response;
+    const host = {
+      switchToHttp: () => ({
+        getRequest: () => ({ id: 'request-2' }),
+        getResponse: () => response,
+      }),
+    } as unknown as ArgumentsHost;
+
+    filter.catch(
+      new ValidationAppException(
+        'PREVISAO_INSUFFICIENT_HISTORY',
+        'Historico insuficiente.',
+        {
+          details: { requiredMonths: 3, availableMonths: 1 },
+        },
+      ),
+      host,
+    );
+
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: {
+          code: 'PREVISAO_INSUFFICIENT_HISTORY',
+          details: { requiredMonths: 3, availableMonths: 1 },
+          field: undefined,
+          message: 'Historico insuficiente.',
+        },
+      }),
+    );
   });
 });

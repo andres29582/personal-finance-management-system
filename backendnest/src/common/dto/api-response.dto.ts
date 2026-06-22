@@ -15,6 +15,7 @@ export interface ErrorResponse {
   success: false;
   error: {
     code: string;
+    details?: Record<string, unknown>;
     message: string;
     field?: string;
   };

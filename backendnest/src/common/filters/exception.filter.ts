@@ -23,6 +23,7 @@ export class AppExceptionFilter implements ExceptionFilter {
         code: exception.code,
         message: exception.message,
         field: exception.field,
+        ...(exception.details ? { details: exception.details } : {}),
       },
       timestamp: new Date().toISOString(),
       requestId,
