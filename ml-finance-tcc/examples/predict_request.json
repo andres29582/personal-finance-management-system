@@ -1,8 +1,17 @@
 {
-  "receita_mes": 5000,
-  "despesa_mes": 6200,
-  "saldo_inicial_mes": 1000,
-  "num_transacoes_despesa": 40,
-  "num_transacoes_receita": 10,
-  "volatilidade_despesa": 0.5
+  "schema_version": 2,
+  "features": {
+    "receita_lag_1": 3200,
+    "despesa_lag_1": 2800,
+    "media_receita_3m": 3100,
+    "media_despesa_3m": 2750,
+    "tendencia_receita_3m": 150,
+    "tendencia_despesa_3m": -50,
+    "volatilidade_despesa_3m": 225.4625,
+    "media_transacoes_receita_3m": 3.3333,
+    "media_transacoes_despesa_3m": 18.6667,
+    "taxa_deficit_3m": 0.3333,
+    "saldo_inicial_mes": 4200,
+    "mes_do_ano": 7
+  }
 }
