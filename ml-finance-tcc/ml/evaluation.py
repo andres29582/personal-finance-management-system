@@ -1,4 +1,4 @@
-"""Métricas de classificação binária e matriz de confusão."""
+"""Avaliacao do modelo e de baselines temporais."""
 
 from __future__ import annotations
 
@@ -14,15 +14,30 @@ from sklearn import metrics
 
 @dataclass
 class EvaluationReport:
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-    roc_auc: float | None
-    confusion_matrix: np.ndarray
-    classification_report: str
+    model_metrics: dict[str, object]
+    baselines: dict[str, dict[str, object]]
     mutual_information: dict[str, float]
     feature_importance_rf: dict[str, float]
+
+
+def classification_metrics(
+    y_true: pd.Series | np.ndarray,
+    y_pred: np.ndarray,
+    y_probability: np.ndarray | None = None,
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "accuracy": float(metrics.accuracy_score(y_true, y_pred)),
+        "precision": float(metrics.precision_score(y_true, y_pred, zero_division=0)),
+        "recall": float(metrics.recall_score(y_true, y_pred, zero_division=0)),
+        "f1": float(metrics.f1_score(y_true, y_pred, zero_division=0)),
+        "confusion_matrix": metrics.confusion_matrix(y_true, y_pred).tolist(),
+    }
+    if y_probability is not None:
+        try:
+            result["roc_auc"] = float(metrics.roc_auc_score(y_true, y_probability))
+        except ValueError:
+            result["roc_auc"] = None
+    return result
 
 
 def evaluate_binary_classifier(
@@ -32,67 +47,48 @@ def evaluate_binary_classifier(
     y_test: pd.Series,
     feature_columns: list[str],
     mutual_info_scores: dict[str, float],
+    majority_baseline: np.ndarray,
+    persistence_baseline: np.ndarray,
     reports_dir: Path,
 ) -> EvaluationReport:
     X_t = preprocessor.transform(X_test)
     y_pred = model.predict(X_t)
     y_proba = model.predict_proba(X_t)[:, 1]
-
-    acc = float(metrics.accuracy_score(y_test, y_pred))
-    prec = float(metrics.precision_score(y_test, y_pred, zero_division=0))
-    rec = float(metrics.recall_score(y_test, y_pred, zero_division=0))
-    f1 = float(metrics.f1_score(y_test, y_pred, zero_division=0))
-    try:
-        roc = float(metrics.roc_auc_score(y_test, y_proba))
-    except ValueError:
-        roc = None
-
-    cm = metrics.confusion_matrix(y_test, y_pred)
-    report = metrics.classification_report(y_test, y_pred, digits=4)
-
+    model_metrics = classification_metrics(y_test, y_pred, y_proba)
+    baselines = {
+        "majority": classification_metrics(y_test, majority_baseline),
+        "persistence": classification_metrics(y_test, persistence_baseline),
+    }
     importances = dict(zip(feature_columns, model.feature_importances_.tolist()))
 
     reports_dir.mkdir(parents=True, exist_ok=True)
-    disp = metrics.ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=[0, 1])
+    confusion_matrix = np.asarray(model_metrics["confusion_matrix"])
+    display = metrics.ConfusionMatrixDisplay(
+        confusion_matrix=confusion_matrix, display_labels=[0, 1]
+    )
     fig, ax = plt.subplots(figsize=(4, 4))
-    disp.plot(ax=ax, cmap="Blues", colorbar=False)
-    ax.set_title("Matriz de confusão (teste)")
+    display.plot(ax=ax, cmap="Blues", colorbar=False)
+    ax.set_title("Matriz de confusao temporal")
     fig.tight_layout()
     fig.savefig(reports_dir / "confusion_matrix.png", dpi=150)
     plt.close(fig)
 
-    # Curva ROC (se AUC definido)
-    if roc is not None:
+    if model_metrics.get("roc_auc") is not None:
         fpr, tpr, _ = metrics.roc_curve(y_test, y_proba)
         fig2, ax2 = plt.subplots(figsize=(4, 4))
-        ax2.plot(fpr, tpr, label=f"AUC = {roc:.3f}")
+        ax2.plot(fpr, tpr, label=f"AUC = {model_metrics['roc_auc']:.3f}")
         ax2.plot([0, 1], [0, 1], "k--", alpha=0.4)
         ax2.set_xlabel("Taxa de falsos positivos")
         ax2.set_ylabel("Taxa de verdadeiros positivos")
-        ax2.set_title("Curva ROC (teste)")
+        ax2.set_title("Curva ROC temporal")
         ax2.legend(loc="lower right")
         fig2.tight_layout()
         fig2.savefig(reports_dir / "roc_curve.png", dpi=150)
         plt.close(fig2)
 
-        prec_c, rec_c, _ = metrics.precision_recall_curve(y_test, y_proba)
-        fig3, ax3 = plt.subplots(figsize=(4, 4))
-        ax3.plot(rec_c, prec_c)
-        ax3.set_xlabel("Recall")
-        ax3.set_ylabel("Precisão")
-        ax3.set_title("Curva Precision–Recall (teste)")
-        fig3.tight_layout()
-        fig3.savefig(reports_dir / "precision_recall_curve.png", dpi=150)
-        plt.close(fig3)
-
     return EvaluationReport(
-        accuracy=acc,
-        precision=prec,
-        recall=rec,
-        f1=f1,
-        roc_auc=roc,
-        confusion_matrix=cm,
-        classification_report=report,
+        model_metrics=model_metrics,
+        baselines=baselines,
         mutual_information=mutual_info_scores,
         feature_importance_rf=importances,
     )
