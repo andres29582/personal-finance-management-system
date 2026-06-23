@@ -4,7 +4,10 @@ import { DividasService } from './dividas.service';
 describe('DividasController', () => {
   let controller: DividasController;
   let dividasService: jest.Mocked<
-    Pick<DividasService, 'create' | 'deactivate' | 'findAll' | 'findOne' | 'update'>
+    Pick<
+      DividasService,
+      'create' | 'deactivate' | 'findAll' | 'findOne' | 'update'
+    >
   >;
 
   const request = {
@@ -69,7 +72,10 @@ describe('DividasController', () => {
       nome: 'Financiamento atualizado',
       cuotaMensual: 150,
     };
-    dividasService.update.mockResolvedValue({ id: 'divida-1', ...dto } as never);
+    dividasService.update.mockResolvedValue({
+      id: 'divida-1',
+      ...dto,
+    } as never);
 
     const result = await controller.update('divida-1', request, dto);
 

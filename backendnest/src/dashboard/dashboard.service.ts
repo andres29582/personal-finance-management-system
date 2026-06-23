@@ -24,20 +24,20 @@ export class DashboardService {
       transacoesRecentes,
       categorias,
     ] = await Promise.all([
-        this.contasService.findAll(usuarioId),
-        this.dashboardRepository.findTransactionsByPeriod(
-          usuarioId,
-          periodRange.startDate,
-          periodRange.endDate,
-        ),
-        this.dashboardRepository.findTransactionsByPeriod(
-          usuarioId,
-          previousPeriodRange.startDate,
-          previousPeriodRange.endDate,
-        ),
-        this.dashboardRepository.findRecentTransactions(usuarioId, 5),
-        this.dashboardRepository.findCategoriesByUser(usuarioId),
-      ]);
+      this.contasService.findAll(usuarioId),
+      this.dashboardRepository.findTransactionsByPeriod(
+        usuarioId,
+        periodRange.startDate,
+        periodRange.endDate,
+      ),
+      this.dashboardRepository.findTransactionsByPeriod(
+        usuarioId,
+        previousPeriodRange.startDate,
+        previousPeriodRange.endDate,
+      ),
+      this.dashboardRepository.findRecentTransactions(usuarioId, 5),
+      this.dashboardRepository.findCategoriesByUser(usuarioId),
+    ]);
 
     const categoriasById = new Map(
       categorias.map((categoria) => [categoria.id, categoria]),

@@ -36,10 +36,7 @@ describe('DashboardController', () => {
 
     const result = await controller.getDashboard(request, query);
 
-    expect(dashboardService.getDashboard).toHaveBeenCalledWith(
-      'user-1',
-      query,
-    );
+    expect(dashboardService.getDashboard).toHaveBeenCalledWith('user-1', query);
     expect(result).toEqual({
       saldoTotal: 4000,
       receitasMes: 3000,

@@ -236,8 +236,9 @@ describe('Dashboard and reports (e2e)', () => {
       })
       .set(bearer(tokenA))
       .expect(200);
-    const filteredReport =
-      unwrapSuccess<RelatorioResponse>(filteredReportResponse);
+    const filteredReport = unwrapSuccess<RelatorioResponse>(
+      filteredReportResponse,
+    );
 
     expect(filteredReport.resumo).toEqual({
       economia: -700,

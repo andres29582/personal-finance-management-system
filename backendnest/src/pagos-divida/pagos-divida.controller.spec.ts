@@ -4,7 +4,10 @@ import { PagosDividaService } from './pagos-divida.service';
 describe('PagosDividaController', () => {
   let controller: PagosDividaController;
   let pagosDividaService: jest.Mocked<
-    Pick<PagosDividaService, 'create' | 'findAllByDivida' | 'findOne' | 'remove'>
+    Pick<
+      PagosDividaService,
+      'create' | 'findAllByDivida' | 'findOne' | 'remove'
+    >
   >;
 
   const request = {
@@ -68,10 +71,7 @@ describe('PagosDividaController', () => {
 
     const result = await controller.findOne('pago-1', request);
 
-    expect(pagosDividaService.findOne).toHaveBeenCalledWith(
-      'pago-1',
-      'user-1',
-    );
+    expect(pagosDividaService.findOne).toHaveBeenCalledWith('pago-1', 'user-1');
     expect(result).toEqual({ id: 'pago-1' });
   });
 
@@ -80,10 +80,7 @@ describe('PagosDividaController', () => {
 
     const result = await controller.remove('pago-1', request);
 
-    expect(pagosDividaService.remove).toHaveBeenCalledWith(
-      'pago-1',
-      'user-1',
-    );
+    expect(pagosDividaService.remove).toHaveBeenCalledWith('pago-1', 'user-1');
     expect(result).toBeUndefined();
   });
 });

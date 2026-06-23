@@ -5,7 +5,10 @@ import { TipoConta } from './enums/tipo-conta.enum';
 describe('ContasController', () => {
   let controller: ContasController;
   let contasService: jest.Mocked<
-    Pick<ContasService, 'create' | 'deactivate' | 'findAll' | 'findOne' | 'update'>
+    Pick<
+      ContasService,
+      'create' | 'deactivate' | 'findAll' | 'findOne' | 'update'
+    >
   >;
 
   const request = {
@@ -72,11 +75,7 @@ describe('ContasController', () => {
 
     const result = await controller.update('conta-1', request, dto);
 
-    expect(contasService.update).toHaveBeenCalledWith(
-      'conta-1',
-      'user-1',
-      dto,
-    );
+    expect(contasService.update).toHaveBeenCalledWith('conta-1', 'user-1', dto);
     expect(result).toEqual({ id: 'conta-1', ...dto });
   });
 
