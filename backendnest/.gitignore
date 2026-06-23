@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /.dev-dist
+/.dev-dist-localhost
 /.nest-onedrive-safe.tsconfig.json
 /tsconfig.onedrive-safe.json
 /node_modules

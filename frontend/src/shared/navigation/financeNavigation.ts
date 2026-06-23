@@ -13,7 +13,6 @@ export const financeSidebarItems: FinanceSidebarItem[] = [
     route: '/previsao-deficit',
   },
   { icon: 'bullseye-arrow', label: 'Metas', route: '/metas' },
-  { icon: 'bell-outline', label: 'Alertas', route: '/alertas' },
   { icon: 'bank-transfer', label: 'Transferencias', route: '/transferencias' },
   { icon: 'receipt-text-outline', label: 'Dividas', route: '/dividas' },
   { icon: 'shield-search', label: 'Auditoria', route: '/audit-logs' },

@@ -1,21 +1,52 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { AppModule } from './../src/app.module';
 import { TipoCategoria } from './../src/categorias/enums/tipo-categoria.enum';
 import { TipoConta } from './../src/contas/enums/tipo-conta.enum';
 import { TipoTransacao } from './../src/transacoes/enums/tipo-transacao.enum';
+import { createE2eApp } from './e2e-app';
+import { configureE2eEnvironment, prepareE2eDatabase } from './e2e-database';
 import {
-  configureE2eEnvironment,
-  prepareE2eDatabase,
-} from './e2e-database';
+  makeRegisterUserPayload,
+  makeLoginPayload,
+} from './factories/auth.factory';
+import { makeCategoriaPayload } from './factories/categoria.factory';
+import { makeContaPayload } from './factories/conta.factory';
+import { makeDividaPayload } from './factories/divida.factory';
+import { makePagoDividaPayload } from './factories/pago-divida.factory';
+import { makeTransacaoPayload } from './factories/transacao.factory';
+import { makeTransferenciaPayload } from './factories/transferencia.factory';
+import {
+  ContaResponse,
+  expectSaldo,
+} from './helpers/financial-assertions.helper';
+import { bearer, Identifiable, unwrapSuccess } from './helpers/http.helper';
 
-type Identifiable = {
-  id: string;
+type RegisterResponse = {
+  usuario: {
+    email: string;
+    senha?: string;
+    senhaHash?: string;
+  };
+  access_token?: string;
 };
 
-type ContaResponse = Identifiable & {
-  saldoAtual: number | string;
+type LoginResponse = {
+  access_token: string;
+  usuario: {
+    senha?: string;
+    senhaHash?: string;
+  };
+};
+
+type TransacaoResponse = Identifiable & {
+  contaId: string;
+  categoriaId: string;
+  tipo: TipoTransacao;
+  valor: number | string;
+};
+
+type PagamentoDividaResponse = Identifiable & {
+  transacaoId: string;
 };
 
 jest.setTimeout(60000);
@@ -27,19 +58,7 @@ describe('Financial flow (e2e)', () => {
     const databaseConfig = configureE2eEnvironment();
     await prepareE2eDatabase(databaseConfig);
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
-    await app.init();
+    app = await createE2eApp();
   });
 
   afterAll(async () => {
@@ -61,86 +80,110 @@ describe('Financial flow (e2e)', () => {
 
     const userARegistration = await request(app.getHttpServer())
       .post('/auth/register')
-      .send({
-        nome: 'Usuario A E2E',
-        email: 'usuario.a.e2e@example.com',
-        cpf: '52998224725',
-        cep: '01001000',
-        endereco: 'Rua A',
-        numero: '100',
-        cidade: 'Sao Paulo',
-        senha: userAPassword,
-        aceitoPoliticaPrivacidade: true,
-      })
+      .send(
+        makeRegisterUserPayload({
+          nome: 'Usuario A E2E',
+          email: 'usuario.a.e2e@example.com',
+          cpf: '52998224725',
+          endereco: 'Rua A',
+          senha: userAPassword,
+        }),
+      )
       .expect(201);
 
-    expect(userARegistration.body.usuario).toEqual(
+    const userARegistrationData =
+      unwrapSuccess<RegisterResponse>(userARegistration);
+
+    expect(userARegistrationData.usuario).toEqual(
       expect.objectContaining({
         email: 'usuario.a.e2e@example.com',
       }),
     );
-    expect(userARegistration.body.usuario.senha).toBeUndefined();
-    expect(userARegistration.body.usuario.senhaHash).toBeUndefined();
-    expect(userARegistration.body.access_token).toBeUndefined();
+    expect(userARegistrationData.usuario.senha).toBeUndefined();
+    expect(userARegistrationData.usuario.senhaHash).toBeUndefined();
+    expect(userARegistrationData.access_token).toBeUndefined();
 
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({
-        nome: 'Usuario B E2E',
-        email: 'usuario.b.e2e@example.com',
-        cpf: '39053344705',
-        cep: '20040002',
-        endereco: 'Rua B',
-        numero: '200',
-        cidade: 'Rio de Janeiro',
-        senha: userBPassword,
-        aceitoPoliticaPrivacidade: true,
-      })
+      .send(
+        makeRegisterUserPayload({
+          nome: 'Usuario B E2E',
+          email: 'usuario.b.e2e@example.com',
+          cpf: '39053344705',
+          cep: '20040002',
+          endereco: 'Rua B',
+          numero: '200',
+          cidade: 'Rio de Janeiro',
+          senha: userBPassword,
+        }),
+      )
       .expect(201);
 
-    await request(app.getHttpServer())
+    const invalidLogin = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({
-        email: 'usuario.a.e2e@example.com',
-        senha: 'senha-incorreta',
-      })
+      .send(
+        makeLoginPayload({
+          email: 'usuario.a.e2e@example.com',
+          senha: 'senha-incorreta',
+        }),
+      )
       .expect(401);
+    expect(invalidLogin.body).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({
+          code: 'AUTH_INVALID_CREDENTIALS',
+        }),
+      }),
+    );
 
     const userALogin = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({
-        email: 'usuario.a.e2e@example.com',
-        senha: userAPassword,
-      })
+      .send(
+        makeLoginPayload({
+          email: 'usuario.a.e2e@example.com',
+          senha: userAPassword,
+        }),
+      )
       .expect(200);
-    const tokenA = userALogin.body.access_token as string;
+    const userALoginData = unwrapSuccess<LoginResponse>(userALogin);
+    const tokenA = userALoginData.access_token;
 
     const userBLogin = await request(app.getHttpServer())
       .post('/auth/login')
-      .send({
-        email: 'usuario.b.e2e@example.com',
-        senha: userBPassword,
-      })
+      .send(
+        makeLoginPayload({
+          email: 'usuario.b.e2e@example.com',
+          senha: userBPassword,
+        }),
+      )
       .expect(200);
-    const tokenB = userBLogin.body.access_token as string;
+    const userBLoginData = unwrapSuccess<LoginResponse>(userBLogin);
+    const tokenB = userBLoginData.access_token;
 
     expect(tokenA).toEqual(expect.any(String));
     expect(tokenB).toEqual(expect.any(String));
-    expect(userALogin.body.usuario.senha).toBeUndefined();
-    expect(userALogin.body.usuario.senhaHash).toBeUndefined();
+    expect(userALoginData.usuario.senha).toBeUndefined();
+    expect(userALoginData.usuario.senhaHash).toBeUndefined();
 
-    const receitaCategoria = await createCategoria(tokenA, {
-      nome: 'Receita E2E',
-      tipo: TipoCategoria.RECEITA,
-      cor: '#16a34a',
-      icone: 'wallet',
-    });
-    const despesaCategoria = await createCategoria(tokenA, {
-      nome: 'Despesa E2E',
-      tipo: TipoCategoria.DESPESA,
-      cor: '#dc2626',
-      icone: 'shopping-cart',
-    });
+    const receitaCategoria = await createCategoria(
+      tokenA,
+      makeCategoriaPayload({
+        nome: 'Receita E2E',
+        tipo: TipoCategoria.RECEITA,
+        cor: '#16a34a',
+        icone: 'wallet',
+      }),
+    );
+    const despesaCategoria = await createCategoria(
+      tokenA,
+      makeCategoriaPayload({
+        nome: 'Despesa E2E',
+        tipo: TipoCategoria.DESPESA,
+        cor: '#dc2626',
+        icone: 'shopping-cart',
+      }),
+    );
     const pagamentoDividaCategoria = await createCategoria(tokenA, {
       nome: 'Pagamento Divida E2E',
       tipo: TipoCategoria.DESPESA,
@@ -148,47 +191,62 @@ describe('Financial flow (e2e)', () => {
       icone: 'receipt',
     });
 
-    const contaOrigem = await createConta(tokenA, {
-      nome: 'Conta Origem E2E',
-      tipo: TipoConta.BANCO,
-      saldoInicial: 1000,
-    });
-    const contaDestino = await createConta(tokenA, {
-      nome: 'Conta Destino E2E',
-      tipo: TipoConta.DINHEIRO,
-      saldoInicial: 200,
-    });
-    const contaUsuarioB = await createConta(tokenB, {
-      nome: 'Conta Usuario B E2E',
-      tipo: TipoConta.BANCO,
-      saldoInicial: 999,
-    });
+    const contaOrigem = await createConta(
+      tokenA,
+      makeContaPayload({
+        nome: 'Conta Origem E2E',
+        tipo: TipoConta.BANCO,
+        saldoInicial: 1000,
+      }),
+    );
+    const contaDestino = await createConta(
+      tokenA,
+      makeContaPayload({
+        nome: 'Conta Destino E2E',
+        tipo: TipoConta.DINHEIRO,
+        saldoInicial: 200,
+      }),
+    );
+    const contaUsuarioB = await createConta(
+      tokenB,
+      makeContaPayload({
+        nome: 'Conta Usuario B E2E',
+        tipo: TipoConta.BANCO,
+        saldoInicial: 999,
+      }),
+    );
 
-    const receita = await request(app.getHttpServer())
+    const receitaResponse = await request(app.getHttpServer())
       .post('/transacoes')
       .set(bearer(tokenA))
-      .send({
-        contaId: contaOrigem.id,
-        categoriaId: receitaCategoria.id,
-        tipo: TipoTransacao.RECEITA,
-        valor: 500,
-        data: '2026-05-01',
-        descricao: 'Receita E2E',
-      })
+      .send(
+        makeTransacaoPayload({
+          contaId: contaOrigem.id,
+          categoriaId: receitaCategoria.id,
+          tipo: TipoTransacao.RECEITA,
+          valor: 500,
+          data: '2026-05-01',
+          descricao: 'Receita E2E',
+        }),
+      )
       .expect(201);
+    const receita = unwrapSuccess<Identifiable>(receitaResponse);
 
-    const despesa = await request(app.getHttpServer())
+    const despesaResponse = await request(app.getHttpServer())
       .post('/transacoes')
       .set(bearer(tokenA))
-      .send({
-        contaId: contaOrigem.id,
-        categoriaId: despesaCategoria.id,
-        tipo: TipoTransacao.DESPESA,
-        valor: 150,
-        data: '2026-05-02',
-        descricao: 'Despesa E2E',
-      })
+      .send(
+        makeTransacaoPayload({
+          contaId: contaOrigem.id,
+          categoriaId: despesaCategoria.id,
+          tipo: TipoTransacao.DESPESA,
+          valor: 150,
+          data: '2026-05-02',
+          descricao: 'Despesa E2E',
+        }),
+      )
       .expect(201);
+    const despesa = unwrapSuccess<Identifiable>(despesaResponse);
 
     let contasUsuarioA = await listContas(tokenA);
     expectSaldo(contasUsuarioA, contaOrigem.id, 1350);
@@ -207,27 +265,29 @@ describe('Financial flow (e2e)', () => {
       .set(bearer(tokenB))
       .expect(404);
     await request(app.getHttpServer())
-      .get(`/transacoes/${receita.body.id}`)
+      .get(`/transacoes/${receita.id}`)
       .set(bearer(tokenB))
       .expect(404);
     await request(app.getHttpServer())
       .post('/transferencias')
       .set(bearer(tokenA))
-      .send({
-        contaOrigemId: contaOrigem.id,
-        contaDestinoId: contaUsuarioB.id,
-        valor: 50,
-        comissao: 0,
-        data: '2026-05-03',
-      })
+      .send(
+        makeTransferenciaPayload({
+          contaOrigemId: contaOrigem.id,
+          contaDestinoId: contaUsuarioB.id,
+          valor: 50,
+          comissao: 0,
+          data: '2026-05-03',
+        }),
+      )
       .expect(404);
 
     await request(app.getHttpServer())
-      .delete(`/transacoes/${despesa.body.id}`)
+      .delete(`/transacoes/${despesa.id}`)
       .set(bearer(tokenA))
       .expect(200);
     await request(app.getHttpServer())
-      .get(`/transacoes/${despesa.body.id}`)
+      .get(`/transacoes/${despesa.id}`)
       .set(bearer(tokenA))
       .expect(404);
 
@@ -235,33 +295,37 @@ describe('Financial flow (e2e)', () => {
       .get('/transacoes')
       .set(bearer(tokenA))
       .expect(200);
-    expect(transacoes.body).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: receita.body.id })]),
+    const transacoesData = unwrapSuccess<Identifiable[]>(transacoes);
+    expect(transacoesData).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: receita.id })]),
     );
-    expect(transacoes.body).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: despesa.body.id }),
-      ]),
+    expect(transacoesData).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: despesa.id })]),
     );
 
     contasUsuarioA = await listContas(tokenA);
     expectSaldo(contasUsuarioA, contaOrigem.id, 1500);
     expectSaldo(contasUsuarioA, contaDestino.id, 200);
 
-    const transferencia = await request(app.getHttpServer())
+    const transferenciaResponse = await request(app.getHttpServer())
       .post('/transferencias')
       .set(bearer(tokenA))
-      .send({
-        contaOrigemId: contaOrigem.id,
-        contaDestinoId: contaDestino.id,
-        valor: 200,
-        comissao: 5,
-        data: '2026-05-04',
-        descricao: 'Transferencia E2E',
-      })
+      .send(
+        makeTransferenciaPayload({
+          contaOrigemId: contaOrigem.id,
+          contaDestinoId: contaDestino.id,
+          valor: 200,
+          comissao: 5,
+          data: '2026-05-04',
+          descricao: 'Transferencia E2E',
+        }),
+      )
       .expect(201);
+    const transferencia = unwrapSuccess<
+      Identifiable & { contaOrigemId: string; contaDestinoId: string }
+    >(transferenciaResponse);
 
-    expect(transferencia.body).toEqual(
+    expect(transferencia).toEqual(
       expect.objectContaining({
         contaOrigemId: contaOrigem.id,
         contaDestinoId: contaDestino.id,
@@ -272,69 +336,69 @@ describe('Financial flow (e2e)', () => {
     expectSaldo(contasUsuarioA, contaOrigem.id, 1295);
     expectSaldo(contasUsuarioA, contaDestino.id, 400);
 
-    const divida = await request(app.getHttpServer())
+    const dividaResponse = await request(app.getHttpServer())
       .post('/dividas')
       .set(bearer(tokenA))
-      .send({
-        contaId: contaOrigem.id,
-        nome: 'Divida E2E',
-        montoTotal: 1000,
-        tasaInteres: 0,
-        cuotaMensual: 100,
-        fechaInicio: '2026-05-01',
-        fechaVencimiento: '2026-12-01',
-        proximoVencimiento: '2026-06-01',
-      })
+      .send(
+        makeDividaPayload({
+          contaId: contaOrigem.id,
+        }),
+      )
       .expect(201);
+    const divida = unwrapSuccess<Identifiable>(dividaResponse);
 
-    const pagamento = await request(app.getHttpServer())
+    const pagamentoResponse = await request(app.getHttpServer())
       .post('/pagos-divida')
       .set(bearer(tokenA))
-      .send({
-        dividaId: divida.body.id,
-        contaId: contaOrigem.id,
-        categoriaId: pagamentoDividaCategoria.id,
-        valor: 100,
-        data: '2026-05-05',
-        descricao: 'Pagamento de divida E2E',
-      })
+      .send(
+        makePagoDividaPayload({
+          dividaId: divida.id,
+          contaId: contaOrigem.id,
+          categoriaId: pagamentoDividaCategoria.id,
+        }),
+      )
       .expect(201);
+    const pagamento = unwrapSuccess<PagamentoDividaResponse>(pagamentoResponse);
 
-    expect(pagamento.body.transacaoId).toEqual(expect.any(String));
+    expect(pagamento.transacaoId).toEqual(expect.any(String));
 
     const transacaoPagamento = await request(app.getHttpServer())
-      .get(`/transacoes/${pagamento.body.transacaoId}`)
+      .get(`/transacoes/${pagamento.transacaoId}`)
       .set(bearer(tokenA))
       .expect(200);
-    expect(transacaoPagamento.body).toEqual(
+    const transacaoPagamentoData =
+      unwrapSuccess<TransacaoResponse>(transacaoPagamento);
+    expect(transacaoPagamentoData).toEqual(
       expect.objectContaining({
-        id: pagamento.body.transacaoId,
+        id: pagamento.transacaoId,
         contaId: contaOrigem.id,
         categoriaId: pagamentoDividaCategoria.id,
         tipo: TipoTransacao.DESPESA,
       }),
     );
-    expect(Number(transacaoPagamento.body.valor)).toBeCloseTo(100, 2);
+    expect(Number(transacaoPagamentoData.valor)).toBeCloseTo(100, 2);
 
     const pagamentosDaDivida = await request(app.getHttpServer())
-      .get(`/pagos-divida/divida/${divida.body.id}`)
+      .get(`/pagos-divida/divida/${divida.id}`)
       .set(bearer(tokenA))
       .expect(200);
-    expect(pagamentosDaDivida.body).toEqual(
+    const pagamentosDaDividaData =
+      unwrapSuccess<PagamentoDividaResponse[]>(pagamentosDaDivida);
+    expect(pagamentosDaDividaData).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: pagamento.body.id,
-          transacaoId: pagamento.body.transacaoId,
+          id: pagamento.id,
+          transacaoId: pagamento.transacaoId,
         }),
       ]),
     );
 
     await request(app.getHttpServer())
-      .get(`/pagos-divida/${pagamento.body.id}`)
+      .get(`/pagos-divida/${pagamento.id}`)
       .set(bearer(tokenB))
       .expect(404);
     await request(app.getHttpServer())
-      .get(`/transacoes/${pagamento.body.transacaoId}`)
+      .get(`/transacoes/${pagamento.transacaoId}`)
       .set(bearer(tokenB))
       .expect(404);
 
@@ -353,7 +417,7 @@ describe('Financial flow (e2e)', () => {
       .send(body)
       .expect(201);
 
-    return response.body as Identifiable;
+    return unwrapSuccess<Identifiable>(response);
   }
 
   async function createConta(
@@ -366,7 +430,7 @@ describe('Financial flow (e2e)', () => {
       .send(body)
       .expect(201);
 
-    return response.body as Identifiable;
+    return unwrapSuccess<Identifiable>(response);
   }
 
   async function listContas(token: string): Promise<ContaResponse[]> {
@@ -375,23 +439,6 @@ describe('Financial flow (e2e)', () => {
       .set(bearer(token))
       .expect(200);
 
-    return response.body as ContaResponse[];
+    return unwrapSuccess<ContaResponse[]>(response);
   }
 });
-
-function bearer(token: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${token}`,
-  };
-}
-
-function expectSaldo(
-  contas: ContaResponse[],
-  contaId: string,
-  saldoEsperado: number,
-): void {
-  const conta = contas.find((item) => item.id === contaId);
-
-  expect(conta).toBeDefined();
-  expect(Number(conta?.saldoAtual)).toBeCloseTo(saldoEsperado, 2);
-}

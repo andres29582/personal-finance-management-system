@@ -182,6 +182,33 @@ describe('TransacaoFormScreen', () => {
     });
   });
 
+  it('shows a specific validation error for invalid date', async () => {
+    const mockContas = makeFormContas();
+    const mockCategorias = makeFormCategorias();
+
+    mockListContas.mockResolvedValue(mockContas);
+    mockListCategorias.mockResolvedValue(mockCategorias);
+
+    render(<TransacaoFormScreen />);
+
+    await waitFor(() => {
+      const valorInput = screen.getByPlaceholderText('0,00');
+      const dataInput = screen.getByPlaceholderText('2026-04-07');
+      const salvarButton = screen.getByText('Salvar transacao');
+
+      fireEvent.changeText(valorInput, '50,00');
+      fireEvent.changeText(dataInput, '2026-99-99');
+      fireEvent.press(salvarButton);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Informe uma data valida no formato YYYY-MM-DD. Ex.: 2026-04-07'),
+      ).toBeTruthy();
+      expect(mockCreateTransacao).not.toHaveBeenCalled();
+    });
+  });
+
   it('shows error message on save failure', async () => {
     const mockContas = makeFormContas();
     const mockCategorias = makeFormCategorias();
