@@ -16,28 +16,49 @@ export class DashboardService {
 
   async getDashboard(usuarioId: string, query: GetDashboardDto) {
     const periodRange = resolveMonthRange(query.mes);
-    const [contas, transacoesPeriodo, transacoesRecentes, categorias] =
-      await Promise.all([
-        this.contasService.findAll(usuarioId),
-        this.dashboardRepository.findTransactionsByPeriod(
-          usuarioId,
-          periodRange.startDate,
-          periodRange.endDate,
-        ),
-        this.dashboardRepository.findRecentTransactions(usuarioId, 5),
-        this.dashboardRepository.findCategoriesByUser(usuarioId),
-      ]);
+    const previousPeriodRange = resolvePreviousMonthRange(periodRange.label);
+    const [
+      contas,
+      transacoesPeriodo,
+      transacoesPeriodoAnterior,
+      transacoesRecentes,
+      categorias,
+    ] = await Promise.all([
+      this.contasService.findAll(usuarioId),
+      this.dashboardRepository.findTransactionsByPeriod(
+        usuarioId,
+        periodRange.startDate,
+        periodRange.endDate,
+      ),
+      this.dashboardRepository.findTransactionsByPeriod(
+        usuarioId,
+        previousPeriodRange.startDate,
+        previousPeriodRange.endDate,
+      ),
+      this.dashboardRepository.findRecentTransactions(usuarioId, 5),
+      this.dashboardRepository.findCategoriesByUser(usuarioId),
+    ]);
 
     const categoriasById = new Map(
       categorias.map((categoria) => [categoria.id, categoria]),
     );
     const contasById = new Map(contas.map((conta) => [conta.id, conta]));
-    const totalReceitas = transacoesPeriodo
-      .filter((transacao) => transacao.tipo === TipoTransacao.RECEITA)
-      .reduce((sum, transacao) => sum + toNumber(transacao.valor), 0);
-    const totalDespesas = transacoesPeriodo
-      .filter((transacao) => transacao.tipo === TipoTransacao.DESPESA)
-      .reduce((sum, transacao) => sum + toNumber(transacao.valor), 0);
+    const totalReceitas = sumTransactionsByType(
+      transacoesPeriodo,
+      TipoTransacao.RECEITA,
+    );
+    const totalDespesas = sumTransactionsByType(
+      transacoesPeriodo,
+      TipoTransacao.DESPESA,
+    );
+    const totalReceitasAnterior = sumTransactionsByType(
+      transacoesPeriodoAnterior,
+      TipoTransacao.RECEITA,
+    );
+    const totalDespesasAnterior = sumTransactionsByType(
+      transacoesPeriodoAnterior,
+      TipoTransacao.DESPESA,
+    );
     const gastosPorCategoriaMap = new Map<
       string,
       { categoriaId: string; categoriaNome: string; total: number }
@@ -104,6 +125,12 @@ export class DashboardService {
         ),
         tipo: conta.tipo,
       })),
+      comparativoMensal: {
+        despesas: buildMonthlyComparison(totalDespesas, totalDespesasAnterior),
+        mesAnterior: previousPeriodRange.label,
+        mesAtual: periodRange.label,
+        receitas: buildMonthlyComparison(totalReceitas, totalReceitasAnterior),
+      },
       despesasMes: totalDespesas,
       economiaMes: totalReceitas - totalDespesas,
       gastosPorCategoria,
@@ -114,4 +141,40 @@ export class DashboardService {
       transacoesRecentes: transacoesRecentesEnriquecidas,
     };
   }
+}
+
+function resolvePreviousMonthRange(monthReference: string) {
+  const [year, month] = monthReference.split('-').map(Number);
+  const previousMonthDate = new Date(Date.UTC(year, month - 2, 1));
+  const previousMonthReference = previousMonthDate.toISOString().slice(0, 7);
+
+  return resolveMonthRange(previousMonthReference);
+}
+
+function sumTransactionsByType(
+  transactions: Array<{
+    tipo: TipoTransacao;
+    valor: number | string | null | undefined;
+  }>,
+  type: TipoTransacao,
+) {
+  return transactions
+    .filter((transacao) => transacao.tipo === type)
+    .reduce((sum, transacao) => sum + toNumber(transacao.valor), 0);
+}
+
+function buildMonthlyComparison(currentValue: number, previousValue: number) {
+  const diferenca = currentValue - previousValue;
+
+  return {
+    atual: currentValue,
+    anterior: previousValue,
+    diferenca,
+    percentual:
+      previousValue > 0
+        ? Number(((diferenca / previousValue) * 100).toFixed(2))
+        : currentValue > 0
+          ? 100
+          : 0,
+  };
 }

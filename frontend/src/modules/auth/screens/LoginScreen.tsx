@@ -106,14 +106,6 @@ export function LoginScreen() {
         />
       </GlassField>
 
-      <TouchableOpacity
-        onPress={() => router.push('/forgot-password' as never)}
-        disabled={loading}
-        style={styles.forgotWrap}
-      >
-        <Text style={styles.link}>Esqueci minha senha</Text>
-      </TouchableOpacity>
-
       <Text style={styles.hint}>Logado, voce pode alterar a senha em Configuracoes &gt; Senha.</Text>
       {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
@@ -165,19 +157,10 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: 15,
   },
-  forgotWrap: {
-    marginTop: FinanceTheme.spacing.xs,
-  },
   hint: {
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     marginTop: FinanceTheme.spacing.sm,
-  },
-  link: {
-    color: FinanceTheme.colors.cyanMuted,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    textDecorationLine: 'underline',
   },
   secureText: {
     color: FinanceTheme.colors.textMuted,

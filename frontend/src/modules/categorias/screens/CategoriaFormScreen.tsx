@@ -26,8 +26,6 @@ export function CategoriaFormScreen() {
   const categoriaId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<TipoCategoria>('despesa');
-  const [cor, setCor] = useState('');
-  const [icone, setIcone] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(!!categoriaId);
   const [saving, setSaving] = useState(false);
@@ -43,8 +41,6 @@ export function CategoriaFormScreen() {
         const categoria = await getCategoriaById(categoriaId);
         setNome(categoria.nome);
         setTipo(categoria.tipo);
-        setCor(categoria.cor || '');
-        setIcone(categoria.icone || '');
       } catch (error) {
         const resolvedError = await resolveApiError(
           error,
@@ -72,8 +68,6 @@ export function CategoriaFormScreen() {
       const payload = {
         nome: nome.trim(),
         tipo,
-        cor: cor.trim() || undefined,
-        icone: icone.trim() || undefined,
       };
 
       if (categoriaId) {
@@ -155,24 +149,6 @@ export function CategoriaFormScreen() {
             ]}
             value={tipo}
             onChange={(value) => setTipo(value as TipoCategoria)}
-          />
-        </GlassField>
-
-        <GlassField label="Cor">
-          <GlassTextInput
-            value={cor}
-            onChangeText={setCor}
-            placeholder="#0B6B34"
-            autoCapitalize="none"
-          />
-        </GlassField>
-
-        <GlassField label="Icone">
-          <GlassTextInput
-            value={icone}
-            onChangeText={setIcone}
-            placeholder="wallet"
-            autoCapitalize="none"
           />
         </GlassField>
 

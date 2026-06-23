@@ -34,7 +34,7 @@ describe('LoginScreen', () => {
     expect(screen.getByPlaceholderText('voce@exemplo.com')).toBeTruthy();
     expect(screen.getByPlaceholderText('Sua senha')).toBeTruthy();
     expect(screen.getByText('Entrar')).toBeTruthy();
-    expect(screen.getByText('Esqueci minha senha')).toBeTruthy();
+    expect(screen.queryByText('Esqueci minha senha')).toBeNull();
     expect(screen.getByText('Cadastrar')).toBeTruthy();
   });
 

@@ -16,39 +16,52 @@ import { resolveApiError } from '../../../../utils/api-error';
 import { formatCurrency, getCurrentMonthReference } from '../../../../utils/formatters';
 import { getPrevisaoDeficit } from '../services/previsaoService';
 import {
-  DeficitFeatures,
+  PrevisaoIndicadores,
   PrevisaoDeficitResponse,
   RiscoDeficit,
 } from '../types/previsao';
 
 type FeatureRow = {
-  format: 'currency' | 'integer' | 'number';
-  key: keyof DeficitFeatures;
+  format: 'currency' | 'integer' | 'number' | 'percent';
+  key: keyof PrevisaoIndicadores;
   label: string;
 };
 
 const featureRows: FeatureRow[] = [
-  { key: 'receita_mes', label: 'Receita do mes', format: 'currency' },
-  { key: 'despesa_mes', label: 'Despesa do mes', format: 'currency' },
   {
-    key: 'saldo_inicial_mes',
+    key: 'saldoInicialMes',
     label: 'Saldo inicial do mes',
     format: 'currency',
   },
   {
-    key: 'num_transacoes_despesa',
-    label: 'Transacoes de despesa',
-    format: 'integer',
+    key: 'mediaReceitas3Meses',
+    label: 'Media de receitas (3 meses)',
+    format: 'currency',
   },
   {
-    key: 'num_transacoes_receita',
-    label: 'Transacoes de receita',
-    format: 'integer',
+    key: 'mediaDespesas3Meses',
+    label: 'Media de despesas (3 meses)',
+    format: 'currency',
   },
   {
-    key: 'volatilidade_despesa',
-    label: 'Volatilidade da despesa',
-    format: 'number',
+    key: 'tendenciaReceitas3Meses',
+    label: 'Tendencia de receitas',
+    format: 'currency',
+  },
+  {
+    key: 'tendenciaDespesas3Meses',
+    label: 'Tendencia de despesas',
+    format: 'currency',
+  },
+  {
+    key: 'taxaDeficit3Meses',
+    label: 'Meses recentes com deficit',
+    format: 'percent',
+  },
+  {
+    key: 'historicoMeses',
+    label: 'Meses completos analisados',
+    format: 'integer',
   },
 ];
 
@@ -72,6 +85,7 @@ export function PrevisaoDeficitScreen() {
     try {
       setLoading(true);
       setMessage('');
+      setPrevisao(null);
       const data = await getPrevisaoDeficit(mes);
       setPrevisao(data);
     } catch (error) {
@@ -194,7 +208,10 @@ export function PrevisaoDeficitScreen() {
               <View key={row.key} style={styles.featureRow}>
                 <Text style={styles.featureLabel}>{row.label}</Text>
                 <Text style={styles.featureValue}>
-                  {formatFeatureValue(previsao.features[row.key], row.format)}
+                  {formatFeatureValue(
+                    previsao.indicadores[row.key],
+                    row.format,
+                  )}
                 </Text>
               </View>
             ))}
@@ -215,6 +232,13 @@ function formatFeatureValue(
 
   if (format === 'integer') {
     return Math.trunc(value).toString();
+  }
+
+  if (format === 'percent') {
+    return new Intl.NumberFormat('pt-BR', {
+      maximumFractionDigits: 1,
+      style: 'percent',
+    }).format(value);
   }
 
   return new Intl.NumberFormat('pt-BR', {

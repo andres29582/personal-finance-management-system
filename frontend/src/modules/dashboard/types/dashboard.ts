@@ -28,7 +28,22 @@ export type DashboardTransacaoRecente = {
   valor: number;
 };
 
+export type DashboardMonthlyComparisonMetric = {
+  anterior: number;
+  atual: number;
+  diferenca: number;
+  percentual: number;
+};
+
+export type DashboardMonthlyComparison = {
+  despesas: DashboardMonthlyComparisonMetric;
+  mesAnterior: string;
+  mesAtual: string;
+  receitas: DashboardMonthlyComparisonMetric;
+};
+
 export type DashboardResponse = {
+  comparativoMensal: DashboardMonthlyComparison;
   contas: DashboardContaResumo[];
   despesasMes: number;
   economiaMes: number;

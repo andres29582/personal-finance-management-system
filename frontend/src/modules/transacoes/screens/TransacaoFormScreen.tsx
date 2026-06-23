@@ -25,6 +25,21 @@ import {
 } from '../services/transacaoService';
 import { TipoTransacao } from '../types/transacao';
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidIsoDate(value: string) {
+  if (!ISO_DATE_PATTERN.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const normalizedDate = new Date(Date.UTC(year, month - 1, day))
+    .toISOString()
+    .slice(0, 10);
+
+  return normalizedDate === value;
+}
+
 export function TransacaoFormScreen() {
   const router = useRouter();
   const { replace } = router;
@@ -94,6 +109,7 @@ export function TransacaoFormScreen() {
 
   async function handleSave() {
     const parsedValor = parseDecimalInput(valor);
+    const normalizedData = data.trim();
 
     if (!contaId) {
       setMessage('Selecione uma conta para continuar.');
@@ -115,8 +131,13 @@ export function TransacaoFormScreen() {
       return;
     }
 
-    if (!data.trim()) {
+    if (!normalizedData) {
       setMessage('Informe a data da transacao.');
+      return;
+    }
+
+    if (!isValidIsoDate(normalizedData)) {
+      setMessage('Informe uma data valida no formato YYYY-MM-DD. Ex.: 2026-04-07');
       return;
     }
 
@@ -127,7 +148,7 @@ export function TransacaoFormScreen() {
       const payload = {
         contaId,
         categoriaId,
-        data,
+        data: normalizedData,
         descricao: descricao.trim() || undefined,
         tipo,
         valor: parsedValor,

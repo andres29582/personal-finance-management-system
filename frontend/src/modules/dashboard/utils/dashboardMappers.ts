@@ -4,6 +4,7 @@ import { financeSidebarItems } from '../../../shared/navigation/financeNavigatio
 import { DashboardAccent } from '../styles/dashboardTheme';
 import {
   DashboardGastoCategoria,
+  DashboardMonthlyComparison,
   DashboardResponse,
 } from '../types/dashboard';
 import { Meta } from '../../metas/types/meta';
@@ -20,6 +21,23 @@ export type DashboardMetricItem = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
   value: string;
+};
+
+export type DashboardMonthlyComparisonItem = {
+  accent: DashboardAccent;
+  currentFormatted: string;
+  differenceFormatted: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  previousFormatted: string;
+  status: 'down' | 'stable' | 'up';
+  variationLabel: string;
+};
+
+export type DashboardMonthlyComparisonOverview = {
+  items: DashboardMonthlyComparisonItem[];
+  mesAnterior: string;
+  mesAtual: string;
 };
 
 export type DashboardCategoryBarItem = {
@@ -82,6 +100,29 @@ export function mapDashboardMetrics(
   ];
 }
 
+export function mapMonthlyComparison(
+  comparison: DashboardMonthlyComparison,
+): DashboardMonthlyComparisonOverview {
+  return {
+    mesAnterior: comparison.mesAnterior,
+    mesAtual: comparison.mesAtual,
+    items: [
+      mapComparisonItem({
+        accent: 'cyan',
+        icon: 'trending-up',
+        label: 'Receitas',
+        metric: comparison.receitas,
+      }),
+      mapComparisonItem({
+        accent: 'magenta',
+        icon: 'trending-down',
+        label: 'Despesas',
+        metric: comparison.despesas,
+      }),
+    ],
+  };
+}
+
 export function mapCategoryBars(
   items: DashboardGastoCategoria[],
 ): DashboardCategoryBarItem[] {
@@ -129,6 +170,32 @@ export function mapGoalOverview(meta: Meta | null): DashboardGoalOverview | null
     montoObjetivoFormatado: formatCurrency(meta.montoObjetivo),
     nome: meta.nome,
     percentual: clampPercent(percentual),
+  };
+}
+
+function mapComparisonItem({
+  accent,
+  icon,
+  label,
+  metric,
+}: {
+  accent: DashboardAccent;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  metric: DashboardMonthlyComparison['receitas'];
+}): DashboardMonthlyComparisonItem {
+  const status = metric.diferenca > 0 ? 'up' : metric.diferenca < 0 ? 'down' : 'stable';
+  const sign = metric.diferenca > 0 ? '+' : '';
+
+  return {
+    accent,
+    currentFormatted: formatCurrency(metric.atual),
+    differenceFormatted: `${sign}${formatCurrency(metric.diferenca)}`,
+    icon,
+    label,
+    previousFormatted: formatCurrency(metric.anterior),
+    status,
+    variationLabel: `${sign}${metric.percentual.toFixed(2)}% vs mes anterior`,
   };
 }
 

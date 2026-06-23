@@ -152,8 +152,6 @@ export function CategoriasScreen() {
                 <Text style={styles.badgeText}>{tipoLabel[categoria.tipo]}</Text>
               </View>
             </View>
-            <Text style={styles.meta}>Cor: {categoria.cor || '-'}</Text>
-            <Text style={styles.meta}>Icone: {categoria.icone || '-'}</Text>
             <View style={styles.actions}>
               <View style={styles.actionCell}>
                 <GlassButton

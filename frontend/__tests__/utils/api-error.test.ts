@@ -14,6 +14,30 @@ beforeEach(() => {
 });
 
 describe('resolveApiError', () => {
+  it('reads typed backend errors and preserves code and details', async () => {
+    const result = await resolveApiError(
+      {
+        response: {
+          status: 422,
+          data: {
+            error: {
+              code: 'PREVISAO_INSUFFICIENT_HISTORY',
+              message: 'Historico insuficiente.',
+              details: { requiredMonths: 3, availableMonths: 1 },
+            },
+          },
+        },
+      },
+      'Fallback',
+    );
+
+    expect(result).toEqual({
+      code: 'PREVISAO_INSUFFICIENT_HISTORY',
+      details: { requiredMonths: 3, availableMonths: 1 },
+      message: 'Historico insuficiente.',
+      unauthorized: false,
+    });
+  });
   it('permite personalizar a mensagem de 401 no login', async () => {
     const result = await resolveApiError(
       {

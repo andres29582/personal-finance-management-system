@@ -5,6 +5,7 @@ import type {
 } from './dto/previsao-deficit-response.dto';
 import { DeficitFeaturesService } from './services/deficit-features.service';
 import { MlPredictClientService } from './services/ml-predict-client.service';
+import { ML_PREDICTION_SCHEMA_VERSION } from './constants/ml-prediction-contract';
 
 @Injectable()
 export class PrevisoesService {
@@ -17,22 +18,21 @@ export class PrevisoesService {
     usuarioId: string,
     mes?: string,
   ): Promise<PrevisaoDeficitResponseDto> {
-    const { features, mesReferencia } = await this.deficitFeaturesService.build(
-      usuarioId,
-      mes,
-    );
+    const { features, indicadores, mesReferencia } =
+      await this.deficitFeaturesService.build(usuarioId, mes);
     const prediction = await this.mlPredictClientService.predict(features);
     const risco = this.resolveRisk(prediction.probability);
     const deficitPrevisto = prediction.prediction === 1;
 
     return {
       deficitPrevisto,
-      features,
+      indicadores,
       mensagem: this.buildMessage(deficitPrevisto, risco),
       mesReferencia,
       prediction: prediction.prediction,
       probability: Number(prediction.probability.toFixed(4)),
       risco,
+      schemaVersion: ML_PREDICTION_SCHEMA_VERSION,
     };
   }
 

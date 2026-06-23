@@ -1,17 +1,21 @@
-export type RiscoDeficit = "baixo" | "moderado" | "alto";
+export const ML_PREDICTION_SCHEMA_VERSION = 2 as const;
 
-export type DeficitFeatures = {
-  receita_mes: number;
-  despesa_mes: number;
-  saldo_inicial_mes: number;
-  num_transacoes_despesa: number;
-  num_transacoes_receita: number;
-  volatilidade_despesa: number;
+export type RiscoDeficit = 'baixo' | 'moderado' | 'alto';
+
+export type PrevisaoIndicadores = {
+  historicoMeses: number;
+  saldoInicialMes: number;
+  mediaReceitas3Meses: number;
+  mediaDespesas3Meses: number;
+  tendenciaReceitas3Meses: number;
+  tendenciaDespesas3Meses: number;
+  taxaDeficit3Meses: number;
 };
 
 export type PrevisaoDeficitResponse = {
+  schemaVersion: typeof ML_PREDICTION_SCHEMA_VERSION;
   deficitPrevisto: boolean;
-  features: DeficitFeatures;
+  indicadores: PrevisaoIndicadores;
   mensagem: string;
   mesReferencia: string;
   prediction: number;

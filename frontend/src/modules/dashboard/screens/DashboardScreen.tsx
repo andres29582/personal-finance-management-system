@@ -7,6 +7,7 @@ import { CategoryBarsCard } from "../components/CategoryBarsCard";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { DashboardShell } from "../components/DashboardShell";
 import { FinancialSummaryGrid } from "../components/FinancialSummaryGrid";
+import { MonthlyComparisonCard } from "../components/MonthlyComparisonCard";
 import { PlanningOverviewGrid } from "../components/PlanningOverviewGrid";
 import { RecentTransactionsCard } from "../components/RecentTransactionsCard";
 import { useDashboardData } from "../hooks/useDashboardData";
@@ -16,6 +17,7 @@ import {
   mapCategoryBars,
   mapDashboardMetrics,
   mapGoalOverview,
+  mapMonthlyComparison,
 } from "../utils/dashboardMappers";
 
 export function DashboardScreen() {
@@ -31,6 +33,9 @@ export function DashboardScreen() {
     usuario,
   } = useDashboardData();
   const metrics = dashboard ? mapDashboardMetrics(dashboard) : [];
+  const monthlyComparison = dashboard
+    ? mapMonthlyComparison(dashboard.comparativoMensal)
+    : null;
   const categoryBars = dashboard
     ? mapCategoryBars(dashboard.gastosPorCategoria)
     : [];
@@ -101,6 +106,10 @@ export function DashboardScreen() {
             items={dashboard.transacoesRecentes}
             onOpenHistory={() => router.push("/transacoes" as never)}
           />
+
+          {monthlyComparison ? (
+            <MonthlyComparisonCard comparison={monthlyComparison} />
+          ) : null}
 
           <PlanningOverviewGrid
             budget={budgetOverview}

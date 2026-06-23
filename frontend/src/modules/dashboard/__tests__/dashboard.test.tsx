@@ -37,6 +37,22 @@ const mockListMetas = metaService.listMetas as jest.MockedFunction<typeof metaSe
 const mockListOrcamentos = orcamentoService.listOrcamentos as jest.MockedFunction<typeof orcamentoService.listOrcamentos>;
 
 const makeDashboard = (overrides = {}) => ({
+  comparativoMensal: {
+    despesas: {
+      anterior: 2500,
+      atual: 0,
+      diferenca: -2500,
+      percentual: -100,
+    },
+    mesAnterior: '2026-04',
+    mesAtual: '2026-05',
+    receitas: {
+      anterior: 6000,
+      atual: 0,
+      diferenca: -6000,
+      percentual: -100,
+    },
+  },
   contas: [],
   despesasMes: 0,
   economiaMes: 0,
@@ -117,6 +133,8 @@ describe('DashboardScreen', () => {
       expect(screen.getByText('R$ 5.000,00')).toBeTruthy(); // saldoTotal
       expect(screen.getByText('R$ 8.000,00')).toBeTruthy(); // receitasTotais
       expect(screen.getByText('R$ 3.000,00')).toBeTruthy(); // despesasTotais
+      expect(screen.getByText('Comparativo de gastos')).toBeTruthy();
+      expect(screen.getByText('2026-05 comparado com 2026-04')).toBeTruthy();
       expect(screen.getByText('Ultimas transacoes')).toBeTruthy();
     });
   });
@@ -239,6 +257,11 @@ describe('DashboardScreen', () => {
 
       fireEvent.press(screen.getByLabelText('Alternar ultimas transacoes'));
       expect(screen.getByText('Conta Corrente - 01/05/2026')).toBeTruthy();
+
+      fireEvent.press(screen.getByLabelText('Alternar comparativo de gastos'));
+      expect(screen.getByText('Gastos do mes')).toBeTruthy();
+      expect(screen.getAllByText('Mes atual')).toBeTruthy();
+      expect(screen.getByText('Mes anterior')).toBeTruthy();
     });
   });
 

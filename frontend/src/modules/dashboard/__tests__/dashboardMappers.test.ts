@@ -5,6 +5,7 @@ import {
   mapCategoryBars,
   mapDashboardMetrics,
   mapGoalOverview,
+  mapMonthlyComparison,
 } from '../utils/dashboardMappers';
 
 function normalizeCurrency(value: string) {
@@ -58,6 +59,42 @@ describe('dashboardMappers', () => {
       'R$ 700,00',
       'R$ 350,00',
     ]);
+  });
+
+  it('maps monthly comparison between current and previous month', () => {
+    const comparison = mapMonthlyComparison({
+      despesas: {
+        anterior: 2500,
+        atual: 3000,
+        diferenca: 500,
+        percentual: 20,
+      },
+      mesAnterior: '2026-04',
+      mesAtual: '2026-05',
+      receitas: {
+        anterior: 6000,
+        atual: 8000,
+        diferenca: 2000,
+        percentual: 33.33,
+      },
+    });
+
+    expect(comparison).toMatchObject({
+      mesAnterior: '2026-04',
+      mesAtual: '2026-05',
+      items: [
+        { label: 'Receitas', status: 'up', variationLabel: '+33.33% vs mes anterior' },
+        { label: 'Despesas', status: 'up', variationLabel: '+20.00% vs mes anterior' },
+      ],
+    });
+    expect(
+      comparison.items.map((item) => normalizeCurrency(item.currentFormatted)),
+    ).toEqual(['R$ 8.000,00', 'R$ 3.000,00']);
+    expect(
+      comparison.items.map((item) =>
+        normalizeCurrency(item.differenceFormatted),
+      ),
+    ).toEqual(['+R$ 2.000,00', '+R$ 500,00']);
   });
 
   it('keeps all dashboard navigation entries in the sidebar', () => {

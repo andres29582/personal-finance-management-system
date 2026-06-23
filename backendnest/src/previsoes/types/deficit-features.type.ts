@@ -1,8 +1,12 @@
-export type DeficitFeatures = {
-  receita_mes: number;
-  despesa_mes: number;
-  saldo_inicial_mes: number;
-  num_transacoes_despesa: number;
-  num_transacoes_receita: number;
-  volatilidade_despesa: number;
+import type {
+  ML_PREDICTION_FEATURES,
+  ML_PREDICTION_SCHEMA_VERSION,
+} from '../constants/ml-prediction-contract';
+
+export type DeficitFeatureName = (typeof ML_PREDICTION_FEATURES)[number];
+export type DeficitFeatures = Record<DeficitFeatureName, number>;
+
+export type MlPredictRequestV2 = {
+  schema_version: typeof ML_PREDICTION_SCHEMA_VERSION;
+  features: DeficitFeatures;
 };

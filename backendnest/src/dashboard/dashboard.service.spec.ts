@@ -50,28 +50,51 @@ describe('DashboardService', () => {
         tipo: 'banco',
       },
     ] as never);
-    dashboardRepository.findTransactionsByPeriod.mockResolvedValue([
-      {
-        categoriaId: 'categoria-1',
-        contaId: 'conta-2',
-        createdAt: new Date('2026-04-02T10:00:00Z'),
-        data: '2026-04-02',
-        descricao: 'Salario',
-        id: 'transacao-1',
-        tipo: TipoTransacao.RECEITA,
-        valor: 3000,
-      },
-      {
-        categoriaId: 'categoria-2',
-        contaId: 'conta-1',
-        createdAt: new Date('2026-04-03T10:00:00Z'),
-        data: '2026-04-03',
-        descricao: 'Mercado',
-        id: 'transacao-2',
-        tipo: TipoTransacao.DESPESA,
-        valor: 500,
-      },
-    ] as Transacao[]);
+    dashboardRepository.findTransactionsByPeriod
+      .mockResolvedValueOnce([
+        {
+          categoriaId: 'categoria-1',
+          contaId: 'conta-2',
+          createdAt: new Date('2026-04-02T10:00:00Z'),
+          data: '2026-04-02',
+          descricao: 'Salario',
+          id: 'transacao-1',
+          tipo: TipoTransacao.RECEITA,
+          valor: 3000,
+        },
+        {
+          categoriaId: 'categoria-2',
+          contaId: 'conta-1',
+          createdAt: new Date('2026-04-03T10:00:00Z'),
+          data: '2026-04-03',
+          descricao: 'Mercado',
+          id: 'transacao-2',
+          tipo: TipoTransacao.DESPESA,
+          valor: 500,
+        },
+      ] as Transacao[])
+      .mockResolvedValueOnce([
+        {
+          categoriaId: 'categoria-1',
+          contaId: 'conta-2',
+          createdAt: new Date('2026-03-02T10:00:00Z'),
+          data: '2026-03-02',
+          descricao: 'Salario anterior',
+          id: 'transacao-3',
+          tipo: TipoTransacao.RECEITA,
+          valor: 2500,
+        },
+        {
+          categoriaId: 'categoria-2',
+          contaId: 'conta-1',
+          createdAt: new Date('2026-03-03T10:00:00Z'),
+          data: '2026-03-03',
+          descricao: 'Mercado anterior',
+          id: 'transacao-4',
+          tipo: TipoTransacao.DESPESA,
+          valor: 400,
+        },
+      ] as Transacao[]);
     dashboardRepository.findRecentTransactions.mockResolvedValue([
       {
         categoriaId: 'categoria-2',
@@ -101,6 +124,22 @@ describe('DashboardService', () => {
     expect(result.receitasMes).toBe(3000);
     expect(result.despesasMes).toBe(500);
     expect(result.economiaMes).toBe(2500);
+    expect(result.comparativoMensal).toEqual({
+      despesas: {
+        anterior: 400,
+        atual: 500,
+        diferenca: 100,
+        percentual: 25,
+      },
+      mesAnterior: '2026-03',
+      mesAtual: '2026-04',
+      receitas: {
+        anterior: 2500,
+        atual: 3000,
+        diferenca: 500,
+        percentual: 20,
+      },
+    });
     expect(result.gastosPorCategoria).toEqual([
       {
         categoriaId: 'categoria-2',
@@ -187,6 +226,11 @@ describe('DashboardService', () => {
       'user-1',
       '2026-04-01',
       '2026-04-30',
+    );
+    expect(dashboardRepository.findTransactionsByPeriod).toHaveBeenCalledWith(
+      'user-1',
+      '2026-03-01',
+      '2026-03-31',
     );
     expect(dashboardRepository.findRecentTransactions).toHaveBeenCalledWith(
       'user-1',

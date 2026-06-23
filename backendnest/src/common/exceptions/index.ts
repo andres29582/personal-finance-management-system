@@ -1,24 +1,25 @@
 import { AppException } from './app.exception';
 
 export type AppExceptionOptions = {
+  details?: Record<string, unknown>;
   field?: string;
 };
 
 export class BusinessRuleException extends AppException {
   constructor(code: string, message: string, options?: AppExceptionOptions) {
-    super(code, message, 400, options?.field);
+    super(code, message, 400, options?.field, options?.details);
   }
 }
 
 export class ValidationAppException extends AppException {
   constructor(code: string, message: string, options?: AppExceptionOptions) {
-    super(code, message, 422, options?.field);
+    super(code, message, 422, options?.field, options?.details);
   }
 }
 
 export class ResourceNotFoundException extends AppException {
   constructor(code: string, message: string, options?: AppExceptionOptions) {
-    super(code, message, 404, options?.field);
+    super(code, message, 404, options?.field, options?.details);
   }
 }
 
@@ -36,7 +37,7 @@ export class ForbiddenResourceException extends AppException {
 
 export class AppConflictException extends AppException {
   constructor(code: string, message: string, options?: AppExceptionOptions) {
-    super(code, message, 409, options?.field);
+    super(code, message, 409, options?.field, options?.details);
   }
 }
 

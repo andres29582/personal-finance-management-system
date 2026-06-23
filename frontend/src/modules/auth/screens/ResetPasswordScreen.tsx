@@ -1,17 +1,12 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Image,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { resetPassword } from '../services/authService';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AuthScreen } from '../../../../components/auth-screen';
 import { clearSession, getToken } from '../../../../storage/authStorage';
+import { resolveApiError } from '../../../../utils/api-error';
+import { FinanceTheme } from '../../../shared/styles/financeTheme';
+import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
+import { resetPassword } from '../services/authService';
 
 export function ResetPasswordScreen() {
   const [novaSenha, setNovaSenha] = useState('');
@@ -42,8 +37,8 @@ export function ResetPasswordScreen() {
     setErro('');
     setSucesso('');
 
-    if (!novaSenha) {
-      setErro('Preencha a nova senha.');
+    if (novaSenha.length < 6) {
+      setErro('A nova senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
@@ -54,19 +49,22 @@ export function ResetPasswordScreen() {
         novaSenha,
       });
 
-      setSucesso(resposta.message || 'Senha atualizada. Faça login novamente.');
+      setSucesso(resposta.message || 'Senha atualizada. Faca login novamente.');
       await clearSession();
 
       redirectTimeoutRef.current = setTimeout(() => {
         router.replace('/login');
       }, 1500);
-    } catch (error: any) {
-      if (error?.response?.status === 401) {
+    } catch (error) {
+      const status = (error as any)?.response?.status;
+
+      if (status === 401) {
         await clearSession();
-        setErro('Sua sessão expirou. Faça login novamente.');
+        setErro('Sua sessao expirou. Faca login novamente.');
         router.replace('/login');
       } else {
-        setErro('Não foi possível atualizar a senha.');
+        const resolved = await resolveApiError(error, 'Nao foi possivel atualizar a senha.');
+        setErro(resolved.message);
       }
     } finally {
       setLoading(false);
@@ -74,161 +72,74 @@ export function ResetPasswordScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.backgroundLayer}>
-        <Image
-          source={require('../../../../assets/images/img1_login.png')}
-          style={styles.backgroundImage}
-          resizeMode="cover"
+    <AuthScreen
+      title="Alterar senha"
+      subtitle="Defina uma nova senha para manter sua conta protegida."
+      cardMaxWidth={380}
+    >
+      <GlassField label="Nova senha" error={erro && !sucesso ? erro : undefined}>
+        <GlassTextInput
+          placeholder="Minimo 6 caracteres"
+          secureTextEntry
+          value={novaSenha}
+          onChangeText={(value) => {
+            setNovaSenha(value);
+            setErro('');
+            setSucesso('');
+          }}
+          editable={!loading}
+        />
+      </GlassField>
+
+      {erro && !sucesso ? <Text style={styles.errorMessage}>{erro}</Text> : null}
+      {sucesso ? <Text style={styles.infoMessage}>{sucesso}</Text> : null}
+
+      <View style={styles.actions}>
+        <GlassButton
+          label={loading ? 'Atualizando...' : 'Atualizar senha'}
+          onPress={handleResetPassword}
+          disabled={loading}
         />
       </View>
 
-      <View style={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Alterar senha</Text>
-          <Text style={styles.subtitle}>
-            Digite sua nova senha para continuar.
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Nova senha"
-            placeholderTextColor="#8A8A8A"
-            secureTextEntry
-            value={novaSenha}
-            onChangeText={setNovaSenha}
-            editable={!loading}
-          />
-
-          {erro ? <Text style={styles.errorText}>{erro}</Text> : null}
-          {sucesso ? <Text style={styles.successText}>{sucesso}</Text> : null}
-
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleResetPassword}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              {loading ? 'Atualizando...' : 'Atualizar senha'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.replace('/dashboard' as never)}
-            disabled={loading}
-          >
-            <Text style={styles.backButtonText}>Voltar para home</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
+      <TouchableOpacity
+        style={styles.back}
+        onPress={() => router.replace('/dashboard' as never)}
+        disabled={loading}
+      >
+        <Text style={styles.backText}>Voltar para home</Text>
+      </TouchableOpacity>
+    </AuthScreen>
   );
 }
 
 export default ResetPasswordScreen;
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#EAF5E7',
-    overflow: 'hidden',
+  actions: {
+    marginTop: FinanceTheme.spacing.md,
   },
-  backgroundLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backgroundImage: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.55,
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  back: {
     alignItems: 'center',
-    paddingHorizontal: 24,
+    marginTop: FinanceTheme.spacing.lg,
   },
-  card: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 22,
-    paddingVertical: 28,
-    ...Platform.select({
-      web: {
-        boxShadow: '0px 6px 12px rgba(0, 0, 0, 0.08)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        elevation: 4,
-      },
-    }),
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: '#123524',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#4B5D52',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  input: {
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#D7E6D5',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: '#123524',
-    backgroundColor: '#FAFAFA',
-    marginBottom: 14,
-  },
-  errorText: {
-    color: '#C62828',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  successText: {
-    color: '#0B6B34',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  button: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#0B6B34',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 14,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  backButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  backButtonText: {
-    color: '#123524',
+  backText: {
+    color: FinanceTheme.colors.cyanMuted,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '800',
+  },
+  errorMessage: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
+  },
+  infoMessage: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
+    textAlign: 'center',
   },
 });
