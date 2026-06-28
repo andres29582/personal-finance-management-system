@@ -27,7 +27,8 @@ A pasta `arquitetura/` descreve a organização técnica do sistema, seus módul
 - [Design System do Frontend](arquitetura/FRONTEND_DESIGN_SYSTEM.md)
 - [Arquitetura do Dashboard Frontend](arquitetura/FRONTEND_DASHBOARD.md)
 - Arquitetura de banco de dados: em construção
-- Arquitetura do módulo de Machine Learning: em construção
+- Documentação técnica do ML: [ml-finance-tcc/README.md](../ml-finance-tcc/README.md)
+- Dicionário de dados do ML: [DICIONARIO_DE_DADOS.md](../ml-finance-tcc/docs/DICIONARIO_DE_DADOS.md)
 - Segurança: em construção
 
 ## Operação
@@ -54,7 +55,7 @@ A pasta `desenvolvimento/` deve reunir práticas de desenvolvimento, testes, pad
 
 A pasta `academico/` deve concentrar materiais relacionados ao TCC, resultados e apresentações acadêmicas.
 
-- TCC: em construção
+- [Nota Técnica do Módulo de Machine Learning](academico/TCC/NOTA_TECNICA_MACHINE_LEARNING.md)
 - [Resultados e Discussão](academico/RESULTADOS/SECAO_5_RESULTADOS_DISCUSSAO.md)
 - [Roteiro de Apresentação](academico/APRESENTACOES/ROTEIRO_APRESENTACAO.md)
 

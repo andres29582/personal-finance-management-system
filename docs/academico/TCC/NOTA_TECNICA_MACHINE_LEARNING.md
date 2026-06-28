@@ -1,4 +1,4 @@
-# Nota técnica para avaliação — ML V2
+# Nota Técnica do Módulo de Machine Learning
 
 O projeto implementa uma previsão causal de déficit mensal. Para prever `M`,
 o modelo recebe somente agregados de `M-3`, `M-2`, `M-1`, o saldo disponível
