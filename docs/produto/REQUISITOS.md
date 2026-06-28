@@ -1,4 +1,4 @@
-# Matriz de rastreabilidade tecnica do MVP
+# Requisitos e Matriz de Rastreabilidade do MVP
 
 Objetivo: relacionar os requisitos centrais do MVP financeiro com endpoints,
 servicos e testes que aumentam a confianca tecnica do backend.

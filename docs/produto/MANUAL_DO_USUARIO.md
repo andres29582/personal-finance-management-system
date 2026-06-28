@@ -1,4 +1,4 @@
-# Manual curto do usuário
+# Manual do Usuário
 
 ## Primeiro acesso
 
