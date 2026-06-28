@@ -99,10 +99,10 @@ Para una rutina de entrega local reproducible, use tambien
 
 Os materiais de apoio do projeto estão em:
 
-- `docs/resumo-arquitetura.md`
-- `docs/manual-do-usuario.md`
-- `docs/matriz-requisitos.md`
-- `docs/roteiro-demo.md`
+- `docs/arquitetura/ARQUITETURA.md`
+- `docs/produto/MANUAL_DO_USUARIO.md`
+- `docs/produto/REQUISITOS.md`
+- `docs/arquivo/relatorios-de-migracao/ROTEIRO_DEMO_ANTIGO.md`
 - `ml-finance-tcc/docs/`
 
 ## Status do projeto

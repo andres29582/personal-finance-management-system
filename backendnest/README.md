@@ -1,4 +1,4 @@
-> Documento de referencia rapido del proyecto: ver `../README.md`, `../docs/resumen-arquitectura.md` y `migrations/0001_mvp_baseline.sql`.
+> Documento de referencia rapido del proyecto: ver `../README.md`, `../docs/arquitetura/ARQUITETURA.md` y `migrations/0001_mvp_baseline.sql`.
 
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>

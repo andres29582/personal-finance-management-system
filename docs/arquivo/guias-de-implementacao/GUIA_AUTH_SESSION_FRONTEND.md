@@ -1,6 +1,6 @@
 ## F1 - Auth/Session Frontend: Implementación de Ajustes Mínimos
 
-Basado en el reporte `F1-AUTH-SESSION-REPORT.md` y tests ejecutados exitosamente.
+Basado en el reporte `../relatorios-de-migracao/RELATORIO_AUTH_SESSION_FRONTEND.md` y tests ejecutados exitosamente.
 
 ---
 
@@ -246,7 +246,7 @@ npm run lint
 
 ## Referencias
 
-- Reporte completo: `F1-AUTH-SESSION-REPORT.md`
+- Reporte completo: `../relatorios-de-migracao/RELATORIO_AUTH_SESSION_FRONTEND.md`
 - Tests: `__tests__/storage/authStorage.test.ts`
 - Tests: `__tests__/services/api.test.ts`
 - Tests: `__tests__/services/authService.test.ts`
