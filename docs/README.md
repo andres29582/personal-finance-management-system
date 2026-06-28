@@ -38,7 +38,7 @@ A pasta `operacao/` deve reunir instruções para preparar ambientes, executar o
 - Deploy: em construção
 - CI/CD: em construção
 - Seed demo: em construção
-- Runbook operacional: em construção
+- [Runbook Operacional Local](operacao/RUNBOOK.md)
 
 ## Desenvolvimento
 

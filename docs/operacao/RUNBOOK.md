@@ -1,4 +1,4 @@
-# Estabilizacion local
+# Runbook Operacional Local
 
 Checklist para preparar una entrega local confiable del sistema financiero.
 
@@ -31,7 +31,7 @@ El seed deja datos para dashboard, contas, transacoes, categorias, orcamentos, r
 
 ## 3. Checks antes de levantar localhost
 
-El comando maestro desde la raiz ejecuta tests del backend, build del backend y tests del frontend:
+O comando principal desde a raiz executa testes do backend, build do backend e testes do frontend:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1 -SkipLocalhost
