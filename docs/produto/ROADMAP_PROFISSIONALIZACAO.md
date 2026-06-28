@@ -49,7 +49,7 @@ A Fase 1 arquitetônica já deixou implementados padrões importantes como Repos
 - Frontend com separação progressiva entre rotas finas, módulos de domínio e camada compartilhada.
 - Cliente Axios com unwrap do response wrapper e refresh automático de token.
 - ML com contrato V2 estrito, validação de schema, manifesto de features e testes HTTP.
-- Seed demo documentado en `docs/estabilizacion-local.md`.
+- Seed demo documentado en `docs/operacao/RUNBOOK.md`.
 - CI inicial existente en `.github/workflows/ci.yml`.
 - Documentação reutilizável para arquitetura, demo, frontend e fechamento da Fase 1.
 
