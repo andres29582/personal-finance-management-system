@@ -1,4 +1,4 @@
-# Roteiro de apresentacao otimizada
+# Roteiro de Apresentação
 
 Objetivo: demonstrar que o Sistema de Gestao Financeira Pessoal funciona de ponta a ponta, com foco em valor para o usuario, integracao entre frontend/backend/ML e confiabilidade tecnica.
 
