@@ -1,4 +1,4 @@
-# Resumo de arquitetura
+# Arquitetura do Sistema Financeiro
 
 ## Visao geral
 
