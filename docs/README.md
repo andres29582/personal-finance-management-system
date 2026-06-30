@@ -25,10 +25,11 @@ A pasta `arquitetura/` descreve a organização técnica do sistema, seus módul
 - [Arquitetura do Sistema Financeiro](arquitetura/ARQUITETURA.md)
 - [Arquitetura do Backend](arquitetura/BACKEND.md)
 - [Arquitetura do Frontend](arquitetura/FRONTEND.md)
+- [Arquitetura do Módulo de Machine Learning](arquitetura/MACHINE_LEARNING.md)
 - [Design System do Frontend](arquitetura/FRONTEND_DESIGN_SYSTEM.md)
 - [Arquitetura do Dashboard Frontend](arquitetura/FRONTEND_DASHBOARD.md)
 - Arquitetura de banco de dados: em construção
-- Documentação técnica do ML: [ml-finance-tcc/README.md](../ml-finance-tcc/README.md)
+- Documentação operacional do ML: [ml-finance-tcc/README.md](../ml-finance-tcc/README.md)
 - Dicionário de dados do ML: [DICIONARIO_DE_DADOS.md](../ml-finance-tcc/docs/DICIONARIO_DE_DADOS.md)
 - Segurança: em construção
 
