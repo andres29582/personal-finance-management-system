@@ -48,6 +48,7 @@ A pasta `operacao/` deve reunir instruções para preparar ambientes, executar o
 
 A pasta `desenvolvimento/` deve reunir práticas de desenvolvimento, testes, padrões de código, contribuição e registros de decisão arquitetural.
 
+- [Estratégia Geral de Testes](desenvolvimento/TESTES.md)
 - [Testes e Rastreabilidade do Frontend](desenvolvimento/TESTES_FRONTEND.md)
 - Padrões de código: em construção
 - Contribuição: em construção
