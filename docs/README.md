@@ -23,7 +23,7 @@ A pasta `produto/` concentra documentos sobre visão de produto, requisitos, roa
 A pasta `arquitetura/` descreve a organização técnica do sistema, seus módulos principais e decisões estruturais.
 
 - [Arquitetura do Sistema Financeiro](arquitetura/ARQUITETURA.md)
-- Arquitetura backend: em construção
+- [Arquitetura do Backend](arquitetura/BACKEND.md)
 - [Design System do Frontend](arquitetura/FRONTEND_DESIGN_SYSTEM.md)
 - [Arquitetura do Dashboard Frontend](arquitetura/FRONTEND_DASHBOARD.md)
 - Arquitetura de banco de dados: em construção
