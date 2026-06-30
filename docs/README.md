@@ -24,6 +24,7 @@ A pasta `arquitetura/` descreve a organização técnica do sistema, seus módul
 
 - [Arquitetura do Sistema Financeiro](arquitetura/ARQUITETURA.md)
 - [Arquitetura do Backend](arquitetura/BACKEND.md)
+- [Arquitetura do Frontend](arquitetura/FRONTEND.md)
 - [Design System do Frontend](arquitetura/FRONTEND_DESIGN_SYSTEM.md)
 - [Arquitetura do Dashboard Frontend](arquitetura/FRONTEND_DASHBOARD.md)
 - Arquitetura de banco de dados: em construção
