@@ -71,7 +71,7 @@ ml-finance-tcc/  # pipeline, modelo e API de previsão de déficit
 
 ## Como executar localmente
 
-Para una rutina de entrega local reproducible, use tambien
+Para uma rotina de entrega local reproduzivel, use tambem
 `docs/operacao/RUNBOOK.md`.
 
 ### Backend

@@ -1,24 +1,24 @@
 # Runbook Operacional Local
 
-Checklist para preparar una entrega local confiable del sistema financiero.
+Checklist para preparar uma entrega local confiavel do sistema financeiro.
 
-## 1. Variables y base de datos
+## 1. Variaveis e base de dados
 
-1. Copiar `backendnest/.env.example` a `backendnest/.env` si todavia no existe.
-2. Confirmar PostgreSQL activo con la base indicada en `DB_NAME`.
-3. Copiar `frontend/.env.example` a `frontend/.env` si todavia no existe.
+1. Copiar `backendnest/.env.example` para `backendnest/.env` se ainda nao existir.
+2. Confirmar PostgreSQL ativo com a base indicada em `DB_NAME`.
+3. Copiar `frontend/.env.example` para `frontend/.env` se ainda nao existir.
 4. Confirmar que `EXPO_PUBLIC_API_URL=http://localhost:3000`.
 
-## 2. Datos demo
+## 2. Dados demo
 
-El camino oficial para cargar datos demo es:
+O caminho oficial para carregar dados demo e:
 
 ```powershell
 cd backendnest
 npm run seed:demo
 ```
 
-El seed recrea el usuario demo si ya existe, por lo que no es destructivo para otros usuarios.
+O seed recria o usuario demo se ele ja existir, por isso nao e destrutivo para outros usuarios.
 
 Credenciales demo:
 
@@ -27,17 +27,17 @@ Email: demo.financeiro@exemplo.com
 Senha: Demo@123456
 ```
 
-El seed deja datos para dashboard, contas, transacoes, categorias, orcamentos, relatorios, metas, alertas, transferencias, dividas y previsao.
+O seed deixa dados para dashboard, contas, transacoes, categorias, orcamentos, relatorios, metas, alertas, transferencias, dividas e previsao.
 
-## 3. Checks antes de levantar localhost
+## 3. Checks antes de subir localhost
 
-O comando principal desde a raiz executa testes do backend, build do backend e testes do frontend:
+O comando principal a partir da raiz executa testes do backend, build do backend e testes do frontend:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1 -SkipLocalhost
 ```
 
-Tambien se puede ejecutar paso a paso:
+Tambem e possivel executar passo a passo:
 
 ```powershell
 cd backendnest
@@ -48,16 +48,16 @@ cd ..\frontend
 npm test -- --runInBand
 ```
 
-Si `npm run build` falla con `EPERM` al intentar borrar archivos en `backendnest/dist`, cerrar procesos locales de Node/Nest que puedan estar usando el build anterior y repetir el comando. El flujo oficial de este checklist usa el build estandar.
+Se `npm run build` falhar com `EPERM` ao tentar apagar arquivos em `backendnest/dist`, feche processos locais de Node/Nest que possam estar usando o build anterior e repita o comando. O fluxo oficial deste checklist usa o build padrao.
 
 ## 4. Orden recomendado para demo
 
-1. Confirmar PostgreSQL activo con la base configurada en `backendnest/.env`.
-2. Levantar backend y validar `GET /health`.
-3. Levantar frontend y validar HTTP 200 en `http://localhost:8081`.
-4. Levantar ML solo si la demo incluye previsao de deficit.
+1. Confirmar PostgreSQL ativo com a base configurada em `backendnest/.env`.
+2. Subir o backend e validar `GET /health`.
+3. Subir o frontend e validar HTTP 200 em `http://localhost:8081`.
+4. Subir o ML somente se a demo incluir previsao de deficit.
 
-## 5. Levantar servicios locales
+## 5. Subir servicos locais
 
 Terminal 1:
 
@@ -73,7 +73,7 @@ cd frontend
 npm run web
 ```
 
-ML opcional, solo para validar previsao de deficit con el servicio externo activo:
+ML opcional, somente para validar previsao de deficit com o servico externo ativo:
 
 ```powershell
 cd ml-finance-tcc
@@ -87,7 +87,7 @@ URLs esperadas:
 - Frontend: `http://localhost:8081`
 - ML opcional: `http://localhost:8000/health`
 
-Los scripts por defecto escriben cache y build temporal en `%LOCALAPPDATA%\meu-sistema-financeiro` para evitar bloqueos de OneDrive. Los scripts `start:dev:standard` y `web:standard` quedan como fallback si el proyecto se mueve fuera de OneDrive.
+Os scripts padrao escrevem cache e build temporario em `%LOCALAPPDATA%\meu-sistema-financeiro` para evitar bloqueios de OneDrive. Os scripts `start:dev:standard` e `web:standard` ficam como fallback se o projeto for movido para fora do OneDrive.
 
 ## 6. Verificacion rapida
 
@@ -97,13 +97,13 @@ Con backend y frontend activos:
 powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1
 ```
 
-Para validar solo los endpoints HTTP:
+Para validar somente os endpoints HTTP:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File scripts\verify-localhost.ps1
 ```
 
-Debe reportar HTTP 200 en `GET /health` del backend y en el frontend.
+Deve reportar HTTP 200 em `GET /health` do backend e no frontend.
 
 ## 7. Smoke manual minimo
 
@@ -114,17 +114,17 @@ Invoke-WebRequest -Uri "http://localhost:3000/health" -UseBasicParsing -TimeoutS
 Invoke-WebRequest -Uri "http://localhost:8081" -UseBasicParsing -TimeoutSec 30
 ```
 
-Si ML esta activo:
+Se o ML estiver ativo:
 
 ```powershell
 Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 8
 ```
 
-Flujo manual en navegador:
+Fluxo manual no navegador:
 
 1. Abrir `http://localhost:8081`.
-2. Entrar con el usuario demo.
-3. Validar que dashboard muestre saldos y tarjetas con datos.
-4. Navegar por contas, transacoes, categorias, orcamentos, relatorios y previsao.
-5. Crear una transacao pequena y confirmar que vuelve a la lista sin error.
-6. Revisar `logs/localhost-*.log` solo si algun servicio no responde.
+2. Entrar com o usuario demo.
+3. Validar que o dashboard mostre saldos e cards com dados.
+4. Navegar por contas, transacoes, categorias, orcamentos, relatorios e previsao.
+5. Criar uma transacao pequena e confirmar que retorna para a lista sem erro.
+6. Revisar `logs/localhost-*.log` somente se algum servico nao responder.
