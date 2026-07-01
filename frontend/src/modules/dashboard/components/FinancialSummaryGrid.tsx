@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { DashboardTheme } from '../styles/dashboardTheme';
 import { DashboardMetricItem } from '../utils/dashboardMappers';
-import { MetricGlassCard } from './MetricGlassCard';
+import { FinancialSummaryCard } from '../v2/components';
 
 type FinancialSummaryGridProps = {
   metrics: DashboardMetricItem[];
@@ -11,7 +11,7 @@ export function FinancialSummaryGrid({ metrics }: FinancialSummaryGridProps) {
   return (
     <View style={styles.grid}>
       {metrics.map((metric) => (
-        <MetricGlassCard
+        <FinancialSummaryCard
           key={metric.label}
           accent={metric.accent}
           icon={metric.icon}
