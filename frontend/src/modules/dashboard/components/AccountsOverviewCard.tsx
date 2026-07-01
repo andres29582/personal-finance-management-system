@@ -1,4 +1,4 @@
-import { GlassStatusCard } from '../../../shared/ui';
+import { EmptyState } from '../v2/components';
 
 type AccountsOverviewCardProps = {
   onCreateAccount: () => void;
@@ -11,7 +11,8 @@ export function AccountsOverviewCard({
 }: AccountsOverviewCardProps) {
   if (totalContas === 0) {
     return (
-      <GlassStatusCard
+      <EmptyState
+        icon="bank-plus"
         title="Comece criando sua primeira conta"
         description="As contas sao a base para registrar transacoes, orcamentos e relatorios."
         actionLabel="Nova conta"

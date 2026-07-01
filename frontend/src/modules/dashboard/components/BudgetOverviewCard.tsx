@@ -1,8 +1,8 @@
 import { DimensionValue, StyleSheet, Text, View } from 'react-native';
 import { DashboardTheme } from '../styles/dashboardTheme';
 import { DashboardBudgetOverview } from '../utils/dashboardMappers';
-import { GlassPanel } from './GlassPanel';
 import { NeonIconButton } from './NeonIconButton';
+import { EmptyState, SectionCard } from '../v2/components';
 
 type BudgetOverviewCardProps = {
   budget: DashboardBudgetOverview | null;
@@ -16,7 +16,7 @@ export function BudgetOverviewCard({
   const progressWidth: DimensionValue = `${budget?.percentualUtilizado ?? 0}%`;
 
   return (
-    <GlassPanel
+    <SectionCard
       accent="mixed"
       title="Orcamento do mes"
       action={
@@ -51,11 +51,14 @@ export function BudgetOverviewCard({
           </Text>
         </View>
       ) : (
-        <Text style={styles.empty}>
-          Nenhum orcamento definido para este mes.
-        </Text>
+        <EmptyState
+          description="Defina um limite mensal para acompanhar quanto ainda pode gastar."
+          framed={false}
+          icon="cash-multiple"
+          title="Nenhum orcamento definido para este mes."
+        />
       )}
-    </GlassPanel>
+    </SectionCard>
   );
 }
 
@@ -66,10 +69,6 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: DashboardTheme.spacing.sm,
-  },
-  empty: {
-    color: DashboardTheme.colors.textMuted,
-    fontSize: DashboardTheme.typography.body,
   },
   fill: {
     backgroundColor: DashboardTheme.colors.cyan,

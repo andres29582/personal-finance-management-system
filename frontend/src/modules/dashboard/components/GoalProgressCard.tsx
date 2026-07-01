@@ -1,8 +1,8 @@
 import { DimensionValue, StyleSheet, Text, View } from 'react-native';
 import { DashboardTheme } from '../styles/dashboardTheme';
 import { DashboardGoalOverview } from '../utils/dashboardMappers';
-import { GlassPanel } from './GlassPanel';
 import { NeonIconButton } from './NeonIconButton';
+import { EmptyState, SectionCard } from '../v2/components';
 
 type GoalProgressCardProps = {
   goal: DashboardGoalOverview | null;
@@ -13,7 +13,7 @@ export function GoalProgressCard({ goal, onOpenGoals }: GoalProgressCardProps) {
   const progressWidth: DimensionValue = `${goal?.percentual ?? 0}%`;
 
   return (
-    <GlassPanel
+    <SectionCard
       accent="magenta"
       title="Meta em destaque"
       action={
@@ -45,9 +45,14 @@ export function GoalProgressCard({ goal, onOpenGoals }: GoalProgressCardProps) {
           </Text>
         </View>
       ) : (
-        <Text style={styles.empty}>Nenhuma meta ativa cadastrada.</Text>
+        <EmptyState
+          description="Cadastre uma meta para visualizar o progresso no painel."
+          framed={false}
+          icon="bullseye-arrow"
+          title="Nenhuma meta ativa cadastrada."
+        />
       )}
-    </GlassPanel>
+    </SectionCard>
   );
 }
 
@@ -58,10 +63,6 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: DashboardTheme.spacing.sm,
-  },
-  empty: {
-    color: DashboardTheme.colors.textMuted,
-    fontSize: DashboardTheme.typography.body,
   },
   fill: {
     backgroundColor: DashboardTheme.colors.magenta,

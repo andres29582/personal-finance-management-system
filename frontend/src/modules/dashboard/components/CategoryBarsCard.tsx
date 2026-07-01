@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { DimensionValue, StyleSheet, Text, View } from 'react-native';
 import { DashboardTheme } from '../styles/dashboardTheme';
 import { DashboardCategoryBarItem } from '../utils/dashboardMappers';
-import { GlassPanel } from './GlassPanel';
 import { NeonIconButton } from './NeonIconButton';
+import { EmptyState, SectionCard } from '../v2/components';
 
 type CategoryBarsCardProps = {
   items: DashboardCategoryBarItem[];
@@ -14,7 +14,7 @@ export function CategoryBarsCard({ items, onOpenHistory }: CategoryBarsCardProps
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <GlassPanel
+    <SectionCard
       accessibilityLabel="Alternar gastos por categoria"
       accent="magenta"
       title="Gastos por categoria"
@@ -50,12 +50,15 @@ export function CategoryBarsCard({ items, onOpenHistory }: CategoryBarsCardProps
             );
           })
         ) : (
-          <Text style={styles.emptyText}>
-            Nenhuma despesa registrada neste mes.
-          </Text>
+          <EmptyState
+            description="Quando houver despesas no mes, a distribuicao por categoria aparece aqui."
+            framed={false}
+            icon="chart-donut"
+            title="Nenhuma despesa registrada neste mes."
+          />
         )
       ) : null}
-    </GlassPanel>
+    </SectionCard>
   );
 }
 
@@ -65,10 +68,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: DashboardTheme.spacing.xs,
     justifyContent: 'flex-end',
-  },
-  emptyText: {
-    color: DashboardTheme.colors.textMuted,
-    fontSize: DashboardTheme.typography.body,
   },
   fill: {
     backgroundColor: DashboardTheme.colors.magenta,

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { DashboardTheme } from '../styles/dashboardTheme';
 import { DashboardMonthlyComparisonOverview } from '../utils/dashboardMappers';
-import { GlassPanel } from './GlassPanel';
+import { SectionCard } from '../v2/components';
 
 type MonthlyComparisonCardProps = {
   comparison: DashboardMonthlyComparisonOverview;
@@ -16,7 +16,7 @@ export function MonthlyComparisonCard({
   const expenses = comparison.items.find((item) => item.label === 'Despesas');
 
   return (
-    <GlassPanel
+    <SectionCard
       accessibilityLabel="Alternar comparativo de gastos"
       accent="magenta"
       subtitle={`${comparison.mesAtual} comparado com ${comparison.mesAnterior}`}
@@ -84,7 +84,7 @@ export function MonthlyComparisonCard({
             </View>
           </View>
       ) : null}
-    </GlassPanel>
+    </SectionCard>
   );
 }
 
