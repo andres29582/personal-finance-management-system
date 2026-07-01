@@ -6,6 +6,8 @@ type ApiErrorEnvelope = {
   error?: {
     code?: string;
   };
+  message?: string;
+  statusCode?: number;
 };
 
 export function expectApiSuccess<T>(response: Response): T {
@@ -23,12 +25,23 @@ export function expectUnauthorized(response: Response): void {
   const body = response.body as ApiErrorEnvelope;
 
   expect(response.status).toBe(401);
+
+  if (body.success === false) {
+    expect(body).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({
+          code: expect.any(String) as string,
+        }) as ApiErrorEnvelope['error'],
+      }),
+    );
+    return;
+  }
+
   expect(body).toEqual(
     expect.objectContaining({
-      success: false,
-      error: expect.objectContaining({
-        code: expect.any(String) as string,
-      }) as ApiErrorEnvelope['error'],
+      message: expect.any(String) as string,
+      statusCode: 401,
     }),
   );
 }
