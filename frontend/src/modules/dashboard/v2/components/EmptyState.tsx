@@ -8,6 +8,7 @@ type DashboardV2IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 type EmptyStateProps = {
   actionLabel?: string;
   description?: string;
+  framed?: boolean;
   icon?: DashboardV2IconName;
   onActionPress?: () => void;
   title: string;
@@ -17,13 +18,14 @@ type EmptyStateProps = {
 export function EmptyState({
   actionLabel,
   description,
+  framed = true,
   icon = 'chart-box-outline',
   onActionPress,
   title,
   tone = 'muted',
 }: EmptyStateProps) {
-  return (
-    <SectionCard compact style={styles.card}>
+  const content = (
+    <>
       <View style={[styles.iconFrame, toneStyles[tone]]}>
         <MaterialCommunityIcons color={toneColors[tone]} name={icon} size={28} />
       </View>
@@ -41,6 +43,16 @@ export function EmptyState({
           <Text style={styles.actionText}>{actionLabel}</Text>
         </Pressable>
       ) : null}
+    </>
+  );
+
+  if (!framed) {
+    return <View style={styles.card}>{content}</View>;
+  }
+
+  return (
+    <SectionCard compact style={styles.card}>
+      {content}
     </SectionCard>
   );
 }

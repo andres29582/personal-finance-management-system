@@ -3,8 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { formatCurrency, formatDate } from '../../../../utils/formatters';
 import { DashboardTransacaoRecente } from '../types/dashboard';
 import { DashboardTheme } from '../styles/dashboardTheme';
-import { GlassPanel } from './GlassPanel';
 import { NeonIconButton } from './NeonIconButton';
+import { EmptyState, SectionCard } from '../v2/components';
 
 type RecentTransactionsCardProps = {
   items: DashboardTransacaoRecente[];
@@ -18,7 +18,7 @@ export function RecentTransactionsCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <GlassPanel
+    <SectionCard
       accessibilityLabel="Alternar ultimas transacoes"
       accent="cyan"
       title="Ultimas transacoes"
@@ -50,10 +50,15 @@ export function RecentTransactionsCard({
             </View>
           ))
         ) : (
-          <Text style={styles.emptyText}>Sem transacoes recentes.</Text>
+          <EmptyState
+            description="As ultimas receitas, despesas e transferencias aparecem aqui."
+            framed={false}
+            icon="receipt-text-clock-outline"
+            title="Sem transacoes recentes."
+          />
         )
       ) : null}
-    </GlassPanel>
+    </SectionCard>
   );
 }
 
@@ -63,10 +68,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: DashboardTheme.spacing.xs,
     justifyContent: 'flex-end',
-  },
-  emptyText: {
-    color: DashboardTheme.colors.textMuted,
-    fontSize: DashboardTheme.typography.body,
   },
   item: {
     borderBottomColor: DashboardTheme.colors.border,

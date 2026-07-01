@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { formatCurrency } from "../../../../utils/formatters";
 import { FinanceTheme } from "../../../shared/styles/financeTheme";
 import { GlassStatusCard } from "../../../shared/ui";
 import { AccountsOverviewCard } from "../components/AccountsOverviewCard";
@@ -11,6 +12,7 @@ import { MonthlyComparisonCard } from "../components/MonthlyComparisonCard";
 import { PlanningOverviewGrid } from "../components/PlanningOverviewGrid";
 import { RecentTransactionsCard } from "../components/RecentTransactionsCard";
 import { useDashboardData } from "../hooks/useDashboardData";
+import { InsightCard } from "../v2/components";
 import {
   dashboardSidebarItems,
   mapBudgetOverview,
@@ -92,6 +94,28 @@ export function DashboardScreen() {
         <>
           <FinancialSummaryGrid metrics={metrics} />
 
+          <View style={styles.insightGrid}>
+            <InsightCard
+              description={
+                dashboard.economiaMes >= 0
+                  ? "Suas receitas cobrem as despesas registradas neste mes."
+                  : "As despesas registradas passaram das receitas do mes."
+              }
+              icon={
+                dashboard.economiaMes >= 0
+                  ? "shield-check-outline"
+                  : "alert-circle-outline"
+              }
+              title={
+                dashboard.economiaMes >= 0
+                  ? "Mes com saldo positivo"
+                  : "Atencao ao saldo do mes"
+              }
+              tone={dashboard.economiaMes >= 0 ? "success" : "warning"}
+              value={formatCurrency(dashboard.economiaMes)}
+            />
+          </View>
+
           <AccountsOverviewCard
             totalContas={dashboard.totalContas}
             onCreateAccount={() => router.push("/contas-create" as never)}
@@ -132,5 +156,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: FinanceTheme.spacing.sm,
     textAlign: "center",
+  },
+  insightGrid: {
+    marginTop: FinanceTheme.spacing.md,
   },
 });

@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import {
   Platform,
+  Pressable,
   StyleProp,
   StyleSheet,
   Text,
@@ -10,33 +11,30 @@ import {
 import { FinanceAccent, FinanceTheme } from '../../../../shared/styles/financeTheme';
 
 type SectionCardProps = {
+  accessibilityLabel?: string;
   accent?: FinanceAccent;
   action?: ReactNode;
   children: ReactNode;
   compact?: boolean;
+  onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   subtitle?: string;
   title?: string;
 };
 
 export function SectionCard({
+  accessibilityLabel,
   accent = 'mixed',
   action,
   children,
   compact = false,
+  onPress,
   style,
   subtitle,
   title,
 }: SectionCardProps) {
-  return (
-    <View
-      style={[
-        styles.card,
-        accentStyles[accent],
-        compact ? styles.compact : null,
-        style,
-      ]}
-    >
+  const content = (
+    <>
       {title || subtitle || action ? (
         <View style={styles.header}>
           <View style={styles.titleGroup}>
@@ -56,6 +54,38 @@ export function SectionCard({
       ) : null}
 
       {children}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityLabel={accessibilityLabel ?? title}
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.card,
+          accentStyles[accent],
+          compact ? styles.compact : null,
+          pressed ? styles.pressed : null,
+          style,
+        ]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.card,
+        accentStyles[accent],
+        compact ? styles.compact : null,
+        style,
+      ]}
+    >
+      {content}
     </View>
   );
 }
@@ -92,6 +122,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: FinanceTheme.spacing.md,
+  },
+  pressed: {
+    opacity: FinanceTheme.opacity.pressed,
   },
   subtitle: {
     color: FinanceTheme.colors.textSubtle,
