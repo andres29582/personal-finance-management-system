@@ -165,9 +165,9 @@ Tests  ████████████████████████�
 ## 📁 DOCUMENTACIÓN ENTREGADA
 
 ```
-backendnest/
-├── ARCHITECTURE_ROADMAP.md        ← Documento principal (este)
-├── PHASE_1_TECHNICAL_GUIDE.md     ← Implementación Fase 1
+docs/arquivo/
+├── roadmaps-antigos/ROADMAP_BACKEND.md        ← Documento principal
+├── fase-1/GUIA_TECNICO_FASE_1.md              ← Implementación Fase 1
 ├── docs/
 │   ├── REPOSITORY_PATTERN.md      (crear en Fase 1)
 │   ├── CQRS_GUIDE.md              (crear en Fase 2)
@@ -250,7 +250,7 @@ Sin breaking changes
 ## 📞 CONTACTO / PREGUNTAS
 
 Para aclaraciones sobre esta estrategia:
-1. Revisar documentación detallada: `PHASE_1_TECHNICAL_GUIDE.md`
+1. Revisar documentación detallada: `docs/arquivo/fase-1/GUIA_TECNICO_FASE_1.md`
 2. Revisar secciones específicas del roadmap
 3. Coordinar pair programming en Week 1
 

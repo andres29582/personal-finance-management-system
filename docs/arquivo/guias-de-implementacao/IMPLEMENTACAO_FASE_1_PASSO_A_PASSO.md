@@ -350,7 +350,7 @@ Si ves `{ success: true, data: { success: true, data: ... } }`, es que hay un in
 Mientras tanto, cualquier duda en implementación:
 1. Revisar `src/users/repositories/user.repository.ts` como referencia
 2. Revisar `src/users/users.service.ts` como ejemplo de integración
-3. Comparar con `PHASE_1_TECHNICAL_GUIDE.md` si necesitas más detalles
+3. Comparar con `../fase-1/GUIA_TECNICO_FASE_1.md` si necesitas más detalles
 
 ---
 

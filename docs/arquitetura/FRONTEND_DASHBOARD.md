@@ -503,7 +503,7 @@ Alterações realizadas:
 - `DashboardTheme` passou a reexportar `FinanceTheme`.
 - `GlassPanel` do dashboard passou a reexportar `src/shared/ui/GlassPanel`.
 - `NeonIconButton` do dashboard passou a reexportar `src/shared/ui/NeonIconButton`.
-- Criado documento `docs/frontend-design-system.md`.
+- Criado documento `docs/arquitetura/FRONTEND_DESIGN_SYSTEM.md`.
 
 Resultado esperado:
 

@@ -95,7 +95,7 @@ Nota: el frontend Expo no define script `build`; por eso se valido con `lint` y 
 
 ## Observaciones
 
-- La Fase 1 quedo alineada con `docs/QUICK_REFERENCE.md` y `docs/ARQUITECTURA_PLAN_EJECUTIVO.md`.
+- La Fase 1 quedo alineada con `docs/arquivo/roadmaps-antigos/REFERENCIA_RAPIDA_ARQUITETURA.md` y `docs/arquivo/roadmaps-antigos/PLANO_ARQUITETURA_EXECUTIVO.md`.
 - El siguiente paso documentado es Fase 2: **CQRS + Redis Cache**.
 - Recomendacion para Fase 2: iniciar con un piloto pequeno antes de migracion masiva.
 

@@ -2,7 +2,7 @@
 
 Frontend em Expo Router, React Native, TypeScript e axios.
 
-Documento de referencia rapido do projeto: ver `../README.md`, `../docs/manual-do-usuario.md`, `../docs/roteiro-demo.md` e `../docs/resumo-arquitetura.md`.
+Documento de referencia rapido do projeto: ver `../README.md`, `../docs/produto/MANUAL_DO_USUARIO.md`, `../docs/arquivo/relatorios-de-migracao/ROTEIRO_DEMO_ANTIGO.md` e `../docs/arquitetura/ARQUITETURA.md`.
 
 ## Arquitetura local
 

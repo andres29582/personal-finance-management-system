@@ -102,19 +102,19 @@ R: Sí, si tienes 4+ devs. Dedicar 2 a refactor, 2+ a features.
 
 ```
 1. Roadmap detallado
-   └─ backendnest/ARCHITECTURE_ROADMAP.md
+   └─ docs/arquivo/roadmaps-antigos/ROADMAP_BACKEND.md
 
 2. Guía técnica Fase 1
-   └─ backendnest/PHASE_1_TECHNICAL_GUIDE.md
+   └─ docs/arquivo/fase-1/GUIA_TECNICO_FASE_1.md
 
 3. Resumen ejecutivo (para stakeholders)
-   └─ docs/ARQUITECTURA_PLAN_EJECUTIVO.md
+   └─ docs/arquivo/roadmaps-antigos/PLANO_ARQUITETURA_EXECUTIVO.md
 
 4. Diagramas arquitectura
-   └─ docs/ARQUITECTURA_DIAGRAMA.md
+   └─ docs/arquivo/roadmaps-antigos/DIAGRAMA_ARQUITETURA_ANTIGO.md
 
 5. Este (Quick Reference)
-   └─ docs/QUICK_REFERENCE.md
+   └─ docs/arquivo/roadmaps-antigos/REFERENCIA_RAPIDA_ARQUITETURA.md
 ```
 
 ---

@@ -1,4 +1,4 @@
-# Matriz de rastreabilidade tecnica do MVP
+# Requisitos e Matriz de Rastreabilidade do MVP
 
 Objetivo: relacionar os requisitos centrais do MVP financeiro com endpoints,
 servicos e testes que aumentam a confianca tecnica do backend.
@@ -36,7 +36,7 @@ Convencoes:
 - Dashboard e relatorios ja possuem E2E dedicado na Fase 3 para validar consultas reais, agregacoes, filtros, soft delete e isolamento multiusuario.
 - Audit logs ja possui E2E dedicado na Fase 3 para validar eventos reais, paginacao, sanitizacao e isolamento multiusuario.
 - Previsao de deficit ja possui E2E dedicado na Fase 3 com cliente ML controlado, validando features reais calculadas a partir do PostgreSQL.
-- A matriz de frontend fica separada em `frontend/F8-FRONTEND-TRACEABILITY-MATRIX.md` e ja registra screen tests para login, dashboard, transacoes, contas, transferencias, dividas, pagamentos de divida, relatorios, previsao de deficit e audit logs.
+- A matriz de frontend fica separada em `docs/desenvolvimento/TESTES_FRONTEND.md` e ja registra screen tests para login, dashboard, transacoes, contas, transferencias, dividas, pagamentos de divida, relatorios, previsao de deficit e audit logs.
 - `ml-finance-tcc` ja possui suite pytest inicial cobrindo data loader, preprocessing, model repository, API direta e integracao HTTP FastAPI.
 
 ## Evidencia tecnica atual

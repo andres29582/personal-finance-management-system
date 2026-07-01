@@ -1,4 +1,4 @@
-# Design System Frontend
+# Design System do Frontend
 
 ## Objetivo
 
