@@ -133,6 +133,10 @@ describe('DashboardScreen', () => {
       expect(screen.getByText('R$ 5.000,00')).toBeTruthy(); // saldoTotal
       expect(screen.getByText('R$ 8.000,00')).toBeTruthy(); // receitasTotais
       expect(screen.getByText('R$ 3.000,00')).toBeTruthy(); // despesasTotais
+      expect(screen.getByText('Receitas do mes')).toBeTruthy();
+      expect(screen.getByText('Despesas do mes')).toBeTruthy();
+      expect(screen.getByText('Mes com saldo positivo')).toBeTruthy();
+      expect(screen.getAllByText('R$ 2.000,00').length).toBeGreaterThan(0);
       expect(screen.getByText('Comparativo de gastos')).toBeTruthy();
       expect(screen.getByText('2026-05 comparado com 2026-04')).toBeTruthy();
       expect(screen.getByText('Ultimas transacoes')).toBeTruthy();
@@ -324,11 +328,32 @@ describe('DashboardScreen', () => {
     await renderDashboard();
 
     await waitFor(() => {
+      expect(screen.getByText('Nenhum orcamento definido para este mes.')).toBeTruthy();
+      expect(screen.getByText('Nenhuma meta ativa cadastrada.')).toBeTruthy();
+
       fireEvent.press(screen.getByText('Orcamentos'));
       expect(mockPush).toHaveBeenCalledWith('/orcamentos');
 
       fireEvent.press(screen.getByText('Metas'));
       expect(mockPush).toHaveBeenCalledWith('/metas');
+    });
+  });
+
+  it('shows v2 empty states inside expandable dashboard sections', async () => {
+    const mockUser = { id: '1', nome: 'JoÃ£o Silva', email: 'joao@example.com' };
+    const mockDashboard = makeDashboard({ totalContas: 1 });
+
+    mockGetUser.mockResolvedValue(mockUser);
+    mockGetDashboard.mockResolvedValue(mockDashboard);
+
+    await renderDashboard();
+
+    await waitFor(() => {
+      fireEvent.press(screen.getByLabelText('Alternar gastos por categoria'));
+      expect(screen.getByText('Nenhuma despesa registrada neste mes.')).toBeTruthy();
+
+      fireEvent.press(screen.getByLabelText('Alternar ultimas transacoes'));
+      expect(screen.getByText('Sem transacoes recentes.')).toBeTruthy();
     });
   });
 
