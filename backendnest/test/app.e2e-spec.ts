@@ -133,7 +133,7 @@ describe('Financial flow (e2e)', () => {
         success: false,
         error: expect.objectContaining({
           code: 'AUTH_INVALID_CREDENTIALS',
-        }),
+        }) as { code: string },
       }),
     );
 

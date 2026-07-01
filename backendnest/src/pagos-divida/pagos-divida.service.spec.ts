@@ -134,7 +134,7 @@ describe('PagosDividaService', () => {
         userId: 'user-1',
         details: expect.objectContaining({
           transacaoId: transacaoPayload.id,
-        }),
+        }) as Record<string, unknown>,
       }),
     );
   });
@@ -253,8 +253,11 @@ describe('PagosDividaService', () => {
       { id: 'transacao-1', usuarioId: 'user-1' },
       expect.objectContaining({ excluidoEm: expect.any(Date) as Date }),
     );
-    const paymentDeletedAt = manager.update.mock.calls[0][2].excluidoEm;
-    const transactionDeletedAt = manager.update.mock.calls[1][2].excluidoEm;
+    const updateCalls = manager.update.mock.calls as Array<
+      [unknown, unknown, { excluidoEm: Date }]
+    >;
+    const paymentDeletedAt = updateCalls[0][2].excluidoEm;
+    const transactionDeletedAt = updateCalls[1][2].excluidoEm;
 
     expect(transactionDeletedAt).toBe(paymentDeletedAt);
     expect(logsService.logEntityEvent).toHaveBeenCalledWith(
