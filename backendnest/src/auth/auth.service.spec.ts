@@ -456,7 +456,7 @@ describe('AuthService', () => {
     expect(result).not.toHaveProperty('resetToken');
     expect(passwordResetTokenRepository.createToken).toHaveBeenCalledWith(
       expect.objectContaining({
-        tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) as string,
         userId: 'user-1',
       }),
     );

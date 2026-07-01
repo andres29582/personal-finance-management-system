@@ -5,18 +5,18 @@ import { TipoConta } from '../src/contas/enums/tipo-conta.enum';
 import { TipoTransacao } from '../src/transacoes/enums/tipo-transacao.enum';
 import { createE2eApp } from './e2e-app';
 import { configureE2eEnvironment, prepareE2eDatabase } from './e2e-database';
+import { registerAndLoginTestUser, withAuth } from './helpers/auth.e2e-helper';
+import { E2E_DATES } from './helpers/date.helper';
 import {
-  makeLoginPayload,
-  makeRegisterUserPayload,
-} from './factories/auth.factory';
-import { makeCategoriaPayload } from './factories/categoria.factory';
-import { makeContaPayload } from './factories/conta.factory';
-import { makeTransacaoPayload } from './factories/transacao.factory';
-import { bearer, Identifiable, unwrapSuccess } from './helpers/http.helper';
-
-type LoginResponse = {
-  access_token: string;
-};
+  expectApiSuccess,
+  expectUnauthorized,
+  expectValidIsoTimestamp,
+} from './helpers/expectations.helper';
+import {
+  createCategoria,
+  createConta,
+  createTransacao,
+} from './helpers/financial-scenario.helper';
 
 type AuditLogListResponse = {
   total: number;
@@ -26,6 +26,7 @@ type AuditLogListResponse = {
 type AuditLogResponse = {
   id: string;
   action: string;
+  createdAt: string;
   details: Record<string, unknown> | null;
   entity: string | null;
   entityId: string | null;
@@ -54,97 +55,139 @@ describe('Audit logs (e2e)', () => {
     await app?.close();
   });
 
-  it('lists only the authenticated user audit logs with pagination and sanitized details', async () => {
-    const tokenA = await registerAndLogin({
-      cpf: '52998224725',
-      email: 'audit.a.e2e@example.com',
-      nome: 'Audit Usuario A',
-      senha: 'SenhaForte123',
-    });
-    const tokenB = await registerAndLogin({
-      cpf: '39053344705',
-      email: 'audit.b.e2e@example.com',
-      nome: 'Audit Usuario B',
-      senha: 'OutraSenha123',
-    });
-
-    await request(app.getHttpServer())
-      .post('/auth/login')
-      .send(
-        makeLoginPayload({
-          email: 'audit.a.e2e@example.com',
-          senha: 'senha-incorreta',
-        }),
-      )
+  it('blocks access without authentication', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/audit-logs')
+      .query({ limit: 10, offset: 0 })
       .expect(401);
 
-    const receitaCategoria = await createCategoria(
-      tokenA,
-      makeCategoriaPayload({
-        nome: 'Receita Audit E2E',
-        tipo: TipoCategoria.RECEITA,
-      }),
-    );
-    const contaA = await createConta(
-      tokenA,
-      makeContaPayload({
-        nome: 'Conta Audit A',
-        tipo: TipoConta.BANCO,
-        saldoInicial: 1000,
-      }),
-    );
-    const transacaoA = await createTransacao(
-      tokenA,
-      makeTransacaoPayload({
-        contaId: contaA.id,
-        categoriaId: receitaCategoria.id,
-        data: '2026-05-01',
-        descricao: 'Receita Audit',
-        tipo: TipoTransacao.RECEITA,
-        valor: 500,
-      }),
-    );
-    const contaB = await createConta(
-      tokenB,
-      makeContaPayload({
-        nome: 'Conta Audit B',
-        tipo: TipoConta.BANCO,
-        saldoInicial: 999,
-      }),
-    );
+    expectUnauthorized(response);
+  });
 
-    const auditAResponse = await request(app.getHttpServer())
-      .get('/audit-logs')
-      .query({ limit: 20, offset: 0 })
-      .set(bearer(tokenA))
+  it('records create, update and soft-delete events for financial entities', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '52998224725',
+      email: 'audit.events.e2e@example.com',
+      nome: 'Audit Events E2E',
+    });
+    const category = await createCategoria(app, session, {
+      nome: 'Despesa audit events',
+      tipo: TipoCategoria.DESPESA,
+    });
+    const account = await createConta(app, session, {
+      nome: 'Conta audit events',
+      saldoInicial: 1000,
+      tipo: TipoConta.BANCO,
+    });
+    const transaction = await createTransacao(app, session, {
+      categoriaId: category.id,
+      contaId: account.id,
+      data: E2E_DATES.targetMonthStart,
+      descricao: 'Despesa auditada',
+      tipo: TipoTransacao.DESPESA,
+      valor: 50,
+    });
+
+    await withAuth(
+      request(app.getHttpServer()).patch(`/contas/${account.id}`),
+      session,
+    )
+      .send({ nome: 'Conta audit events atualizada' })
       .expect(200);
-    const auditA = unwrapSuccess<AuditLogListResponse>(auditAResponse);
+    await withAuth(
+      request(app.getHttpServer()).delete(`/transacoes/${transaction.id}`),
+      session,
+    ).expect(200);
 
-    expect(auditA.total).toBeGreaterThanOrEqual(4);
-    expect(auditA.items).toEqual(
+    const response = await withAuth(
+      request(app.getHttpServer()).get('/audit-logs'),
+      session,
+    )
+      .query({ limit: 30, offset: 0 })
+      .expect(200);
+    const audit = expectApiSuccess<AuditLogListResponse>(response);
+
+    expect(audit.total).toBeGreaterThanOrEqual(5);
+    expect(audit.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          event: 'LOGIN_SUCCESS',
-          module: 'auth',
-          success: true,
-        }),
-        expect.objectContaining({
-          entity: 'categoria',
-          entityId: receitaCategoria.id,
-          event: 'CATEGORIA_CREATED',
-          module: 'categorias',
-        }),
-        expect.objectContaining({
           entity: 'conta',
-          entityId: contaA.id,
+          entityId: account.id,
           event: 'CONTA_CREATED',
           module: 'contas',
         }),
         expect.objectContaining({
           entity: 'transacao',
-          entityId: transacaoA.id,
+          entityId: transaction.id,
           event: 'TRANSACAO_CREATED',
           module: 'transacoes',
+        }),
+        expect.objectContaining({
+          entity: 'conta',
+          entityId: account.id,
+          event: 'CONTA_UPDATED',
+          module: 'contas',
+        }),
+        expect.objectContaining({
+          entity: 'transacao',
+          entityId: transaction.id,
+          event: 'TRANSACAO_SOFT_DELETED',
+          module: 'transacoes',
+        }),
+      ]),
+    );
+    audit.items.forEach((item) => {
+      expectValidIsoTimestamp(item.createdAt);
+    });
+  });
+
+  it('lists only logs from the authenticated user and sanitizes sensitive details', async () => {
+    const ownerSession = await registerAndLoginTestUser(app, {
+      cpf: '39053344705',
+      email: 'audit.owner.e2e@example.com',
+      nome: 'Audit Owner E2E',
+      senha: 'SenhaAuditOwner123',
+    });
+    const otherSession = await registerAndLoginTestUser(app, {
+      cpf: '68199965000',
+      email: 'audit.other.e2e@example.com',
+      nome: 'Audit Other E2E',
+      senha: 'SenhaAuditOther123',
+    });
+
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: ownerSession.email,
+        senha: 'senha-incorreta-audit',
+      })
+      .expect(401);
+
+    const ownerAccount = await createConta(app, ownerSession, {
+      nome: 'Conta audit owner',
+      saldoInicial: 10,
+      tipo: TipoConta.BANCO,
+    });
+    const otherAccount = await createConta(app, otherSession, {
+      nome: 'Conta audit other',
+      saldoInicial: 20,
+      tipo: TipoConta.BANCO,
+    });
+
+    const ownerResponse = await withAuth(
+      request(app.getHttpServer()).get('/audit-logs'),
+      ownerSession,
+    )
+      .query({ limit: 30, offset: 0 })
+      .expect(200);
+    const ownerAudit = expectApiSuccess<AuditLogListResponse>(ownerResponse);
+
+    expect(ownerAudit.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entity: 'conta',
+          entityId: ownerAccount.id,
+          event: 'CONTA_CREATED',
         }),
         expect.objectContaining({
           event: 'LOGIN_FAILED',
@@ -153,100 +196,29 @@ describe('Audit logs (e2e)', () => {
         }),
       ]),
     );
-    expect(JSON.stringify(auditA.items)).not.toContain('senha-incorreta');
-    expect(JSON.stringify(auditA.items)).not.toContain('SenhaForte123');
-    expect(JSON.stringify(auditA.items)).not.toContain(contaB.id);
+    expect(JSON.stringify(ownerAudit.items)).not.toContain(otherAccount.id);
+    expect(JSON.stringify(ownerAudit.items)).not.toContain(
+      'senha-incorreta-audit',
+    );
+    expect(JSON.stringify(ownerAudit.items)).not.toContain(ownerSession.senha);
 
-    const paginatedResponse = await request(app.getHttpServer())
-      .get('/audit-logs')
-      .query({ limit: 1, offset: 0 })
-      .set(bearer(tokenA))
+    const otherResponse = await withAuth(
+      request(app.getHttpServer()).get('/audit-logs'),
+      otherSession,
+    )
+      .query({ limit: 30, offset: 0 })
       .expect(200);
-    const paginated = unwrapSuccess<AuditLogListResponse>(paginatedResponse);
+    const otherAudit = expectApiSuccess<AuditLogListResponse>(otherResponse);
 
-    expect(paginated.total).toBe(auditA.total);
-    expect(paginated.items).toHaveLength(1);
-
-    const auditBResponse = await request(app.getHttpServer())
-      .get('/audit-logs')
-      .query({ limit: 20, offset: 0 })
-      .set(bearer(tokenB))
-      .expect(200);
-    const auditB = unwrapSuccess<AuditLogListResponse>(auditBResponse);
-
-    expect(auditB.items).toEqual(
+    expect(otherAudit.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           entity: 'conta',
-          entityId: contaB.id,
+          entityId: otherAccount.id,
           event: 'CONTA_CREATED',
         }),
       ]),
     );
-    expect(JSON.stringify(auditB.items)).not.toContain(contaA.id);
-    expect(JSON.stringify(auditB.items)).not.toContain(transacaoA.id);
+    expect(JSON.stringify(otherAudit.items)).not.toContain(ownerAccount.id);
   });
-
-  async function registerAndLogin(input: {
-    cpf: string;
-    email: string;
-    nome: string;
-    senha: string;
-  }): Promise<string> {
-    await request(app.getHttpServer())
-      .post('/auth/register')
-      .send(makeRegisterUserPayload(input))
-      .expect(201);
-
-    const loginResponse = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send(
-        makeLoginPayload({
-          email: input.email,
-          senha: input.senha,
-        }),
-      )
-      .expect(200);
-
-    return unwrapSuccess<LoginResponse>(loginResponse).access_token;
-  }
-
-  async function createCategoria(
-    token: string,
-    body: Record<string, unknown>,
-  ): Promise<Identifiable> {
-    const response = await request(app.getHttpServer())
-      .post('/categorias')
-      .set(bearer(token))
-      .send(body)
-      .expect(201);
-
-    return unwrapSuccess<Identifiable>(response);
-  }
-
-  async function createConta(
-    token: string,
-    body: Record<string, unknown>,
-  ): Promise<Identifiable> {
-    const response = await request(app.getHttpServer())
-      .post('/contas')
-      .set(bearer(token))
-      .send(body)
-      .expect(201);
-
-    return unwrapSuccess<Identifiable>(response);
-  }
-
-  async function createTransacao(
-    token: string,
-    body: Record<string, unknown>,
-  ): Promise<Identifiable> {
-    const response = await request(app.getHttpServer())
-      .post('/transacoes')
-      .set(bearer(token))
-      .send(body)
-      .expect(201);
-
-    return unwrapSuccess<Identifiable>(response);
-  }
 });

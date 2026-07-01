@@ -102,10 +102,9 @@ async function ensureDatabaseExists(config: E2eDatabaseConfig): Promise<void> {
   await withDataSource(
     { ...config, database: config.adminDatabase },
     async (dataSource) => {
-      const databaseExists = await dataSource.query(
-        'SELECT 1 FROM pg_database WHERE datname = $1',
-        [config.database],
-      );
+      const databaseExists = await dataSource.query<
+        Array<Record<string, unknown>>
+      >('SELECT 1 FROM pg_database WHERE datname = $1', [config.database]);
 
       if (databaseExists.length === 0) {
         await dataSource.query(

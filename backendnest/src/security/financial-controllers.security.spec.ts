@@ -40,7 +40,8 @@ describe('Financial controllers security', () => {
     TransacoesController,
     TransferenciasController,
   ])('%p is protected by JwtAuthGuard', (controllerClass) => {
-    const guards = Reflect.getMetadata(GUARDS_METADATA, controllerClass) ?? [];
+    const guards = (Reflect.getMetadata(GUARDS_METADATA, controllerClass) ??
+      []) as unknown[];
 
     expect(guards).toContain(JwtAuthGuard);
   });

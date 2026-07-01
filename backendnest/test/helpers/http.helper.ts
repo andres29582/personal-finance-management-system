@@ -1,5 +1,12 @@
 import { Response } from 'supertest';
 
+type ApiSuccessResponse<T> = {
+  success: true;
+  data: T;
+  requestId: string;
+  timestamp: string;
+};
+
 export type Identifiable = {
   id: string;
 };
@@ -11,14 +18,16 @@ export function bearer(token: string): Record<string, string> {
 }
 
 export function unwrapSuccess<T>(response: Response): T {
-  expect(response.body).toEqual(
+  const body = response.body as Partial<ApiSuccessResponse<T>>;
+
+  expect(body).toEqual(
     expect.objectContaining({
       success: true,
-      data: expect.anything(),
-      requestId: expect.any(String),
-      timestamp: expect.any(String),
+      data: expect.anything() as T,
+      requestId: expect.any(String) as string,
+      timestamp: expect.any(String) as string,
     }),
   );
 
-  return response.body.data as T;
+  return body.data as T;
 }
