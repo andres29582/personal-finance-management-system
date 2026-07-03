@@ -23,7 +23,10 @@ Todas as rotas do MVP devem ser autenticadas.
 | `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
 | `PATCH` | `/planejamentos/:id` | Edita dados basicos do planejamento. |
-| `DELETE` | `/planejamentos/:id` | Cancela ou arquiva planejamento conforme regra definida. |
+| `PATCH` | `/planejamentos/:id/fechar` | Fecha planejamento quando nao houver pendencias impeditivas. |
+| `PATCH` | `/planejamentos/:id/arquivar` | Arquiva planejamento sem exclusao fisica. |
+| `PATCH` | `/planejamentos/:id/cancelar` | Cancela planejamento logicamente. |
+| `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
 | `POST` | `/planejamentos/:id/participantes` | Adiciona participante manual. |
 | `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
 | `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
@@ -33,7 +36,7 @@ Todas as rotas do MVP devem ser autenticadas.
 | `PATCH` | `/planejamentos/:id/gastos/:gastoId` | Edita gasto e recalcula divisoes. |
 | `DELETE` | `/planejamentos/:id/gastos/:gastoId` | Cancela gasto logicamente. |
 | `GET` | `/planejamentos/:id/resumo` | Retorna resumo financeiro do planejamento. |
-| `GET` | `/planejamentos/:id/acertos` | Lista acertos calculados ou persistidos. |
+| `GET` | `/planejamentos/:id/acertos` | Lista acertos oficiais persistidos. |
 | `PATCH` | `/planejamentos/:id/acertos/:acertoId/pagar` | Marca acerto como pago. |
 | `PATCH` | `/planejamentos/:id/acertos/:acertoId/reabrir` | Reabre acerto pago para pendente. |
 | `PATCH` | `/planejamentos/:id/acertos/:acertoId/cancelar` | Cancela acerto pago mantendo historico. |
@@ -87,6 +90,24 @@ Campos editaveis no MVP:
 - `tipo`, se nao houver restricao de dominio;
 - `mesReferencia`;
 - `status`, para transicoes permitidas.
+
+### Alterar status do planejamento
+
+Endpoints preferenciais:
+
+```text
+PATCH /planejamentos/:id/fechar
+PATCH /planejamentos/:id/arquivar
+PATCH /planejamentos/:id/cancelar
+```
+
+Regras conceituais:
+
+- `fechar` deve bloquear fechamento enquanto houver gastos `PENDENTE_REVISAO`;
+- `arquivar` preserva historico e nao exclui registros;
+- `cancelar` e cancelamento logico;
+- se `DELETE /planejamentos/:id` for mantido, ele deve ser tratado como
+  cancelamento logico, nunca exclusao fisica.
 
 ### Adicionar participante
 
@@ -187,10 +208,16 @@ Resposta conceitual:
 
 Ao alterar `valorCentavos`, `pagoPorParticipanteId` ou
 `participantesDivisao`, o backend deve recalcular divisoes, saldos e acertos.
+Se existirem acertos `PAGO`, eles devem permanecer como historico financeiro, e
+novos acertos `PENDENTE` devem representar apenas a compensacao restante.
 
 ## Endpoint de resumo
 
 `GET /planejamentos/:id/resumo`
+
+O resumo oficial deve considerar gastos ativos, divisoes ativas e acertos pagos.
+Gastos `PENDENTE_REVISAO` nao devem gerar acertos oficiais; eles podem aparecer
+em totais provisorios separados.
 
 Resposta conceitual:
 
@@ -235,6 +262,11 @@ Resposta conceitual:
 ## Endpoint de acertos
 
 `GET /planejamentos/:id/acertos`
+
+Consulta de acertos nao deve alterar o banco de dados. Os acertos oficiais devem
+ter sido materializados por operacoes de escrita anteriores. Gastos
+`PENDENTE_REVISAO` nao devem gerar acertos oficiais ate serem revisados e
+confirmados.
 
 Resposta conceitual:
 

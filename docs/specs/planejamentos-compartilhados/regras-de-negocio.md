@@ -22,7 +22,11 @@
 | RN-PLAN-05 | A descricao e opcional. |
 | RN-PLAN-06 | O mes de referencia e opcional para planejamentos gerais e recomendado para planejamentos mensais de casa compartilhada. |
 | RN-PLAN-07 | Planejamentos `CANCELADO` ou `ARQUIVADO` nao devem aceitar novos gastos no MVP. |
-| RN-PLAN-08 | Planejamentos fechados podem bloquear novas alteracoes financeiras, conforme regra de fechamento definida na implementacao. |
+| RN-PLAN-08 | Planejamentos fechados devem bloquear novas alteracoes financeiras, salvo reabertura futura explicitamente definida. |
+| RN-PLAN-09 | Fechamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/fechar`. |
+| RN-PLAN-10 | Arquivamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/arquivar`. |
+| RN-PLAN-11 | Cancelamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/cancelar`; se `DELETE /planejamentos/:id` for mantido, deve representar cancelamento logico. |
+| RN-PLAN-12 | Planejamento com gasto `PENDENTE_REVISAO` nao pode ser fechado. |
 
 ## Regras de participantes
 
@@ -38,6 +42,7 @@
 | RN-PART-08 | Participante removido deve continuar aparecendo no historico de gastos, divisoes e acertos ja existentes. |
 | RN-PART-09 | Nao deve haver exclusao fisica de participante com vinculo historico. |
 | RN-PART-10 | O MVP nao exige que participante tenha conta no sistema. |
+| RN-PART-11 | Participante removido com pendencia financeira deve continuar aparecendo no resumo e nos acertos ate quitacao ou compensacao. |
 
 ## Regras de convidados futuros
 
@@ -69,6 +74,7 @@
 | RN-GASTO-13 | Alterar valor, pagador ou participantes da divisao exige recalculo das divisoes. |
 | RN-GASTO-14 | Alteracoes financeiras devem invalidar ou recalcular saldos e acertos pendentes. |
 | RN-GASTO-15 | Gasto com status `PENDENTE_REVISAO` deve aparecer como alerta para o criador antes de fechamento ou confirmacao mensal. |
+| RN-GASTO-16 | Gasto com status `PENDENTE_REVISAO` nao deve gerar acertos oficiais ate ser revisado e confirmado. |
 
 ## Regras de comprovante opcional
 
@@ -91,6 +97,7 @@
 | RN-DIV-05 | Participantes removidos podem permanecer em divisoes historicas existentes. |
 | RN-DIV-06 | Editar participantes da divisao deve substituir o conjunto anterior de divisoes do gasto. |
 | RN-DIV-07 | Divisao por porcentagem ou valor manual fica fora do MVP. |
+| RN-DIV-08 | No MVP, nao deve ser permitida divisao quando `valorCentavos` for menor que a quantidade de participantes selecionados. |
 
 ## Regras de centavos e arredondamento
 
@@ -103,6 +110,7 @@
 | RN-CENT-05 | A ordem de distribuicao deve ser deterministica. |
 | RN-CENT-06 | A ordem recomendada e a ordem enviada no payload, persistida na divisao, ou uma ordenacao estavel por data de inclusao e identificador. |
 | RN-CENT-07 | O mesmo gasto com os mesmos participantes e mesma ordem deve gerar sempre a mesma divisao. |
+| RN-CENT-08 | Cada participante selecionado deve receber pelo menos 1 centavo de responsabilidade no MVP. |
 
 Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 
@@ -119,13 +127,15 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | --- | --- |
 | RN-SALDO-01 | Total pago por participante e a soma dos gastos ativos em que ele aparece como pagador. |
 | RN-SALDO-02 | Total devido por participante e a soma das divisoes de gastos ativos em que ele aparece como participante de divisao. |
-| RN-SALDO-03 | Saldo final deve ser `totalPagoCentavos - totalDevidoCentavos`. |
+| RN-SALDO-03 | Saldo bruto deve ser `totalPagoCentavos - totalDevidoCentavos`. |
 | RN-SALDO-04 | Saldo positivo indica valor a receber. |
 | RN-SALDO-05 | Saldo negativo indica valor a pagar. |
 | RN-SALDO-06 | Saldo zero indica participante quitado. |
 | RN-SALDO-07 | A soma dos saldos finais de todos os participantes deve ser zero. |
 | RN-SALDO-08 | Gastos cancelados devem ser ignorados em total pago, total devido e saldo. |
-| RN-SALDO-09 | O resumo deve considerar acertos pagos separadamente quando a tela precisar exibir pendencias restantes. |
+| RN-SALDO-09 | O resumo financeiro oficial deve considerar gastos ativos, divisoes ativas e acertos pagos. |
+| RN-SALDO-10 | Acertos pendentes devem ser calculados sobre a pendencia restante apos considerar acertos pagos. |
+| RN-SALDO-11 | Gastos `PENDENTE_REVISAO` podem aparecer em totais provisorios separados, mas nao entram em acertos oficiais. |
 
 ## Regras de acertos minimos
 
@@ -141,6 +151,10 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-ACERTO-08 | A soma dos acertos de um recebedor deve ser igual ao valor que ele deve receber, descontados acertos ja pagos quando aplicavel. |
 | RN-ACERTO-09 | A ordem de pareamento deve ser deterministica para evitar resultados instaveis entre chamadas. |
 | RN-ACERTO-10 | Acertos com valor zero nao devem ser criados ou exibidos. |
+| RN-ACERTO-11 | Acertos oficiais devem ser materializados e persistidos apos cada alteracao financeira relevante. |
+| RN-ACERTO-12 | Acertos `PENDENTE` podem ser recalculados e substituidos. |
+| RN-ACERTO-13 | Acertos `PAGO` nao devem ser apagados automaticamente. |
+| RN-ACERTO-14 | Consultas `GET` de resumo ou acertos nao devem alterar o banco de dados. |
 
 ## Regras para marcar acerto como pago
 
@@ -165,6 +179,8 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-REABRIR-05 | Reabertura de acerto deve preservar historico e auditoria. |
 | RN-REABRIR-06 | A operacao deve registrar quem executou a acao e quando. |
 | RN-REABRIR-07 | Se gastos forem editados apos um acerto pago, a implementacao deve preservar o acerto historico e recalcular pendencias restantes de forma explicita. |
+| RN-REABRIR-08 | Cancelar ou reabrir acerto pago deve remover o efeito financeiro daquele pagamento. |
+| RN-REABRIR-09 | Apos cancelar ou reabrir acerto pago, o sistema deve recalcular os acertos pendentes. |
 
 ## Regras de edicao e cancelamento de gastos
 
@@ -179,6 +195,8 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-EDIT-07 | Cancelar gasto nao deve apagar suas divisoes historicas. |
 | RN-EDIT-08 | Gasto cancelado deve sair de resumo, saldos e acertos. |
 | RN-EDIT-09 | Gasto cancelado deve continuar visivel no historico do planejamento. |
+| RN-EDIT-10 | Acertos pagos devem permanecer como historico financeiro apos edicao ou cancelamento de gasto. |
+| RN-EDIT-11 | Se a edicao ou cancelamento gerar nova pendencia, novos acertos `PENDENTE` devem ser criados para compensacao. |
 
 ## Regras de replicacao mensal
 
@@ -217,7 +235,9 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-REV-03 | O sistema deve informar o mes de referencia do valor replicado. |
 | RN-REV-04 | O sistema deve informar quando o valor do gasto foi alterado pela ultima vez, quando esse dado existir. |
 | RN-REV-05 | Ao revisar e confirmar o valor mensal, o gasto pode passar para `ATIVO`. |
-| RN-REV-06 | Enquanto estiver `PENDENTE_REVISAO`, a implementacao deve definir se o gasto entra nos calculos ou se bloqueia fechamento; a recomendacao para o MVP e permitir calculo com alerta explicito. |
+| RN-REV-06 | Enquanto estiver `PENDENTE_REVISAO`, o gasto nao deve entrar em acertos oficiais. |
+| RN-REV-07 | Gastos `PENDENTE_REVISAO` podem aparecer em totais provisorios separados. |
+| RN-REV-08 | A existencia de gasto `PENDENTE_REVISAO` deve bloquear fechamento do planejamento. |
 
 ## Regras de auditoria
 

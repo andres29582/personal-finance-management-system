@@ -34,6 +34,7 @@ Casos obrigatorios:
 | Sobra de 2 centavos | `10001 / 3` | `3334`, `3334`, `3333`. |
 | Um participante | `12345 / 1` | `12345`. |
 | Valor invalido | `0` | erro de dominio ou validacao. |
+| Valor menor que participantes | `2 / 3` | erro de dominio ou validacao. |
 | Sem participantes | lista vazia | erro de dominio ou validacao. |
 | Ordem deterministica | mesma entrada repetida | mesma saida repetida. |
 
@@ -85,6 +86,8 @@ Cobertura minima:
 - cancelar gasto e remove-lo dos calculos;
 - calcular resumo financeiro;
 - calcular acertos minimos;
+- materializar acertos pendentes apos alteracoes financeiras relevantes;
+- garantir que consultas `GET` de resumo e acertos nao alterem o banco de dados;
 - marcar acerto como pago;
 - reabrir acerto pago;
 - replicar planejamento mensal;
@@ -111,7 +114,10 @@ Casos por endpoint:
 | `GET /planejamentos` | lista planejamentos do usuario. |
 | `GET /planejamentos/:id` | consulta detalhes. |
 | `PATCH /planejamentos/:id` | edita dados basicos. |
-| `DELETE /planejamentos/:id` | cancela ou arquiva logicamente. |
+| `PATCH /planejamentos/:id/fechar` | fecha planejamento sem pendencias impeditivas. |
+| `PATCH /planejamentos/:id/arquivar` | arquiva logicamente. |
+| `PATCH /planejamentos/:id/cancelar` | cancela logicamente. |
+| `DELETE /planejamentos/:id` | se existir, cancela logicamente e nunca exclui fisicamente. |
 | `POST /planejamentos/:id/participantes` | adiciona participante. |
 | `GET /planejamentos/:id/participantes` | lista participantes. |
 | `PATCH /planejamentos/:id/participantes/:participanteId` | edita participante. |
@@ -144,9 +150,10 @@ Fluxo minimo recomendado:
 9. Usuario A reabre acerto.
 10. Usuario A marca outro acerto como pago e cancela esse acerto.
 11. Usuario A cancela gasto.
-12. Usuario A valida novo resumo sem o gasto cancelado.
+12. Usuario A valida novo resumo sem o gasto cancelado e com acertos pagos preservados.
 13. Usuario A replica planejamento mensal.
-14. Usuario B tenta acessar recursos do usuario A e recebe erro.
+14. Usuario A valida que gastos `PENDENTE_REVISAO` nao geram acertos oficiais.
+15. Usuario B tenta acessar recursos do usuario A e recebe erro.
 
 ## Casos obrigatorios de isolamento de dados
 
@@ -166,10 +173,8 @@ Fluxo minimo recomendado:
 
 - Dividir `10000` entre 3 participantes deve gerar `3334`, `3333`, `3333`.
 - Dividir `10001` entre 3 participantes deve gerar `3334`, `3334`, `3333`.
-- Dividir `1` entre 3 participantes deve gerar `1`, `0`, `0` apenas se o
-  dominio permitir valor devido zero por participante; recomendacao: permitir
-  somente quando o valor total for positivo e documentar acertos zero como nao
-  exibidos.
+- Dividir `1` entre 3 participantes deve ser rejeitado no MVP.
+- Dividir valor menor que a quantidade de participantes deve ser rejeitado.
 - Repetir o mesmo payload deve gerar a mesma distribuicao.
 - Alterar a ordem dos participantes deve alterar apenas a distribuicao da sobra,
   nao a soma total.
@@ -183,8 +188,8 @@ Fluxo minimo recomendado:
 - Editar descricao nao altera calculos financeiros.
 - Editar comprovante opcional nao altera calculos financeiros.
 - Editar gasto com acertos pendentes recalcula acertos pendentes.
-- Editar gasto apos acerto pago preserva historico e recalcula pendencias
-  restantes conforme regra implementada.
+- Editar gasto apos acerto pago preserva historico financeiro e cria novos
+  acertos pendentes para compensacao quando houver nova pendencia.
 
 ## Casos de cancelamento de gasto
 
@@ -195,6 +200,7 @@ Fluxo minimo recomendado:
 - Pagador do gasto cancelado nao recebe total pago por esse gasto.
 - Acertos sao recalculados apos cancelamento.
 - Cancelar gasto deve registrar auditoria.
+- Acertos pagos permanecem como historico financeiro apos cancelamento de gasto.
 
 ## Casos de acertos minimos
 
@@ -206,6 +212,9 @@ Fluxo minimo recomendado:
 - Soma dos acertos por devedor fecha com sua divida.
 - Soma dos acertos por recebedor fecha com seu credito.
 - Ordem de retorno e deterministica.
+- Acertos `PENDENTE` sao substituidos apos novo recalculo.
+- Acertos `PAGO` nao sao apagados automaticamente apos novo recalculo.
+- Consulta `GET /planejamentos/:id/acertos` nao cria nem altera acertos.
 
 ## Casos de replicacao mensal
 
@@ -223,6 +232,8 @@ Fluxo minimo recomendado:
 
 - Gasto variavel replicado nasce `PENDENTE_REVISAO`.
 - Gasto pendente de revisao aparece no resumo ou endpoint dedicado.
+- Gasto pendente de revisao nao gera acertos oficiais.
+- Gasto pendente de revisao bloqueia fechamento do planejamento.
 - Revisar valor recalcula divisao.
 - Confirmar revisao altera status para `ATIVO`.
 - Sistema informa mes de origem do valor replicado.

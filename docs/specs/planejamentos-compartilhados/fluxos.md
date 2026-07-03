@@ -90,25 +90,31 @@ Total: 10000
 
 ## Fluxo de calculo de acertos
 
-1. Buscar gastos ativos do planejamento.
+Este fluxo deve ser executado por operacoes de escrita apos alteracoes
+financeiras relevantes. Consultas `GET` devem apenas ler os acertos oficiais ja
+materializados.
+
+1. Buscar gastos ativos e revisados do planejamento.
 2. Somar total pago por participante.
 3. Somar total devido por participante com base nas divisoes dos gastos ativos.
-4. Calcular saldo final: `totalPagoCentavos - totalDevidoCentavos`.
-5. Separar participantes com saldo negativo como devedores.
-6. Separar participantes com saldo positivo como recebedores.
-7. Ordenar devedores e recebedores de forma deterministica.
-8. Parear devedor e recebedor usando o menor valor entre divida restante e
+4. Calcular saldo bruto: `totalPagoCentavos - totalDevidoCentavos`.
+5. Aplicar acertos `PAGO` para obter a pendencia restante.
+6. Substituir acertos `PENDENTE` antigos pelos novos acertos calculados.
+7. Separar participantes com saldo restante negativo como devedores.
+8. Separar participantes com saldo restante positivo como recebedores.
+9. Ordenar devedores e recebedores de forma deterministica.
+10. Parear devedor e recebedor usando o menor valor entre divida restante e
    credito restante.
-9. Criar acerto conceitual com devedor, recebedor e valor.
-10. Reduzir divida e credito restantes.
-11. Repetir ate todos os saldos ficarem zerados.
-12. Ignorar acertos com valor zero.
+11. Materializar acerto `PENDENTE` com devedor, recebedor e valor.
+12. Reduzir divida e credito restantes.
+13. Repetir ate todos os saldos ficarem zerados.
+14. Ignorar acertos com valor zero.
 
 Resultado esperado:
 
 - menor quantidade pratica de pagamentos entre participantes;
-- soma dos acertos a pagar equivale aos saldos negativos;
-- soma dos acertos a receber equivale aos saldos positivos;
+- soma dos acertos pendentes a pagar equivale aos saldos negativos restantes;
+- soma dos acertos pendentes a receber equivale aos saldos positivos restantes;
 - resultado deterministico entre chamadas.
 
 ## Fluxo de marcacao de acerto como pago
@@ -137,9 +143,11 @@ Resultado esperado:
 5. Para reabertura, acerto `PAGO` volta para `PENDENTE`.
 6. Para cancelamento, acerto recebe status `CANCELADO` quando esse fluxo for
    usado.
-7. Backend registra data/hora da acao.
-8. Backend registra auditoria.
-9. Backend retorna acerto atualizado.
+7. Backend remove o efeito financeiro daquele pagamento.
+8. Backend recalcula os acertos pendentes.
+9. Backend registra data/hora da acao.
+10. Backend registra auditoria.
+11. Backend retorna acerto atualizado.
 
 Resultado esperado:
 
@@ -204,8 +212,8 @@ Resultado esperado:
 
 - gastos variaveis nao passam despercebidos;
 - mes de referencia e ultima alteracao ficam rastreaveis;
-- resumo e acertos usam valores revisados ou exibem alerta claro quando ainda
-  houver pendencia.
+- resumo oficial e acertos usam apenas valores revisados;
+- gastos ainda pendentes de revisao aparecem em alerta ou totais provisorios.
 
 ## Exemplo pratico de festa
 

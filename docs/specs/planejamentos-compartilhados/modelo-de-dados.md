@@ -158,7 +158,7 @@ saldos do planejamento.
 | `valorCentavos` | integer | Sim | Valor do acerto em centavos. |
 | `status` | enum `StatusAcerto` | Sim | No MVP: `PENDENTE` e `PAGO`; futuros: `CONFIRMADO`, `CANCELADO`. |
 | `versaoCalculo` | integer | Nao | Ajuda a rastrear recalculos. |
-| `calculadoEm` | datetime | Sim | Momento em que o acerto foi calculado ou materializado. |
+| `calculadoEm` | datetime | Sim | Momento em que o acerto foi calculado e materializado. |
 | `pagoEm` | datetime | Nao | Momento em que foi marcado como pago. |
 | `reabertoEm` | datetime | Nao | Momento da ultima reabertura. |
 | `canceladoEm` | datetime | Nao | Momento do cancelamento. |
@@ -174,9 +174,11 @@ Relacionamentos:
 
 Observacoes:
 
-- Acertos podem ser calculados sob demanda ou materializados. Como o MVP exige
-  marcar acerto como pago, a implementacao precisa persistir ao menos os acertos
-  pagos e o historico de alteracoes.
+- Acertos oficiais devem ser materializados e persistidos apos cada alteracao
+  financeira relevante.
+- Acertos `PENDENTE` podem ser recalculados e substituidos.
+- Acertos `PAGO` nao devem ser apagados automaticamente.
+- Consultas `GET` de resumo e acertos nao devem alterar o banco de dados.
 - Ao editar gastos depois de acertos pagos, a implementacao deve preservar o
   que ja foi pago e recalcular pendencias restantes de forma auditavel.
 
