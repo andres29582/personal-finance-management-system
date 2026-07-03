@@ -49,6 +49,7 @@ Validar DTOs com o mesmo comportamento do `ValidationPipe` global:
 - `UpdateGastoPlanejamentoDto`;
 - `PagarAcertoPlanejamentoDto`;
 - `ReabrirAcertoPlanejamentoDto`;
+- `CancelarAcertoPlanejamentoDto`;
 - `ReplicarPlanejamentoDto`;
 - DTOs de filtros, se existirem.
 
@@ -123,6 +124,7 @@ Casos por endpoint:
 | `GET /planejamentos/:id/acertos` | retorna acertos. |
 | `PATCH /planejamentos/:id/acertos/:acertoId/pagar` | marca acerto como pago. |
 | `PATCH /planejamentos/:id/acertos/:acertoId/reabrir` | reabre acerto. |
+| `PATCH /planejamentos/:id/acertos/:acertoId/cancelar` | cancela acerto. |
 | `POST /planejamentos/:id/replicar` | replica planejamento mensal. |
 
 ## Testes E2E
@@ -140,10 +142,11 @@ Fluxo minimo recomendado:
 7. Usuario A consulta acertos.
 8. Usuario A marca acerto como pago.
 9. Usuario A reabre acerto.
-10. Usuario A cancela gasto.
-11. Usuario A valida novo resumo sem o gasto cancelado.
-12. Usuario A replica planejamento mensal.
-13. Usuario B tenta acessar recursos do usuario A e recebe erro.
+10. Usuario A marca outro acerto como pago e cancela esse acerto.
+11. Usuario A cancela gasto.
+12. Usuario A valida novo resumo sem o gasto cancelado.
+13. Usuario A replica planejamento mensal.
+14. Usuario B tenta acessar recursos do usuario A e recebe erro.
 
 ## Casos obrigatorios de isolamento de dados
 

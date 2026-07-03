@@ -36,6 +36,7 @@ Todas as rotas do MVP devem ser autenticadas.
 | `GET` | `/planejamentos/:id/acertos` | Lista acertos calculados ou persistidos. |
 | `PATCH` | `/planejamentos/:id/acertos/:acertoId/pagar` | Marca acerto como pago. |
 | `PATCH` | `/planejamentos/:id/acertos/:acertoId/reabrir` | Reabre acerto pago para pendente. |
+| `PATCH` | `/planejamentos/:id/acertos/:acertoId/cancelar` | Cancela acerto pago mantendo historico. |
 | `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
 
 ## Payloads conceituais
@@ -297,6 +298,31 @@ Resposta conceitual:
   "reabertoEm": "2026-07-03T10:40:00.000Z"
 }
 ```
+
+### Cancelar acerto
+
+`PATCH /planejamentos/:id/acertos/:acertoId/cancelar`
+
+Payload opcional:
+
+```json
+{
+  "motivo": "Acerto cancelado apos revisao do planejamento"
+}
+```
+
+Resposta conceitual:
+
+```json
+{
+  "id": "uuid",
+  "status": "CANCELADO",
+  "canceladoEm": "2026-07-03T10:45:00.000Z"
+}
+```
+
+O cancelamento deve preservar historico e auditoria. No MVP, ele nao deve criar,
+alterar ou cancelar transacoes pessoais automaticamente.
 
 ## Endpoint de replicacao mensal
 
