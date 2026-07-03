@@ -31,6 +31,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 import { CepModule } from './cep/cep.module';
 import { PrevisoesModule } from './previsoes/previsoes.module';
 import { AuditLogsModule } from './logs/audit-logs.module';
+import { PlanejamentosModule } from './planejamentos/planejamentos.module';
 import { PasswordResetToken } from './auth/entities/password-reset-token.entity';
 import { User } from './users/entities/user.entity';
 import { AuthSession } from './auth/entities/auth-session.entity';
@@ -43,6 +44,11 @@ import { PagoDivida } from './pagos-divida/entities/pago-divida.entity';
 import { Meta } from './metas/entities/meta.entity';
 import { Alerta } from './alertas/entities/alerta.entity';
 import { Orcamento } from './orcamentos/entities/orcamento.entity';
+import { Planejamento } from './planejamentos/entities/planejamento.entity';
+import { ParticipantePlanejamento } from './planejamentos/entities/participante-planejamento.entity';
+import { GastoPlanejamento } from './planejamentos/entities/gasto-planejamento.entity';
+import { DivisaoGasto } from './planejamentos/entities/divisao-gasto.entity';
+import { AcertoPlanejamento } from './planejamentos/entities/acerto-planejamento.entity';
 
 @Module({
   imports: [
@@ -73,6 +79,11 @@ import { Orcamento } from './orcamentos/entities/orcamento.entity';
           Meta,
           Alerta,
           Orcamento,
+          Planejamento,
+          ParticipantePlanejamento,
+          GastoPlanejamento,
+          DivisaoGasto,
+          AcertoPlanejamento,
         ],
         synchronize: false,
       }),
@@ -108,6 +119,7 @@ import { Orcamento } from './orcamentos/entities/orcamento.entity';
     OrcamentosModule,
     RelatoriosModule,
     PrevisoesModule,
+    PlanejamentosModule,
     TransferenciasModule,
     DividasModule,
     PagosDividaModule,

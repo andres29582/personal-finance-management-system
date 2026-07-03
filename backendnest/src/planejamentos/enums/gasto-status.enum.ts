@@ -1,0 +1,5 @@
+export enum GastoStatus {
+  ATIVO = 'ATIVO',
+  CANCELADO = 'CANCELADO',
+  PENDENTE_REVISAO = 'PENDENTE_REVISAO',
+}
