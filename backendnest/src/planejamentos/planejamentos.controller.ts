@@ -110,4 +110,15 @@ export class PlanejamentosController {
       req.user.id,
     );
   }
+
+  @Post(':planejamentoId/acertos/sincronizar')
+  sincronizarAcertos(
+    @Param() params: FindAcertosPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.sincronizarAcertos(
+      params.planejamentoId,
+      req.user.id,
+    );
+  }
 }

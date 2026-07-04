@@ -194,6 +194,7 @@ describe('Financial controllers security', () => {
       findGasto: jest.fn().mockResolvedValue({ id: 'gasto-1' }),
       findGastos: jest.fn().mockResolvedValue([{ id: 'gasto-1' }]),
       findOne: jest.fn().mockResolvedValue({ id: 'planejamento-1' }),
+      sincronizarAcertos: jest.fn().mockResolvedValue([]),
     };
     const controller = new PlanejamentosController(
       service as unknown as PlanejamentosService,
@@ -218,6 +219,10 @@ describe('Financial controllers security', () => {
       req,
     );
     await controller.findAcertos({ planejamentoId: 'planejamento-1' }, req);
+    await controller.sincronizarAcertos(
+      { planejamentoId: 'planejamento-1' },
+      req,
+    );
 
     expect(service.create).toHaveBeenCalledWith(req.user, dto);
     expect(service.findOne).toHaveBeenCalledWith('planejamento-1', 'user-1');
@@ -238,6 +243,10 @@ describe('Financial controllers security', () => {
       'user-1',
     );
     expect(service.findAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(service.sincronizarAcertos).toHaveBeenCalledWith(
       'planejamento-1',
       'user-1',
     );

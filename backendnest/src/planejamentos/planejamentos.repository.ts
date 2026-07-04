@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, FindOptionsWhere, IsNull, Repository } from 'typeorm';
+import {
+  DataSource,
+  DeepPartial,
+  FindOptionsWhere,
+  IsNull,
+  Repository,
+} from 'typeorm';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
@@ -31,7 +37,25 @@ export class PlanejamentosRepository {
     private readonly divisaoRepository: Repository<DivisaoGasto>,
     @InjectRepository(AcertoPlanejamento)
     private readonly acertoRepository: Repository<AcertoPlanejamento>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async executarEmTransacao<T>(
+    operacao: (repository: PlanejamentosRepository) => Promise<T>,
+  ): Promise<T> {
+    return this.dataSource.transaction((manager) =>
+      operacao(
+        new PlanejamentosRepository(
+          manager.getRepository(Planejamento),
+          manager.getRepository(ParticipantePlanejamento),
+          manager.getRepository(GastoPlanejamento),
+          manager.getRepository(DivisaoGasto),
+          manager.getRepository(AcertoPlanejamento),
+          this.dataSource,
+        ),
+      ),
+    );
+  }
 
   async buscarPorIdEUsuarioCriador(
     id: string,

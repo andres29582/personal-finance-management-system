@@ -20,6 +20,7 @@ describe('PlanejamentosController', () => {
       | 'findGasto'
       | 'findGastos'
       | 'findOne'
+      | 'sincronizarAcertos'
     >
   >;
 
@@ -42,6 +43,7 @@ describe('PlanejamentosController', () => {
       findGasto: jest.fn(),
       findGastos: jest.fn(),
       findOne: jest.fn(),
+      sincronizarAcertos: jest.fn(),
     };
 
     controller = new PlanejamentosController(
@@ -202,6 +204,31 @@ describe('PlanejamentosController', () => {
         devedorParticipanteId: 'participante-2',
         recebedorParticipanteId: 'participante-1',
         valorCentavos: 5000,
+      },
+    ]);
+  });
+
+  it('delegates sincronizarAcertos using planejamento route id and authenticated user id', async () => {
+    planejamentosService.sincronizarAcertos.mockResolvedValue([
+      {
+        id: 'acerto-1',
+        status: 'PENDENTE',
+      },
+    ] as never);
+
+    const result = await controller.sincronizarAcertos(
+      { planejamentoId: 'planejamento-1' },
+      request,
+    );
+
+    expect(planejamentosService.sincronizarAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toEqual([
+      {
+        id: 'acerto-1',
+        status: 'PENDENTE',
       },
     ]);
   });

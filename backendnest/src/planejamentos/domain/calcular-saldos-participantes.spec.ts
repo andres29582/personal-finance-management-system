@@ -117,6 +117,40 @@ describe('calcularSaldosParticipantes', () => {
     ]);
   });
 
+  it('considera acertos confirmados como liquidados no saldo aberto restante', () => {
+    const acertos: AcertoPlanejamentoCalculo[] = [
+      {
+        devedorParticipanteId: 'joao',
+        recebedorParticipanteId: 'andres',
+        valorCentavos: 5000,
+        status: 'CONFIRMADO',
+      },
+    ];
+
+    const saldos = calcularSaldosParticipantes(
+      participantes,
+      criarGastosExemplo(),
+      acertos,
+    );
+
+    expect(saldos).toContainEqual(
+      expect.objectContaining({
+        participanteId: 'andres',
+        saldoAbertoCentavos: 0,
+        totalRecebidoEmAcertosCentavos: 5000,
+        statusFinanceiro: 'QUITADO',
+      }),
+    );
+    expect(saldos).toContainEqual(
+      expect.objectContaining({
+        participanteId: 'joao',
+        saldoAbertoCentavos: 0,
+        totalPagoEmAcertosCentavos: 5000,
+        statusFinanceiro: 'QUITADO',
+      }),
+    );
+  });
+
   function criarGastosExemplo(): GastoPlanejamentoCalculo[] {
     return [
       criarGasto('bebidas', 'andres', 30000),

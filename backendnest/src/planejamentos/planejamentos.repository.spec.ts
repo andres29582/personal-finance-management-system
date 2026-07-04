@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
@@ -19,6 +19,7 @@ describe('PlanejamentosRepository', () => {
   let gastoRepository: RepositoryMock<GastoPlanejamento>;
   let divisaoRepository: RepositoryMock<DivisaoGasto>;
   let acertoRepository: RepositoryMock<AcertoPlanejamento>;
+  let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
   let repository: PlanejamentosRepository;
 
   beforeEach(() => {
@@ -27,6 +28,9 @@ describe('PlanejamentosRepository', () => {
     gastoRepository = criarRepositoryMock<GastoPlanejamento>();
     divisaoRepository = criarRepositoryMock<DivisaoGasto>();
     acertoRepository = criarRepositoryMock<AcertoPlanejamento>();
+    dataSource = {
+      transaction: jest.fn(),
+    };
 
     repository = new PlanejamentosRepository(
       comoRepositoryTypeOrm(planejamentoRepository),
@@ -34,7 +38,56 @@ describe('PlanejamentosRepository', () => {
       comoRepositoryTypeOrm(gastoRepository),
       comoRepositoryTypeOrm(divisaoRepository),
       comoRepositoryTypeOrm(acertoRepository),
+      dataSource as unknown as DataSource,
     );
+  });
+
+  it('executa operacoes compostas em transacao usando repositories do manager', async () => {
+    const managerPlanejamentoRepository = criarRepositoryMock<Planejamento>();
+    const managerParticipanteRepository =
+      criarRepositoryMock<ParticipantePlanejamento>();
+    const managerGastoRepository = criarRepositoryMock<GastoPlanejamento>();
+    const managerDivisaoRepository = criarRepositoryMock<DivisaoGasto>();
+    const managerAcertoRepository = criarRepositoryMock<AcertoPlanejamento>();
+    const manager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === Planejamento) {
+          return comoRepositoryTypeOrm(managerPlanejamentoRepository);
+        }
+
+        if (entity === ParticipantePlanejamento) {
+          return comoRepositoryTypeOrm(managerParticipanteRepository);
+        }
+
+        if (entity === GastoPlanejamento) {
+          return comoRepositoryTypeOrm(managerGastoRepository);
+        }
+
+        if (entity === DivisaoGasto) {
+          return comoRepositoryTypeOrm(managerDivisaoRepository);
+        }
+
+        return comoRepositoryTypeOrm(managerAcertoRepository);
+      }),
+    };
+    dataSource.transaction.mockImplementation(
+      (callback: (entityManager: typeof manager) => Promise<Planejamento>) =>
+        callback(manager),
+    );
+    managerPlanejamentoRepository.save.mockResolvedValue({
+      id: 'planejamento-transacao',
+    } as Planejamento);
+
+    const result = await repository.executarEmTransacao((transacional) =>
+      transacional.salvarPlanejamento({ id: 'planejamento-transacao' }),
+    );
+
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(manager.getRepository).toHaveBeenCalledWith(Planejamento);
+    expect(managerPlanejamentoRepository.save).toHaveBeenCalledWith({
+      id: 'planejamento-transacao',
+    });
+    expect(result).toEqual({ id: 'planejamento-transacao' });
   });
 
   it('busca planejamento por id sempre com usuario criador e sem removidos logicamente', async () => {

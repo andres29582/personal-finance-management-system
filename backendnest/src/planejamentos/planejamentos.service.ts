@@ -19,6 +19,7 @@ import {
   PlanejamentoDominioError,
 } from './domain/types';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
+import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
 import {
@@ -58,24 +59,75 @@ export class PlanejamentosService {
   ): Promise<Planejamento> {
     this.validarPeriodo(dto);
 
-    const planejamento = await this.planejamentosRepository.salvarPlanejamento({
-      id: randomUUID(),
-      usuarioCriadorId: usuario.id,
-      nome: dto.nome,
-      descricao: dto.descricao ?? null,
-      tipo: dto.tipo,
-      status: PlanejamentoStatus.ABERTO,
-      dataInicio: dto.dataInicio ?? null,
-      dataFim: dto.dataFim ?? null,
-      deletedAt: null,
-    });
-
-    await this.criarParticipanteProprietarioSeNecessario(
-      planejamento.id,
-      usuario,
+    const planejamento = await this.planejamentosRepository.executarEmTransacao(
+      (repository) =>
+        this.criarPlanejamentoComProprietario(repository, usuario, dto),
     );
 
     return this.findOne(planejamento.id, usuario.id);
+  }
+
+  async sincronizarAcertos(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<AcertoPlanejamento[]> {
+    const planejamento = await this.buscarPlanejamentoParaAcertos(
+      planejamentoId,
+      usuarioId,
+    );
+    const participantesAtivos = this.listarParticipantesAtivos(planejamento);
+    const participantesPorId =
+      this.mapearParticipantesPorId(participantesAtivos);
+    const sugestoes = this.calcularAcertosPersistidos(
+      planejamento,
+      participantesAtivos.map((participante) => participante.id),
+    );
+    const acertosPendentesExistentes =
+      this.filtrarAcertosPendentes(planejamento);
+    const novosAcertos = sugestoes
+      .filter(
+        (sugestao) =>
+          !this.existeAcertoPendenteEquivalente(
+            sugestao,
+            acertosPendentesExistentes,
+          ),
+      )
+      .map((sugestao) => {
+        this.assertParticipanteIdAtivo(
+          participantesPorId,
+          sugestao.devedorParticipanteId,
+          'PLANEJAMENTO_ACERTO_DEVEDOR_INVALIDO',
+          'O devedor do acerto precisa ser participante ativo do planejamento.',
+        );
+        this.assertParticipanteIdAtivo(
+          participantesPorId,
+          sugestao.recebedorParticipanteId,
+          'PLANEJAMENTO_ACERTO_RECEBEDOR_INVALIDO',
+          'O recebedor do acerto precisa ser participante ativo do planejamento.',
+        );
+
+        return {
+          id: randomUUID(),
+          planejamentoId,
+          deParticipanteId: sugestao.devedorParticipanteId,
+          paraParticipanteId: sugestao.recebedorParticipanteId,
+          valorCentavos: sugestao.valorCentavos,
+          status: AcertoStatus.PENDENTE,
+          dataPagamento: null,
+          observacao: null,
+        };
+      });
+
+    if (novosAcertos.length === 0) {
+      return acertosPendentesExistentes;
+    }
+
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => [
+        ...acertosPendentesExistentes,
+        ...(await repository.salvarAcertos(novosAcertos)),
+      ],
+    );
   }
 
   async findAll(
@@ -150,34 +202,40 @@ export class PlanejamentosService {
       );
     }
 
-    const gastoId = randomUUID();
-    const gasto = await this.planejamentosRepository.salvarGasto({
-      id: gastoId,
-      planejamentoId,
-      descricao: dto.descricao,
-      valorCentavos: dto.valorCentavos,
-      dataGasto: dto.dataGasto,
-      categoria: dto.categoria ?? null,
-      comportamento: dto.comportamento,
-      status: GastoStatus.ATIVO,
-      pagoPorParticipanteId: dto.pagoPorParticipanteId,
-      observacao: dto.observacao ?? null,
-      comprovanteUrl: null,
-      comprovanteNome: null,
-      mesReferencia: dto.mesReferencia ?? null,
-      ultimaAlteracaoValorEm: null,
-      requerRevisaoMensal: false,
-      deletedAt: null,
-    });
+    const gasto = await this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const gastoId = randomUUID();
+        const gastoSalvo = await repository.salvarGasto({
+          id: gastoId,
+          planejamentoId,
+          descricao: dto.descricao,
+          valorCentavos: dto.valorCentavos,
+          dataGasto: dto.dataGasto,
+          categoria: dto.categoria ?? null,
+          comportamento: dto.comportamento,
+          status: GastoStatus.ATIVO,
+          pagoPorParticipanteId: dto.pagoPorParticipanteId,
+          observacao: dto.observacao ?? null,
+          comprovanteUrl: null,
+          comprovanteNome: null,
+          mesReferencia: dto.mesReferencia ?? null,
+          ultimaAlteracaoValorEm: null,
+          requerRevisaoMensal: false,
+          deletedAt: null,
+        });
 
-    await this.planejamentosRepository.salvarDivisoes(
-      divisoesCalculadas.map((divisao) => ({
-        id: randomUUID(),
-        gastoId,
-        participanteId: divisao.participanteId,
-        valorDevidoCentavos: divisao.valorCentavos,
-        status: DivisaoStatus.ATIVA,
-      })),
+        await repository.salvarDivisoes(
+          divisoesCalculadas.map((divisao) => ({
+            id: randomUUID(),
+            gastoId,
+            participanteId: divisao.participanteId,
+            valorDevidoCentavos: divisao.valorCentavos,
+            status: DivisaoStatus.ATIVA,
+          })),
+        );
+
+        return gastoSalvo;
+      },
     );
 
     return this.findGasto(planejamentoId, gasto.id, usuarioId);
@@ -221,28 +279,13 @@ export class PlanejamentosService {
     planejamentoId: string,
     usuarioId: string,
   ): Promise<AcertoPlanejamentoSugerido[]> {
-    const planejamento =
-      await this.planejamentosRepository.buscarComGastosDivisoesAcertos(
-        planejamentoId,
-        usuarioId,
-      );
-
-    if (!planejamento) {
-      throw new ResourceNotFoundException(
-        'PLANEJAMENTO_NOT_FOUND',
-        'Planejamento nao encontrado.',
-      );
-    }
-
-    const participantesAtivos = (planejamento.participantes ?? []).filter(
-      (participante) => participante.status === ParticipanteStatus.ATIVO,
+    const planejamento = await this.buscarPlanejamentoParaAcertos(
+      planejamentoId,
+      usuarioId,
     );
-    const participantesPorId = new Map(
-      participantesAtivos.map((participante) => [
-        participante.id,
-        participante,
-      ]),
-    );
+    const participantesAtivos = this.listarParticipantesAtivos(planejamento);
+    const participantesPorId =
+      this.mapearParticipantesPorId(participantesAtivos);
     const acertos = this.calcularAcertosPersistidos(
       planejamento,
       participantesAtivos.map((participante) => participante.id),
@@ -262,6 +305,32 @@ export class PlanejamentosService {
     }));
   }
 
+  private async criarPlanejamentoComProprietario(
+    repository: PlanejamentosRepository,
+    usuario: PlanejamentoUsuarioAutenticado,
+    dto: CreatePlanejamentoDto,
+  ): Promise<Planejamento> {
+    const planejamento = await repository.salvarPlanejamento({
+      id: randomUUID(),
+      usuarioCriadorId: usuario.id,
+      nome: dto.nome,
+      descricao: dto.descricao ?? null,
+      tipo: dto.tipo,
+      status: PlanejamentoStatus.ABERTO,
+      dataInicio: dto.dataInicio ?? null,
+      dataFim: dto.dataFim ?? null,
+      deletedAt: null,
+    });
+
+    await this.criarParticipanteProprietarioSeNecessario(
+      repository,
+      planejamento.id,
+      usuario,
+    );
+
+    return planejamento;
+  }
+
   private validarPeriodo(dto: CreatePlanejamentoDto): void {
     if (!dto.dataInicio || !dto.dataFim || dto.dataFim >= dto.dataInicio) {
       return;
@@ -275,11 +344,12 @@ export class PlanejamentosService {
   }
 
   private async criarParticipanteProprietarioSeNecessario(
+    repository: PlanejamentosRepository,
     planejamentoId: string,
     usuario: PlanejamentoUsuarioAutenticado,
   ): Promise<void> {
     const participanteExistente =
-      await this.planejamentosRepository.buscarParticipanteAtivoPorUsuario(
+      await repository.buscarParticipanteAtivoPorUsuario(
         planejamentoId,
         usuario.id,
       );
@@ -288,7 +358,7 @@ export class PlanejamentosService {
       return;
     }
 
-    await this.planejamentosRepository.salvarParticipante({
+    await repository.salvarParticipante({
       id: randomUUID(),
       planejamentoId,
       usuarioId: usuario.id,
@@ -371,6 +441,79 @@ export class PlanejamentosService {
 
       throw error;
     }
+  }
+
+  private async buscarPlanejamentoParaAcertos(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<Planejamento> {
+    const planejamento =
+      await this.planejamentosRepository.buscarComGastosDivisoesAcertos(
+        planejamentoId,
+        usuarioId,
+      );
+
+    if (!planejamento) {
+      throw new ResourceNotFoundException(
+        'PLANEJAMENTO_NOT_FOUND',
+        'Planejamento nao encontrado.',
+      );
+    }
+
+    return planejamento;
+  }
+
+  private listarParticipantesAtivos(
+    planejamento: Planejamento,
+  ): ParticipantePlanejamento[] {
+    return (planejamento.participantes ?? []).filter(
+      (participante) => participante.status === ParticipanteStatus.ATIVO,
+    );
+  }
+
+  private mapearParticipantesPorId(
+    participantes: ParticipantePlanejamento[],
+  ): Map<string, ParticipantePlanejamento> {
+    return new Map(
+      participantes.map((participante) => [participante.id, participante]),
+    );
+  }
+
+  private filtrarAcertosPendentes(
+    planejamento: Planejamento,
+  ): AcertoPlanejamento[] {
+    return (planejamento.acertos ?? []).filter(
+      (acerto) => acerto.status === AcertoStatus.PENDENTE,
+    );
+  }
+
+  private existeAcertoPendenteEquivalente(
+    sugestao: {
+      devedorParticipanteId: string;
+      recebedorParticipanteId: string;
+      valorCentavos: number;
+    },
+    acertos: AcertoPlanejamento[],
+  ): boolean {
+    return acertos.some(
+      (acerto) =>
+        acerto.deParticipanteId === sugestao.devedorParticipanteId &&
+        acerto.paraParticipanteId === sugestao.recebedorParticipanteId &&
+        acerto.valorCentavos === sugestao.valorCentavos,
+    );
+  }
+
+  private assertParticipanteIdAtivo(
+    participantesPorId: Map<string, ParticipantePlanejamento>,
+    participanteId: string,
+    code: string,
+    message: string,
+  ): void {
+    if (participantesPorId.has(participanteId)) {
+      return;
+    }
+
+    throw new ValidationAppException(code, message);
   }
 
   private mapearGastosParaCalculo(

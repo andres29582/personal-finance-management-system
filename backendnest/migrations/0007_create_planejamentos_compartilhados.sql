@@ -339,4 +339,13 @@ CREATE INDEX IF NOT EXISTS idx_acerto_planejamento
 CREATE INDEX IF NOT EXISTS idx_acerto_planejamento_status
   ON public.acerto_planejamento (planejamento_id, status);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_acerto_planejamento_pendente_unico
+  ON public.acerto_planejamento (
+    planejamento_id,
+    de_participante_id,
+    para_participante_id,
+    valor_centavos
+  )
+  WHERE status = 'PENDENTE';
+
 COMMIT;

@@ -27,8 +27,10 @@ describe('PlanejamentosService', () => {
       | 'buscarGastoPorIdEPlanejamento'
       | 'buscarParticipanteAtivoDuplicado'
       | 'buscarParticipanteAtivoPorUsuario'
+      | 'executarEmTransacao'
       | 'listarAcessiveisPorUsuario'
       | 'listarGastosPorPlanejamento'
+      | 'salvarAcertos'
       | 'salvarDivisoes'
       | 'salvarGasto'
       | 'salvarParticipante'
@@ -43,13 +45,18 @@ describe('PlanejamentosService', () => {
       buscarGastoPorIdEPlanejamento: jest.fn(),
       buscarParticipanteAtivoDuplicado: jest.fn(),
       buscarParticipanteAtivoPorUsuario: jest.fn(),
+      executarEmTransacao: jest.fn(),
       listarAcessiveisPorUsuario: jest.fn(),
       listarGastosPorPlanejamento: jest.fn(),
+      salvarAcertos: jest.fn(),
       salvarDivisoes: jest.fn(),
       salvarGasto: jest.fn(),
       salvarParticipante: jest.fn(),
       salvarPlanejamento: jest.fn(),
     };
+    repository.executarEmTransacao.mockImplementation((operacao) =>
+      operacao(repository as unknown as PlanejamentosRepository),
+    );
 
     service = new PlanejamentosService(
       repository as unknown as PlanejamentosRepository,
@@ -104,6 +111,7 @@ describe('PlanejamentosService', () => {
         usuarioId: 'user-1',
       }),
     );
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       id: 'planejamento-1',
       usuarioCriadorId: 'user-1',
@@ -135,6 +143,7 @@ describe('PlanejamentosService', () => {
     );
 
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
   });
 
   it('creates a shared expense for users with planejamento access using equal split', async () => {
@@ -192,6 +201,7 @@ describe('PlanejamentosService', () => {
         valorDevidoCentavos: 5000,
       }),
     ]);
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
     expect(result.id).toBe('gasto-1');
   });
 
@@ -557,6 +567,221 @@ describe('PlanejamentosService', () => {
     );
   });
 
+  it('synchronizes pending settlement suggestions transactionally', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+    repository.salvarAcertos.mockResolvedValue([
+      criarAcertoPersistido({
+        deParticipanteId: 'participante-2',
+        paraParticipanteId: 'participante-1',
+        valorCentavos: 5000,
+      }),
+    ] as never);
+
+    const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(repository.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        dataPagamento: null,
+        deParticipanteId: 'participante-2',
+        observacao: null,
+        paraParticipanteId: 'participante-1',
+        planejamentoId: 'planejamento-1',
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 5000,
+      }),
+    ]);
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([
+      expect.objectContaining({
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 5000,
+      }),
+    ]);
+  });
+
+  it('keeps settlement synchronization idempotent when pending suggestion already exists', async () => {
+    const acertoPendente = criarAcertoPersistido({
+      deParticipanteId: 'participante-2',
+      paraParticipanteId: 'participante-1',
+      valorCentavos: 5000,
+    });
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPendente],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.executarEmTransacao).not.toHaveBeenCalled();
+    expect(result).toEqual([acertoPendente]);
+  });
+
+  it('does not duplicate pending settlements while preserving existing records', async () => {
+    const acertoPendente = criarAcertoPersistido({
+      id: 'acerto-pendente',
+      deParticipanteId: 'participante-2',
+      paraParticipanteId: 'participante-1',
+      valorCentavos: 5000,
+      status: AcertoStatus.PENDENTE,
+    });
+    const acertoPago = criarAcertoPersistido({
+      id: 'acerto-pago',
+      deParticipanteId: 'participante-1',
+      paraParticipanteId: 'participante-2',
+      valorCentavos: 1000,
+      status: AcertoStatus.PAGO,
+    });
+    const acertoConfirmado = criarAcertoPersistido({
+      id: 'acerto-confirmado',
+      deParticipanteId: 'participante-1',
+      paraParticipanteId: 'participante-2',
+      valorCentavos: 1000,
+      status: AcertoStatus.CONFIRMADO,
+    });
+    const acertoCancelado = criarAcertoPersistido({
+      id: 'acerto-cancelado',
+      deParticipanteId: 'participante-1',
+      paraParticipanteId: 'participante-2',
+      valorCentavos: 1000,
+      status: AcertoStatus.CANCELADO,
+    });
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPendente, acertoCancelado],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toEqual([acertoPendente]);
+    expect(acertoPago.status).toBe(AcertoStatus.PAGO);
+    expect(acertoConfirmado.status).toBe(AcertoStatus.CONFIRMADO);
+    expect(acertoCancelado.status).toBe(AcertoStatus.CANCELADO);
+  });
+
+  it('does not create new pending settlements when paid or confirmed settlements already liquidated the balance', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [
+          criarAcertoPersistido({
+            status: AcertoStatus.PAGO,
+          }),
+        ],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.sincronizarAcertos('planejamento-1', 'user-1'),
+    ).resolves.toEqual([]);
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [
+          criarAcertoPersistido({
+            status: AcertoStatus.CONFIRMADO,
+          }),
+        ],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.sincronizarAcertos('planejamento-1', 'user-1'),
+    ).resolves.toEqual([]);
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('does not synchronize settlements when user has no planejamento access', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(null);
+
+    await expect(
+      service.sincronizarAcertos('planejamento-1', 'user-3'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.executarEmTransacao).not.toHaveBeenCalled();
+  });
+
+  it('rejects settlement synchronization when calculated participants are not active in planejamento', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [criarParticipantePersistido('participante-1')],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.sincronizarAcertos('planejamento-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ValidationAppException);
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
   it('rejects creation when dataFim is before dataInicio', async () => {
     await expect(
       service.create(
@@ -752,6 +977,20 @@ describe('PlanejamentosService', () => {
       participanteId,
       status: DivisaoStatus.ATIVA,
       valorDevidoCentavos,
+    };
+  }
+
+  function criarAcertoPersistido(
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      id: 'acerto-1',
+      deParticipanteId: 'participante-2',
+      paraParticipanteId: 'participante-1',
+      planejamentoId: 'planejamento-1',
+      status: AcertoStatus.PENDENTE,
+      valorCentavos: 5000,
+      ...overrides,
     };
   }
 });
