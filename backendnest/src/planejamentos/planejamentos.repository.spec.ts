@@ -246,6 +246,46 @@ describe('PlanejamentosRepository', () => {
     ]);
   });
 
+  it('lista gastos nao removidos de um planejamento com divisoes e pagador', async () => {
+    gastoRepository.find.mockResolvedValue([]);
+
+    await repository.listarGastosPorPlanejamento('planejamento-id');
+
+    const argumento = obterObjetoDaPrimeiraChamada(gastoRepository.find);
+    const where = obterObjeto(argumento.where);
+
+    expect(where.planejamentoId).toBe('planejamento-id');
+    expect(where.deletedAt).toBeDefined();
+    expect(argumento.relations).toEqual({
+      divisoes: true,
+      pagoPorParticipante: true,
+    });
+    expect(argumento.order).toEqual({
+      createdAt: 'DESC',
+      dataGasto: 'DESC',
+    });
+  });
+
+  it('busca gasto por id e planejamento com divisoes e pagador', async () => {
+    gastoRepository.findOne.mockResolvedValue(null);
+
+    await repository.buscarGastoPorIdEPlanejamento(
+      'gasto-id',
+      'planejamento-id',
+    );
+
+    const argumento = obterObjetoDaPrimeiraChamada(gastoRepository.findOne);
+    const where = obterObjeto(argumento.where);
+
+    expect(where.id).toBe('gasto-id');
+    expect(where.planejamentoId).toBe('planejamento-id');
+    expect(where.deletedAt).toBeDefined();
+    expect(argumento.relations).toEqual({
+      divisoes: true,
+      pagoPorParticipante: true,
+    });
+  });
+
   it('delegar salvamentos aos repositories TypeORM sem aplicar calculo financeiro', async () => {
     const planejamento = { id: 'planejamento-id' } as Planejamento;
     const participante = { id: 'participante-id' } as ParticipantePlanejamento;

@@ -1,5 +1,9 @@
 import { AuthenticatedRequest } from '../common/authenticated-request';
-import { PlanejamentoStatus, PlanejamentoTipo } from './enums';
+import {
+  GastoComportamento,
+  PlanejamentoStatus,
+  PlanejamentoTipo,
+} from './enums';
 import { PlanejamentosController } from './planejamentos.controller';
 import { PlanejamentosService } from './planejamentos.service';
 
@@ -8,7 +12,13 @@ describe('PlanejamentosController', () => {
   let planejamentosService: jest.Mocked<
     Pick<
       PlanejamentosService,
-      'addParticipante' | 'create' | 'findAll' | 'findOne'
+      | 'addParticipante'
+      | 'create'
+      | 'createGasto'
+      | 'findAll'
+      | 'findGasto'
+      | 'findGastos'
+      | 'findOne'
     >
   >;
 
@@ -25,7 +35,10 @@ describe('PlanejamentosController', () => {
     planejamentosService = {
       addParticipante: jest.fn(),
       create: jest.fn(),
+      createGasto: jest.fn(),
       findAll: jest.fn(),
+      findGasto: jest.fn(),
+      findGastos: jest.fn(),
       findOne: jest.fn(),
     };
 
@@ -97,5 +110,70 @@ describe('PlanejamentosController', () => {
       dto,
     );
     expect(result).toEqual({ id: 'participante-1' });
+  });
+
+  it('delegates createGasto using planejamento route id and authenticated user id', async () => {
+    const dto = {
+      comportamento: GastoComportamento.EVENTUAL,
+      dataGasto: '2026-07-04',
+      descricao: 'Mercado',
+      pagoPorParticipanteId: 'participante-1',
+      participantesIds: ['participante-1', 'participante-2'],
+      valorCentavos: 10001,
+    };
+    planejamentosService.createGasto.mockResolvedValue({
+      id: 'gasto-1',
+    } as never);
+
+    const result = await controller.createGasto(
+      { planejamentoId: 'planejamento-1' },
+      request,
+      dto,
+    );
+
+    expect(planejamentosService.createGasto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+      dto,
+    );
+    expect(result).toEqual({ id: 'gasto-1' });
+  });
+
+  it('delegates findGastos using planejamento route id and authenticated user id', async () => {
+    planejamentosService.findGastos.mockResolvedValue([
+      { id: 'gasto-1' },
+    ] as never);
+
+    const result = await controller.findGastos(
+      { planejamentoId: 'planejamento-1' },
+      request,
+    );
+
+    expect(planejamentosService.findGastos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toEqual([{ id: 'gasto-1' }]);
+  });
+
+  it('delegates findGasto using route ids and authenticated user id', async () => {
+    planejamentosService.findGasto.mockResolvedValue({
+      id: 'gasto-1',
+    } as never);
+
+    const result = await controller.findGasto(
+      {
+        gastoId: 'gasto-1',
+        planejamentoId: 'planejamento-1',
+      },
+      request,
+    );
+
+    expect(planejamentosService.findGasto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+    );
+    expect(result).toEqual({ id: 'gasto-1' });
   });
 });

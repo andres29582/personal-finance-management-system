@@ -8,12 +8,18 @@ import {
 } from '../common/exceptions';
 import {
   AddParticipantePlanejamentoDto,
+  CreateGastoPlanejamentoDto,
   CreatePlanejamentoDto,
   FindPlanejamentosDto,
 } from './dto';
+import { calcularDivisaoIgualitaria } from './domain';
+import { PlanejamentoDominioError } from './domain/types';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
+import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
 import {
+  DivisaoStatus,
+  GastoStatus,
   ParticipanteStatus,
   ParticipanteTipo,
   PlanejamentoStatus,
@@ -106,6 +112,97 @@ export class PlanejamentosService {
     });
   }
 
+  async createGasto(
+    planejamentoId: string,
+    usuarioId: string,
+    dto: CreateGastoPlanejamentoDto,
+  ): Promise<GastoPlanejamento> {
+    const planejamento = await this.findOne(planejamentoId, usuarioId);
+    this.assertParticipantePertenceAoPlanejamento(
+      planejamento,
+      dto.pagoPorParticipanteId,
+      'PLANEJAMENTO_PAGADOR_INVALIDO',
+      'O pagador precisa ser participante ativo do planejamento.',
+    );
+
+    const divisoesCalculadas = this.calcularDivisoes(dto);
+
+    for (const divisao of divisoesCalculadas) {
+      this.assertParticipantePertenceAoPlanejamento(
+        planejamento,
+        divisao.participanteId,
+        'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
+        'Todos os participantes da divisao precisam pertencer ao planejamento.',
+      );
+    }
+
+    const gastoId = randomUUID();
+    const gasto = await this.planejamentosRepository.salvarGasto({
+      id: gastoId,
+      planejamentoId,
+      descricao: dto.descricao,
+      valorCentavos: dto.valorCentavos,
+      dataGasto: dto.dataGasto,
+      categoria: dto.categoria ?? null,
+      comportamento: dto.comportamento,
+      status: GastoStatus.ATIVO,
+      pagoPorParticipanteId: dto.pagoPorParticipanteId,
+      observacao: dto.observacao ?? null,
+      comprovanteUrl: null,
+      comprovanteNome: null,
+      mesReferencia: dto.mesReferencia ?? null,
+      ultimaAlteracaoValorEm: null,
+      requerRevisaoMensal: false,
+      deletedAt: null,
+    });
+
+    await this.planejamentosRepository.salvarDivisoes(
+      divisoesCalculadas.map((divisao) => ({
+        id: randomUUID(),
+        gastoId,
+        participanteId: divisao.participanteId,
+        valorDevidoCentavos: divisao.valorCentavos,
+        status: DivisaoStatus.ATIVA,
+      })),
+    );
+
+    return this.findGasto(planejamentoId, gasto.id, usuarioId);
+  }
+
+  async findGastos(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<GastoPlanejamento[]> {
+    await this.findOne(planejamentoId, usuarioId);
+
+    return this.planejamentosRepository.listarGastosPorPlanejamento(
+      planejamentoId,
+    );
+  }
+
+  async findGasto(
+    planejamentoId: string,
+    gastoId: string,
+    usuarioId: string,
+  ): Promise<GastoPlanejamento> {
+    await this.findOne(planejamentoId, usuarioId);
+
+    const gasto =
+      await this.planejamentosRepository.buscarGastoPorIdEPlanejamento(
+        gastoId,
+        planejamentoId,
+      );
+
+    if (!gasto) {
+      throw new ResourceNotFoundException(
+        'PLANEJAMENTO_GASTO_NOT_FOUND',
+        'Gasto do planejamento nao encontrado.',
+      );
+    }
+
+    return gasto;
+  }
+
   private validarPeriodo(dto: CreatePlanejamentoDto): void {
     if (!dto.dataInicio || !dto.dataFim || dto.dataFim >= dto.dataInicio) {
       return;
@@ -181,5 +278,39 @@ export class PlanejamentosService {
       'PLANEJAMENTO_PARTICIPANTE_DUPLICADO',
       'Ja existe um participante ativo com estes dados no planejamento.',
     );
+  }
+
+  private calcularDivisoes(dto: CreateGastoPlanejamentoDto) {
+    try {
+      return calcularDivisaoIgualitaria(
+        dto.valorCentavos,
+        dto.participantesIds,
+      );
+    } catch (error) {
+      if (error instanceof PlanejamentoDominioError) {
+        throw new ValidationAppException(error.code, error.message);
+      }
+
+      throw error;
+    }
+  }
+
+  private assertParticipantePertenceAoPlanejamento(
+    planejamento: Planejamento,
+    participanteId: string,
+    code: string,
+    message: string,
+  ): void {
+    const pertence = planejamento.participantes.some(
+      (participante) =>
+        participante.id === participanteId &&
+        participante.status === ParticipanteStatus.ATIVO,
+    );
+
+    if (pertence) {
+      return;
+    }
+
+    throw new ValidationAppException(code, message);
   }
 }

@@ -5,6 +5,9 @@ import {
   ValidationAppException,
 } from '../common/exceptions';
 import {
+  DivisaoStatus,
+  GastoComportamento,
+  GastoStatus,
   ParticipanteStatus,
   ParticipanteTipo,
   PlanejamentoStatus,
@@ -19,9 +22,13 @@ describe('PlanejamentosService', () => {
     Pick<
       PlanejamentosRepository,
       | 'buscarAcessivelComParticipantes'
+      | 'buscarGastoPorIdEPlanejamento'
       | 'buscarParticipanteAtivoDuplicado'
       | 'buscarParticipanteAtivoPorUsuario'
       | 'listarAcessiveisPorUsuario'
+      | 'listarGastosPorPlanejamento'
+      | 'salvarDivisoes'
+      | 'salvarGasto'
       | 'salvarParticipante'
       | 'salvarPlanejamento'
     >
@@ -30,9 +37,13 @@ describe('PlanejamentosService', () => {
   beforeEach(() => {
     repository = {
       buscarAcessivelComParticipantes: jest.fn(),
+      buscarGastoPorIdEPlanejamento: jest.fn(),
       buscarParticipanteAtivoDuplicado: jest.fn(),
       buscarParticipanteAtivoPorUsuario: jest.fn(),
       listarAcessiveisPorUsuario: jest.fn(),
+      listarGastosPorPlanejamento: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
       salvarParticipante: jest.fn(),
       salvarPlanejamento: jest.fn(),
     };
@@ -121,6 +132,244 @@ describe('PlanejamentosService', () => {
     );
 
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('creates a shared expense for users with planejamento access using equal split', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.salvarGasto.mockResolvedValue({
+      id: 'gasto-1',
+    } as never);
+    repository.salvarDivisoes.mockResolvedValue([] as never);
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue({
+      id: 'gasto-1',
+      divisoes: [
+        {
+          participanteId: 'participante-1',
+          valorDevidoCentavos: 5001,
+        },
+        {
+          participanteId: 'participante-2',
+          valorDevidoCentavos: 5000,
+        },
+      ],
+    } as never);
+
+    const result = await service.createGasto('planejamento-1', 'user-1', {
+      comportamento: GastoComportamento.EVENTUAL,
+      dataGasto: '2026-07-04',
+      descricao: 'Mercado',
+      pagoPorParticipanteId: 'participante-1',
+      participantesIds: ['participante-1', 'participante-2'],
+      valorCentavos: 10001,
+    });
+
+    expect(repository.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        deletedAt: null,
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        planejamentoId: 'planejamento-1',
+        status: GastoStatus.ATIVO,
+        valorCentavos: 10001,
+      }),
+    );
+    expect(repository.salvarDivisoes).toHaveBeenCalledWith([
+      expect.objectContaining({
+        participanteId: 'participante-1',
+        status: DivisaoStatus.ATIVA,
+        valorDevidoCentavos: 5001,
+      }),
+      expect.objectContaining({
+        participanteId: 'participante-2',
+        status: DivisaoStatus.ATIVA,
+        valorDevidoCentavos: 5000,
+      }),
+    ]);
+    expect(result.id).toBe('gasto-1');
+  });
+
+  it('rejects shared expense creation when user has no planejamento access', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-3', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-1'],
+        valorCentavos: 1000,
+      }),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('rejects shared expense when payer does not belong to planejamento', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-3',
+        participantesIds: ['participante-1'],
+        valorCentavos: 1000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_PAGADOR_INVALIDO',
+    });
+
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('rejects shared expense when split participant does not belong to planejamento', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-1', 'participante-3'],
+        valorCentavos: 1000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
+    });
+
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicated split participants using domain validation', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-1', 'participante-1'],
+        valorCentavos: 1000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PARTICIPANTE_DUPLICADO',
+    });
+
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty split participants using domain validation', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: [],
+        valorCentavos: 1000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PARTICIPANTES_OBRIGATORIOS',
+    });
+
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-positive shared expense values using domain validation', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-1'],
+        valorCentavos: 0,
+      }),
+    ).rejects.toMatchObject({
+      code: 'VALOR_CENTAVOS_DEVE_SER_POSITIVO',
+    });
+
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('lists shared expenses only after confirming planejamento access', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.listarGastosPorPlanejamento.mockResolvedValue([
+      { id: 'gasto-1' },
+    ] as never);
+
+    const result = await service.findGastos('planejamento-1', 'user-1');
+
+    expect(repository.listarGastosPorPlanejamento).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(result).toEqual([{ id: 'gasto-1' }]);
+  });
+
+  it('does not list shared expenses when user has no planejamento access', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+    await expect(
+      service.findGastos('planejamento-1', 'user-3'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+
+    expect(repository.listarGastosPorPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('returns one shared expense only after confirming planejamento access', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue({
+      id: 'gasto-1',
+    } as never);
+
+    const result = await service.findGasto(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+    );
+
+    expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
+      'gasto-1',
+      'planejamento-1',
+    );
+    expect(result).toEqual({ id: 'gasto-1' });
+  });
+
+  it('throws not found when shared expense does not exist in the planejamento', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue(null);
+
+    await expect(
+      service.findGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
   });
 
   it('rejects creation when dataFim is before dataInicio', async () => {
@@ -271,4 +520,21 @@ describe('PlanejamentosService', () => {
 
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
   });
+
+  function criarPlanejamentoComParticipantes() {
+    return {
+      id: 'planejamento-1',
+      participantes: [
+        {
+          id: 'participante-1',
+          status: ParticipanteStatus.ATIVO,
+        },
+        {
+          id: 'participante-2',
+          status: ParticipanteStatus.ATIVO,
+        },
+      ],
+      usuarioCriadorId: 'user-1',
+    } as never;
+  }
 });

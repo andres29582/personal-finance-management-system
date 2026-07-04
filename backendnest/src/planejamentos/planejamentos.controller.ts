@@ -12,7 +12,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import type { AuthenticatedRequest } from '../common/authenticated-request';
 import {
   AddParticipantePlanejamentoDto,
+  CreateGastoPlanejamentoDto,
   CreatePlanejamentoDto,
+  FindGastoPlanejamentoParamsDto,
+  FindGastosPlanejamentoParamsDto,
   FindPlanejamentoParamsDto,
   FindPlanejamentosDto,
 } from './dto';
@@ -57,6 +60,42 @@ export class PlanejamentosController {
       params.id,
       req.user.id,
       dto,
+    );
+  }
+
+  @Post(':planejamentoId/gastos')
+  createGasto(
+    @Param() params: FindGastosPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: CreateGastoPlanejamentoDto,
+  ) {
+    return this.planejamentosService.createGasto(
+      params.planejamentoId,
+      req.user.id,
+      dto,
+    );
+  }
+
+  @Get(':planejamentoId/gastos')
+  findGastos(
+    @Param() params: FindGastosPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.findGastos(
+      params.planejamentoId,
+      req.user.id,
+    );
+  }
+
+  @Get(':planejamentoId/gastos/:gastoId')
+  findGasto(
+    @Param() params: FindGastoPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.findGasto(
+      params.planejamentoId,
+      params.gastoId,
+      req.user.id,
     );
   }
 }

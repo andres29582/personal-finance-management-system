@@ -119,6 +119,42 @@ export class PlanejamentosRepository {
     });
   }
 
+  async listarGastosPorPlanejamento(
+    planejamentoId: string,
+  ): Promise<GastoPlanejamento[]> {
+    return this.gastoRepository.find({
+      where: {
+        planejamentoId,
+        deletedAt: IsNull(),
+      },
+      relations: {
+        divisoes: true,
+        pagoPorParticipante: true,
+      },
+      order: {
+        dataGasto: 'DESC',
+        createdAt: 'DESC',
+      },
+    });
+  }
+
+  async buscarGastoPorIdEPlanejamento(
+    id: string,
+    planejamentoId: string,
+  ): Promise<GastoPlanejamento | null> {
+    return this.gastoRepository.findOne({
+      where: {
+        id,
+        planejamentoId,
+        deletedAt: IsNull(),
+      },
+      relations: {
+        divisoes: true,
+        pagoPorParticipante: true,
+      },
+    });
+  }
+
   async buscarParticipanteAtivoPorUsuario(
     planejamentoId: string,
     usuarioId: string,
