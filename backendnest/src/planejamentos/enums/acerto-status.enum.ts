@@ -1,0 +1,6 @@
+export enum AcertoStatus {
+  PENDENTE = 'PENDENTE',
+  PAGO = 'PAGO',
+  CONFIRMADO = 'CONFIRMADO',
+  CANCELADO = 'CANCELADO',
+}
