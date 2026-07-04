@@ -23,6 +23,7 @@ describe('PlanejamentosService', () => {
     Pick<
       PlanejamentosRepository,
       | 'buscarAcessivelComParticipantes'
+      | 'buscarAcertoPorIdEPlanejamento'
       | 'buscarComGastosDivisoesAcertos'
       | 'buscarGastoPorIdEPlanejamento'
       | 'buscarParticipanteAtivoDuplicado'
@@ -30,6 +31,7 @@ describe('PlanejamentosService', () => {
       | 'executarEmTransacao'
       | 'listarAcessiveisPorUsuario'
       | 'listarGastosPorPlanejamento'
+      | 'salvarAcerto'
       | 'salvarAcertos'
       | 'salvarDivisoes'
       | 'salvarGasto'
@@ -41,6 +43,7 @@ describe('PlanejamentosService', () => {
   beforeEach(() => {
     repository = {
       buscarAcessivelComParticipantes: jest.fn(),
+      buscarAcertoPorIdEPlanejamento: jest.fn(),
       buscarComGastosDivisoesAcertos: jest.fn(),
       buscarGastoPorIdEPlanejamento: jest.fn(),
       buscarParticipanteAtivoDuplicado: jest.fn(),
@@ -48,6 +51,7 @@ describe('PlanejamentosService', () => {
       executarEmTransacao: jest.fn(),
       listarAcessiveisPorUsuario: jest.fn(),
       listarGastosPorPlanejamento: jest.fn(),
+      salvarAcerto: jest.fn(),
       salvarAcertos: jest.fn(),
       salvarDivisoes: jest.fn(),
       salvarGasto: jest.fn(),
@@ -782,6 +786,218 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
   });
 
+  it('allows owner to mark a pending settlement as paid', async () => {
+    const acerto = criarAcertoPersistido({
+      deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      acerto as never,
+    );
+    repository.salvarAcerto.mockResolvedValue({
+      ...acerto,
+      status: AcertoStatus.PAGO,
+    } as never);
+
+    const result = await service.pagarAcerto(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+
+    expect(repository.buscarAcertoPorIdEPlanejamento).toHaveBeenCalledWith(
+      'acerto-1',
+      'planejamento-1',
+    );
+    expect(repository.salvarAcerto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'acerto-1',
+        status: AcertoStatus.PAGO,
+        dataPagamento: expect.any(Date) as Date,
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ status: AcertoStatus.PAGO }),
+    );
+  });
+
+  it('allows debtor participant to mark a pending settlement as paid', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      criarAcertoPersistido({
+        deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
+      }) as never,
+    );
+    repository.salvarAcerto.mockResolvedValue({
+      id: 'acerto-1',
+      status: AcertoStatus.PAGO,
+    } as never);
+
+    await service.pagarAcerto('planejamento-1', 'acerto-1', 'user-2');
+
+    expect(repository.salvarAcerto).toHaveBeenCalledWith(
+      expect.objectContaining({ status: AcertoStatus.PAGO }),
+    );
+  });
+
+  it('rejects creditor participant when marking a settlement as paid', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      criarAcertoPersistido({
+        deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
+        paraParticipante: criarParticipantePersistido(
+          'participante-1',
+          'user-3',
+        ),
+      }) as never,
+    );
+
+    await expect(
+      service.pagarAcerto('planejamento-1', 'acerto-1', 'user-3'),
+    ).rejects.toBeInstanceOf(ForbiddenResourceException);
+
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+  });
+
+  it('rejects settlement changes when user has no planejamento access', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+    await expect(
+      service.pagarAcerto('planejamento-1', 'acerto-1', 'user-3'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+
+    expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+  });
+
+  it('rejects settlement changes when acerto does not belong to planejamento', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(null);
+
+    await expect(
+      service.pagarAcerto('planejamento-1', 'acerto-outro', 'user-1'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+  });
+
+  it('allows owner to cancel pending or paid settlements', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
+      criarAcertoPersistido({ status: AcertoStatus.PENDENTE }) as never,
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
+      criarAcertoPersistido({ status: AcertoStatus.PAGO }) as never,
+    );
+    repository.salvarAcerto.mockImplementation((acerto) =>
+      Promise.resolve(acerto as never),
+    );
+
+    await service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-1');
+    await service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-1');
+
+    expect(repository.salvarAcerto).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+      }),
+    );
+    expect(repository.salvarAcerto).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+      }),
+    );
+  });
+
+  it('rejects non-owner canceling or reopening settlements', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      criarAcertoPersistido({ status: AcertoStatus.PENDENTE }) as never,
+    );
+
+    await expect(
+      service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-2'),
+    ).rejects.toBeInstanceOf(ForbiddenResourceException);
+    await expect(
+      service.reabrirAcerto('planejamento-1', 'acerto-1', 'user-2'),
+    ).rejects.toBeInstanceOf(ForbiddenResourceException);
+
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+  });
+
+  it('allows owner to reopen a canceled settlement as pending', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      criarAcertoPersistido({
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: new Date('2026-07-04T00:00:00.000Z'),
+      }) as never,
+    );
+    repository.salvarAcerto.mockResolvedValue({
+      id: 'acerto-1',
+      status: AcertoStatus.PENDENTE,
+    } as never);
+
+    await service.reabrirAcerto('planejamento-1', 'acerto-1', 'user-1');
+
+    expect(repository.salvarAcerto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+      }),
+    );
+  });
+
+  it('rejects invalid settlement status transitions and protects confirmed settlements', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
+      criarAcertoPersistido({ status: AcertoStatus.PAGO }) as never,
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
+      criarAcertoPersistido({ status: AcertoStatus.CANCELADO }) as never,
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
+      criarAcertoPersistido({ status: AcertoStatus.CONFIRMADO }) as never,
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
+      criarAcertoPersistido({ status: AcertoStatus.PAGO }) as never,
+    );
+
+    await expect(
+      service.pagarAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ValidationAppException);
+    await expect(
+      service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ValidationAppException);
+    await expect(
+      service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ValidationAppException);
+    await expect(
+      service.reabrirAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toBeInstanceOf(ValidationAppException);
+
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+  });
+
   it('rejects creation when dataFim is before dataInicio', async () => {
     await expect(
       service.create(
@@ -947,10 +1163,11 @@ describe('PlanejamentosService', () => {
     } as never;
   }
 
-  function criarParticipantePersistido(id: string) {
+  function criarParticipantePersistido(id: string, usuarioId?: string) {
     return {
       id,
       status: ParticipanteStatus.ATIVO,
+      usuarioId: usuarioId ?? id.replace('participante', 'user'),
     };
   }
 
@@ -987,6 +1204,8 @@ describe('PlanejamentosService', () => {
       id: 'acerto-1',
       deParticipanteId: 'participante-2',
       paraParticipanteId: 'participante-1',
+      deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
+      paraParticipante: criarParticipantePersistido('participante-1', 'user-1'),
       planejamentoId: 'planejamento-1',
       status: AcertoStatus.PENDENTE,
       valorCentavos: 5000,

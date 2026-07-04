@@ -13,6 +13,7 @@ describe('PlanejamentosController', () => {
     Pick<
       PlanejamentosService,
       | 'addParticipante'
+      | 'cancelarAcerto'
       | 'create'
       | 'createGasto'
       | 'findAcertos'
@@ -20,6 +21,8 @@ describe('PlanejamentosController', () => {
       | 'findGasto'
       | 'findGastos'
       | 'findOne'
+      | 'pagarAcerto'
+      | 'reabrirAcerto'
       | 'sincronizarAcertos'
     >
   >;
@@ -36,6 +39,7 @@ describe('PlanejamentosController', () => {
   beforeEach(() => {
     planejamentosService = {
       addParticipante: jest.fn(),
+      cancelarAcerto: jest.fn(),
       create: jest.fn(),
       createGasto: jest.fn(),
       findAcertos: jest.fn(),
@@ -43,6 +47,8 @@ describe('PlanejamentosController', () => {
       findGasto: jest.fn(),
       findGastos: jest.fn(),
       findOne: jest.fn(),
+      pagarAcerto: jest.fn(),
+      reabrirAcerto: jest.fn(),
       sincronizarAcertos: jest.fn(),
     };
 
@@ -231,5 +237,53 @@ describe('PlanejamentosController', () => {
         status: 'PENDENTE',
       },
     ]);
+  });
+
+  it('delegates persisted settlement management using route ids and authenticated user id', async () => {
+    const params = {
+      planejamentoId: 'planejamento-1',
+      acertoId: 'acerto-1',
+    };
+    planejamentosService.pagarAcerto.mockResolvedValue({
+      id: 'acerto-1',
+      status: 'PAGO',
+    } as never);
+    planejamentosService.cancelarAcerto.mockResolvedValue({
+      id: 'acerto-1',
+      status: 'CANCELADO',
+    } as never);
+    planejamentosService.reabrirAcerto.mockResolvedValue({
+      id: 'acerto-1',
+      status: 'PENDENTE',
+    } as never);
+
+    await expect(controller.pagarAcerto(params, request)).resolves.toEqual({
+      id: 'acerto-1',
+      status: 'PAGO',
+    });
+    await expect(controller.cancelarAcerto(params, request)).resolves.toEqual({
+      id: 'acerto-1',
+      status: 'CANCELADO',
+    });
+    await expect(controller.reabrirAcerto(params, request)).resolves.toEqual({
+      id: 'acerto-1',
+      status: 'PENDENTE',
+    });
+
+    expect(planejamentosService.pagarAcerto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+    expect(planejamentosService.cancelarAcerto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+    expect(planejamentosService.reabrirAcerto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
   });
 });

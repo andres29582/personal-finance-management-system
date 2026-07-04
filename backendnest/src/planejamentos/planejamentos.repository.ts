@@ -147,6 +147,22 @@ export class PlanejamentosRepository {
     });
   }
 
+  async buscarAcertoPorIdEPlanejamento(
+    id: string,
+    planejamentoId: string,
+  ): Promise<AcertoPlanejamento | null> {
+    return this.acertoRepository.findOne({
+      where: {
+        id,
+        planejamentoId,
+      },
+      relations: {
+        deParticipante: true,
+        paraParticipante: true,
+      },
+    });
+  }
+
   async listarGastosPorPlanejamento(
     planejamentoId: string,
   ): Promise<GastoPlanejamento[]> {
@@ -257,6 +273,12 @@ export class PlanejamentosRepository {
     acertos: DeepPartial<AcertoPlanejamento>[],
   ): Promise<AcertoPlanejamento[]> {
     return this.acertoRepository.save(acertos);
+  }
+
+  async salvarAcerto(
+    acerto: DeepPartial<AcertoPlanejamento>,
+  ): Promise<AcertoPlanejamento> {
+    return this.acertoRepository.save(acerto);
   }
 
   private criarWhereAcessivel(

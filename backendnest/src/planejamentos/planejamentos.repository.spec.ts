@@ -343,6 +343,25 @@ describe('PlanejamentosRepository', () => {
     });
   });
 
+  it('busca acerto por id dentro do planejamento com participantes envolvidos', async () => {
+    acertoRepository.findOne.mockResolvedValue(null);
+
+    await repository.buscarAcertoPorIdEPlanejamento(
+      'acerto-id',
+      'planejamento-id',
+    );
+
+    const argumento = obterObjetoDaPrimeiraChamada(acertoRepository.findOne);
+    const where = obterObjeto(argumento.where);
+
+    expect(where.id).toBe('acerto-id');
+    expect(where.planejamentoId).toBe('planejamento-id');
+    expect(argumento.relations).toEqual({
+      deParticipante: true,
+      paraParticipante: true,
+    });
+  });
+
   it('delegar salvamentos aos repositories TypeORM sem aplicar calculo financeiro', async () => {
     const planejamento = { id: 'planejamento-id' } as Planejamento;
     const participante = { id: 'participante-id' } as ParticipantePlanejamento;
@@ -354,7 +373,9 @@ describe('PlanejamentosRepository', () => {
     participanteRepository.save.mockResolvedValue(participante);
     gastoRepository.save.mockResolvedValue(gasto);
     divisaoRepository.save.mockResolvedValue(divisoes);
-    acertoRepository.save.mockResolvedValue(acertos);
+    acertoRepository.save
+      .mockResolvedValueOnce(acertos)
+      .mockResolvedValueOnce(acertos[0]);
 
     await expect(repository.salvarPlanejamento(planejamento)).resolves.toBe(
       planejamento,
@@ -365,6 +386,7 @@ describe('PlanejamentosRepository', () => {
     await expect(repository.salvarGasto(gasto)).resolves.toBe(gasto);
     await expect(repository.salvarDivisoes(divisoes)).resolves.toBe(divisoes);
     await expect(repository.salvarAcertos(acertos)).resolves.toBe(acertos);
+    await expect(repository.salvarAcerto(acertos[0])).resolves.toBe(acertos[0]);
   });
 
   function criarRepositoryMock<T>(): RepositoryMock<T> {

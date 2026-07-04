@@ -305,6 +305,84 @@ export class PlanejamentosService {
     }));
   }
 
+  async pagarAcerto(
+    planejamentoId: string,
+    acertoId: string,
+    usuarioId: string,
+  ): Promise<AcertoPlanejamento> {
+    const { planejamento, acerto } = await this.buscarContextoAcerto(
+      planejamentoId,
+      acertoId,
+      usuarioId,
+    );
+
+    this.assertUsuarioPodePagarAcerto(planejamento, acerto, usuarioId);
+    this.assertTransicaoAcertoPermitida(
+      acerto.status,
+      [AcertoStatus.PENDENTE],
+      'PLANEJAMENTO_ACERTO_PAGAR_STATUS_INVALIDO',
+      'Apenas acertos pendentes podem ser marcados como pagos.',
+    );
+
+    return this.planejamentosRepository.salvarAcerto({
+      ...acerto,
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date(),
+    });
+  }
+
+  async cancelarAcerto(
+    planejamentoId: string,
+    acertoId: string,
+    usuarioId: string,
+  ): Promise<AcertoPlanejamento> {
+    const { planejamento, acerto } = await this.buscarContextoAcerto(
+      planejamentoId,
+      acertoId,
+      usuarioId,
+    );
+
+    this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+    this.assertTransicaoAcertoPermitida(
+      acerto.status,
+      [AcertoStatus.PENDENTE, AcertoStatus.PAGO],
+      'PLANEJAMENTO_ACERTO_CANCELAR_STATUS_INVALIDO',
+      'Apenas acertos pendentes ou pagos podem ser cancelados.',
+    );
+
+    return this.planejamentosRepository.salvarAcerto({
+      ...acerto,
+      status: AcertoStatus.CANCELADO,
+      dataPagamento: null,
+    });
+  }
+
+  async reabrirAcerto(
+    planejamentoId: string,
+    acertoId: string,
+    usuarioId: string,
+  ): Promise<AcertoPlanejamento> {
+    const { planejamento, acerto } = await this.buscarContextoAcerto(
+      planejamentoId,
+      acertoId,
+      usuarioId,
+    );
+
+    this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+    this.assertTransicaoAcertoPermitida(
+      acerto.status,
+      [AcertoStatus.CANCELADO],
+      'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
+      'Apenas acertos cancelados podem ser reabertos.',
+    );
+
+    return this.planejamentosRepository.salvarAcerto({
+      ...acerto,
+      status: AcertoStatus.PENDENTE,
+      dataPagamento: null,
+    });
+  }
+
   private async criarPlanejamentoComProprietario(
     repository: PlanejamentosRepository,
     usuario: PlanejamentoUsuarioAutenticado,
@@ -375,14 +453,7 @@ export class PlanejamentosService {
   ): Promise<void> {
     const planejamento = await this.findOne(planejamentoId, usuarioId);
 
-    if (planejamento.usuarioCriadorId === usuarioId) {
-      return;
-    }
-
-    throw new ForbiddenResourceException(
-      'PLANEJAMENTO_OWNER_REQUIRED',
-      'Apenas o proprietario do planejamento pode adicionar participantes.',
-    );
+    this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
   }
 
   private async assertParticipanteAtivoNaoDuplicado(
@@ -461,6 +532,76 @@ export class PlanejamentosService {
     }
 
     return planejamento;
+  }
+
+  private async buscarContextoAcerto(
+    planejamentoId: string,
+    acertoId: string,
+    usuarioId: string,
+  ): Promise<{ planejamento: Planejamento; acerto: AcertoPlanejamento }> {
+    const planejamento = await this.findOne(planejamentoId, usuarioId);
+    const acerto =
+      await this.planejamentosRepository.buscarAcertoPorIdEPlanejamento(
+        acertoId,
+        planejamentoId,
+      );
+
+    if (!acerto) {
+      throw new ResourceNotFoundException(
+        'PLANEJAMENTO_ACERTO_NOT_FOUND',
+        'Acerto do planejamento nao encontrado.',
+      );
+    }
+
+    return { planejamento, acerto };
+  }
+
+  private assertUsuarioProprietarioDoPlanejamento(
+    planejamento: Planejamento,
+    usuarioId: string,
+  ): void {
+    if (planejamento.usuarioCriadorId === usuarioId) {
+      return;
+    }
+
+    throw new ForbiddenResourceException(
+      'PLANEJAMENTO_OWNER_REQUIRED',
+      'Apenas o proprietario do planejamento pode executar esta acao.',
+    );
+  }
+
+  private assertUsuarioPodePagarAcerto(
+    planejamento: Planejamento,
+    acerto: AcertoPlanejamento,
+    usuarioId: string,
+  ): void {
+    if (planejamento.usuarioCriadorId === usuarioId) {
+      return;
+    }
+
+    if (acerto.deParticipante?.usuarioId === usuarioId) {
+      return;
+    }
+
+    throw new ForbiddenResourceException(
+      'PLANEJAMENTO_ACERTO_PAGAR_FORBIDDEN',
+      'Apenas o proprietario ou o participante devedor pode marcar o acerto como pago.',
+    );
+  }
+
+  private assertTransicaoAcertoPermitida(
+    statusAtual: AcertoStatus,
+    statusPermitidos: AcertoStatus[],
+    code: string,
+    message: string,
+  ): void {
+    if (statusPermitidos.includes(statusAtual)) {
+      return;
+    }
+
+    throw new ValidationAppException(code, message, {
+      details: { statusAtual },
+    });
   }
 
   private listarParticipantesAtivos(
