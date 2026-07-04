@@ -12,6 +12,12 @@ export type ListarPlanejamentosFiltros = {
   status?: PlanejamentoStatus;
 };
 
+export type BuscarParticipanteDuplicadoFiltros = {
+  usuarioId?: string;
+  email?: string;
+  nome: string;
+};
+
 @Injectable()
 export class PlanejamentosRepository {
   constructor(
@@ -99,14 +105,10 @@ export class PlanejamentosRepository {
 
   async buscarComGastosDivisoesAcertos(
     id: string,
-    usuarioCriadorId: string,
+    usuarioId: string,
   ): Promise<Planejamento | null> {
     return this.planejamentoRepository.findOne({
-      where: {
-        id,
-        usuarioCriadorId,
-        deletedAt: IsNull(),
-      },
+      where: this.criarWhereAcessivel(usuarioId, { id }),
       relations: {
         participantes: true,
         gastos: {
@@ -115,6 +117,52 @@ export class PlanejamentosRepository {
         acertos: true,
       },
     });
+  }
+
+  async buscarParticipanteAtivoPorUsuario(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<ParticipantePlanejamento | null> {
+    return this.participanteRepository.findOne({
+      where: {
+        planejamentoId,
+        usuarioId,
+        status: ParticipanteStatus.ATIVO,
+      },
+    });
+  }
+
+  async buscarParticipanteAtivoDuplicado(
+    planejamentoId: string,
+    filtros: BuscarParticipanteDuplicadoFiltros,
+  ): Promise<ParticipantePlanejamento | null> {
+    const where: FindOptionsWhere<ParticipantePlanejamento>[] = [];
+
+    if (filtros.usuarioId) {
+      where.push({
+        planejamentoId,
+        usuarioId: filtros.usuarioId,
+        status: ParticipanteStatus.ATIVO,
+      });
+    }
+
+    if (filtros.email) {
+      where.push({
+        planejamentoId,
+        email: filtros.email,
+        status: ParticipanteStatus.ATIVO,
+      });
+    }
+
+    if (!filtros.usuarioId && !filtros.email) {
+      where.push({
+        planejamentoId,
+        nome: filtros.nome,
+        status: ParticipanteStatus.ATIVO,
+      });
+    }
+
+    return this.participanteRepository.findOne({ where });
   }
 
   async salvarPlanejamento(

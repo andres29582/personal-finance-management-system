@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { ResourceNotFoundException } from '../common/exceptions';
+import {
+  AppConflictException,
+  ForbiddenResourceException,
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import {
   AddParticipantePlanejamentoDto,
   CreatePlanejamentoDto,
@@ -15,6 +20,12 @@ import {
 } from './enums';
 import { PlanejamentosRepository } from './planejamentos.repository';
 
+export type PlanejamentoUsuarioAutenticado = {
+  id: string;
+  email: string;
+  nome: string;
+};
+
 @Injectable()
 export class PlanejamentosService {
   constructor(
@@ -22,12 +33,14 @@ export class PlanejamentosService {
   ) {}
 
   async create(
-    usuarioId: string,
+    usuario: PlanejamentoUsuarioAutenticado,
     dto: CreatePlanejamentoDto,
   ): Promise<Planejamento> {
+    this.validarPeriodo(dto);
+
     const planejamento = await this.planejamentosRepository.salvarPlanejamento({
       id: randomUUID(),
-      usuarioCriadorId: usuarioId,
+      usuarioCriadorId: usuario.id,
       nome: dto.nome,
       descricao: dto.descricao ?? null,
       tipo: dto.tipo,
@@ -37,7 +50,12 @@ export class PlanejamentosService {
       deletedAt: null,
     });
 
-    return this.findOne(planejamento.id, usuarioId);
+    await this.criarParticipanteProprietarioSeNecessario(
+      planejamento.id,
+      usuario,
+    );
+
+    return this.findOne(planejamento.id, usuario.id);
   }
 
   async findAll(
@@ -72,7 +90,8 @@ export class PlanejamentosService {
     usuarioId: string,
     dto: AddParticipantePlanejamentoDto,
   ): Promise<ParticipantePlanejamento> {
-    await this.findOne(planejamentoId, usuarioId);
+    await this.assertUsuarioProprietario(planejamentoId, usuarioId);
+    await this.assertParticipanteAtivoNaoDuplicado(planejamentoId, dto);
 
     return this.planejamentosRepository.salvarParticipante({
       id: randomUUID(),
@@ -85,5 +104,82 @@ export class PlanejamentosService {
         : ParticipanteTipo.MANUAL,
       status: ParticipanteStatus.ATIVO,
     });
+  }
+
+  private validarPeriodo(dto: CreatePlanejamentoDto): void {
+    if (!dto.dataInicio || !dto.dataFim || dto.dataFim >= dto.dataInicio) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_PERIODO_INVALIDO',
+      'A data final deve ser maior ou igual a data inicial.',
+      { field: 'dataFim' },
+    );
+  }
+
+  private async criarParticipanteProprietarioSeNecessario(
+    planejamentoId: string,
+    usuario: PlanejamentoUsuarioAutenticado,
+  ): Promise<void> {
+    const participanteExistente =
+      await this.planejamentosRepository.buscarParticipanteAtivoPorUsuario(
+        planejamentoId,
+        usuario.id,
+      );
+
+    if (participanteExistente) {
+      return;
+    }
+
+    await this.planejamentosRepository.salvarParticipante({
+      id: randomUUID(),
+      planejamentoId,
+      usuarioId: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      tipo: ParticipanteTipo.VINCULADO,
+      status: ParticipanteStatus.ATIVO,
+    });
+  }
+
+  private async assertUsuarioProprietario(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<void> {
+    const planejamento = await this.findOne(planejamentoId, usuarioId);
+
+    if (planejamento.usuarioCriadorId === usuarioId) {
+      return;
+    }
+
+    throw new ForbiddenResourceException(
+      'PLANEJAMENTO_OWNER_REQUIRED',
+      'Apenas o proprietario do planejamento pode adicionar participantes.',
+    );
+  }
+
+  private async assertParticipanteAtivoNaoDuplicado(
+    planejamentoId: string,
+    dto: AddParticipantePlanejamentoDto,
+  ): Promise<void> {
+    const participanteExistente =
+      await this.planejamentosRepository.buscarParticipanteAtivoDuplicado(
+        planejamentoId,
+        {
+          usuarioId: dto.usuarioId,
+          email: dto.email,
+          nome: dto.nome,
+        },
+      );
+
+    if (!participanteExistente) {
+      return;
+    }
+
+    throw new AppConflictException(
+      'PLANEJAMENTO_PARTICIPANTE_DUPLICADO',
+      'Ja existe um participante ativo com estes dados no planejamento.',
+    );
   }
 }

@@ -28,7 +28,7 @@ export class PlanejamentosController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: CreatePlanejamentoDto,
   ) {
-    return this.planejamentosService.create(req.user.id, dto);
+    return this.planejamentosService.create(req.user, dto);
   }
 
   @Get()

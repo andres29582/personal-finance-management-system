@@ -206,7 +206,7 @@ describe('Financial controllers security', () => {
       nome: 'Bruno',
     });
 
-    expect(service.create).toHaveBeenCalledWith('user-1', dto);
+    expect(service.create).toHaveBeenCalledWith(req.user, dto);
     expect(service.findOne).toHaveBeenCalledWith('planejamento-1', 'user-1');
     expect(service.addParticipante).toHaveBeenCalledWith(
       'planejamento-1',

@@ -46,7 +46,7 @@ describe('PlanejamentosController', () => {
 
     const result = await controller.create(request, dto);
 
-    expect(planejamentosService.create).toHaveBeenCalledWith('user-1', dto);
+    expect(planejamentosService.create).toHaveBeenCalledWith(request.user, dto);
     expect(result).toEqual({ id: 'planejamento-1' });
   });
 

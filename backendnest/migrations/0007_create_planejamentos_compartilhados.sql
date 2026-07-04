@@ -307,6 +307,17 @@ CREATE INDEX IF NOT EXISTS idx_participante_planejamento
 CREATE INDEX IF NOT EXISTS idx_participante_planejamento_status
   ON public.participante_planejamento (planejamento_id, status);
 
+CREATE INDEX IF NOT EXISTS idx_participante_planejamento_usuario_status
+  ON public.participante_planejamento (usuario_id, status) WHERE usuario_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_participante_planejamento_usuario_ativo_unico
+  ON public.participante_planejamento (planejamento_id, usuario_id)
+  WHERE usuario_id IS NOT NULL AND status = 'ATIVO';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_participante_planejamento_email_ativo_unico
+  ON public.participante_planejamento (planejamento_id, email)
+  WHERE email IS NOT NULL AND status = 'ATIVO';
+
 CREATE INDEX IF NOT EXISTS idx_gasto_planejamento
   ON public.gasto_planejamento (planejamento_id);
 

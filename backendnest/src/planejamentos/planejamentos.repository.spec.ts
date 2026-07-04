@@ -155,10 +155,22 @@ describe('PlanejamentosRepository', () => {
     const argumento = obterObjetoDaPrimeiraChamada(
       planejamentoRepository.findOne,
     );
-    const where = obterObjeto(argumento.where);
+    const where = argumento.where as Record<string, unknown>[];
+    const participantes = obterObjeto(where[1].participantes);
 
-    expect(where.id).toBe('planejamento-id');
-    expect(where.usuarioCriadorId).toBe('usuario-id');
+    expect(where).toHaveLength(2);
+    expect(where[0]).toEqual(
+      expect.objectContaining({
+        id: 'planejamento-id',
+        usuarioCriadorId: 'usuario-id',
+      }),
+    );
+    expect(participantes).toEqual(
+      expect.objectContaining({
+        status: ParticipanteStatus.ATIVO,
+        usuarioId: 'usuario-id',
+      }),
+    );
     expect(argumento.relations).toEqual({
       participantes: true,
       gastos: {
@@ -166,6 +178,72 @@ describe('PlanejamentosRepository', () => {
       },
       acertos: true,
     });
+  });
+
+  it('busca participante ativo por usuario no planejamento', async () => {
+    participanteRepository.findOne.mockResolvedValue(null);
+
+    await repository.buscarParticipanteAtivoPorUsuario(
+      'planejamento-id',
+      'usuario-id',
+    );
+
+    const where = obterWhereDaPrimeiraChamada(participanteRepository.findOne);
+
+    expect(where).toEqual({
+      planejamentoId: 'planejamento-id',
+      status: ParticipanteStatus.ATIVO,
+      usuarioId: 'usuario-id',
+    });
+  });
+
+  it('busca participante ativo duplicado por usuario e email', async () => {
+    participanteRepository.findOne.mockResolvedValue(null);
+
+    await repository.buscarParticipanteAtivoDuplicado('planejamento-id', {
+      email: 'bruno@example.com',
+      nome: 'Bruno',
+      usuarioId: 'usuario-id',
+    });
+
+    const argumento = obterObjetoDaPrimeiraChamada(
+      participanteRepository.findOne,
+    );
+    const where = argumento.where as Record<string, unknown>[];
+
+    expect(where).toEqual([
+      {
+        planejamentoId: 'planejamento-id',
+        status: ParticipanteStatus.ATIVO,
+        usuarioId: 'usuario-id',
+      },
+      {
+        email: 'bruno@example.com',
+        planejamentoId: 'planejamento-id',
+        status: ParticipanteStatus.ATIVO,
+      },
+    ]);
+  });
+
+  it('busca participante ativo duplicado por nome quando nao ha usuario ou email', async () => {
+    participanteRepository.findOne.mockResolvedValue(null);
+
+    await repository.buscarParticipanteAtivoDuplicado('planejamento-id', {
+      nome: 'Bruno',
+    });
+
+    const argumento = obterObjetoDaPrimeiraChamada(
+      participanteRepository.findOne,
+    );
+    const where = argumento.where as Record<string, unknown>[];
+
+    expect(where).toEqual([
+      {
+        nome: 'Bruno',
+        planejamentoId: 'planejamento-id',
+        status: ParticipanteStatus.ATIVO,
+      },
+    ]);
   });
 
   it('delegar salvamentos aos repositories TypeORM sem aplicar calculo financeiro', async () => {
