@@ -11,6 +11,8 @@ import { OrcamentosController } from '../orcamentos/orcamentos.controller';
 import { OrcamentosService } from '../orcamentos/orcamentos.service';
 import { PagosDividaController } from '../pagos-divida/pagos-divida.controller';
 import { PagosDividaService } from '../pagos-divida/pagos-divida.service';
+import { PlanejamentosController } from '../planejamentos/planejamentos.controller';
+import { PlanejamentosService } from '../planejamentos/planejamentos.service';
 import { RelatoriosController } from '../relatorios/relatorios.controller';
 import { RelatoriosService } from '../relatorios/relatorios.service';
 import { PeriodoRelatorio } from '../relatorios/enums/periodo-relatorio.enum';
@@ -36,6 +38,7 @@ describe('Financial controllers security', () => {
     DividasController,
     OrcamentosController,
     PagosDividaController,
+    PlanejamentosController,
     RelatoriosController,
     TransacoesController,
     TransferenciasController,
@@ -179,6 +182,36 @@ describe('Financial controllers security', () => {
     expect(orcamentosService.findAll).toHaveBeenCalledWith(
       'user-1',
       budgetQuery,
+    );
+  });
+
+  it('uses authenticated user id for shared planning endpoints', async () => {
+    const service = {
+      addParticipante: jest.fn().mockResolvedValue({ id: 'participante-1' }),
+      create: jest.fn().mockResolvedValue({ id: 'planejamento-1' }),
+      findOne: jest.fn().mockResolvedValue({ id: 'planejamento-1' }),
+    };
+    const controller = new PlanejamentosController(
+      service as unknown as PlanejamentosService,
+    );
+    const dto = {
+      nome: 'Viagem',
+      tipo: 'VIAGEM',
+      usuarioCriadorId: 'user-2',
+    } as never;
+
+    await controller.create(req, dto);
+    await controller.findOne({ id: 'planejamento-1' }, req);
+    await controller.addParticipante({ id: 'planejamento-1' }, req, {
+      nome: 'Bruno',
+    });
+
+    expect(service.create).toHaveBeenCalledWith('user-1', dto);
+    expect(service.findOne).toHaveBeenCalledWith('planejamento-1', 'user-1');
+    expect(service.addParticipante).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+      { nome: 'Bruno' },
     );
   });
 });

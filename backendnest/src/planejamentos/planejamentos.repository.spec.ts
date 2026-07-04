@@ -4,6 +4,7 @@ import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
+import { ParticipanteStatus, PlanejamentoStatus } from './enums';
 import { PlanejamentosRepository } from './planejamentos.repository';
 
 type RepositoryMock<T> = {
@@ -64,6 +65,36 @@ describe('PlanejamentosRepository', () => {
     expect(argumento.order).toEqual({ createdAt: 'DESC' });
   });
 
+  it('lista planejamentos acessiveis por usuario criador ou participante ativo', async () => {
+    planejamentoRepository.find.mockResolvedValue([]);
+
+    await repository.listarAcessiveisPorUsuario('usuario-id', {
+      status: PlanejamentoStatus.ABERTO,
+    });
+
+    const argumento = obterObjetoDaPrimeiraChamada(planejamentoRepository.find);
+    const where = argumento.where as Record<string, unknown>[];
+    const participantes = obterObjeto(where[1].participantes);
+
+    expect(where).toHaveLength(2);
+    expect(where[0]).toEqual(
+      expect.objectContaining({
+        status: PlanejamentoStatus.ABERTO,
+        usuarioCriadorId: 'usuario-id',
+      }),
+    );
+    expect(participantes).toEqual(
+      expect.objectContaining({
+        status: ParticipanteStatus.ATIVO,
+        usuarioId: 'usuario-id',
+      }),
+    );
+    expect(argumento.relations).toEqual({
+      participantes: true,
+    });
+    expect(argumento.order).toEqual({ createdAt: 'DESC' });
+  });
+
   it('busca planejamento com participantes mantendo escopo por usuario criador', async () => {
     planejamentoRepository.findOne.mockResolvedValue(null);
 
@@ -76,6 +107,38 @@ describe('PlanejamentosRepository', () => {
 
     expect(where.id).toBe('planejamento-id');
     expect(where.usuarioCriadorId).toBe('usuario-id');
+    expect(argumento.relations).toEqual({
+      participantes: true,
+    });
+  });
+
+  it('busca planejamento acessivel por usuario criador ou participante ativo', async () => {
+    planejamentoRepository.findOne.mockResolvedValue(null);
+
+    await repository.buscarAcessivelComParticipantes(
+      'planejamento-id',
+      'usuario-id',
+    );
+
+    const argumento = obterObjetoDaPrimeiraChamada(
+      planejamentoRepository.findOne,
+    );
+    const where = argumento.where as Record<string, unknown>[];
+    const participantes = obterObjeto(where[1].participantes);
+
+    expect(where).toHaveLength(2);
+    expect(where[0]).toEqual(
+      expect.objectContaining({
+        id: 'planejamento-id',
+        usuarioCriadorId: 'usuario-id',
+      }),
+    );
+    expect(participantes).toEqual(
+      expect.objectContaining({
+        status: ParticipanteStatus.ATIVO,
+        usuarioId: 'usuario-id',
+      }),
+    );
     expect(argumento.relations).toEqual({
       participantes: true,
     });

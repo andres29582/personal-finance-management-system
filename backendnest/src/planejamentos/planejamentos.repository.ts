@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, IsNull, Repository } from 'typeorm';
+import { DeepPartial, FindOptionsWhere, IsNull, Repository } from 'typeorm';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
+import { ParticipanteStatus, PlanejamentoStatus } from './enums';
+
+export type ListarPlanejamentosFiltros = {
+  status?: PlanejamentoStatus;
+};
 
 @Injectable()
 export class PlanejamentosRepository {
@@ -49,6 +54,21 @@ export class PlanejamentosRepository {
     });
   }
 
+  async listarAcessiveisPorUsuario(
+    usuarioId: string,
+    filtros: ListarPlanejamentosFiltros = {},
+  ): Promise<Planejamento[]> {
+    return this.planejamentoRepository.find({
+      where: this.criarWhereAcessivel(usuarioId, filtros),
+      relations: {
+        participantes: true,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+
   async buscarComParticipantes(
     id: string,
     usuarioCriadorId: string,
@@ -59,6 +79,18 @@ export class PlanejamentosRepository {
         usuarioCriadorId,
         deletedAt: IsNull(),
       },
+      relations: {
+        participantes: true,
+      },
+    });
+  }
+
+  async buscarAcessivelComParticipantes(
+    id: string,
+    usuarioId: string,
+  ): Promise<Planejamento | null> {
+    return this.planejamentoRepository.findOne({
+      where: this.criarWhereAcessivel(usuarioId, { id }),
       relations: {
         participantes: true,
       },
@@ -113,5 +145,30 @@ export class PlanejamentosRepository {
     acertos: DeepPartial<AcertoPlanejamento>[],
   ): Promise<AcertoPlanejamento[]> {
     return this.acertoRepository.save(acertos);
+  }
+
+  private criarWhereAcessivel(
+    usuarioId: string,
+    filtros: ListarPlanejamentosFiltros & { id?: string },
+  ): FindOptionsWhere<Planejamento>[] {
+    const baseWhere = {
+      ...(filtros.id ? { id: filtros.id } : {}),
+      ...(filtros.status ? { status: filtros.status } : {}),
+      deletedAt: IsNull(),
+    };
+
+    return [
+      {
+        ...baseWhere,
+        usuarioCriadorId: usuarioId,
+      },
+      {
+        ...baseWhere,
+        participantes: {
+          usuarioId,
+          status: ParticipanteStatus.ATIVO,
+        },
+      },
+    ];
   }
 }

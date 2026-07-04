@@ -5,7 +5,9 @@ import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
+import { PlanejamentosController } from './planejamentos.controller';
 import { PlanejamentosRepository } from './planejamentos.repository';
+import { PlanejamentosService } from './planejamentos.service';
 
 @Module({
   imports: [
@@ -17,7 +19,8 @@ import { PlanejamentosRepository } from './planejamentos.repository';
       AcertoPlanejamento,
     ]),
   ],
-  providers: [PlanejamentosRepository],
-  exports: [PlanejamentosRepository],
+  controllers: [PlanejamentosController],
+  providers: [PlanejamentosService, PlanejamentosRepository],
+  exports: [PlanejamentosService, PlanejamentosRepository],
 })
 export class PlanejamentosModule {}
