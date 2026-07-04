@@ -5,6 +5,7 @@ import {
   ValidationAppException,
 } from '../common/exceptions';
 import {
+  AcertoStatus,
   DivisaoStatus,
   GastoComportamento,
   GastoStatus,
@@ -22,6 +23,7 @@ describe('PlanejamentosService', () => {
     Pick<
       PlanejamentosRepository,
       | 'buscarAcessivelComParticipantes'
+      | 'buscarComGastosDivisoesAcertos'
       | 'buscarGastoPorIdEPlanejamento'
       | 'buscarParticipanteAtivoDuplicado'
       | 'buscarParticipanteAtivoPorUsuario'
@@ -37,6 +39,7 @@ describe('PlanejamentosService', () => {
   beforeEach(() => {
     repository = {
       buscarAcessivelComParticipantes: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
       buscarGastoPorIdEPlanejamento: jest.fn(),
       buscarParticipanteAtivoDuplicado: jest.fn(),
       buscarParticipanteAtivoPorUsuario: jest.fn(),
@@ -372,6 +375,188 @@ describe('PlanejamentosService', () => {
     ).rejects.toBeInstanceOf(ResourceNotFoundException);
   });
 
+  it('returns an empty settlement list when planejamento has no expenses', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [],
+      }),
+    );
+
+    const result = await service.findAcertos('planejamento-1', 'user-1');
+
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('calculates suggested settlements for the owner using persisted expenses', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const result = await service.findAcertos('planejamento-1', 'user-1');
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        devedorParticipanteId: 'participante-2',
+        recebedorParticipanteId: 'participante-1',
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 5000,
+      }),
+    ]);
+    expect(result[0].valorCentavos).toBeGreaterThan(0);
+  });
+
+  it('calculates suggested settlements for active participants', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const result = await service.findAcertos('planejamento-1', 'user-2');
+
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-2',
+    );
+    expect(result).toHaveLength(1);
+  });
+
+  it('does not calculate settlements when user has no planejamento access', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(null);
+
+    await expect(
+      service.findAcertos('planejamento-1', 'user-3'),
+    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+  });
+
+  it('consolidates multiple expenses into minimal settlements', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          criarParticipantePersistido('participante-2'),
+          criarParticipantePersistido('participante-3'),
+        ],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 12000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 4000),
+              criarDivisaoPersistida('participante-2', 4000),
+              criarDivisaoPersistida('participante-3', 4000),
+            ],
+          }),
+          criarGastoPersistido({
+            id: 'gasto-2',
+            pagoPorParticipanteId: 'participante-2',
+            valorCentavos: 3000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 1000),
+              criarDivisaoPersistida('participante-2', 1000),
+              criarDivisaoPersistida('participante-3', 1000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const result = await service.findAcertos('planejamento-1', 'user-1');
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        devedorParticipanteId: 'participante-2',
+        recebedorParticipanteId: 'participante-1',
+        valorCentavos: 2000,
+      }),
+      expect.objectContaining({
+        devedorParticipanteId: 'participante-3',
+        recebedorParticipanteId: 'participante-1',
+        valorCentavos: 5000,
+      }),
+    ]);
+    expect(result.every((acerto) => acerto.valorCentavos > 0)).toBe(true);
+  });
+
+  it('does not suggest settlements for balanced participants', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 1000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 500),
+              criarDivisaoPersistida('participante-2', 500),
+            ],
+          }),
+          criarGastoPersistido({
+            id: 'gasto-2',
+            pagoPorParticipanteId: 'participante-2',
+            valorCentavos: 1000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 500),
+              criarDivisaoPersistida('participante-2', 500),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.findAcertos('planejamento-1', 'user-1'),
+    ).resolves.toEqual([]);
+  });
+
+  it('keeps settlement calculation scoped to the requested planejamento aggregate', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [
+          criarGastoPersistido({
+            planejamentoId: 'planejamento-1',
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 1000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 500),
+              criarDivisaoPersistida('participante-2', 500),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await service.findAcertos('planejamento-1', 'user-1');
+
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+  });
+
   it('rejects creation when dataFim is before dataInicio', async () => {
     await expect(
       service.create(
@@ -521,20 +706,52 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
   });
 
-  function criarPlanejamentoComParticipantes() {
+  function criarPlanejamentoComParticipantes(
+    overrides: Record<string, unknown> = {},
+  ) {
     return {
       id: 'planejamento-1',
       participantes: [
-        {
-          id: 'participante-1',
-          status: ParticipanteStatus.ATIVO,
-        },
-        {
-          id: 'participante-2',
-          status: ParticipanteStatus.ATIVO,
-        },
+        criarParticipantePersistido('participante-1'),
+        criarParticipantePersistido('participante-2'),
       ],
       usuarioCriadorId: 'user-1',
+      gastos: [],
+      acertos: [],
+      ...overrides,
     } as never;
+  }
+
+  function criarParticipantePersistido(id: string) {
+    return {
+      id,
+      status: ParticipanteStatus.ATIVO,
+    };
+  }
+
+  function criarGastoPersistido(
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      id: 'gasto-1',
+      deletedAt: null,
+      divisoes: [],
+      pagoPorParticipanteId: 'participante-1',
+      planejamentoId: 'planejamento-1',
+      status: GastoStatus.ATIVO,
+      valorCentavos: 1000,
+      ...overrides,
+    };
+  }
+
+  function criarDivisaoPersistida(
+    participanteId: string,
+    valorDevidoCentavos: number,
+  ) {
+    return {
+      participanteId,
+      status: DivisaoStatus.ATIVA,
+      valorDevidoCentavos,
+    };
   }
 });

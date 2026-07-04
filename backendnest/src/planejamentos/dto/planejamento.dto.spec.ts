@@ -3,6 +3,7 @@ import {
   AddParticipantePlanejamentoDto,
   CreateGastoPlanejamentoDto,
   CreatePlanejamentoDto,
+  FindAcertosPlanejamentoParamsDto,
   FindGastoPlanejamentoParamsDto,
   FindGastosPlanejamentoParamsDto,
   FindPlanejamentoParamsDto,
@@ -152,5 +153,20 @@ describe('Planejamento DTO validation', () => {
 
     await expect(validate(listaParams)).resolves.toHaveLength(0);
     await expect(validate(detalheParams)).resolves.toHaveLength(0);
+  });
+
+  it('accepts and rejects shared settlement route params', async () => {
+    const valido = Object.assign(new FindAcertosPlanejamentoParamsDto(), {
+      planejamentoId: uuid,
+    });
+    const invalido = Object.assign(new FindAcertosPlanejamentoParamsDto(), {
+      planejamentoId: 'planejamento-id',
+    });
+
+    await expect(validate(valido)).resolves.toHaveLength(0);
+
+    const errors = await validate(invalido);
+
+    expect(errors.map((error) => error.property)).toContain('planejamentoId');
   });
 });

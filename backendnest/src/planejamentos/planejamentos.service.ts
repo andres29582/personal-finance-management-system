@@ -12,12 +12,17 @@ import {
   CreatePlanejamentoDto,
   FindPlanejamentosDto,
 } from './dto';
-import { calcularDivisaoIgualitaria } from './domain';
-import { PlanejamentoDominioError } from './domain/types';
+import { calcularAcertosMinimos, calcularDivisaoIgualitaria } from './domain';
+import {
+  AcertoPlanejamentoCalculo,
+  GastoPlanejamentoCalculo,
+  PlanejamentoDominioError,
+} from './domain/types';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
 import {
+  AcertoStatus,
   DivisaoStatus,
   GastoStatus,
   ParticipanteStatus,
@@ -30,6 +35,15 @@ export type PlanejamentoUsuarioAutenticado = {
   id: string;
   email: string;
   nome: string;
+};
+
+export type AcertoPlanejamentoSugerido = {
+  devedorParticipanteId: string;
+  recebedorParticipanteId: string;
+  valorCentavos: number;
+  status: AcertoStatus.PENDENTE;
+  devedorParticipante: ParticipantePlanejamento;
+  recebedorParticipante: ParticipantePlanejamento;
 };
 
 @Injectable()
@@ -203,6 +217,51 @@ export class PlanejamentosService {
     return gasto;
   }
 
+  async findAcertos(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<AcertoPlanejamentoSugerido[]> {
+    const planejamento =
+      await this.planejamentosRepository.buscarComGastosDivisoesAcertos(
+        planejamentoId,
+        usuarioId,
+      );
+
+    if (!planejamento) {
+      throw new ResourceNotFoundException(
+        'PLANEJAMENTO_NOT_FOUND',
+        'Planejamento nao encontrado.',
+      );
+    }
+
+    const participantesAtivos = (planejamento.participantes ?? []).filter(
+      (participante) => participante.status === ParticipanteStatus.ATIVO,
+    );
+    const participantesPorId = new Map(
+      participantesAtivos.map((participante) => [
+        participante.id,
+        participante,
+      ]),
+    );
+    const acertos = this.calcularAcertosPersistidos(
+      planejamento,
+      participantesAtivos.map((participante) => participante.id),
+    );
+
+    return acertos.map((acerto) => ({
+      devedorParticipanteId: acerto.devedorParticipanteId,
+      recebedorParticipanteId: acerto.recebedorParticipanteId,
+      valorCentavos: acerto.valorCentavos,
+      status: AcertoStatus.PENDENTE,
+      devedorParticipante: participantesPorId.get(
+        acerto.devedorParticipanteId,
+      )!,
+      recebedorParticipante: participantesPorId.get(
+        acerto.recebedorParticipanteId,
+      )!,
+    }));
+  }
+
   private validarPeriodo(dto: CreatePlanejamentoDto): void {
     if (!dto.dataInicio || !dto.dataFim || dto.dataFim >= dto.dataInicio) {
       return;
@@ -293,6 +352,55 @@ export class PlanejamentosService {
 
       throw error;
     }
+  }
+
+  private calcularAcertosPersistidos(
+    planejamento: Planejamento,
+    participantesIds: string[],
+  ) {
+    try {
+      return calcularAcertosMinimos(
+        participantesIds,
+        this.mapearGastosParaCalculo(planejamento),
+        this.mapearAcertosParaCalculo(planejamento),
+      );
+    } catch (error) {
+      if (error instanceof PlanejamentoDominioError) {
+        throw new ValidationAppException(error.code, error.message);
+      }
+
+      throw error;
+    }
+  }
+
+  private mapearGastosParaCalculo(
+    planejamento: Planejamento,
+  ): GastoPlanejamentoCalculo[] {
+    return (planejamento.gastos ?? [])
+      .filter((gasto) => gasto.status === GastoStatus.ATIVO && !gasto.deletedAt)
+      .map((gasto) => ({
+        id: gasto.id,
+        pagoPorParticipanteId: gasto.pagoPorParticipanteId,
+        status: gasto.status,
+        valorCentavos: gasto.valorCentavos,
+        divisoes: (gasto.divisoes ?? [])
+          .filter((divisao) => divisao.status === DivisaoStatus.ATIVA)
+          .map((divisao) => ({
+            participanteId: divisao.participanteId,
+            valorCentavos: divisao.valorDevidoCentavos,
+          })),
+      }));
+  }
+
+  private mapearAcertosParaCalculo(
+    planejamento: Planejamento,
+  ): AcertoPlanejamentoCalculo[] {
+    return (planejamento.acertos ?? []).map((acerto) => ({
+      devedorParticipanteId: acerto.deParticipanteId,
+      recebedorParticipanteId: acerto.paraParticipanteId,
+      status: acerto.status,
+      valorCentavos: acerto.valorCentavos,
+    }));
   }
 
   private assertParticipantePertenceAoPlanejamento(

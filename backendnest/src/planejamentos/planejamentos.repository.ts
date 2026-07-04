@@ -113,8 +113,12 @@ export class PlanejamentosRepository {
         participantes: true,
         gastos: {
           divisoes: true,
+          pagoPorParticipante: true,
         },
-        acertos: true,
+        acertos: {
+          deParticipante: true,
+          paraParticipante: true,
+        },
       },
     });
   }

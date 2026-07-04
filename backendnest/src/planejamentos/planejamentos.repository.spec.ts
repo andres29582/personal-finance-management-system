@@ -144,7 +144,7 @@ describe('PlanejamentosRepository', () => {
     });
   });
 
-  it('busca planejamento com gastos, divisoes e acertos mantendo escopo por usuario criador', async () => {
+  it('busca planejamento com gastos, pagadores, divisoes e acertos mantendo escopo por usuario criador', async () => {
     planejamentoRepository.findOne.mockResolvedValue(null);
 
     await repository.buscarComGastosDivisoesAcertos(
@@ -175,8 +175,12 @@ describe('PlanejamentosRepository', () => {
       participantes: true,
       gastos: {
         divisoes: true,
+        pagoPorParticipante: true,
       },
-      acertos: true,
+      acertos: {
+        deParticipante: true,
+        paraParticipante: true,
+      },
     });
   });
 

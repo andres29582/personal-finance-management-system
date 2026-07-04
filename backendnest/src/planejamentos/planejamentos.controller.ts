@@ -14,6 +14,7 @@ import {
   AddParticipantePlanejamentoDto,
   CreateGastoPlanejamentoDto,
   CreatePlanejamentoDto,
+  FindAcertosPlanejamentoParamsDto,
   FindGastoPlanejamentoParamsDto,
   FindGastosPlanejamentoParamsDto,
   FindPlanejamentoParamsDto,
@@ -95,6 +96,17 @@ export class PlanejamentosController {
     return this.planejamentosService.findGasto(
       params.planejamentoId,
       params.gastoId,
+      req.user.id,
+    );
+  }
+
+  @Get(':planejamentoId/acertos')
+  findAcertos(
+    @Param() params: FindAcertosPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.findAcertos(
+      params.planejamentoId,
       req.user.id,
     );
   }

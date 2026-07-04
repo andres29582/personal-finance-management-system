@@ -15,6 +15,7 @@ describe('PlanejamentosController', () => {
       | 'addParticipante'
       | 'create'
       | 'createGasto'
+      | 'findAcertos'
       | 'findAll'
       | 'findGasto'
       | 'findGastos'
@@ -36,6 +37,7 @@ describe('PlanejamentosController', () => {
       addParticipante: jest.fn(),
       create: jest.fn(),
       createGasto: jest.fn(),
+      findAcertos: jest.fn(),
       findAll: jest.fn(),
       findGasto: jest.fn(),
       findGastos: jest.fn(),
@@ -175,5 +177,32 @@ describe('PlanejamentosController', () => {
       'user-1',
     );
     expect(result).toEqual({ id: 'gasto-1' });
+  });
+
+  it('delegates findAcertos using planejamento route id and authenticated user id', async () => {
+    planejamentosService.findAcertos.mockResolvedValue([
+      {
+        devedorParticipanteId: 'participante-2',
+        recebedorParticipanteId: 'participante-1',
+        valorCentavos: 5000,
+      },
+    ] as never);
+
+    const result = await controller.findAcertos(
+      { planejamentoId: 'planejamento-1' },
+      request,
+    );
+
+    expect(planejamentosService.findAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toEqual([
+      {
+        devedorParticipanteId: 'participante-2',
+        recebedorParticipanteId: 'participante-1',
+        valorCentavos: 5000,
+      },
+    ]);
   });
 });
