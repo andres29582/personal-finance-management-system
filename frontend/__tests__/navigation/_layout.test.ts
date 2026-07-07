@@ -96,6 +96,7 @@ describe('_layout.tsx - Navigation Guards', () => {
       '/metas',
       '/orcamentos',
       '/planejamentos',
+      '/planejamentos-gasto-form',
       '/planejamentos-participante-form',
       '/relatorios',
       '/alertas',
