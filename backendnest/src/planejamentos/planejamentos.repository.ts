@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, FindOptionsWhere, IsNull, Repository } from 'typeorm';
+import {
+  DataSource,
+  DeepPartial,
+  FindOptionsWhere,
+  IsNull,
+  Repository,
+} from 'typeorm';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
@@ -31,7 +37,25 @@ export class PlanejamentosRepository {
     private readonly divisaoRepository: Repository<DivisaoGasto>,
     @InjectRepository(AcertoPlanejamento)
     private readonly acertoRepository: Repository<AcertoPlanejamento>,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async executarEmTransacao<T>(
+    operacao: (repository: PlanejamentosRepository) => Promise<T>,
+  ): Promise<T> {
+    return this.dataSource.transaction((manager) =>
+      operacao(
+        new PlanejamentosRepository(
+          manager.getRepository(Planejamento),
+          manager.getRepository(ParticipantePlanejamento),
+          manager.getRepository(GastoPlanejamento),
+          manager.getRepository(DivisaoGasto),
+          manager.getRepository(AcertoPlanejamento),
+          this.dataSource,
+        ),
+      ),
+    );
+  }
 
   async buscarPorIdEUsuarioCriador(
     id: string,
@@ -119,6 +143,22 @@ export class PlanejamentosRepository {
           deParticipante: true,
           paraParticipante: true,
         },
+      },
+    });
+  }
+
+  async buscarAcertoPorIdEPlanejamento(
+    id: string,
+    planejamentoId: string,
+  ): Promise<AcertoPlanejamento | null> {
+    return this.acertoRepository.findOne({
+      where: {
+        id,
+        planejamentoId,
+      },
+      relations: {
+        deParticipante: true,
+        paraParticipante: true,
       },
     });
   }
@@ -233,6 +273,12 @@ export class PlanejamentosRepository {
     acertos: DeepPartial<AcertoPlanejamento>[],
   ): Promise<AcertoPlanejamento[]> {
     return this.acertoRepository.save(acertos);
+  }
+
+  async salvarAcerto(
+    acerto: DeepPartial<AcertoPlanejamento>,
+  ): Promise<AcertoPlanejamento> {
+    return this.acertoRepository.save(acerto);
   }
 
   private criarWhereAcessivel(

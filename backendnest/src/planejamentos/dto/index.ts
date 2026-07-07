@@ -1,6 +1,7 @@
 export * from './add-participante-planejamento.dto';
 export * from './create-gasto-planejamento.dto';
 export * from './create-planejamento.dto';
+export * from './find-acerto-planejamento-params.dto';
 export * from './find-acertos-planejamento-params.dto';
 export * from './find-gasto-planejamento-params.dto';
 export * from './find-gastos-planejamento-params.dto';

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Request,
@@ -14,6 +15,7 @@ import {
   AddParticipantePlanejamentoDto,
   CreateGastoPlanejamentoDto,
   CreatePlanejamentoDto,
+  FindAcertoPlanejamentoParamsDto,
   FindAcertosPlanejamentoParamsDto,
   FindGastoPlanejamentoParamsDto,
   FindGastosPlanejamentoParamsDto,
@@ -107,6 +109,53 @@ export class PlanejamentosController {
   ) {
     return this.planejamentosService.findAcertos(
       params.planejamentoId,
+      req.user.id,
+    );
+  }
+
+  @Post(':planejamentoId/acertos/sincronizar')
+  sincronizarAcertos(
+    @Param() params: FindAcertosPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.sincronizarAcertos(
+      params.planejamentoId,
+      req.user.id,
+    );
+  }
+
+  @Patch(':planejamentoId/acertos/:acertoId/pagar')
+  pagarAcerto(
+    @Param() params: FindAcertoPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.pagarAcerto(
+      params.planejamentoId,
+      params.acertoId,
+      req.user.id,
+    );
+  }
+
+  @Patch(':planejamentoId/acertos/:acertoId/cancelar')
+  cancelarAcerto(
+    @Param() params: FindAcertoPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.cancelarAcerto(
+      params.planejamentoId,
+      params.acertoId,
+      req.user.id,
+    );
+  }
+
+  @Patch(':planejamentoId/acertos/:acertoId/reabrir')
+  reabrirAcerto(
+    @Param() params: FindAcertoPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.reabrirAcerto(
+      params.planejamentoId,
+      params.acertoId,
       req.user.id,
     );
   }

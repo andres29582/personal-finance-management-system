@@ -89,6 +89,27 @@ describe('calcularAcertosMinimos', () => {
     ]);
   });
 
+  it('considera acertos confirmados e gera apenas pendencias restantes', () => {
+    const participantes = ['andres', 'maria', 'joao', 'pedro'];
+    const gastos = criarGastosExemplo(participantes);
+    const acertos: AcertoPlanejamentoCalculo[] = [
+      {
+        devedorParticipanteId: 'joao',
+        recebedorParticipanteId: 'andres',
+        valorCentavos: 5000,
+        status: 'CONFIRMADO',
+      },
+    ];
+
+    expect(calcularAcertosMinimos(participantes, gastos, acertos)).toEqual([
+      {
+        devedorParticipanteId: 'pedro',
+        recebedorParticipanteId: 'maria',
+        valorCentavos: 25000,
+      },
+    ]);
+  });
+
   it('ignora acertos cancelados', () => {
     const participantes = ['andres', 'maria', 'joao', 'pedro'];
     const gastos = criarGastosExemplo(participantes);

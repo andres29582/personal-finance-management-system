@@ -2,6 +2,12 @@
 
 Esta pasta reúne a documentação oficial, histórica, acadêmica e operacional do projeto. A documentação viva deve refletir o estado atual do sistema; documentos em `arquivo/` são históricos e não representam necessariamente a arquitetura, decisões ou processos atuais.
 
+## Fonte oficial de contrato da API
+
+O contrato oficial da API e `backendnest/swagger.yaml`.
+
+Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o contrato OpenAPI.
+
 ## Documentos principais
 
 - [Roadmap de Profissionalização](produto/ROADMAP_PROFISSIONALIZACAO.md)

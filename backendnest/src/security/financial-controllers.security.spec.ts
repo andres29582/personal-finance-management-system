@@ -188,12 +188,16 @@ describe('Financial controllers security', () => {
   it('uses authenticated user id for shared planning endpoints', async () => {
     const service = {
       addParticipante: jest.fn().mockResolvedValue({ id: 'participante-1' }),
+      cancelarAcerto: jest.fn().mockResolvedValue({ id: 'acerto-1' }),
       create: jest.fn().mockResolvedValue({ id: 'planejamento-1' }),
       createGasto: jest.fn().mockResolvedValue({ id: 'gasto-1' }),
       findAcertos: jest.fn().mockResolvedValue([]),
       findGasto: jest.fn().mockResolvedValue({ id: 'gasto-1' }),
       findGastos: jest.fn().mockResolvedValue([{ id: 'gasto-1' }]),
       findOne: jest.fn().mockResolvedValue({ id: 'planejamento-1' }),
+      pagarAcerto: jest.fn().mockResolvedValue({ id: 'acerto-1' }),
+      reabrirAcerto: jest.fn().mockResolvedValue({ id: 'acerto-1' }),
+      sincronizarAcertos: jest.fn().mockResolvedValue([]),
     };
     const controller = new PlanejamentosController(
       service as unknown as PlanejamentosService,
@@ -218,6 +222,22 @@ describe('Financial controllers security', () => {
       req,
     );
     await controller.findAcertos({ planejamentoId: 'planejamento-1' }, req);
+    await controller.sincronizarAcertos(
+      { planejamentoId: 'planejamento-1' },
+      req,
+    );
+    await controller.pagarAcerto(
+      { planejamentoId: 'planejamento-1', acertoId: 'acerto-1' },
+      req,
+    );
+    await controller.cancelarAcerto(
+      { planejamentoId: 'planejamento-1', acertoId: 'acerto-1' },
+      req,
+    );
+    await controller.reabrirAcerto(
+      { planejamentoId: 'planejamento-1', acertoId: 'acerto-1' },
+      req,
+    );
 
     expect(service.create).toHaveBeenCalledWith(req.user, dto);
     expect(service.findOne).toHaveBeenCalledWith('planejamento-1', 'user-1');
@@ -239,6 +259,25 @@ describe('Financial controllers security', () => {
     );
     expect(service.findAcertos).toHaveBeenCalledWith(
       'planejamento-1',
+      'user-1',
+    );
+    expect(service.sincronizarAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(service.pagarAcerto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+    expect(service.cancelarAcerto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+    expect(service.reabrirAcerto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'acerto-1',
       'user-1',
     );
   });

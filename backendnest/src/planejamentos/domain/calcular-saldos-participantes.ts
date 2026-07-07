@@ -49,7 +49,7 @@ export function calcularSaldosParticipantes(
       continue;
     }
 
-    if (acerto.status !== 'PAGO') {
+    if (acerto.status !== 'PAGO' && acerto.status !== 'CONFIRMADO') {
       continue;
     }
 

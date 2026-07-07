@@ -9,8 +9,12 @@ Documentos relacionados:
 - Projeto completo: `../README.md`
 - Arquitetura geral: `../docs/arquitetura/ARQUITETURA.md`
 - Runbook local: `../docs/operacao/RUNBOOK.md`
-- Contrato OpenAPI estatico: `swagger.yaml`
+- Contrato oficial da API: `swagger.yaml` (`backendnest/swagger.yaml` no repositorio)
 - Baseline de banco: `migrations/0001_mvp_baseline.sql`
+
+O contrato oficial da API e `backendnest/swagger.yaml`.
+
+Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o contrato OpenAPI.
 
 ## Papel do backend
 
