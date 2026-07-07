@@ -6,6 +6,11 @@ export const financeSidebarItems: FinanceSidebarItem[] = [
   { icon: 'swap-horizontal', label: 'Transacoes', route: '/transacoes' },
   { icon: 'tag-outline', label: 'Categorias', route: '/categorias' },
   { icon: 'cash-multiple', label: 'Orcamentos', route: '/orcamentos' },
+  {
+    icon: 'account-group-outline',
+    label: 'Planejamentos',
+    route: '/planejamentos',
+  },
   { icon: 'chart-box-outline', label: 'Relatorios', route: '/relatorios' },
   {
     icon: 'chart-timeline-variant',

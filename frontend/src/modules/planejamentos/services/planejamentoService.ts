@@ -1,0 +1,27 @@
+import {
+  CreatePlanejamentoRequest,
+  Planejamento,
+  PlanejamentoStatus,
+} from '../types/planejamento';
+import { api } from '../../../shared/services/api';
+
+export async function listPlanejamentos(
+  status?: PlanejamentoStatus,
+): Promise<Planejamento[]> {
+  const response = await api.get<Planejamento[]>('/planejamentos', {
+    params: status ? { status } : undefined,
+  });
+  return response.data;
+}
+
+export async function createPlanejamento(
+  data: CreatePlanejamentoRequest,
+): Promise<Planejamento> {
+  const response = await api.post<Planejamento>('/planejamentos', data);
+  return response.data;
+}
+
+export async function getPlanejamentoById(id: string): Promise<Planejamento> {
+  const response = await api.get<Planejamento>(`/planejamentos/${id}`);
+  return response.data;
+}

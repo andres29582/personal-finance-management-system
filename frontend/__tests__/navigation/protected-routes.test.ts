@@ -33,6 +33,9 @@ describe('F2 - Protected Routes & Navigation Flows', () => {
         '/metas-form',
         '/orcamentos',
         '/orcamentos-form',
+        '/planejamentos',
+        '/planejamentos-form',
+        '/planejamentos-detail',
         '/relatorios',
         '/previsao-deficit',
         '/alertas',
@@ -321,6 +324,19 @@ describe('F2 - Protected Routes & Navigation Flows', () => {
     it('debe permitir /dividas-form (subrutade /dividas)', async () => {
       const token = 'valid_token';
       const protectedRoutes = ['/dividas', '/dividas-form'];
+
+      protectedRoutes.forEach((route) => {
+        expect(token).not.toBeNull();
+      });
+    });
+
+    it('debe permitir /planejamentos-detail (subrutade /planejamentos)', async () => {
+      const token = 'valid_token';
+      const protectedRoutes = [
+        '/planejamentos',
+        '/planejamentos-form',
+        '/planejamentos-detail',
+      ];
 
       protectedRoutes.forEach((route) => {
         expect(token).not.toBeNull();
