@@ -95,6 +95,7 @@ describe('_layout.tsx - Navigation Guards', () => {
       '/dividas',
       '/metas',
       '/orcamentos',
+      '/planejamentos',
       '/relatorios',
       '/alertas',
       '/transferencias',
