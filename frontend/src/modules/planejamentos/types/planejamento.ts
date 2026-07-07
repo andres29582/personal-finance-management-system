@@ -109,6 +109,12 @@ export type CreatePlanejamentoRequest = {
   tipo: PlanejamentoTipo;
 };
 
+export type AddParticipantePlanejamentoRequest = {
+  email?: string;
+  nome: string;
+  usuarioId?: string;
+};
+
 export type SuccessEnvelope<T> = {
   data: T;
   requestId: string;
@@ -118,3 +124,5 @@ export type SuccessEnvelope<T> = {
 
 export type PlanejamentoListSuccess = SuccessEnvelope<Planejamento[]>;
 export type PlanejamentoSuccess = SuccessEnvelope<Planejamento>;
+export type ParticipantePlanejamentoSuccess =
+  SuccessEnvelope<ParticipantePlanejamento>;

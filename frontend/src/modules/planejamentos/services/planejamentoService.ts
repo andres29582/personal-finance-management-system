@@ -1,5 +1,7 @@
 import {
+  AddParticipantePlanejamentoRequest,
   CreatePlanejamentoRequest,
+  ParticipantePlanejamento,
   Planejamento,
   PlanejamentoStatus,
 } from '../types/planejamento';
@@ -23,5 +25,16 @@ export async function createPlanejamento(
 
 export async function getPlanejamentoById(id: string): Promise<Planejamento> {
   const response = await api.get<Planejamento>(`/planejamentos/${id}`);
+  return response.data;
+}
+
+export async function addParticipantePlanejamento(
+  planejamentoId: string,
+  data: AddParticipantePlanejamentoRequest,
+): Promise<ParticipantePlanejamento> {
+  const response = await api.post<ParticipantePlanejamento>(
+    `/planejamentos/${planejamentoId}/participantes`,
+    data,
+  );
   return response.data;
 }

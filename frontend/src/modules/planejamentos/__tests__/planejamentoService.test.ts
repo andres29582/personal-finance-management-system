@@ -1,11 +1,14 @@
 import {
+  addParticipantePlanejamento,
   createPlanejamento,
   getPlanejamentoById,
   listPlanejamentos,
 } from '../services/planejamentoService';
 import { api } from '../../../shared/services/api';
 import {
+  AddParticipantePlanejamentoRequest,
   CreatePlanejamentoRequest,
+  ParticipantePlanejamento,
   Planejamento,
 } from '../types/planejamento';
 
@@ -36,6 +39,23 @@ function makePlanejamento(
     tipo: 'VIAGEM',
     updatedAt: '2026-01-01T00:00:00.000Z',
     usuarioCriadorId: 'usuario-1',
+    ...overrides,
+  };
+}
+
+function makeParticipante(
+  overrides: Partial<ParticipantePlanejamento> = {},
+): ParticipantePlanejamento {
+  return {
+    createdAt: '2026-01-01T00:00:00.000Z',
+    email: 'ana@example.com',
+    id: 'participante-1',
+    nome: 'Ana',
+    planejamentoId: 'planejamento-1',
+    status: 'ATIVO',
+    tipo: 'MANUAL',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    usuarioId: null,
     ...overrides,
   };
 }
@@ -94,5 +114,22 @@ describe('planejamentoService', () => {
 
     expect(mockedApi.get).toHaveBeenCalledWith('/planejamentos/planejamento-2');
     expect(result).toEqual(planejamento);
+  });
+
+  it('adiciona participante ao planejamento', async () => {
+    const payload: AddParticipantePlanejamentoRequest = {
+      email: 'ana@example.com',
+      nome: 'Ana',
+    };
+    const participante = makeParticipante(payload);
+    mockedApi.post.mockResolvedValueOnce({ data: participante });
+
+    const result = await addParticipantePlanejamento('planejamento-1', payload);
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/participantes',
+      payload,
+    );
+    expect(result).toEqual(participante);
   });
 });
