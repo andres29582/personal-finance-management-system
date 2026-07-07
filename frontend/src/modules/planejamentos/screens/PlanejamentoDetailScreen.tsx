@@ -14,6 +14,9 @@ import { resolveApiError } from '../../../../utils/api-error';
 import { formatDate } from '../../../../utils/formatters';
 import { getPlanejamentoById } from '../services/planejamentoService';
 import {
+  ParticipantePlanejamento,
+  ParticipantePlanejamentoStatus,
+  ParticipantePlanejamentoTipo,
   Planejamento,
   PlanejamentoStatus,
   PlanejamentoTipo,
@@ -35,8 +38,24 @@ const tipoLabel: Record<PlanejamentoTipo, string> = {
   VIAGEM: 'Viagem',
 };
 
+const participanteTipoLabel: Record<ParticipantePlanejamentoTipo, string> = {
+  CONVIDADO: 'Convidado',
+  MANUAL: 'Manual',
+  VINCULADO: 'Vinculado',
+};
+
+const participanteStatusLabel: Record<ParticipantePlanejamentoStatus, string> = {
+  ATIVO: 'Ativo',
+  PENDENTE: 'Pendente',
+  REMOVIDO: 'Removido',
+};
+
 function formatOptionalDate(date: string | null | undefined) {
   return date ? formatDate(date.slice(0, 10)) : '-';
+}
+
+function getParticipantes(planejamento: Planejamento | null) {
+  return planejamento?.participantes ?? [];
 }
 
 export function PlanejamentoDetailScreen() {
@@ -78,6 +97,8 @@ export function PlanejamentoDetailScreen() {
     void loadPlanejamento();
   }, [planejamentoId, router]);
 
+  const participantes = getParticipantes(planejamento);
+
   return (
     <FinanceAppShell
       activeRoute="/planejamentos"
@@ -118,50 +139,123 @@ export function PlanejamentoDetailScreen() {
       ) : null}
 
       {!loading && planejamento ? (
-        <GlassPanel title="Dados gerais" accent="cyan">
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>{planejamento.nome}</Text>
-            <View
-              style={[
-                styles.badge,
-                planejamento.status === 'ABERTO'
-                  ? styles.badgeOpen
-                  : styles.badgeClosed,
-              ]}
-            >
-              <Text style={styles.badgeText}>
-                {statusLabel[planejamento.status]}
-              </Text>
+        <>
+          <GlassPanel title="Dados gerais" accent="cyan">
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>{planejamento.nome}</Text>
+              <View
+                style={[
+                  styles.badge,
+                  planejamento.status === 'ABERTO'
+                    ? styles.badgeOpen
+                    : styles.badgeClosed,
+                ]}
+              >
+                <Text style={styles.badgeText}>
+                  {statusLabel[planejamento.status]}
+                </Text>
+              </View>
             </View>
-          </View>
-          <Text style={styles.typeText}>{tipoLabel[planejamento.tipo]}</Text>
-          {planejamento.descricao ? (
-            <Text style={styles.description}>{planejamento.descricao}</Text>
-          ) : null}
+            <Text style={styles.typeText}>{tipoLabel[planejamento.tipo]}</Text>
+            {planejamento.descricao ? (
+              <Text style={styles.description}>{planejamento.descricao}</Text>
+            ) : null}
 
-          <View style={styles.infoGrid}>
-            <View style={styles.infoCell}>
-              <Text style={styles.infoLabel}>Inicio</Text>
-              <Text style={styles.infoValue}>
-                {formatOptionalDate(planejamento.dataInicio)}
-              </Text>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoCell}>
+                <Text style={styles.infoLabel}>Inicio</Text>
+                <Text style={styles.infoValue}>
+                  {formatOptionalDate(planejamento.dataInicio)}
+                </Text>
+              </View>
+              <View style={styles.infoCell}>
+                <Text style={styles.infoLabel}>Fim</Text>
+                <Text style={styles.infoValue}>
+                  {formatOptionalDate(planejamento.dataFim)}
+                </Text>
+              </View>
+              <View style={styles.infoCell}>
+                <Text style={styles.infoLabel}>Criado em</Text>
+                <Text style={styles.infoValue}>
+                  {formatOptionalDate(planejamento.createdAt)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.infoCell}>
-              <Text style={styles.infoLabel}>Fim</Text>
-              <Text style={styles.infoValue}>
-                {formatOptionalDate(planejamento.dataFim)}
+          </GlassPanel>
+
+          <GlassPanel
+            title="Participantes"
+            subtitle="Pessoas vinculadas a este planejamento."
+            action={
+              <GlassButton
+                label="Adicionar participante"
+                onPress={() =>
+                  router.push({
+                    pathname: '/planejamentos-participante-form',
+                    params: { id: planejamento.id },
+                  } as never)
+                }
+                variant="ghost"
+              />
+            }
+          >
+            {participantes.length ? (
+              participantes.map((participante) => (
+                <ParticipanteRow
+                  key={participante.id}
+                  participante={participante}
+                />
+              ))
+            ) : (
+              <Text style={styles.emptyText}>
+                Nenhum participante cadastrado.
               </Text>
-            </View>
-            <View style={styles.infoCell}>
-              <Text style={styles.infoLabel}>Criado em</Text>
-              <Text style={styles.infoValue}>
-                {formatOptionalDate(planejamento.createdAt)}
-              </Text>
-            </View>
-          </View>
-        </GlassPanel>
+            )}
+          </GlassPanel>
+        </>
       ) : null}
     </FinanceAppShell>
+  );
+}
+
+function ParticipanteRow({
+  participante,
+}: {
+  participante: ParticipantePlanejamento;
+}) {
+  return (
+    <View style={styles.participantRow}>
+      <View style={styles.participantAvatar}>
+        <Text style={styles.participantInitial}>
+          {participante.nome.slice(0, 1).toUpperCase()}
+        </Text>
+      </View>
+      <View style={styles.participantInfo}>
+        <Text style={styles.participantName}>{participante.nome}</Text>
+        {participante.email ? (
+          <Text style={styles.participantEmail}>{participante.email}</Text>
+        ) : null}
+        <View style={styles.participantBadges}>
+          <View style={styles.participantBadge}>
+            <Text style={styles.participantBadgeText}>
+              {participanteTipoLabel[participante.tipo]}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.participantBadge,
+              participante.status === 'ATIVO'
+                ? styles.participantBadgeActive
+                : null,
+            ]}
+          >
+            <Text style={styles.participantBadgeText}>
+              {participanteStatusLabel[participante.status]}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -191,6 +285,11 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     marginTop: FinanceTheme.spacing.sm,
+  },
+  emptyText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
   },
   headerRow: {
     alignItems: 'center',
@@ -234,6 +333,64 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
+  },
+  participantAvatar: {
+    alignItems: 'center',
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
+    borderRadius: FinanceTheme.radius.md,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  participantBadge: {
+    backgroundColor: FinanceTheme.colors.glassSubtle,
+    borderColor: FinanceTheme.colors.border,
+    borderRadius: 999,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xxs,
+  },
+  participantBadgeActive: {
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
+  },
+  participantBadgeText: {
+    color: FinanceTheme.colors.text,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  participantBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.xs,
+    marginTop: FinanceTheme.spacing.xs,
+  },
+  participantEmail: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    marginTop: FinanceTheme.spacing.xxs,
+  },
+  participantInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  participantInitial: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '900',
+  },
+  participantName: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+  },
+  participantRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+    marginBottom: FinanceTheme.spacing.sm,
   },
   title: {
     color: FinanceTheme.colors.text,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { PlanejamentoDetailScreen } from '../screens/PlanejamentoDetailScreen';
 import * as planejamentoService from '../services/planejamentoService';
 import { Planejamento } from '../types/planejamento';
@@ -72,6 +72,41 @@ describe('PlanejamentoDetailScreen', () => {
       expect(screen.getByText('Aberto')).toBeTruthy();
       expect(screen.getByText('Viagem')).toBeTruthy();
       expect(screen.getByText('10/01/2026')).toBeTruthy();
+      expect(screen.getByText('Participantes')).toBeTruthy();
+      expect(screen.getByText('Ana')).toBeTruthy();
+      expect(screen.getByText('ana@example.com')).toBeTruthy();
+      expect(screen.getByText('Vinculado')).toBeTruthy();
+      expect(screen.getByText('Ativo')).toBeTruthy();
+    });
+  });
+
+  it('mostra empty state quando nao existem participantes', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(
+      makePlanejamento({ participantes: [] }),
+    );
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Participantes')).toBeTruthy();
+      expect(screen.getByText('Nenhum participante cadastrado.')).toBeTruthy();
+    });
+  });
+
+  it('navega para adicionar participante', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Adicionar participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Adicionar participante'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/planejamentos-participante-form',
+      params: { id: 'planejamento-1' },
     });
   });
 
