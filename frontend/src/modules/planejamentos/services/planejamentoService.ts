@@ -1,6 +1,8 @@
 import {
   AddParticipantePlanejamentoRequest,
+  CreateGastoPlanejamentoRequest,
   CreatePlanejamentoRequest,
+  GastoPlanejamento,
   ParticipantePlanejamento,
   Planejamento,
   PlanejamentoStatus,
@@ -35,6 +37,36 @@ export async function addParticipantePlanejamento(
   const response = await api.post<ParticipantePlanejamento>(
     `/planejamentos/${planejamentoId}/participantes`,
     data,
+  );
+  return response.data;
+}
+
+export async function listGastosPlanejamento(
+  planejamentoId: string,
+): Promise<GastoPlanejamento[]> {
+  const response = await api.get<GastoPlanejamento[]>(
+    `/planejamentos/${planejamentoId}/gastos`,
+  );
+  return response.data;
+}
+
+export async function createGastoPlanejamento(
+  planejamentoId: string,
+  data: CreateGastoPlanejamentoRequest,
+): Promise<GastoPlanejamento> {
+  const response = await api.post<GastoPlanejamento>(
+    `/planejamentos/${planejamentoId}/gastos`,
+    data,
+  );
+  return response.data;
+}
+
+export async function getGastoPlanejamentoById(
+  planejamentoId: string,
+  gastoId: string,
+): Promise<GastoPlanejamento> {
+  const response = await api.get<GastoPlanejamento>(
+    `/planejamentos/${planejamentoId}/gastos/${gastoId}`,
   );
   return response.data;
 }

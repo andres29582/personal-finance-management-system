@@ -11,9 +11,14 @@ import {
   GlassStatusCard,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
-import { formatDate } from '../../../../utils/formatters';
-import { getPlanejamentoById } from '../services/planejamentoService';
+import { formatCurrency, formatDate } from '../../../../utils/formatters';
 import {
+  getPlanejamentoById,
+  listGastosPlanejamento,
+} from '../services/planejamentoService';
+import {
+  GastoPlanejamento,
+  GastoPlanejamentoComportamento,
   ParticipantePlanejamento,
   ParticipantePlanejamentoStatus,
   ParticipantePlanejamentoTipo,
@@ -50,8 +55,18 @@ const participanteStatusLabel: Record<ParticipantePlanejamentoStatus, string> = 
   REMOVIDO: 'Removido',
 };
 
+const gastoComportamentoLabel: Record<GastoPlanejamentoComportamento, string> = {
+  EVENTUAL: 'Eventual',
+  FIXO: 'Fixo',
+  VARIAVEL: 'Variavel',
+};
+
 function formatOptionalDate(date: string | null | undefined) {
   return date ? formatDate(date.slice(0, 10)) : '-';
+}
+
+function formatCents(value: number) {
+  return formatCurrency(value / 100);
 }
 
 function getParticipantes(planejamento: Planejamento | null) {
@@ -63,6 +78,7 @@ export function PlanejamentoDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const planejamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [planejamento, setPlanejamento] = useState<Planejamento | null>(null);
+  const [gastos, setGastos] = useState<GastoPlanejamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -77,8 +93,12 @@ export function PlanejamentoDetailScreen() {
       try {
         setLoading(true);
         setMessage('');
-        const data = await getPlanejamentoById(planejamentoId);
+        const [data, gastosData] = await Promise.all([
+          getPlanejamentoById(planejamentoId),
+          listGastosPlanejamento(planejamentoId),
+        ]);
         setPlanejamento(data);
+        setGastos(gastosData);
       } catch (error) {
         const resolvedError = await resolveApiError(
           error,
@@ -212,6 +232,35 @@ export function PlanejamentoDetailScreen() {
               </Text>
             )}
           </GlassPanel>
+
+          <GlassPanel
+            title="Gastos"
+            subtitle="Despesas compartilhadas deste planejamento."
+            action={
+              <GlassButton
+                label="Adicionar gasto"
+                onPress={() =>
+                  router.push({
+                    pathname: '/planejamentos-gasto-form',
+                    params: { id: planejamento.id },
+                  } as never)
+                }
+                variant="ghost"
+              />
+            }
+          >
+            {gastos.length ? (
+              gastos.map((gasto) => (
+                <GastoRow
+                  key={gasto.id}
+                  gasto={gasto}
+                  participantes={participantes}
+                />
+              ))
+            ) : (
+              <Text style={styles.emptyText}>Nenhum gasto cadastrado.</Text>
+            )}
+          </GlassPanel>
         </>
       ) : null}
     </FinanceAppShell>
@@ -259,6 +308,39 @@ function ParticipanteRow({
   );
 }
 
+function GastoRow({
+  gasto,
+  participantes,
+}: {
+  gasto: GastoPlanejamento;
+  participantes: ParticipantePlanejamento[];
+}) {
+  const pagador =
+    gasto.pagoPorParticipante ??
+    participantes.find(
+      (participante) => participante.id === gasto.pagoPorParticipanteId,
+    );
+
+  return (
+    <View style={styles.expenseRow}>
+      <View style={styles.expenseMain}>
+        <Text style={styles.expenseDescription}>{gasto.descricao}</Text>
+        <Text style={styles.expenseMeta}>
+          {formatOptionalDate(gasto.dataGasto)} -{' '}
+          {gastoComportamentoLabel[gasto.comportamento]}
+          {gasto.categoria ? ` - ${gasto.categoria}` : ''}
+        </Text>
+        {pagador ? (
+          <Text style={styles.expenseMeta}>Pago por {pagador.nome}</Text>
+        ) : null}
+      </View>
+      <Text style={styles.expenseValue}>
+        {formatCents(gasto.valorCentavos)}
+      </Text>
+    </View>
+  );
+}
+
 export default PlanejamentoDetailScreen;
 
 const styles = StyleSheet.create({
@@ -290,6 +372,37 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
+  },
+  expenseDescription: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '900',
+  },
+  expenseMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  expenseMeta: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.micro,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.xxs,
+  },
+  expenseRow: {
+    alignItems: 'center',
+    backgroundColor: FinanceTheme.colors.glassSubtle,
+    borderColor: FinanceTheme.colors.border,
+    borderRadius: FinanceTheme.radius.md,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.sm,
+    marginBottom: FinanceTheme.spacing.sm,
+    padding: FinanceTheme.spacing.sm,
+  },
+  expenseValue: {
+    color: FinanceTheme.colors.success,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '900',
   },
   headerRow: {
     alignItems: 'center',
