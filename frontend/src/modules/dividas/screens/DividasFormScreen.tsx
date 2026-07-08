@@ -18,6 +18,7 @@ import { resolveApiError } from '../../../../utils/api-error';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import { createDivida, getDividaById, updateDivida } from '../services/dividaService';
 import { Periodicidade } from '../types/divida';
+import { isValidDateInput } from '../validators/dateInput';
 
 type DividaField =
   | 'cuotaMensual'
@@ -27,21 +28,6 @@ type DividaField =
   | 'nome'
   | 'proximoVencimiento'
   | 'tasaInteres';
-
-function isValidDateInput(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-
-  const [year, month, day] = value.split('-').map(Number);
-  const parsedDate = new Date(Date.UTC(year, month - 1, day));
-
-  return (
-    parsedDate.getUTCFullYear() === year &&
-    parsedDate.getUTCMonth() === month - 1 &&
-    parsedDate.getUTCDate() === day
-  );
-}
 
 export function DividasFormScreen() {
   const router = useRouter();
