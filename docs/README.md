@@ -14,6 +14,7 @@ Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o c
 - [Requisitos](produto/REQUISITOS.md)
 - [Manual do Usuário](produto/MANUAL_DO_USUARIO.md)
 - [Arquitetura do Sistema](arquitetura/ARQUITETURA.md)
+- [Runbook Operacional Local](operacao/RUNBOOK.md)
 
 ## Produto
 
@@ -28,16 +29,16 @@ A pasta `produto/` concentra documentos sobre visão de produto, requisitos, roa
 
 A pasta `arquitetura/` descreve a organização técnica do sistema, seus módulos principais e decisões estruturais.
 
-- [Arquitetura do Sistema Financeiro](arquitetura/ARQUITETURA.md)
-- [Arquitetura do Backend](arquitetura/BACKEND.md)
-- [Arquitetura do Frontend](arquitetura/FRONTEND.md)
-- [Arquitetura do Módulo de Machine Learning](arquitetura/MACHINE_LEARNING.md)
-- [Design System do Frontend](arquitetura/FRONTEND_DESIGN_SYSTEM.md)
-- [Arquitetura do Dashboard Frontend](arquitetura/FRONTEND_DASHBOARD.md)
-- Arquitetura de banco de dados: em construção
-- Documentação operacional do ML: [ml-finance-tcc/README.md](../ml-finance-tcc/README.md)
-- Dicionário de dados do ML: [DICIONARIO_DE_DADOS.md](../ml-finance-tcc/docs/DICIONARIO_DE_DADOS.md)
-- Segurança: em construção
+- [Arquitetura do Sistema Financeiro](arquitetura/ARQUITETURA.md): fonte oficial resumida da arquitetura geral.
+- [Arquitetura do Backend](arquitetura/BACKEND.md): fonte oficial da estrutura backend.
+- [Arquitetura do Frontend](arquitetura/FRONTEND.md): fonte oficial da estrutura frontend.
+- [Contratos de API do Frontend](arquitetura/FRONTEND_API_CONTRACTS.md): complemento frontend para consumo do Swagger/OpenAPI.
+- [Padrões de Formulários e Validações](arquitetura/PADROES_FORMULARIOS_VALIDACOES.md): guia atual de formularios frontend.
+- [Arquitetura do Módulo de Machine Learning](arquitetura/MACHINE_LEARNING.md): fonte oficial da integracao ML.
+- [Design System do Frontend](arquitetura/FRONTEND_DESIGN_SYSTEM.md): parcial; guia de evolucao visual do frontend.
+- [Arquitetura do Dashboard Frontend](arquitetura/FRONTEND_DASHBOARD.md): parcial; historico tecnico detalhado do dashboard.
+- Arquitetura de banco de dados: documento dedicado ainda nao existe.
+- Segurança: documento dedicado ainda nao existe.
 
 ## Operação
 
@@ -54,11 +55,36 @@ A pasta `operacao/` deve reunir instruções para preparar ambientes, executar o
 
 A pasta `desenvolvimento/` deve reunir práticas de desenvolvimento, testes, padrões de código, contribuição e registros de decisão arquitetural.
 
-- [Estratégia Geral de Testes](desenvolvimento/TESTES.md)
-- [Testes e Rastreabilidade do Frontend](desenvolvimento/TESTES_FRONTEND.md)
+- [Estratégia Geral de Testes](desenvolvimento/TESTES.md): fonte geral de testes do projeto.
+- [Testes e Rastreabilidade do Frontend](desenvolvimento/TESTES_FRONTEND.md): fonte atual de testes frontend.
 - Padrões de código: em construção
 - Contribuição: em construção
 - ADRs: em construção em `desenvolvimento/ADR/`
+
+## Validação
+
+- [Validação de Endpoints e APIs](validacao/VALIDACAO_ENDPOINTS_APIS.md): relatório de auditoria; não substitui `backendnest/swagger.yaml`.
+- Contrato oficial HTTP: [backendnest/swagger.yaml](../backendnest/swagger.yaml).
+- Coleção Postman: não encontrada neste repositório.
+
+## Specs
+
+Specs documentam requisitos e decisões de módulos específicos. Elas são
+complementares à documentação de arquitetura e ao Swagger.
+
+- [Planejamentos Compartilhados - Requisitos](specs/planejamentos-compartilhados/requisitos.md)
+- [Planejamentos Compartilhados - Regras de Negócio](specs/planejamentos-compartilhados/regras-de-negocio.md)
+- [Planejamentos Compartilhados - Fluxos](specs/planejamentos-compartilhados/fluxos.md)
+- [Planejamentos Compartilhados - Modelo de Dados](specs/planejamentos-compartilhados/modelo-de-dados.md)
+- [Planejamentos Compartilhados - API](specs/planejamentos-compartilhados/api.md)
+- [Planejamentos Compartilhados - Testes](specs/planejamentos-compartilhados/testes.md)
+- [Planejamentos Compartilhados - ADR](specs/planejamentos-compartilhados/adr-decisoes-implementacao.md)
+
+## Machine Learning
+
+- [Arquitetura ML](arquitetura/MACHINE_LEARNING.md): fonte arquitetural da integracao ML.
+- [README do módulo ML](../ml-finance-tcc/README.md): guia operacional do serviço FastAPI e pipeline.
+- [Dicionário de Dados do ML](../ml-finance-tcc/docs/DICIONARIO_DE_DADOS.md): referência das features e dados do modelo.
 
 ## Acadêmico
 
@@ -75,6 +101,17 @@ A pasta `pesquisa/` deve reunir estudos e avaliações futuras que ainda não fa
 - Open Finance: em construção
 - Inteligência artificial: em construção
 - Funcionalidades futuras: em construção
+
+## Governança documental
+
+- Documentação viva deve refletir o estado atual do sistema.
+- Documentos históricos ficam em `docs/arquivo/` e não devem ser usados como fonte atual sem validação.
+- Specs futuras ou exploratórias devem ser identificadas como roadmap, pesquisa ou futuro.
+- `backendnest/swagger.yaml` é a referência oficial para contrato HTTP do backend.
+- Documentos de arquitetura devem ser revisados quando houver mudança estrutural.
+- Documentos de testes devem ser atualizados quando números, estratégia ou cobertura mudarem.
+- Não criar documento novo se já existir documento equivalente; revisar, fundir ou arquivar o existente.
+- Relatórios em `docs/validacao/` registram auditorias e evidências, mas não substituem contratos oficiais.
 
 ## Arquivo histórico
 
