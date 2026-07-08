@@ -1,5 +1,11 @@
 # Planejamentos Compartilhados - Modelo de dados
 
+> Nota de status:
+> Este documento contem especificacoes conceituais e itens de roadmap. O
+> contrato atual implementado deve ser conferido no Swagger oficial
+> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
+> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+
 ## Objetivo do modelo
 
 Documentar as entidades conceituais iniciais para orientar a implementacao do

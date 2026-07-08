@@ -1,5 +1,11 @@
 # Planejamentos Compartilhados - API conceitual
 
+> Nota de status:
+> Este documento contem especificacoes conceituais e itens de roadmap. O
+> contrato atual implementado deve ser conferido no Swagger oficial
+> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
+> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+
 ## Visao geral
 
 Este documento descreve endpoints planejados para o modulo de Planejamentos
@@ -15,31 +21,43 @@ Rotas conceituais usam o prefixo:
 
 Todas as rotas do MVP devem ser autenticadas.
 
-## Endpoints planejados
+## Contrato atual implementado
+
+Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 
 | Metodo | Rota | Descricao |
 | --- | --- | --- |
 | `POST` | `/planejamentos` | Cria planejamento compartilhado. |
 | `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
+| `POST` | `/planejamentos/:id/participantes` | Adiciona participante manual. |
+| `POST` | `/planejamentos/:planejamentoId/gastos` | Registra gasto compartilhado. |
+| `GET` | `/planejamentos/:planejamentoId/gastos` | Lista gastos do planejamento. |
+| `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consulta gasto do planejamento. |
+| `GET` | `/planejamentos/:planejamentoId/acertos` | Lista acertos oficiais persistidos. |
+| `POST` | `/planejamentos/:planejamentoId/acertos/sincronizar` | Sincroniza acertos pendentes. |
+| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/pagar` | Marca acerto como pago. |
+| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/cancelar` | Cancela acerto mantendo historico. |
+| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/reabrir` | Reabre acerto para pendente. |
+
+## Roadmap / futuro
+
+Os endpoints abaixo sao planejamento futuro e nao devem ser tratados como
+contrato disponivel no backend atual.
+
+| Metodo | Rota | Descricao |
+| --- | --- | --- |
 | `PATCH` | `/planejamentos/:id` | Edita dados basicos do planejamento. |
 | `PATCH` | `/planejamentos/:id/fechar` | Fecha planejamento quando nao houver pendencias impeditivas. |
 | `PATCH` | `/planejamentos/:id/arquivar` | Arquiva planejamento sem exclusao fisica. |
 | `PATCH` | `/planejamentos/:id/cancelar` | Cancela planejamento logicamente. |
 | `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
-| `POST` | `/planejamentos/:id/participantes` | Adiciona participante manual. |
 | `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
 | `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
 | `DELETE` | `/planejamentos/:id/participantes/:participanteId` | Remove participante logicamente. |
-| `POST` | `/planejamentos/:id/gastos` | Registra gasto compartilhado. |
-| `GET` | `/planejamentos/:id/gastos` | Lista gastos do planejamento. |
 | `PATCH` | `/planejamentos/:id/gastos/:gastoId` | Edita gasto e recalcula divisoes. |
 | `DELETE` | `/planejamentos/:id/gastos/:gastoId` | Cancela gasto logicamente. |
 | `GET` | `/planejamentos/:id/resumo` | Retorna resumo financeiro do planejamento. |
-| `GET` | `/planejamentos/:id/acertos` | Lista acertos oficiais persistidos. |
-| `PATCH` | `/planejamentos/:id/acertos/:acertoId/pagar` | Marca acerto como pago. |
-| `PATCH` | `/planejamentos/:id/acertos/:acertoId/reabrir` | Reabre acerto pago para pendente. |
-| `PATCH` | `/planejamentos/:id/acertos/:acertoId/cancelar` | Cancela acerto pago mantendo historico. |
 | `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
 
 ## Payloads conceituais

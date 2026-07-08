@@ -1,5 +1,11 @@
 # Planejamentos Compartilhados - Requisitos
 
+> Nota de status:
+> Este documento contem especificacoes conceituais e itens de roadmap. O
+> contrato atual implementado deve ser conferido no Swagger oficial
+> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
+> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+
 ## Objetivo
 
 Especificar a funcionalidade de Planejamentos Compartilhados como um modulo

@@ -1,5 +1,11 @@
 # Planejamentos Compartilhados - Fluxos
 
+> Nota de status:
+> Este documento contem especificacoes conceituais e itens de roadmap. O
+> contrato atual implementado deve ser conferido no Swagger oficial
+> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
+> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+
 ## Fluxo de criacao de planejamento
 
 1. Usuario autenticado envia nome, tipo, descricao opcional e mes de referencia

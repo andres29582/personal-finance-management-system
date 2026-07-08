@@ -120,6 +120,7 @@ As migrations ficam em `migrations/` e devem ser executadas em ordem:
 0004_add_auth_session.sql
 0005_add_audit_log.sql
 0006_soft_delete_lgpd_password_reset.sql
+0007_create_planejamentos_compartilhados.sql
 ```
 
 Exemplo de execucao com `psql`:
@@ -131,7 +132,34 @@ psql -h localhost -U postgres -d gestao_financeira -f migrations/0003_add_usuari
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0004_add_auth_session.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0005_add_audit_log.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0006_soft_delete_lgpd_password_reset.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0007_create_planejamentos_compartilhados.sql
 ```
+
+### Atencao: Planejamentos Compartilhados
+
+A migration `0007_create_planejamentos_compartilhados.sql` cria as tabelas do
+fluxo de Planejamentos Compartilhados:
+
+- `planejamento`
+- `participante_planejamento`
+- `gasto_planejamento`
+- `divisao_gasto`
+- `acerto_planejamento`
+
+Para testar o fluxo de Planejamentos localmente, a migration
+`0007_create_planejamentos_compartilhados.sql` precisa estar aplicada no banco
+PostgreSQL.
+
+Se a migration nao estiver aplicada, endpoints como `POST /planejamentos` podem
+falhar com erro interno porque a tabela `planejamento` ainda nao existe.
+
+Antes de testar o frontend de Planejamentos:
+
+- Aplicar migrations pendentes.
+- Confirmar que as tabelas de Planejamentos existem no PostgreSQL.
+- Iniciar backend.
+- Validar `POST /planejamentos` por HTTP.
+- So depois testar o fluxo pelo frontend.
 
 ## Execucao
 
@@ -228,6 +256,7 @@ Endpoints autenticados usam `Authorization: Bearer <access_token>`:
 - `/dashboard`
 - `/previsoes/deficit`
 - `/audit-logs`
+- `/planejamentos`
 
 Respostas de sucesso sao envolvidas pelo interceptor global:
 
@@ -318,6 +347,10 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1
 - `ECONNREFUSED` ou erro TypeORM ao iniciar: confirme PostgreSQL ativo,
   credenciais em `.env` e banco criado.
 - Tabelas ou colunas ausentes: reaplique as migrations em ordem na base correta.
+- `POST /planejamentos` retornando erro interno localmente: confirme se
+  `0007_create_planejamentos_compartilhados.sql` foi aplicada e se as tabelas
+  `planejamento`, `participante_planejamento`, `gasto_planejamento`,
+  `divisao_gasto` e `acerto_planejamento` existem no PostgreSQL.
 - CORS bloqueando o frontend: inclua a origem em `CORS_ORIGINS`.
 - `EPERM` ao limpar `dist`: encerre processos Node/Nest antigos e tente de novo;
   preferencialmente use `npm run start:dev`.
