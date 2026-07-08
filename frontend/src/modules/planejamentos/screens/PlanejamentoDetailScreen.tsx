@@ -11,22 +11,9 @@ import {
   GlassStatusCard,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
-import { formatCurrency, formatDate } from '../../../../utils/formatters';
+import { formatDate } from '../../../../utils/formatters';
+import { getPlanejamentoById } from '../services/planejamentoService';
 import {
-  cancelAcertoPlanejamento,
-  getPlanejamentoById,
-  listAcertosPlanejamento,
-  listGastosPlanejamento,
-  payAcertoPlanejamento,
-  reopenAcertoPlanejamento,
-  syncAcertosPlanejamento,
-} from '../services/planejamentoService';
-import {
-  AcertoPlanejamento,
-  AcertoPlanejamentoStatus,
-  AcertoPlanejamentoSugerido,
-  GastoPlanejamento,
-  GastoPlanejamentoComportamento,
   ParticipantePlanejamento,
   ParticipantePlanejamentoStatus,
   ParticipantePlanejamentoTipo,
@@ -63,58 +50,12 @@ const participanteStatusLabel: Record<ParticipantePlanejamentoStatus, string> = 
   REMOVIDO: 'Removido',
 };
 
-const gastoComportamentoLabel: Record<GastoPlanejamentoComportamento, string> = {
-  EVENTUAL: 'Eventual',
-  FIXO: 'Fixo',
-  VARIAVEL: 'Variavel',
-};
-
-const acertoStatusLabel: Record<AcertoPlanejamentoStatus, string> = {
-  CANCELADO: 'Cancelado',
-  CONFIRMADO: 'Confirmado',
-  PAGO: 'Pago',
-  PENDENTE: 'Pendente',
-};
-
-type AcertoPlanejamentoItem =
-  | AcertoPlanejamento
-  | AcertoPlanejamentoSugerido;
-
-type AcertoAction = 'cancel' | 'pay' | 'reopen';
-
 function formatOptionalDate(date: string | null | undefined) {
   return date ? formatDate(date.slice(0, 10)) : '-';
 }
 
-function formatCents(value: number) {
-  return formatCurrency(value / 100);
-}
-
 function getParticipantes(planejamento: Planejamento | null) {
   return planejamento?.participantes ?? [];
-}
-
-function isAcertoPersistido(
-  acerto: AcertoPlanejamentoItem,
-): acerto is AcertoPlanejamento {
-  return 'id' in acerto;
-}
-
-function upsertAcerto(
-  acertos: AcertoPlanejamento[],
-  acertoAtualizado: AcertoPlanejamento,
-) {
-  const acertoIndex = acertos.findIndex(
-    (acerto) => acerto.id === acertoAtualizado.id,
-  );
-
-  if (acertoIndex === -1) {
-    return [acertoAtualizado, ...acertos];
-  }
-
-  return acertos.map((acerto) =>
-    acerto.id === acertoAtualizado.id ? acertoAtualizado : acerto,
-  );
 }
 
 export function PlanejamentoDetailScreen() {
@@ -122,20 +63,8 @@ export function PlanejamentoDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const planejamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [planejamento, setPlanejamento] = useState<Planejamento | null>(null);
-  const [gastos, setGastos] = useState<GastoPlanejamento[]>([]);
-  const [acertosOficiais, setAcertosOficiais] = useState<
-    AcertoPlanejamento[]
-  >([]);
-  const [acertosSugeridos, setAcertosSugeridos] = useState<
-    AcertoPlanejamentoSugerido[]
-  >([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
-  const [acertosError, setAcertosError] = useState('');
-  const [acertosInfo, setAcertosInfo] = useState('');
-  const [acertosActionLoading, setAcertosActionLoading] = useState<
-    string | null
-  >(null);
 
   useEffect(() => {
     async function loadPlanejamento() {
@@ -148,15 +77,8 @@ export function PlanejamentoDetailScreen() {
       try {
         setLoading(true);
         setMessage('');
-        const [data, gastosData, acertosData] = await Promise.all([
-          getPlanejamentoById(planejamentoId),
-          listGastosPlanejamento(planejamentoId),
-          listAcertosPlanejamento(planejamentoId),
-        ]);
+        const data = await getPlanejamentoById(planejamentoId);
         setPlanejamento(data);
-        setGastos(gastosData);
-        setAcertosOficiais(data.acertos ?? []);
-        setAcertosSugeridos(acertosData);
       } catch (error) {
         const resolvedError = await resolveApiError(
           error,
@@ -176,98 +98,6 @@ export function PlanejamentoDetailScreen() {
   }, [planejamentoId, router]);
 
   const participantes = getParticipantes(planejamento);
-  const acertos = acertosOficiais.length ? acertosOficiais : acertosSugeridos;
-  const exibindoSugestoes = !acertosOficiais.length;
-
-  async function refreshAcertos() {
-    if (!planejamentoId) {
-      return;
-    }
-
-    const acertosData = await listAcertosPlanejamento(planejamentoId);
-    setAcertosSugeridos(acertosData);
-  }
-
-  async function handleSyncAcertos() {
-    if (!planejamentoId) {
-      return;
-    }
-
-    try {
-      setAcertosActionLoading('sync');
-      setAcertosError('');
-      setAcertosInfo('');
-
-      const acertosSincronizados =
-        await syncAcertosPlanejamento(planejamentoId);
-
-      setAcertosOficiais(acertosSincronizados);
-      await refreshAcertos();
-
-      setAcertosInfo(
-        acertosSincronizados.length
-          ? 'Acertos sincronizados com sucesso.'
-          : 'Ainda nao ha dados suficientes para gerar acertos. Cadastre gastos e participantes ativos e tente novamente.',
-      );
-    } catch (error) {
-      const resolvedError = await resolveApiError(
-        error,
-        'Nao foi possivel sincronizar os acertos.',
-      );
-      setAcertosError(resolvedError.message);
-
-      if (resolvedError.unauthorized) {
-        router.replace('/login');
-      }
-    } finally {
-      setAcertosActionLoading(null);
-    }
-  }
-
-  async function handleAcertoAction(
-    acerto: AcertoPlanejamento,
-    action: AcertoAction,
-  ) {
-    if (!planejamentoId) {
-      return;
-    }
-
-    const actionKey = `${action}:${acerto.id}`;
-
-    try {
-      setAcertosActionLoading(actionKey);
-      setAcertosError('');
-      setAcertosInfo('');
-
-      const actionByType = {
-        cancel: cancelAcertoPlanejamento,
-        pay: payAcertoPlanejamento,
-        reopen: reopenAcertoPlanejamento,
-      };
-      const acertoAtualizado = await actionByType[action](
-        planejamentoId,
-        acerto.id,
-      );
-
-      setAcertosOficiais((currentAcertos) =>
-        upsertAcerto(currentAcertos, acertoAtualizado),
-      );
-      await refreshAcertos();
-      setAcertosInfo('Acerto atualizado com sucesso.');
-    } catch (error) {
-      const resolvedError = await resolveApiError(
-        error,
-        'Nao foi possivel atualizar o acerto.',
-      );
-      setAcertosError(resolvedError.message);
-
-      if (resolvedError.unauthorized) {
-        router.replace('/login');
-      }
-    } finally {
-      setAcertosActionLoading(null);
-    }
-  }
 
   return (
     <FinanceAppShell
@@ -382,82 +212,6 @@ export function PlanejamentoDetailScreen() {
               </Text>
             )}
           </GlassPanel>
-
-          <GlassPanel
-            title="Gastos"
-            subtitle="Despesas compartilhadas deste planejamento."
-            action={
-              <GlassButton
-                label="Adicionar gasto"
-                onPress={() =>
-                  router.push({
-                    pathname: '/planejamentos-gasto-form',
-                    params: { id: planejamento.id },
-                  } as never)
-                }
-                variant="ghost"
-              />
-            }
-          >
-            {gastos.length ? (
-              gastos.map((gasto) => (
-                <GastoRow
-                  key={gasto.id}
-                  gasto={gasto}
-                  participantes={participantes}
-                />
-              ))
-            ) : (
-              <Text style={styles.emptyText}>Nenhum gasto cadastrado.</Text>
-            )}
-          </GlassPanel>
-
-          <GlassPanel
-            title="Acertos"
-            subtitle="Pagamentos calculados entre participantes."
-            action={
-              <GlassButton
-                disabled={!!acertosActionLoading}
-                label={
-                  acertosActionLoading === 'sync'
-                    ? 'Sincronizando...'
-                    : 'Sincronizar acertos'
-                }
-                onPress={handleSyncAcertos}
-                variant="ghost"
-              />
-            }
-          >
-            {acertosError ? (
-              <Text style={styles.acertosError}>{acertosError}</Text>
-            ) : null}
-            {acertosInfo ? (
-              <Text style={styles.acertosInfo}>{acertosInfo}</Text>
-            ) : null}
-
-            {acertos.length ? (
-              acertos.map((acerto, index) => (
-                <AcertoRow
-                  key={
-                    isAcertoPersistido(acerto)
-                      ? acerto.id
-                      : `${acerto.devedorParticipanteId}-${acerto.recebedorParticipanteId}-${index}`
-                  }
-                  acerto={acerto}
-                  actionLoading={acertosActionLoading}
-                  disabled={!!acertosActionLoading}
-                  exibindoSugestao={exibindoSugestoes}
-                  onAction={handleAcertoAction}
-                  participantes={participantes}
-                />
-              ))
-            ) : (
-              <Text style={styles.emptyText}>
-                Nenhum acerto encontrado. Cadastre gastos e participantes ativos
-                para calcular os acertos.
-              </Text>
-            )}
-          </GlassPanel>
         </>
       ) : null}
     </FinanceAppShell>
@@ -505,208 +259,9 @@ function ParticipanteRow({
   );
 }
 
-function GastoRow({
-  gasto,
-  participantes,
-}: {
-  gasto: GastoPlanejamento;
-  participantes: ParticipantePlanejamento[];
-}) {
-  const pagador =
-    gasto.pagoPorParticipante ??
-    participantes.find(
-      (participante) => participante.id === gasto.pagoPorParticipanteId,
-    );
-
-  return (
-    <View style={styles.expenseRow}>
-      <View style={styles.expenseMain}>
-        <Text style={styles.expenseDescription}>{gasto.descricao}</Text>
-        <Text style={styles.expenseMeta}>
-          {formatOptionalDate(gasto.dataGasto)} -{' '}
-          {gastoComportamentoLabel[gasto.comportamento]}
-          {gasto.categoria ? ` - ${gasto.categoria}` : ''}
-        </Text>
-        {pagador ? (
-          <Text style={styles.expenseMeta}>Pago por {pagador.nome}</Text>
-        ) : null}
-      </View>
-      <Text style={styles.expenseValue}>
-        {formatCents(gasto.valorCentavos)}
-      </Text>
-    </View>
-  );
-}
-
-function AcertoRow({
-  acerto,
-  actionLoading,
-  disabled,
-  exibindoSugestao,
-  onAction,
-  participantes,
-}: {
-  acerto: AcertoPlanejamentoItem;
-  actionLoading: string | null;
-  disabled: boolean;
-  exibindoSugestao: boolean;
-  onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
-  participantes: ParticipantePlanejamento[];
-}) {
-  const persistido = isAcertoPersistido(acerto);
-  const devedor = persistido
-    ? acerto.deParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.deParticipanteId,
-      )
-    : acerto.devedorParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.devedorParticipanteId,
-      );
-  const recebedor = persistido
-    ? acerto.paraParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.paraParticipanteId,
-      )
-    : acerto.recebedorParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.recebedorParticipanteId,
-      );
-  const devedorNome = devedor?.nome ?? 'Participante devedor';
-  const recebedorNome = recebedor?.nome ?? 'Participante recebedor';
-
-  return (
-    <View style={styles.settlementRow}>
-      <View style={styles.settlementMain}>
-        <View style={styles.settlementHeader}>
-          <Text style={styles.settlementTitle}>
-            {devedorNome} deve pagar {recebedorNome}
-          </Text>
-          <View
-            style={[
-              styles.settlementBadge,
-              getAcertoBadgeStyle(acerto.status),
-            ]}
-          >
-            <Text style={styles.settlementBadgeText}>
-              {acertoStatusLabel[acerto.status]}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.settlementMeta}>Devedor: {devedorNome}</Text>
-        <Text style={styles.settlementMeta}>Recebedor: {recebedorNome}</Text>
-        {persistido && acerto.dataPagamento ? (
-          <Text style={styles.settlementMeta}>
-            Pago em {formatOptionalDate(acerto.dataPagamento)}
-          </Text>
-        ) : null}
-        {persistido && acerto.observacao ? (
-          <Text style={styles.settlementMeta}>
-            Observacao: {acerto.observacao}
-          </Text>
-        ) : null}
-        {!persistido && exibindoSugestao ? (
-          <Text style={styles.settlementHint}>
-            Sincronize para criar o acerto oficial e gerenciar o status.
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.settlementSide}>
-        <Text style={styles.settlementValue}>
-          {formatCents(acerto.valorCentavos)}
-        </Text>
-        {persistido ? (
-          <AcertoActions
-            acerto={acerto}
-            actionLoading={actionLoading}
-            disabled={disabled}
-            onAction={onAction}
-          />
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function AcertoActions({
-  acerto,
-  actionLoading,
-  disabled,
-  onAction,
-}: {
-  acerto: AcertoPlanejamento;
-  actionLoading: string | null;
-  disabled: boolean;
-  onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
-}) {
-  const payLoading = actionLoading === `pay:${acerto.id}`;
-  const cancelLoading = actionLoading === `cancel:${acerto.id}`;
-  const reopenLoading = actionLoading === `reopen:${acerto.id}`;
-
-  if (acerto.status === 'PENDENTE') {
-    return (
-      <View style={styles.settlementActions}>
-        <GlassButton
-          disabled={disabled}
-          label={payLoading ? 'Marcando...' : 'Marcar como pago'}
-          onPress={() => onAction(acerto, 'pay')}
-          variant="primary"
-        />
-        <GlassButton
-          disabled={disabled}
-          label={cancelLoading ? 'Cancelando...' : 'Cancelar'}
-          onPress={() => onAction(acerto, 'cancel')}
-          variant="danger"
-        />
-      </View>
-    );
-  }
-
-  if (acerto.status === 'PAGO' || acerto.status === 'CANCELADO') {
-    return (
-      <View style={styles.settlementActions}>
-        <GlassButton
-          disabled={disabled}
-          label={reopenLoading ? 'Reabrindo...' : 'Reabrir'}
-          onPress={() => onAction(acerto, 'reopen')}
-          variant="ghost"
-        />
-      </View>
-    );
-  }
-
-  return null;
-}
-
-function getAcertoBadgeStyle(status: AcertoPlanejamentoStatus) {
-  if (status === 'PENDENTE') {
-    return styles.settlementBadgePending;
-  }
-
-  if (status === 'PAGO' || status === 'CONFIRMADO') {
-    return styles.settlementBadgePaid;
-  }
-
-  return styles.settlementBadgeCanceled;
-}
-
 export default PlanejamentoDetailScreen;
 
 const styles = StyleSheet.create({
-  acertosError: {
-    color: FinanceTheme.colors.danger,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
-  acertosInfo: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
   badge: {
     borderRadius: 999,
     borderWidth: FinanceTheme.borderWidth.hairline,
@@ -735,37 +290,6 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
-  },
-  expenseDescription: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-  },
-  expenseMain: {
-    flex: 1,
-    minWidth: 0,
-  },
-  expenseMeta: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.xxs,
-  },
-  expenseRow: {
-    alignItems: 'center',
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    flexDirection: 'row',
-    gap: FinanceTheme.spacing.sm,
-    marginBottom: FinanceTheme.spacing.sm,
-    padding: FinanceTheme.spacing.sm,
-  },
-  expenseValue: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
   },
   headerRow: {
     alignItems: 'center',
@@ -867,86 +391,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: FinanceTheme.spacing.sm,
     marginBottom: FinanceTheme.spacing.sm,
-  },
-  settlementActions: {
-    gap: FinanceTheme.spacing.xs,
-    minWidth: 170,
-    width: '100%',
-  },
-  settlementBadge: {
-    borderRadius: 999,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    paddingHorizontal: FinanceTheme.spacing.sm,
-    paddingVertical: FinanceTheme.spacing.xxs,
-  },
-  settlementBadgeCanceled: {
-    backgroundColor: 'rgba(255, 122, 144, 0.10)',
-    borderColor: 'rgba(255, 122, 144, 0.34)',
-  },
-  settlementBadgePaid: {
-    backgroundColor: 'rgba(119, 242, 178, 0.14)',
-    borderColor: 'rgba(119, 242, 178, 0.42)',
-  },
-  settlementBadgePending: {
-    backgroundColor: 'rgba(255, 209, 102, 0.12)',
-    borderColor: 'rgba(255, 209, 102, 0.40)',
-  },
-  settlementBadgeText: {
-    color: FinanceTheme.colors.text,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  settlementHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.xs,
-    justifyContent: 'space-between',
-  },
-  settlementHint: {
-    color: FinanceTheme.colors.cyanMuted,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.xs,
-  },
-  settlementMain: {
-    flex: 1,
-    minWidth: 0,
-  },
-  settlementMeta: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.xxs,
-  },
-  settlementRow: {
-    alignItems: 'flex-start',
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.sm,
-    marginBottom: FinanceTheme.spacing.sm,
-    padding: FinanceTheme.spacing.sm,
-  },
-  settlementSide: {
-    alignItems: 'flex-end',
-    gap: FinanceTheme.spacing.sm,
-    minWidth: 170,
-  },
-  settlementTitle: {
-    color: FinanceTheme.colors.text,
-    flex: 1,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-    minWidth: 180,
-  },
-  settlementValue: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
   },
   title: {
     color: FinanceTheme.colors.text,
