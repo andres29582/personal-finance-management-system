@@ -1,5 +1,7 @@
 import {
   AddParticipantePlanejamentoRequest,
+  AcertoPlanejamento,
+  AcertoPlanejamentoSugerido,
   CreateGastoPlanejamentoRequest,
   CreatePlanejamentoRequest,
   GastoPlanejamento,
@@ -67,6 +69,54 @@ export async function getGastoPlanejamentoById(
 ): Promise<GastoPlanejamento> {
   const response = await api.get<GastoPlanejamento>(
     `/planejamentos/${planejamentoId}/gastos/${gastoId}`,
+  );
+  return response.data;
+}
+
+export async function listAcertosPlanejamento(
+  planejamentoId: string,
+): Promise<AcertoPlanejamentoSugerido[]> {
+  const response = await api.get<AcertoPlanejamentoSugerido[]>(
+    `/planejamentos/${planejamentoId}/acertos`,
+  );
+  return response.data;
+}
+
+export async function syncAcertosPlanejamento(
+  planejamentoId: string,
+): Promise<AcertoPlanejamento[]> {
+  const response = await api.post<AcertoPlanejamento[]>(
+    `/planejamentos/${planejamentoId}/acertos/sincronizar`,
+  );
+  return response.data;
+}
+
+export async function payAcertoPlanejamento(
+  planejamentoId: string,
+  acertoId: string,
+): Promise<AcertoPlanejamento> {
+  const response = await api.patch<AcertoPlanejamento>(
+    `/planejamentos/${planejamentoId}/acertos/${acertoId}/pagar`,
+  );
+  return response.data;
+}
+
+export async function cancelAcertoPlanejamento(
+  planejamentoId: string,
+  acertoId: string,
+): Promise<AcertoPlanejamento> {
+  const response = await api.patch<AcertoPlanejamento>(
+    `/planejamentos/${planejamentoId}/acertos/${acertoId}/cancelar`,
+  );
+  return response.data;
+}
+
+export async function reopenAcertoPlanejamento(
+  planejamentoId: string,
+  acertoId: string,
+): Promise<AcertoPlanejamento> {
+  const response = await api.patch<AcertoPlanejamento>(
+    `/planejamentos/${planejamentoId}/acertos/${acertoId}/reabrir`,
   );
   return response.data;
 }
