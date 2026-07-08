@@ -108,7 +108,6 @@ Validacao mecanica executada:
 
 | ID | Descricao | Evidencia | Impacto | Recomendacao |
 | --- | --- | --- | --- | --- |
-| I-04 | Planejamentos implementado esta apenas parcialmente alinhado ao documento conceitual. | `docs/specs/planejamentos-compartilhados/api.md` preve endpoints futuros que nao existem no controller atual. | Produto e contrato futuro podem divergir do MVP implementado. | Atualizar a especificacao conceitual ou completar os endpoints planejados em etapa propria. |
 | I-05 | Contrato de erro tem dois formatos em runtime. | `AppExceptionFilter` e `LogsExceptionFilter` podem emitir envelopes diferentes. | Clientes precisam tratar ambos os formatos. | Manter ambos documentados no OpenAPI ou unificar filtros em etapa futura. |
 | M-01 | Colecao Postman ausente. | Nao ha `.postman`, `postman` nem `*.postman_collection.json`. | Nao ha artefato Postman para validacao manual. | Opcionalmente gerar colecao a partir do OpenAPI oficial, sem manter contrato paralelo. |
 | M-02 | Frontend tipa algumas operacoes destrutivas/desativacao como `Promise<void>`. | Services ignoram payload envelopado de sucesso. | Baixo; payload nao e usado. | Manter se intencional ou criar tipo `ApiEmptySuccess` no frontend. |
