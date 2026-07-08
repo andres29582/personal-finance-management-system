@@ -84,6 +84,15 @@ export type AcertoPlanejamento = {
   valorCentavos: number;
 };
 
+export type AcertoPlanejamentoSugerido = {
+  devedorParticipante?: ParticipantePlanejamento;
+  devedorParticipanteId: string;
+  recebedorParticipante?: ParticipantePlanejamento;
+  recebedorParticipanteId: string;
+  status: 'PENDENTE';
+  valorCentavos: number;
+};
+
 export type Planejamento = {
   acertos?: AcertoPlanejamento[];
   createdAt: string;
@@ -115,6 +124,18 @@ export type AddParticipantePlanejamentoRequest = {
   usuarioId?: string;
 };
 
+export type CreateGastoPlanejamentoRequest = {
+  categoria?: string;
+  comportamento: GastoPlanejamentoComportamento;
+  dataGasto: string;
+  descricao: string;
+  mesReferencia?: string;
+  observacao?: string;
+  pagoPorParticipanteId: string;
+  participantesIds: string[];
+  valorCentavos: number;
+};
+
 export type SuccessEnvelope<T> = {
   data: T;
   requestId: string;
@@ -126,3 +147,12 @@ export type PlanejamentoListSuccess = SuccessEnvelope<Planejamento[]>;
 export type PlanejamentoSuccess = SuccessEnvelope<Planejamento>;
 export type ParticipantePlanejamentoSuccess =
   SuccessEnvelope<ParticipantePlanejamento>;
+export type GastoPlanejamentoSuccess = SuccessEnvelope<GastoPlanejamento>;
+export type GastoPlanejamentoListSuccess =
+  SuccessEnvelope<GastoPlanejamento[]>;
+export type AcertoPlanejamentoSuccess = SuccessEnvelope<AcertoPlanejamento>;
+export type AcertoPlanejamentoListSuccess =
+  SuccessEnvelope<AcertoPlanejamento[]>;
+export type AcertoPlanejamentoSugeridoListSuccess = SuccessEnvelope<
+  AcertoPlanejamentoSugerido[]
+>;
