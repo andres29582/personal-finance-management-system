@@ -1,5 +1,11 @@
 # Planejamentos Compartilhados - Estrategia de testes
 
+> Nota de status:
+> Este documento contem especificacoes conceituais e itens de roadmap. O
+> contrato atual implementado deve ser conferido no Swagger oficial
+> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
+> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+
 ## Objetivo
 
 Definir a estrategia inicial de testes para o futuro modulo de Planejamentos

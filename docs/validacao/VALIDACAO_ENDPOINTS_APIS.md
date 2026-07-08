@@ -141,7 +141,18 @@ Validacao mecanica executada:
 | Refresh token | `POST /auth/refresh` rotaciona refresh token | Interceptor salva novo access/refresh token | Coerente |
 | Endpoints consumidos | Todos existem no backend | Services apontam para rotas reais | Coerente |
 | ML | Frontend chama `GET /previsoes/deficit`; nao chama FastAPI direto | Coerente com docs |
-| Planejamentos | Backend implementa modulo | Frontend nao consome modulo | Nao consumido; sem erro atual |
+| Planejamentos | Backend implementa modulo com 12 endpoints | Frontend consome listagem, criacao, detalhe, participantes, gastos e acertos | Coerente |
+
+Observacao atualizada em 2026-07-08: o frontend passou a consumir o modulo de
+Planejamentos Compartilhados nas telas e fluxos de listagem, criacao, detalhe,
+participantes, gastos e acertos. A observacao anterior de que o modulo nao era
+consumido pelo frontend deve ser tratada como historica.
+
+O backend expoe 12 endpoints de Planejamentos, cobertos pelo Swagger oficial, e
+o fluxo local depende da migration
+`backendnest/migrations/0007_create_planejamentos_compartilhados.sql`, que cria
+as tabelas `planejamento`, `participante_planejamento`,
+`gasto_planejamento`, `divisao_gasto` e `acerto_planejamento`.
 
 ## Divergencias Swagger/Postman
 
