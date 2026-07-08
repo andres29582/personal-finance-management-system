@@ -150,6 +150,78 @@ describe('PlanejamentosService', () => {
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the email prefix for the owner participant when authenticated user has no name', async () => {
+    repository.salvarPlanejamento.mockResolvedValue({
+      id: 'planejamento-1',
+    } as never);
+    repository.buscarParticipanteAtivoPorUsuario.mockResolvedValue(null);
+    repository.salvarParticipante.mockResolvedValue({
+      id: 'participante-owner',
+    } as never);
+    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+      id: 'planejamento-1',
+      usuarioCriadorId: 'user-1',
+    } as never);
+
+    await service.create(
+      {
+        id: 'user-1',
+        email: 'ana@example.com',
+        nome: undefined,
+      },
+      {
+        nome: 'Viagem',
+        tipo: PlanejamentoTipo.VIAGEM,
+      },
+    );
+
+    expect(repository.salvarParticipante).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'ana@example.com',
+        nome: 'ana',
+        planejamentoId: 'planejamento-1',
+        usuarioId: 'user-1',
+      }),
+    );
+  });
+
+  it('uses a safe fallback for the owner participant when authenticated user has no name or email', async () => {
+    repository.salvarPlanejamento.mockResolvedValue({
+      id: 'planejamento-1',
+    } as never);
+    repository.buscarParticipanteAtivoPorUsuario.mockResolvedValue(null);
+    repository.salvarParticipante.mockResolvedValue({
+      id: 'participante-owner',
+    } as never);
+    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+      id: 'planejamento-1',
+      usuarioCriadorId: 'user-1',
+    } as never);
+
+    await service.create(
+      {
+        id: 'user-1',
+        email: undefined,
+        nome: undefined,
+      },
+      {
+        nome: 'Viagem',
+        tipo: PlanejamentoTipo.VIAGEM,
+      },
+    );
+
+    expect(repository.salvarParticipante).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: null,
+        nome: 'Proprietario',
+        planejamentoId: 'planejamento-1',
+        status: ParticipanteStatus.ATIVO,
+        tipo: ParticipanteTipo.VINCULADO,
+        usuarioId: 'user-1',
+      }),
+    );
+  });
+
   it('creates a shared expense for users with planejamento access using equal split', async () => {
     repository.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
