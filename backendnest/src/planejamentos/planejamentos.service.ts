@@ -34,8 +34,8 @@ import { PlanejamentosRepository } from './planejamentos.repository';
 
 export type PlanejamentoUsuarioAutenticado = {
   id: string;
-  email: string;
-  nome: string;
+  email?: string | null;
+  nome?: string | null;
 };
 
 export type AcertoPlanejamentoSugerido = {
@@ -440,11 +440,25 @@ export class PlanejamentosService {
       id: randomUUID(),
       planejamentoId,
       usuarioId: usuario.id,
-      nome: usuario.nome,
-      email: usuario.email,
+      nome: this.obterNomeParticipanteProprietario(usuario),
+      email: usuario.email ?? null,
       tipo: ParticipanteTipo.VINCULADO,
       status: ParticipanteStatus.ATIVO,
     });
+  }
+
+  private obterNomeParticipanteProprietario(
+    usuario: PlanejamentoUsuarioAutenticado,
+  ): string {
+    const nome = usuario.nome?.trim();
+
+    if (nome) {
+      return nome;
+    }
+
+    const emailPrefix = usuario.email?.split('@')[0]?.trim();
+
+    return emailPrefix || 'Proprietario';
   }
 
   private async assertUsuarioProprietario(
