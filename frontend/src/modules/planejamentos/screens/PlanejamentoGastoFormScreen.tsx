@@ -284,7 +284,7 @@ export function PlanejamentoGastoFormScreen() {
           }
           onActionPress={goToParticipantForm}
           title="Nenhum participante disponivel"
-          tone="warning"
+          tone="muted"
         />
       ) : null}
 
