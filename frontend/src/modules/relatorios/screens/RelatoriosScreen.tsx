@@ -25,11 +25,8 @@ import {
 } from '../../../../utils/formatters';
 import { RelatorioGestaoCharts } from '../components/RelatorioGestaoCharts';
 import { getRelatorio } from '../services/relatorioService';
-import {
-  GetRelatorioParams,
-  PeriodoRelatorio,
-  RelatorioResponse,
-} from '../types/relatorio';
+import { PeriodoRelatorio, RelatorioResponse } from '../types/relatorio';
+import { buildRelatorioParams } from '../utils/relatorioFilters';
 
 export function RelatoriosScreen() {
   const router = useRouter();
@@ -73,37 +70,21 @@ export function RelatoriosScreen() {
     void loadSelectors();
   }, [router]);
 
-  const filtros = useMemo<GetRelatorioParams>(() => {
-    const base: GetRelatorioParams = { periodo };
-
-    if (periodo === 'mensal') {
-      base.mes = mes;
-    }
-
-    if (periodo === 'trimestral') {
-      base.ano = ano;
-      base.trimestre = trimestre;
-    }
-
-    if (periodo === 'intervalo') {
-      base.dataInicio = dataInicio;
-      base.dataFim = dataFim;
-    }
-
-    if (tipo) {
-      base.tipo = tipo as GetRelatorioParams['tipo'];
-    }
-
-    if (contaId) {
-      base.contaId = contaId;
-    }
-
-    if (categoriaId) {
-      base.categoriaId = categoriaId;
-    }
-
-    return base;
-  }, [ano, categoriaId, contaId, dataFim, dataInicio, mes, periodo, tipo, trimestre]);
+  const filtros = useMemo(
+    () =>
+      buildRelatorioParams({
+        ano,
+        categoriaId,
+        contaId,
+        dataFim,
+        dataInicio,
+        mes,
+        periodo,
+        tipo,
+        trimestre,
+      }),
+    [ano, categoriaId, contaId, dataFim, dataInicio, mes, periodo, tipo, trimestre],
+  );
 
   const handleGenerate = useCallback(async () => {
     try {
