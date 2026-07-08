@@ -84,6 +84,15 @@ export type AcertoPlanejamento = {
   valorCentavos: number;
 };
 
+export type AcertoPlanejamentoSugerido = {
+  devedorParticipante?: ParticipantePlanejamento;
+  devedorParticipanteId: string;
+  recebedorParticipante?: ParticipantePlanejamento;
+  recebedorParticipanteId: string;
+  status: 'PENDENTE';
+  valorCentavos: number;
+};
+
 export type Planejamento = {
   acertos?: AcertoPlanejamento[];
   createdAt: string;
@@ -141,3 +150,9 @@ export type ParticipantePlanejamentoSuccess =
 export type GastoPlanejamentoSuccess = SuccessEnvelope<GastoPlanejamento>;
 export type GastoPlanejamentoListSuccess =
   SuccessEnvelope<GastoPlanejamento[]>;
+export type AcertoPlanejamentoSuccess = SuccessEnvelope<AcertoPlanejamento>;
+export type AcertoPlanejamentoListSuccess =
+  SuccessEnvelope<AcertoPlanejamento[]>;
+export type AcertoPlanejamentoSugeridoListSuccess = SuccessEnvelope<
+  AcertoPlanejamentoSugerido[]
+>;

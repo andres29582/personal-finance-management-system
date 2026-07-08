@@ -1,14 +1,21 @@
 import {
   addParticipantePlanejamento,
+  cancelAcertoPlanejamento,
   createGastoPlanejamento,
   createPlanejamento,
   getGastoPlanejamentoById,
   getPlanejamentoById,
+  listAcertosPlanejamento,
   listGastosPlanejamento,
   listPlanejamentos,
+  payAcertoPlanejamento,
+  reopenAcertoPlanejamento,
+  syncAcertosPlanejamento,
 } from '../services/planejamentoService';
 import { api } from '../../../shared/services/api';
 import {
+  AcertoPlanejamento,
+  AcertoPlanejamentoSugerido,
   AddParticipantePlanejamentoRequest,
   CreateGastoPlanejamentoRequest,
   CreatePlanejamentoRequest,
@@ -20,6 +27,7 @@ import {
 jest.mock('../../../shared/services/api', () => ({
   api: {
     get: jest.fn(),
+    patch: jest.fn(),
     post: jest.fn(),
   },
 }));
@@ -87,6 +95,52 @@ function makeGasto(overrides: Partial<GastoPlanejamento> = {}): GastoPlanejament
     ultimaAlteracaoValorEm: null,
     updatedAt: '2026-01-01T00:00:00.000Z',
     valorCentavos: 12345,
+    ...overrides,
+  };
+}
+
+function makeAcerto(
+  overrides: Partial<AcertoPlanejamento> = {},
+): AcertoPlanejamento {
+  return {
+    createdAt: '2026-01-01T00:00:00.000Z',
+    dataPagamento: null,
+    deParticipante: makeParticipante({
+      id: 'participante-2',
+      nome: 'Bruno',
+    }),
+    deParticipanteId: 'participante-2',
+    id: 'acerto-1',
+    observacao: null,
+    paraParticipante: makeParticipante({
+      id: 'participante-1',
+      nome: 'Ana',
+    }),
+    paraParticipanteId: 'participante-1',
+    planejamentoId: 'planejamento-1',
+    status: 'PENDENTE',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    valorCentavos: 5000,
+    ...overrides,
+  };
+}
+
+function makeAcertoSugerido(
+  overrides: Partial<AcertoPlanejamentoSugerido> = {},
+): AcertoPlanejamentoSugerido {
+  return {
+    devedorParticipante: makeParticipante({
+      id: 'participante-2',
+      nome: 'Bruno',
+    }),
+    devedorParticipanteId: 'participante-2',
+    recebedorParticipante: makeParticipante({
+      id: 'participante-1',
+      nome: 'Ana',
+    }),
+    recebedorParticipanteId: 'participante-1',
+    status: 'PENDENTE',
+    valorCentavos: 5000,
     ...overrides,
   };
 }
@@ -210,5 +264,74 @@ describe('planejamentoService', () => {
       '/planejamentos/planejamento-1/gastos/gasto-2',
     );
     expect(result).toEqual(gasto);
+  });
+
+  it('lista acertos sugeridos do planejamento', async () => {
+    const acertos = [makeAcertoSugerido()];
+    mockedApi.get.mockResolvedValueOnce({ data: acertos });
+
+    const result = await listAcertosPlanejamento('planejamento-1');
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/acertos',
+    );
+    expect(result).toEqual(acertos);
+  });
+
+  it('sincroniza acertos oficiais do planejamento', async () => {
+    const acertos = [makeAcerto()];
+    mockedApi.post.mockResolvedValueOnce({ data: acertos });
+
+    const result = await syncAcertosPlanejamento('planejamento-1');
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/acertos/sincronizar',
+    );
+    expect(result).toEqual(acertos);
+  });
+
+  it('marca acerto como pago', async () => {
+    const acerto = makeAcerto({
+      dataPagamento: '2026-01-15T00:00:00.000Z',
+      status: 'PAGO',
+    });
+    mockedApi.patch.mockResolvedValueOnce({ data: acerto });
+
+    const result = await payAcertoPlanejamento('planejamento-1', 'acerto-1');
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/acertos/acerto-1/pagar',
+    );
+    expect(result).toEqual(acerto);
+  });
+
+  it('cancela acerto do planejamento', async () => {
+    const acerto = makeAcerto({ status: 'CANCELADO' });
+    mockedApi.patch.mockResolvedValueOnce({ data: acerto });
+
+    const result = await cancelAcertoPlanejamento(
+      'planejamento-1',
+      'acerto-1',
+    );
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/acertos/acerto-1/cancelar',
+    );
+    expect(result).toEqual(acerto);
+  });
+
+  it('reabre acerto do planejamento', async () => {
+    const acerto = makeAcerto({ status: 'PENDENTE' });
+    mockedApi.patch.mockResolvedValueOnce({ data: acerto });
+
+    const result = await reopenAcertoPlanejamento(
+      'planejamento-1',
+      'acerto-1',
+    );
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/acertos/acerto-1/reabrir',
+    );
+    expect(result).toEqual(acerto);
   });
 });
