@@ -36,7 +36,6 @@ describe('F2 - Protected Routes & Navigation Flows', () => {
         '/planejamentos',
         '/planejamentos-form',
         '/planejamentos-detail',
-        '/planejamentos-gasto-form',
         '/planejamentos-participante-form',
         '/relatorios',
         '/previsao-deficit',
@@ -338,7 +337,6 @@ describe('F2 - Protected Routes & Navigation Flows', () => {
         '/planejamentos',
         '/planejamentos-form',
         '/planejamentos-detail',
-        '/planejamentos-gasto-form',
         '/planejamentos-participante-form',
       ];
 

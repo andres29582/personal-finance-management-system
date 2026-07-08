@@ -1,10 +1,6 @@
 import {
   AddParticipantePlanejamentoRequest,
-  AcertoPlanejamento,
-  AcertoPlanejamentoSugerido,
-  CreateGastoPlanejamentoRequest,
   CreatePlanejamentoRequest,
-  GastoPlanejamento,
   ParticipantePlanejamento,
   Planejamento,
   PlanejamentoStatus,
@@ -39,84 +35,6 @@ export async function addParticipantePlanejamento(
   const response = await api.post<ParticipantePlanejamento>(
     `/planejamentos/${planejamentoId}/participantes`,
     data,
-  );
-  return response.data;
-}
-
-export async function listGastosPlanejamento(
-  planejamentoId: string,
-): Promise<GastoPlanejamento[]> {
-  const response = await api.get<GastoPlanejamento[]>(
-    `/planejamentos/${planejamentoId}/gastos`,
-  );
-  return response.data;
-}
-
-export async function createGastoPlanejamento(
-  planejamentoId: string,
-  data: CreateGastoPlanejamentoRequest,
-): Promise<GastoPlanejamento> {
-  const response = await api.post<GastoPlanejamento>(
-    `/planejamentos/${planejamentoId}/gastos`,
-    data,
-  );
-  return response.data;
-}
-
-export async function getGastoPlanejamentoById(
-  planejamentoId: string,
-  gastoId: string,
-): Promise<GastoPlanejamento> {
-  const response = await api.get<GastoPlanejamento>(
-    `/planejamentos/${planejamentoId}/gastos/${gastoId}`,
-  );
-  return response.data;
-}
-
-export async function listAcertosPlanejamento(
-  planejamentoId: string,
-): Promise<AcertoPlanejamentoSugerido[]> {
-  const response = await api.get<AcertoPlanejamentoSugerido[]>(
-    `/planejamentos/${planejamentoId}/acertos`,
-  );
-  return response.data;
-}
-
-export async function syncAcertosPlanejamento(
-  planejamentoId: string,
-): Promise<AcertoPlanejamento[]> {
-  const response = await api.post<AcertoPlanejamento[]>(
-    `/planejamentos/${planejamentoId}/acertos/sincronizar`,
-  );
-  return response.data;
-}
-
-export async function payAcertoPlanejamento(
-  planejamentoId: string,
-  acertoId: string,
-): Promise<AcertoPlanejamento> {
-  const response = await api.patch<AcertoPlanejamento>(
-    `/planejamentos/${planejamentoId}/acertos/${acertoId}/pagar`,
-  );
-  return response.data;
-}
-
-export async function cancelAcertoPlanejamento(
-  planejamentoId: string,
-  acertoId: string,
-): Promise<AcertoPlanejamento> {
-  const response = await api.patch<AcertoPlanejamento>(
-    `/planejamentos/${planejamentoId}/acertos/${acertoId}/cancelar`,
-  );
-  return response.data;
-}
-
-export async function reopenAcertoPlanejamento(
-  planejamentoId: string,
-  acertoId: string,
-): Promise<AcertoPlanejamento> {
-  const response = await api.patch<AcertoPlanejamento>(
-    `/planejamentos/${planejamentoId}/acertos/${acertoId}/reabrir`,
   );
   return response.data;
 }
