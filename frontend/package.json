@@ -12,7 +12,9 @@
     "web:standard": "expo start --web",
     "test": "jest",
     "test:watch": "jest --watch",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "typecheck": "tsc --noEmit",
+    "export:web": "expo export --platform web"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

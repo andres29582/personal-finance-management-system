@@ -54,6 +54,20 @@ Novas regras de tela, service ou tipo devem entrar em `src/modules` ou
 compatibilidade temporaria com imports antigos e nao devem receber nova regra de
 negocio.
 
+`frontend/components` tambem deve ser tratado como camada legada ou de
+compatibilidade quando houver alternativa em `src/shared/ui`. Novos componentes
+reutilizaveis devem nascer em `src/shared/ui`; componentes especificos de
+dominio devem nascer em `src/modules/<dominio>/components`.
+
+Regra de manutencao para pastas raiz legadas:
+
+- nao criar novas features em `frontend/services`, `frontend/types`,
+  `frontend/hooks` ou `frontend/components`;
+- nao mover codigo de dominio novo para a raiz do frontend;
+- manter shims apenas enquanto imports antigos dependerem deles;
+- remover shims somente com teste, typecheck e lint passando;
+- preferir `src/modules` para dominio e `src/shared` para infraestrutura.
+
 ## Rotas, modulos e navegacao
 
 As rotas em `app/` refletem as telas do produto: login, cadastro, dashboard,
@@ -70,6 +84,21 @@ combinacao de:
 - `components/`: componentes especificos do dominio;
 - `hooks/`: estado local ou coordenacao de dados;
 - `__tests__/`: testes de tela, service ou mappers.
+
+Padrao recomendado para novos modulos:
+
+```text
+src/modules/<dominio>/
+  screens/
+  services/
+  types/
+  components/
+  hooks/
+  __tests__/
+```
+
+Nem todo modulo precisa criar todas as pastas de inicio. A pasta deve existir
+quando houver responsabilidade real para ela.
 
 A navegacao autenticada usa itens compartilhados em
 `src/shared/navigation/financeNavigation.ts`. Essa lista alimenta o shell
@@ -192,6 +221,21 @@ especificos de dominio continuam dentro do modulo correspondente.
 Para detalhes de fases, tokens e componentes, consulte
 [FRONTEND_DESIGN_SYSTEM.md](FRONTEND_DESIGN_SYSTEM.md).
 
+## Formularios e validacoes
+
+Formularios devem seguir o padrao descrito em
+[PADROES_FORMULARIOS_VALIDACOES.md](PADROES_FORMULARIOS_VALIDACOES.md).
+
+Diretrizes gerais:
+
+- separar valores de formulario, erros por campo, mensagem geral e estado de
+  envio;
+- usar `submitting` para bloquear duplo envio;
+- normalizar payload antes de chamar services;
+- tratar erros HTTP com `resolveApiError`;
+- exibir feedback visual consistente para loading, erro, vazio e sucesso;
+- extrair validacoes, normalizadores ou hooks quando a tela crescer.
+
 ## Estrategia de testes
 
 A estrategia de testes do frontend cobre quatro camadas:
@@ -208,6 +252,61 @@ A estrategia de testes do frontend cobre quatro camadas:
 telas reais, services, riscos e testes automatizados. A matriz atual separa
 fluxos cobertos, parciais e pendentes, e deve ser atualizada quando novas telas
 ou testes forem adicionados.
+
+Comandos de validacao esperados dentro de `frontend/`:
+
+```bash
+npm run lint
+npm run typecheck
+npm test -- --runInBand
+npm run export:web
+```
+
+`export:web` pode gerar artefato de build/export. Esse artefato nao deve ser
+versionado.
+
+## Padrao para telas grandes
+
+Telas grandes sao permitidas temporariamente, mas nao devem continuar crescendo
+sem estrutura. Quando uma tela concentrar estado, chamadas HTTP, validacao,
+mapeamento de dados, renderizacao condicional e muitos estilos, a evolucao
+recomendada e:
+
+1. extrair hook de tela para coordenacao de dados e acoes;
+2. extrair mappers para transformar DTOs em modelos de apresentacao;
+3. extrair componentes menores para secoes repetidas ou complexas;
+4. manter validacoes e normalizacao de payload em funcoes pequenas;
+5. manter rotas em `frontend/app` como adaptadores finos.
+
+Prioridades atuais de atencao: planejamentos, usuario, relatorios, cadastro e
+formularios financeiros complexos.
+
+## Contratos de API
+
+O contrato entre frontend e backend esta documentado em
+[FRONTEND_API_CONTRACTS.md](FRONTEND_API_CONTRACTS.md).
+
+Riscos atuais:
+
+- DTOs e types do frontend ainda sao mantidos manualmente;
+- services contem paths de endpoint escritos manualmente;
+- o client Axios desembrulha o envelope global de sucesso, entao e preciso
+  diferenciar tipo transportado pela API e tipo consumido pela tela;
+- erros do backend podem chegar em formatos diferentes.
+
+Novos endpoints devem ser confirmados no `backendnest/swagger.yaml` antes de
+serem consumidos pelo frontend.
+
+## Riscos conhecidos da arquitetura atual
+
+- Contratos API manuais podem divergir do Swagger.
+- Telas grandes podem misturar responsabilidades e dificultar testes.
+- Cores hardcoded ainda existem fora do tema compartilhado.
+- Nomes tecnicos ainda misturam portugues, ingles e espanhol por historico de
+  contrato e dominio.
+- Scripts de validacao eram incompletos antes da inclusao de `typecheck` e
+  `export:web`.
+- Smoke visual web/mobile e acessibilidade ainda nao possuem processo formal.
 
 ## Pontos sensiveis de manutencao
 
@@ -275,6 +374,10 @@ isolamento por usuario. Mudancas nessas telas devem validar:
   local e comandos principais.
 - [FRONTEND_DESIGN_SYSTEM.md](FRONTEND_DESIGN_SYSTEM.md): tokens visuais,
   componentes compartilhados e shell autenticado.
+- [FRONTEND_API_CONTRACTS.md](FRONTEND_API_CONTRACTS.md): contrato entre
+  frontend, Swagger e backend.
+- [PADROES_FORMULARIOS_VALIDACOES.md](PADROES_FORMULARIOS_VALIDACOES.md):
+  padroes de formularios, validacoes e feedback visual.
 - [FRONTEND_DASHBOARD.md](FRONTEND_DASHBOARD.md): historico e arquitetura
   detalhada do dashboard.
 - [docs/desenvolvimento/TESTES_FRONTEND.md](../desenvolvimento/TESTES_FRONTEND.md):

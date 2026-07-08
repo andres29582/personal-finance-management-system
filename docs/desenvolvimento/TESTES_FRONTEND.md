@@ -58,11 +58,17 @@ Status usado:
 
 ## Resumo de cobertura
 
-| Categoria | Quantidade |
-|---|---:|
-| Coberto | 20 |
-| Parcial | 14 |
-| Pendente | 0 |
+Resumo historico por rota mantido acima. A evidencia automatizada mais recente
+da suite completa e:
+
+| Comando | Resultado | Observacao |
+|---|---|---|
+| `npm test -- --runInBand` | Passando | 45 suites / 440 testes |
+| `npm run lint` | Passando | `expo lint` sem erro |
+| `npx tsc --noEmit` | Passando | executado antes da criacao do script oficial |
+| `npm run typecheck` | Ausente antes desta etapa | deve apontar para `tsc --noEmit` |
+| `npm run build` | Ausente antes desta etapa | em Expo, preferir comando explicito de export web |
+| `npm run export:web` | Adicionado nesta etapa | valida export Expo Web e gera `dist/` ignorado pelo Git |
 
 ## Principais lacunas para proximas fases
 
@@ -70,12 +76,82 @@ Status usado:
 2. Adicionar teste dedicado para `src/shared/services/cepService.ts`, hoje coberto indiretamente por cadastro/perfil.
 3. Expandir os fluxos financeiros ja cobertos para estados vazios, erros de remocao/salvamento e casos `401` adicionais nos formularios.
 4. Manter builders tipados em `src/shared/test/builders/` como fonte unica de fixtures para evitar mocks desatualizados.
+5. Formalizar smoke visual web/mobile.
+6. Criar checklist de acessibilidade.
+7. Validar contratos API contra `backendnest/swagger.yaml` de forma automatica ou semi-automatica.
+
+## Tipos de testes existentes
+
+### API client e storage
+
+Cobrem token de acesso, refresh token, limpeza de sessao, retry de `401`,
+unwrap de resposta de sucesso, listeners de auth state e usuario local invalido.
+
+Exemplos:
+
+- `frontend/__tests__/services/api.test.ts`
+- `frontend/__tests__/storage/authStorage.test.ts`
+- `frontend/__tests__/utils/api-error.test.ts`
+
+### Services de dominio
+
+Services devem ser testados com mock do `api`, validando endpoint, metodo,
+query params, payload, retorno desembrulhado e propagacao de erro.
+
+Padrao recomendado:
+
+- testar `api.get`, `api.post`, `api.patch` ou `api.delete` chamado com path
+  correto;
+- testar payload normalizado;
+- testar query params quando houver filtro;
+- testar erro rejeitado pelo client;
+- manter builders em `src/shared/test/builders` quando houver fixtures
+  reutilizaveis.
+
+### Hooks
+
+Hooks devem ganhar teste dedicado quando concentrarem regra de apresentacao,
+coordenacao de dados, reload, efeito de foco ou navegacao. Enquanto um hook
+estiver muito acoplado a uma tela, a cobertura pode comecar por teste da tela e
+ser extraida depois.
+
+### Telas
+
+Telas devem ser testadas com Testing Library React Native. O teste deve mockar
+services do dominio e `expo-router` quando houver navegacao.
+
+Fluxos recomendados:
+
+- renderizacao inicial;
+- loading;
+- erro bloqueante;
+- erro nao bloqueante quando ja ha dados;
+- vazio;
+- sucesso;
+- submit de formulario;
+- redirecionamento em `401`, quando aplicavel.
+
+### Estados de UI
+
+Telas com dados remotos devem cobrir loading, erro, vazio e sucesso. Telas com
+formularios devem cobrir validacao client-side, erro de backend, estado
+`submitting` e sucesso/navegacao apos envio.
 
 ## Evidencia tecnica atual
 
-Ultima verificacao conhecida nesta fase:
+Ultima verificacao registrada nesta etapa:
 
-- Suite critica frontend financeira, analitica e auditoria:
-  `npm test -- --runInBand src/modules/auth/__tests__/login.test.tsx src/modules/dashboard/__tests__/dashboard.test.tsx src/modules/transacoes/__tests__/transacoes-form.test.tsx src/modules/transacoes/__tests__/transacoes-screen.test.tsx src/modules/contas/__tests__/contas-screen.test.tsx src/modules/contas/__tests__/contas-form.test.tsx src/modules/transferencias/__tests__/transferencias-screen.test.tsx src/modules/transferencias/__tests__/transferencias-form.test.tsx src/modules/dividas/__tests__/dividas-screen.test.tsx src/modules/dividas/__tests__/dividas-form.test.tsx src/modules/pagos-divida/__tests__/pagoDividaService.test.ts src/modules/pagos-divida/__tests__/pagos-divida-screen.test.tsx src/modules/relatorios/__tests__/relatorioService.test.ts src/modules/relatorios/__tests__/relatorios-screen.test.tsx src/modules/previsao-deficit/__tests__/previsaoService.test.ts src/modules/previsao-deficit/__tests__/previsao-screen.test.tsx src/modules/audit-logs/__tests__/auditLogService.test.ts src/modules/audit-logs/__tests__/audit-logs-screen.test.tsx`
-  -> 18 suites / 77 tests passando.
-- Verificacoes globais anteriores registradas: `npm test -- --runInBand` -> 27 suites / 329 tests passando; `npm run lint` passando; `npx tsc --noEmit` passando.
+- `npm test -- --runInBand`: 45 suites / 440 testes passando.
+- `npm run lint`: passando.
+- `npx tsc --noEmit`: passando.
+- `npm run export:web`: passando; gerou `frontend/dist`, ja ignorado por
+  `frontend/.gitignore`.
+
+Comandos oficiais recomendados apos a criacao dos scripts:
+
+```bash
+npm run lint
+npm run typecheck
+npm test -- --runInBand
+npm run export:web
+```
