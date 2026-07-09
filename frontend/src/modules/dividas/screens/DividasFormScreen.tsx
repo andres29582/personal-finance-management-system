@@ -15,7 +15,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
-import { parseDecimalInput } from '../../../../utils/number-input';
+import { buildDividaPayload } from '../mappers/dividaPayloadMapper';
 import { createDivida, getDividaById, updateDivida } from '../services/dividaService';
 import { Periodicidade } from '../types/divida';
 import {
@@ -90,9 +90,6 @@ export function DividasFormScreen() {
   }, [dividaId, router]);
 
   async function handleSave() {
-    const total = parseDecimalInput(montoTotal);
-    const interest = parseDecimalInput(tasaInteres);
-    const monthlyPayment = parseDecimalInput(cuotaMensual);
     const nextFieldErrors = validateDividaForm({
       cuotaMensual,
       fechaInicio,
@@ -114,17 +111,17 @@ export function DividasFormScreen() {
       setMessage('');
       setFieldErrors({});
 
-      const payload = {
-        contaId: contaId || undefined,
-        cuotaMensual: Number.isFinite(monthlyPayment) ? monthlyPayment : undefined,
+      const payload = buildDividaPayload({
+        contaId,
+        cuotaMensual,
         fechaInicio,
         fechaVencimiento,
-        montoTotal: total,
-        nome: nome.trim(),
+        montoTotal,
+        nome,
         periodicidade,
-        proximoVencimiento: proximoVencimiento || undefined,
-        tasaInteres: Number.isFinite(interest) ? interest : undefined,
-      };
+        proximoVencimiento,
+        tasaInteres,
+      });
 
       if (dividaId) {
         await updateDivida(dividaId, payload);
