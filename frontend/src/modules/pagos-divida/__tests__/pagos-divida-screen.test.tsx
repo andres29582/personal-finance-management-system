@@ -123,6 +123,29 @@ describe('PagosDividaScreen', () => {
     });
   });
 
+  it('blocks save when payment date is invalid', async () => {
+    mockSuccessfulLoad();
+
+    render(<PagosDividaScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Registrar pagamento')).toBeTruthy();
+    });
+
+    const emptyInputs = screen.getAllByDisplayValue('');
+    fireEvent.changeText(emptyInputs[0], '300,75');
+    fireEvent.changeText(
+      screen.getByDisplayValue(new Date().toISOString().slice(0, 10)),
+      '01/05/2026',
+    );
+    fireEvent.press(screen.getByText('Registrar pagamento'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Informe uma data valida no formato YYYY-MM-DD.')).toBeTruthy();
+      expect(mockCreatePagoDivida).not.toHaveBeenCalled();
+    });
+  });
+
   it('removes payment after confirmation and reloads history', async () => {
     mockSuccessfulLoad();
     mockRemovePagoDivida.mockResolvedValue(undefined);
