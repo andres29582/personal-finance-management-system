@@ -107,11 +107,8 @@ describe('DividasFormScreen', () => {
 
     await waitFor(() => {
       expect(mockUpdateDivida).toHaveBeenCalledWith('divida1', {
-        contaId: 'conta1',
         cuotaMensual: 500,
-        fechaInicio: '2026-05-01',
         fechaVencimiento: '2026-12-01',
-        montoTotal: 5000,
         nome: 'Emprestimo atualizado',
         periodicidade: 'mensal',
         proximoVencimiento: '2026-06-01',
