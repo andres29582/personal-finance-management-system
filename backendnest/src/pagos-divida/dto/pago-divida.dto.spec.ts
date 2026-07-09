@@ -49,6 +49,23 @@ describe('PagoDivida DTO validation', () => {
     expect(errors.map((error) => error.property)).toContain('data');
   });
 
+  it.each(['2026-99-99', '01/05/2026'])(
+    'rejects invalid payment date: %s',
+    async (data) => {
+      const dto = Object.assign(new CreatePagoDividaDto(), {
+        dividaId,
+        contaId,
+        categoriaId,
+        valor: 100,
+        data,
+      });
+
+      const errors = await validate(dto);
+
+      expect(errors.map((error) => error.property)).toContain('data');
+    },
+  );
+
   it('accepts payment creation without an optional description', async () => {
     const dto = Object.assign(new CreatePagoDividaDto(), {
       dividaId,

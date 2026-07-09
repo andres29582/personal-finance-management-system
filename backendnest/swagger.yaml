@@ -637,6 +637,7 @@ components:
           exclusiveMinimum: true
         data:
           type: string
+          format: date
         descricao:
           type: string
     CreateMetaRequest:

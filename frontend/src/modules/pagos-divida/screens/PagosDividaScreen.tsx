@@ -20,13 +20,14 @@ import {
 import { confirmAction } from '../../../../utils/confirm-action';
 import { resolveApiError } from '../../../../utils/api-error';
 import { formatCurrency, formatDate } from '../../../../utils/formatters';
-import { parseDecimalInput } from '../../../../utils/number-input';
+import { buildPagoDividaPayload } from '../mappers/pagoDividaPayloadMapper';
 import {
   createPagoDivida,
   listPagosByDivida,
   removePagoDivida,
 } from '../services/pagoDividaService';
 import { PagoDivida } from '../types/pago-divida';
+import { validatePagoDividaForm } from '../validators/pagoDividaForm';
 
 export function PagosDividaScreen() {
   const router = useRouter();
@@ -93,29 +94,27 @@ export function PagosDividaScreen() {
   }
 
   async function handleSave() {
-    const parsedValor = parseDecimalInput(valor);
+    const formValues = {
+      categoriaId,
+      contaId,
+      data,
+      descricao,
+      dividaId,
+      valor,
+    };
+    const validation = validatePagoDividaForm(formValues);
 
-    if (!dividaId || !contaId || !categoriaId || !Number.isFinite(parsedValor)) {
-      setMessage('Preencha conta, categoria, valor e data.');
-      return;
-    }
-
-    if (parsedValor <= 0) {
-      setMessage('O valor deve ser maior que zero.');
+    if (!validation.valid) {
+      setMessage(validation.message);
       return;
     }
 
     try {
       setSaving(true);
       setMessage('');
-      await createPagoDivida({
-        categoriaId,
-        contaId,
-        data,
-        descricao: descricao.trim() || undefined,
-        dividaId,
-        valor: parsedValor,
-      });
+      await createPagoDivida(
+        buildPagoDividaPayload(formValues, validation.parsedValor),
+      );
       setValor('');
       setDescricao('');
       await reloadPayments();
