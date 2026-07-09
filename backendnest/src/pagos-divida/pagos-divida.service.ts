@@ -33,7 +33,15 @@ export class PagosDividaService {
     dto: CreatePagoDividaDto,
   ): Promise<PagoDivida> {
     assertPositiveFinancialValue(dto.valor, 'Valor do pagamento');
-    await this.dividasService.findOne(dto.dividaId, usuarioId);
+    const divida = await this.dividasService.findOne(dto.dividaId, usuarioId);
+
+    if (!divida.ativa) {
+      throw new BusinessRuleException(
+        'PAGAMENTO_DIVIDA_INACTIVE_DEBT',
+        'Nao e possivel registrar pagamento para uma divida inativa.',
+      );
+    }
+
     await this.contasService.findOne(dto.contaId, usuarioId);
     const categoria = await this.categoriasService.findOne(
       dto.categoriaId,
