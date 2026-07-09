@@ -56,6 +56,26 @@ describe('Divida DTO validation', () => {
     );
   });
 
+  it('rejects invalid debt creation dates', async () => {
+    const dto = Object.assign(new CreateDividaDto(), {
+      nome: 'Financiamento',
+      montoTotal: 1000,
+      fechaInicio: '01/05/2026',
+      fechaVencimiento: '2026-99-99',
+      proximoVencimiento: '2026-13-01',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining([
+        'fechaInicio',
+        'fechaVencimiento',
+        'proximoVencimiento',
+      ]),
+    );
+  });
+
   it('accepts partial debt updates', async () => {
     const dto = Object.assign(new UpdateDividaDto(), {
       nome: 'Financiamento atualizado',
@@ -84,6 +104,19 @@ describe('Divida DTO validation', () => {
         'periodicidade',
         'ativa',
       ]),
+    );
+  });
+
+  it('rejects invalid partial debt update dates', async () => {
+    const dto = Object.assign(new UpdateDividaDto(), {
+      fechaVencimiento: '2026-99-99',
+      proximoVencimiento: '01/06/2026',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining(['fechaVencimiento', 'proximoVencimiento']),
     );
   });
 });
