@@ -1,5 +1,5 @@
 import { parseDecimalInput } from '../../../../utils/number-input';
-import type { Divida, Periodicidade } from '../types/divida';
+import type { Divida, Periodicidade, UpdateDividaRequestDto } from '../types/divida';
 
 export type DividaPayloadFormValues = {
   contaId: string;
@@ -36,6 +36,22 @@ export function buildDividaPayload(values: DividaPayloadFormValues): DividaPaylo
     fechaInicio: values.fechaInicio,
     fechaVencimiento: values.fechaVencimiento,
     montoTotal: total,
+    nome: values.nome.trim(),
+    periodicidade: values.periodicidade,
+    proximoVencimiento: values.proximoVencimiento || undefined,
+    tasaInteres: Number.isFinite(interest) ? interest : undefined,
+  };
+}
+
+export function buildDividaUpdatePayload(
+  values: DividaPayloadFormValues,
+): UpdateDividaRequestDto {
+  const interest = parseDecimalInput(values.tasaInteres);
+  const monthlyPayment = parseDecimalInput(values.cuotaMensual);
+
+  return {
+    cuotaMensual: Number.isFinite(monthlyPayment) ? monthlyPayment : undefined,
+    fechaVencimiento: values.fechaVencimiento,
     nome: values.nome.trim(),
     periodicidade: values.periodicidade,
     proximoVencimiento: values.proximoVencimiento || undefined,

@@ -15,7 +15,11 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
-import { buildDividaPayload, mapDividaToFormValues } from '../mappers/dividaPayloadMapper';
+import {
+  buildDividaPayload,
+  buildDividaUpdatePayload,
+  mapDividaToFormValues,
+} from '../mappers/dividaPayloadMapper';
 import { createDivida, getDividaById, updateDivida } from '../services/dividaService';
 import { Periodicidade } from '../types/divida';
 import {
@@ -113,7 +117,7 @@ export function DividasFormScreen() {
       setMessage('');
       setFieldErrors({});
 
-      const payload = buildDividaPayload({
+      const formValues = {
         contaId,
         cuotaMensual,
         fechaInicio,
@@ -123,12 +127,12 @@ export function DividasFormScreen() {
         periodicidade,
         proximoVencimiento,
         tasaInteres,
-      });
+      };
 
       if (dividaId) {
-        await updateDivida(dividaId, payload);
+        await updateDivida(dividaId, buildDividaUpdatePayload(formValues));
       } else {
-        await createDivida(payload);
+        await createDivida(buildDividaPayload(formValues));
       }
 
       router.replace('/dividas' as never);
