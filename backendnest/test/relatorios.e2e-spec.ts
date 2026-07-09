@@ -152,6 +152,68 @@ describe('Relatorios (e2e)', () => {
     ]);
   });
 
+  it('excludes soft-deleted debt payments from monthly expense reports', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '24284898009',
+      email: 'relatorios.deleted-payment.e2e@example.com',
+      nome: 'Relatorios Deleted Payment E2E',
+    });
+    const scenario = await createMonthlyFinancialScenario(
+      app,
+      session,
+      'relatorio-deleted-payment',
+    );
+
+    const beforeDeleteResponse = await withAuth(
+      request(app.getHttpServer()).get('/relatorios'),
+      session,
+    )
+      .query(monthlyReportQuery())
+      .expect(200);
+    const beforeDelete =
+      expectApiSuccess<RelatorioResponse>(beforeDeleteResponse);
+
+    expectMoney(
+      beforeDelete.resumo.totalDespesas,
+      scenario.expected.currentMonthExpense,
+    );
+    expect(beforeDelete.transacoes.map((item) => item.id)).toContain(
+      scenario.debtPayment.transacaoId,
+    );
+
+    await withAuth(
+      request(app.getHttpServer()).delete(
+        `/pagos-divida/${scenario.debtPayment.id}`,
+      ),
+      session,
+    ).expect(200);
+
+    const afterDeleteResponse = await withAuth(
+      request(app.getHttpServer()).get('/relatorios'),
+      session,
+    )
+      .query(monthlyReportQuery())
+      .expect(200);
+    const afterDelete = expectApiSuccess<RelatorioResponse>(afterDeleteResponse);
+
+    expectMoney(
+      afterDelete.resumo.totalDespesas,
+      scenario.expected.expenseByCategory.expense,
+    );
+    expect(afterDelete.resumo.totalTransacoes).toBe(2);
+    expect(afterDelete.despesasPorCategoria).toEqual([
+      {
+        categoriaId: scenario.categories.expense.id,
+        categoriaNome: 'Despesa relatorio-deleted-payment',
+        percentual: 100,
+        total: scenario.expected.expenseByCategory.expense,
+      },
+    ]);
+    expect(afterDelete.transacoes.map((item) => item.id)).not.toContain(
+      scenario.debtPayment.transacaoId,
+    );
+  });
+
   it('filters report transactions by account when contaId is provided', async () => {
     const session = await registerAndLoginTestUser(app, {
       cpf: '68199965000',

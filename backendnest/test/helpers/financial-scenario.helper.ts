@@ -13,6 +13,7 @@ import { makeTransferenciaPayload } from '../factories/transferencia.factory';
 import { E2eAuthSession, withAuth } from './auth.e2e-helper';
 import { E2E_DATES, E2E_DATE_VALUES } from './date.helper';
 import { expectApiSuccess } from './expectations.helper';
+import { ContaResponse } from './financial-assertions.helper';
 import { Identifiable } from './http.helper';
 
 type EntityResponse = Identifiable & Record<string, unknown>;
@@ -217,6 +218,18 @@ export async function createConta(
     .expect(201);
 
   return expectApiSuccess<EntityResponse>(response);
+}
+
+export async function listContas(
+  app: INestApplication,
+  session: E2eAuthSession,
+): Promise<ContaResponse[]> {
+  const response = await withAuth(
+    request(app.getHttpServer()).get('/contas'),
+    session,
+  ).expect(200);
+
+  return expectApiSuccess<ContaResponse[]>(response);
 }
 
 export async function createTransacao(
