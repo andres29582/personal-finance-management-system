@@ -50,6 +50,22 @@ describe('Transferencia DTO validation', () => {
     );
   });
 
+  it.each(['01/05/2026', '2026-99-99'])(
+    'rejects invalid transfer creation date: %s',
+    async (data) => {
+      const dto = Object.assign(new CreateTransferenciaDto(), {
+        contaOrigemId,
+        contaDestinoId,
+        valor: 200,
+        data,
+      });
+
+      const errors = await validate(dto);
+
+      expect(errors.map((error) => error.property)).toContain('data');
+    },
+  );
+
   it('accepts partial transfer updates', async () => {
     const dto = Object.assign(new UpdateTransferenciaDto(), {
       valor: 250,
@@ -71,5 +87,15 @@ describe('Transferencia DTO validation', () => {
     expect(errors.map((error) => error.property)).toEqual(
       expect.arrayContaining(['valor', 'comissao']),
     );
+  });
+
+  it('rejects invalid date in partial transfer updates', async () => {
+    const dto = Object.assign(new UpdateTransferenciaDto(), {
+      data: '01/05/2026',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map((error) => error.property)).toContain('data');
   });
 });

@@ -534,6 +534,7 @@ components:
           exclusiveMinimum: true
         data:
           type: string
+          format: date
         descricao:
           type: string
         comissao:
@@ -547,6 +548,7 @@ components:
           exclusiveMinimum: true
         data:
           type: string
+          format: date
         descricao:
           type: string
         comissao:
@@ -577,10 +579,13 @@ components:
           exclusiveMinimum: true
         fechaInicio:
           type: string
+          format: date
         fechaVencimiento:
           type: string
+          format: date
         proximoVencimiento:
           type: string
+          format: date
         periodicidade:
           type: string
           enum:
@@ -602,8 +607,10 @@ components:
           exclusiveMinimum: true
         fechaVencimiento:
           type: string
+          format: date
         proximoVencimiento:
           type: string
+          format: date
         periodicidade:
           type: string
           enum:
