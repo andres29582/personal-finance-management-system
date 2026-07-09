@@ -1,5 +1,5 @@
 import { parseDecimalInput } from '../../../../utils/number-input';
-import type { Periodicidade } from '../types/divida';
+import type { Divida, Periodicidade } from '../types/divida';
 
 export type DividaPayloadFormValues = {
   contaId: string;
@@ -40,5 +40,19 @@ export function buildDividaPayload(values: DividaPayloadFormValues): DividaPaylo
     periodicidade: values.periodicidade,
     proximoVencimiento: values.proximoVencimiento || undefined,
     tasaInteres: Number.isFinite(interest) ? interest : undefined,
+  };
+}
+
+export function mapDividaToFormValues(divida: Divida): DividaPayloadFormValues {
+  return {
+    contaId: divida.contaId || '',
+    cuotaMensual: divida.cuotaMensual === null ? '' : String(divida.cuotaMensual),
+    fechaInicio: divida.fechaInicio,
+    fechaVencimiento: divida.fechaVencimiento,
+    montoTotal: String(divida.montoTotal),
+    nome: divida.nome,
+    periodicidade: divida.periodicidade || 'mensal',
+    proximoVencimiento: divida.proximoVencimiento || '',
+    tasaInteres: divida.tasaInteres === null ? '' : String(divida.tasaInteres),
   };
 }

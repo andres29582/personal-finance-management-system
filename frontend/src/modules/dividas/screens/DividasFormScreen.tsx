@@ -15,7 +15,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
-import { buildDividaPayload } from '../mappers/dividaPayloadMapper';
+import { buildDividaPayload, mapDividaToFormValues } from '../mappers/dividaPayloadMapper';
 import { createDivida, getDividaById, updateDivida } from '../services/dividaService';
 import { Periodicidade } from '../types/divida';
 import {
@@ -65,15 +65,17 @@ export function DividasFormScreen() {
 
         if (dividaId) {
           const divida = await getDividaById(dividaId);
-          setContaId(divida.contaId || '');
-          setNome(divida.nome);
-          setMontoTotal(String(divida.montoTotal));
-          setTasaInteres(String(divida.tasaInteres ?? ''));
-          setCuotaMensual(String(divida.cuotaMensual ?? ''));
-          setFechaInicio(divida.fechaInicio);
-          setFechaVencimiento(divida.fechaVencimiento);
-          setProximoVencimiento(divida.proximoVencimiento || '');
-          setPeriodicidade(divida.periodicidade || 'mensal');
+          const formValues = mapDividaToFormValues(divida);
+
+          setContaId(formValues.contaId);
+          setNome(formValues.nome);
+          setMontoTotal(formValues.montoTotal);
+          setTasaInteres(formValues.tasaInteres);
+          setCuotaMensual(formValues.cuotaMensual);
+          setFechaInicio(formValues.fechaInicio);
+          setFechaVencimiento(formValues.fechaVencimiento);
+          setProximoVencimiento(formValues.proximoVencimiento);
+          setPeriodicidade(formValues.periodicidade);
         }
       } catch (error) {
         const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar a divida.');
