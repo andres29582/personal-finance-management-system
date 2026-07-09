@@ -83,6 +83,28 @@ describe('TransferenciaFormScreen', () => {
     });
   });
 
+  it('blocks save when transfer date is invalid', async () => {
+    mockContas();
+
+    render(<TransferenciaFormScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nova transferencia')).toBeTruthy();
+    });
+
+    fireEvent.changeText(screen.getAllByDisplayValue('')[0], '100');
+    fireEvent.changeText(
+      screen.getByDisplayValue(new Date().toISOString().slice(0, 10)),
+      '2026-99-99',
+    );
+    fireEvent.press(screen.getByText('Salvar transferencia'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Informe uma data valida no formato YYYY-MM-DD.')).toBeTruthy();
+      expect(mockCreateTransferencia).not.toHaveBeenCalled();
+    });
+  });
+
   it('loads transfer data and updates an existing transfer', async () => {
     mockContas();
     mockLocalSearchParams = { id: 'transferencia1' };

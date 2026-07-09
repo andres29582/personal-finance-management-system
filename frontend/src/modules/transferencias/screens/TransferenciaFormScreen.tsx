@@ -21,6 +21,7 @@ import {
   getTransferenciaById,
   updateTransferencia,
 } from '../services/transferenciaService';
+import { isValidDateInput } from '../../../shared/validators/dateInput';
 
 export function TransferenciaFormScreen() {
   const router = useRouter();
@@ -78,6 +79,11 @@ export function TransferenciaFormScreen() {
 
     if (!contaOrigemId || !contaDestinoId || !Number.isFinite(parsedValor) || !data) {
       setMessage('Preencha origem, destino, valor e data.');
+      return;
+    }
+
+    if (!isValidDateInput(data)) {
+      setMessage('Informe uma data valida no formato YYYY-MM-DD.');
       return;
     }
 
