@@ -83,6 +83,25 @@ describe('DividasScreen', () => {
     });
   });
 
+  it('does not show payment action for inactive debt', async () => {
+    mockListDividas.mockResolvedValue([
+      makeDivida({
+        ativa: false,
+        id: 'divida-inativa',
+        nome: 'Emprestimo encerrado',
+      }),
+    ]);
+
+    render(<DividasScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Emprestimo encerrado')).toBeTruthy();
+      expect(screen.getByText('Inativa')).toBeTruthy();
+    });
+
+    expect(screen.queryByText('Pagamentos')).toBeNull();
+  });
+
   it('deactivates debt after confirmation and reloads list', async () => {
     mockListDividas.mockResolvedValue([divida]);
     mockDeactivateDivida.mockResolvedValue(undefined);
