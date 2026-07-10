@@ -86,7 +86,10 @@ describe('PagosDividaService', () => {
     };
 
     contasService.findOne.mockResolvedValue({ id: 'conta-1' } as never);
-    dividasService.findOne.mockResolvedValue({ id: 'divida-1' } as never);
+    dividasService.findOne.mockResolvedValue({
+      ativa: true,
+      id: 'divida-1',
+    } as never);
     categoriasService.findOne.mockResolvedValue({
       id: 'categoria-1',
       tipo: TipoCategoria.DESPESA,
@@ -156,7 +159,10 @@ describe('PagosDividaService', () => {
     };
 
     contasService.findOne.mockResolvedValue({ id: 'conta-1' } as never);
-    dividasService.findOne.mockResolvedValue({ id: 'divida-1' } as never);
+    dividasService.findOne.mockResolvedValue({
+      ativa: true,
+      id: 'divida-1',
+    } as never);
     categoriasService.findOne.mockResolvedValue({
       id: 'categoria-1',
       tipo: TipoCategoria.DESPESA,
@@ -194,9 +200,47 @@ describe('PagosDividaService', () => {
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
+  it('rejects debt payment when debt is inactive before creating side effects', async () => {
+    dividasService.findOne.mockResolvedValue({
+      ativa: false,
+      id: 'divida-1',
+    } as never);
+
+    await expect(
+      service.create('user-1', {
+        categoriaId: 'categoria-1',
+        contaId: 'conta-1',
+        data: '2026-04-01',
+        dividaId: 'divida-1',
+        valor: 350,
+      }),
+    ).rejects.toBeInstanceOf(BusinessRuleException);
+    await expect(
+      service.create('user-1', {
+        categoriaId: 'categoria-1',
+        contaId: 'conta-1',
+        data: '2026-04-01',
+        dividaId: 'divida-1',
+        valor: 350,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PAGAMENTO_DIVIDA_INACTIVE_DEBT',
+      message: 'Nao e possivel registrar pagamento para uma divida inativa.',
+      statusCode: 400,
+    });
+
+    expect(contasService.findOne).not.toHaveBeenCalled();
+    expect(categoriasService.findOne).not.toHaveBeenCalled();
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+
   it('rejects debt payment when category is not an expense', async () => {
     contasService.findOne.mockResolvedValue({ id: 'conta-1' } as never);
-    dividasService.findOne.mockResolvedValue({ id: 'divida-1' } as never);
+    dividasService.findOne.mockResolvedValue({
+      ativa: true,
+      id: 'divida-1',
+    } as never);
     categoriasService.findOne.mockResolvedValue({
       id: 'categoria-1',
       tipo: TipoCategoria.RECEITA,
