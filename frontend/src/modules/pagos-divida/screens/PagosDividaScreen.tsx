@@ -5,6 +5,8 @@ import { listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
+import { getDividaById } from '../../dividas/services/dividaService';
+import { Divida } from '../../dividas/types/divida';
 import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
@@ -33,6 +35,7 @@ export function PagosDividaScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ dividaId?: string | string[] }>();
   const dividaId = Array.isArray(params.dividaId) ? params.dividaId[0] : params.dividaId;
+  const [divida, setDivida] = useState<Divida | null>(null);
   const [pagos, setPagos] = useState<PagoDivida[]>([]);
   const [contas, setContas] = useState<Conta[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -49,6 +52,7 @@ export function PagosDividaScreen() {
     () => categorias.filter((categoria) => categoria.tipo === 'despesa'),
     [categorias],
   );
+  const paymentBlocked = divida?.ativa === false;
 
   const loadPayments = useCallback(async () => {
     if (!dividaId) {
@@ -60,11 +64,13 @@ export function PagosDividaScreen() {
     try {
       setLoading(true);
       setMessage('');
-      const [pagosData, contasData, categoriasData] = await Promise.all([
+      const [dividaData, pagosData, contasData, categoriasData] = await Promise.all([
+        getDividaById(dividaId),
         listPagosByDivida(dividaId),
         listContas(),
         listCategorias('despesa'),
       ]);
+      setDivida(dividaData);
       setPagos(pagosData);
       setContas(contasData);
       setCategorias(categoriasData);
@@ -102,6 +108,12 @@ export function PagosDividaScreen() {
       dividaId,
       valor,
     };
+
+    if (paymentBlocked) {
+      setMessage('Nao e possivel registrar pagamento para uma divida inativa.');
+      return;
+    }
+
     const validation = validatePagoDividaForm(formValues);
 
     if (!validation.valid) {
@@ -120,7 +132,7 @@ export function PagosDividaScreen() {
       await reloadPayments();
     } catch (error) {
       const resolvedError = await resolveApiError(error, 'Nao foi possivel registrar o pagamento.');
-      setMessage(resolvedError.message);
+      setMessage(resolvePaymentErrorMessage(resolvedError));
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
@@ -177,49 +189,57 @@ export function PagosDividaScreen() {
         />
       ) : (
         <>
-          <GlassPanel>
-            <GlassField label="Conta">
-              <GlassOptionGroup
-                options={contas.map((conta) => ({ label: conta.nome, value: conta.id }))}
-                value={contaId}
-                onChange={setContaId}
-              />
-            </GlassField>
-
-            <GlassField label="Categoria">
-              <GlassOptionGroup
-                options={categoriasDespesa.map((categoria) => ({
-                  label: categoria.nome,
-                  value: categoria.id,
-                }))}
-                value={categoriaId}
-                onChange={setCategoriaId}
-              />
-            </GlassField>
-
-            <GlassField label="Valor">
-              <GlassTextInput
-                keyboardType="decimal-pad"
-                value={valor}
-                onChangeText={setValor}
-              />
-            </GlassField>
-
-            <GlassField label="Data">
-              <GlassTextInput value={data} onChangeText={setData} />
-            </GlassField>
-
-            <GlassField label="Descricao">
-              <GlassTextInput value={descricao} onChangeText={setDescricao} />
-            </GlassField>
-
-            {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
-            <GlassButton
-              label={saving ? 'Salvando...' : 'Registrar pagamento'}
-              onPress={handleSave}
-              disabled={saving}
+          {paymentBlocked ? (
+            <GlassStatusCard
+              title="Divida inativa"
+              description="Nao e possivel registrar pagamento para uma divida inativa."
+              tone="error"
             />
-          </GlassPanel>
+          ) : (
+            <GlassPanel>
+              <GlassField label="Conta">
+                <GlassOptionGroup
+                  options={contas.map((conta) => ({ label: conta.nome, value: conta.id }))}
+                  value={contaId}
+                  onChange={setContaId}
+                />
+              </GlassField>
+
+              <GlassField label="Categoria">
+                <GlassOptionGroup
+                  options={categoriasDespesa.map((categoria) => ({
+                    label: categoria.nome,
+                    value: categoria.id,
+                  }))}
+                  value={categoriaId}
+                  onChange={setCategoriaId}
+                />
+              </GlassField>
+
+              <GlassField label="Valor">
+                <GlassTextInput
+                  keyboardType="decimal-pad"
+                  value={valor}
+                  onChangeText={setValor}
+                />
+              </GlassField>
+
+              <GlassField label="Data">
+                <GlassTextInput value={data} onChangeText={setData} />
+              </GlassField>
+
+              <GlassField label="Descricao">
+                <GlassTextInput value={descricao} onChangeText={setDescricao} />
+              </GlassField>
+
+              {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+              <GlassButton
+                label={saving ? 'Salvando...' : 'Registrar pagamento'}
+                onPress={handleSave}
+                disabled={saving}
+              />
+            </GlassPanel>
+          )}
 
           {pagos.length ? (
             pagos.map((pago) => (
@@ -278,3 +298,13 @@ const styles = StyleSheet.create({
 });
 
 export default PagosDividaScreen;
+
+type ResolvedApiError = Awaited<ReturnType<typeof resolveApiError>>;
+
+function resolvePaymentErrorMessage(resolvedError: ResolvedApiError) {
+  if (resolvedError.code === 'PAGAMENTO_DIVIDA_INACTIVE_DEBT') {
+    return 'Nao e possivel registrar pagamento para uma divida inativa.';
+  }
+
+  return resolvedError.message;
+}

@@ -3,12 +3,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 import { PagosDividaScreen } from '../screens/PagosDividaScreen';
 import * as categoriaService from '../../categorias/services/categoriaService';
 import * as contaService from '../../contas/services/contaService';
+import * as dividaService from '../../dividas/services/dividaService';
 import * as pagoDividaService from '../services/pagoDividaService';
 import * as authStorage from '../../../../storage/authStorage';
 import { confirmAction } from '../../../../utils/confirm-action';
 import {
   makeCategoria,
   makeConta,
+  makeDivida,
   makePagoDivida,
 } from '../../../shared/test/builders';
 
@@ -24,12 +26,14 @@ jest.mock('expo-router', () => ({
 
 jest.mock('../../categorias/services/categoriaService');
 jest.mock('../../contas/services/contaService');
+jest.mock('../../dividas/services/dividaService');
 jest.mock('../services/pagoDividaService');
 jest.mock('../../../../storage/authStorage');
 jest.mock('../../../../utils/confirm-action');
 
 const mockListCategorias = categoriaService.listCategorias as jest.MockedFunction<typeof categoriaService.listCategorias>;
 const mockListContas = contaService.listContas as jest.MockedFunction<typeof contaService.listContas>;
+const mockGetDividaById = dividaService.getDividaById as jest.MockedFunction<typeof dividaService.getDividaById>;
 const mockListPagosByDivida = pagoDividaService.listPagosByDivida as jest.MockedFunction<typeof pagoDividaService.listPagosByDivida>;
 const mockCreatePagoDivida = pagoDividaService.createPagoDivida as jest.MockedFunction<typeof pagoDividaService.createPagoDivida>;
 const mockRemovePagoDivida = pagoDividaService.removePagoDivida as jest.MockedFunction<typeof pagoDividaService.removePagoDivida>;
@@ -48,6 +52,7 @@ const pago = makePagoDivida({
 });
 
 function mockSuccessfulLoad() {
+  mockGetDividaById.mockResolvedValue(makeDivida({ id: 'divida1' }));
   mockListPagosByDivida.mockResolvedValue([pago]);
   mockListContas.mockResolvedValue([conta]);
   mockListCategorias.mockResolvedValue([categoria]);
@@ -67,6 +72,7 @@ describe('PagosDividaScreen', () => {
     render(<PagosDividaScreen />);
 
     await waitFor(() => {
+      expect(mockGetDividaById).toHaveBeenCalledWith('divida1');
       expect(mockListPagosByDivida).toHaveBeenCalledWith('divida1');
       expect(mockListCategorias).toHaveBeenCalledWith('despesa');
       expect(screen.getByText('Pagamentos da divida')).toBeTruthy();
@@ -146,6 +152,58 @@ describe('PagosDividaScreen', () => {
     });
   });
 
+  it('blocks payment form when debt is inactive', async () => {
+    mockGetDividaById.mockResolvedValue(makeDivida({ ativa: false, id: 'divida1' }));
+    mockListPagosByDivida.mockResolvedValue([]);
+    mockListContas.mockResolvedValue([conta]);
+    mockListCategorias.mockResolvedValue([categoria]);
+
+    render(<PagosDividaScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Divida inativa')).toBeTruthy();
+      expect(
+        screen.getByText('Nao e possivel registrar pagamento para uma divida inativa.'),
+      ).toBeTruthy();
+    });
+
+    expect(screen.queryByText('Registrar pagamento')).toBeNull();
+    expect(mockCreatePagoDivida).not.toHaveBeenCalled();
+  });
+
+  it('shows a clear message when backend rejects payment for inactive debt', async () => {
+    mockSuccessfulLoad();
+    mockCreatePagoDivida.mockRejectedValue({
+      response: {
+        data: {
+          error: {
+            code: 'PAGAMENTO_DIVIDA_INACTIVE_DEBT',
+            message: 'Backend inactive debt message',
+          },
+        },
+        status: 400,
+      },
+    });
+
+    render(<PagosDividaScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Registrar pagamento')).toBeTruthy();
+    });
+
+    const emptyInputs = screen.getAllByDisplayValue('');
+    fireEvent.changeText(emptyInputs[0], '300,75');
+    fireEvent.changeText(emptyInputs[1], 'Parcela extra');
+    fireEvent.press(screen.getByText('Registrar pagamento'));
+
+    await waitFor(() => {
+      expect(mockCreatePagoDivida).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByText('Nao e possivel registrar pagamento para uma divida inativa.'),
+      ).toBeTruthy();
+    });
+  });
+
   it('removes payment after confirmation and reloads history', async () => {
     mockSuccessfulLoad();
     mockRemovePagoDivida.mockResolvedValue(undefined);
@@ -169,6 +227,7 @@ describe('PagosDividaScreen', () => {
   });
 
   it('redirects to login when loading fails with unauthorized error', async () => {
+    mockGetDividaById.mockResolvedValue(makeDivida({ id: 'divida1' }));
     mockListPagosByDivida.mockRejectedValue({
       response: { status: 401, data: { message: 'Unauthorized' } },
     });

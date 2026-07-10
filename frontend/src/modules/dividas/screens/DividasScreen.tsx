@@ -119,6 +119,7 @@ export function DividasScreen() {
             <Text style={styles.meta}>Valor total: {formatCurrency(divida.montoTotal)}</Text>
             <Text style={styles.meta}>Inicio: {formatDate(divida.fechaInicio)}</Text>
             <Text style={styles.meta}>Vencimento: {formatDate(divida.fechaVencimiento)}</Text>
+            {!divida.ativa ? <Text style={styles.inactiveBadge}>Inativa</Text> : null}
             <View style={styles.actions}>
               <View style={styles.actionCell}>
                 <GlassButton
@@ -132,25 +133,29 @@ export function DividasScreen() {
                   }
                 />
               </View>
-              <View style={styles.actionCell}>
-                <GlassButton
-                  label="Pagamentos"
-                  variant="ghost"
-                  onPress={() =>
-                    router.push({
-                      pathname: '/pagos-divida',
-                      params: { dividaId: divida.id },
-                    } as never)
-                  }
-                />
-              </View>
-              <View style={styles.actionCell}>
-                <GlassButton
-                  label="Desativar"
-                  variant="danger"
-                  onPress={() => handleDeactivate(divida)}
-                />
-              </View>
+              {divida.ativa ? (
+                <>
+                  <View style={styles.actionCell}>
+                    <GlassButton
+                      label="Pagamentos"
+                      variant="ghost"
+                      onPress={() =>
+                        router.push({
+                          pathname: '/pagos-divida',
+                          params: { dividaId: divida.id },
+                        } as never)
+                      }
+                    />
+                  </View>
+                  <View style={styles.actionCell}>
+                    <GlassButton
+                      label="Desativar"
+                      variant="danger"
+                      onPress={() => handleDeactivate(divida)}
+                    />
+                  </View>
+                </>
+              ) : null}
             </View>
           </GlassPanel>
         ))
@@ -175,6 +180,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: FinanceTheme.spacing.sm,
     textAlign: 'center',
+  },
+  inactiveBadge: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+    marginTop: FinanceTheme.spacing.xs,
   },
   meta: {
     color: FinanceTheme.colors.textMuted,
