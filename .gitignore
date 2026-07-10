@@ -1,2 +1,79 @@
-/logs/
+# Ambiente local
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Dependencias
+node_modules/
+**/node_modules/
+
+# Builds, exports e cobertura
+dist/
+build/
+web-build/
+coverage/
+.nyc_output/
+
+# Caches de ferramentas
+.cache/
+.expo/
+.eslintcache
+*.tsbuildinfo
+.turbo/
+.parcel-cache/
+.pytest_cache
+.pytest_cache/
+.pytest-tmp
+.pytest-tmp/
+pytest-cache-files*/
+__pycache__/
+*.py[cod]
+
+# Ambientes virtuais Python
+.venv/
+venv/
+env/
+
+# Logs e temporarios
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+tmp/
+temp/
+.tmp/
+.temp/
+*.tmp
+*.temp
+
+# Bancos locais
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Credenciais e chaves locais
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs e editores
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Ferramentas locais
 .gitnexus/
