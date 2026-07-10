@@ -15,10 +15,17 @@ import { makeDividaPayload } from './factories/divida.factory';
 import { makePagoDividaPayload } from './factories/pago-divida.factory';
 import { makeTransacaoPayload } from './factories/transacao.factory';
 import { makeTransferenciaPayload } from './factories/transferencia.factory';
+import { registerAndLoginTestUser, withAuth } from './helpers/auth.e2e-helper';
 import {
   ContaResponse,
   expectSaldo,
 } from './helpers/financial-assertions.helper';
+import {
+  createDivida,
+  createPagoDivida,
+  createTransferencia,
+  listContas as listFinancialContas,
+} from './helpers/financial-scenario.helper';
 import { bearer, Identifiable, unwrapSuccess } from './helpers/http.helper';
 
 type RegisterResponse = {
@@ -72,6 +79,126 @@ describe('Financial flow (e2e)', () => {
       .get('/contas')
       .set('Authorization', 'Bearer invalid-token')
       .expect(401);
+  });
+
+  it('reverts account balances when a transfer is soft-deleted', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '68199965000',
+      email: 'transferencia.soft-delete.e2e@example.com',
+      nome: 'Transferencia Soft Delete E2E',
+    });
+
+    const contaOrigem = await createConta(
+      session.token,
+      makeContaPayload({
+        nome: 'Conta origem soft delete',
+        tipo: TipoConta.BANCO,
+        saldoInicial: 1000,
+      }),
+    );
+    const contaDestino = await createConta(
+      session.token,
+      makeContaPayload({
+        nome: 'Conta destino soft delete',
+        tipo: TipoConta.DINHEIRO,
+        saldoInicial: 150,
+      }),
+    );
+
+    let contas = await listFinancialContas(app, session);
+    expectSaldo(contas, contaOrigem.id, 1000);
+    expectSaldo(contas, contaDestino.id, 150);
+
+    const transferencia = await createTransferencia(app, session, {
+      comissao: 15,
+      contaDestinoId: contaDestino.id,
+      contaOrigemId: contaOrigem.id,
+      data: '2026-05-18',
+      descricao: 'Transferencia com reversao E2E',
+      valor: 200,
+    });
+
+    contas = await listFinancialContas(app, session);
+    expectSaldo(contas, contaOrigem.id, 785);
+    expectSaldo(contas, contaDestino.id, 350);
+
+    await withAuth(
+      request(app.getHttpServer()).delete(
+        `/transferencias/${transferencia.id}`,
+      ),
+      session,
+    ).expect(200);
+    await withAuth(
+      request(app.getHttpServer()).get(`/transferencias/${transferencia.id}`),
+      session,
+    ).expect(404);
+
+    contas = await listFinancialContas(app, session);
+    expectSaldo(contas, contaOrigem.id, 1000);
+    expectSaldo(contas, contaDestino.id, 150);
+  });
+
+  it('reverts account balance and linked transaction when a debt payment is soft-deleted', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '11144477735',
+      email: 'pagamento-divida.soft-delete.e2e@example.com',
+      nome: 'Pagamento Divida Soft Delete E2E',
+    });
+
+    const pagamentoDividaCategoria = await createCategoria(session.token, {
+      nome: 'Pagamento divida soft delete',
+      tipo: TipoCategoria.DESPESA,
+      cor: '#f97316',
+      icone: 'receipt',
+    });
+    const conta = await createConta(
+      session.token,
+      makeContaPayload({
+        nome: 'Conta pagamento soft delete',
+        tipo: TipoConta.BANCO,
+        saldoInicial: 1000,
+      }),
+    );
+    const divida = await createDivida(app, session, {
+      contaId: conta.id,
+      montoTotal: 600,
+      nome: 'Divida pagamento soft delete',
+    });
+
+    let contas = await listFinancialContas(app, session);
+    expectSaldo(contas, conta.id, 1000);
+
+    const pagamento = await createPagoDivida(app, session, {
+      categoriaId: pagamentoDividaCategoria.id,
+      contaId: conta.id,
+      data: '2026-05-19',
+      descricao: 'Pagamento com reversao E2E',
+      dividaId: divida.id,
+      valor: 125,
+    });
+
+    expect(pagamento.transacaoId).toEqual(expect.any(String));
+
+    contas = await listFinancialContas(app, session);
+    expectSaldo(contas, conta.id, 875);
+
+    await withAuth(
+      request(app.getHttpServer()).delete(`/pagos-divida/${pagamento.id}`),
+      session,
+    ).expect(200);
+    await withAuth(
+      request(app.getHttpServer()).get(`/pagos-divida/${pagamento.id}`),
+      session,
+    ).expect(404);
+    await withAuth(
+      request(app.getHttpServer()).get(
+        `/transacoes/${pagamento.transacaoId}`,
+      ),
+      session,
+    ).expect(404);
+
+    contas = await listFinancialContas(app, session);
+    expectSaldo(contas, conta.id, 1000);
   });
 
   it('covers the critical MVP financial lifecycle in PostgreSQL', async () => {

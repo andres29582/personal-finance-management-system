@@ -152,6 +152,76 @@ describe('Relatorios (e2e)', () => {
     ]);
   });
 
+  it('excludes soft-deleted debt payments from expense totals', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '10000001252',
+      email: 'relatorios.pagamento-deletado.e2e@example.com',
+      nome: 'Relatorios Pagamento Deletado E2E',
+    });
+    const scenario = await createMonthlyFinancialScenario(
+      app,
+      session,
+      'relatorio-pagamento-deletado',
+    );
+
+    const beforeDeleteResponse = await withAuth(
+      request(app.getHttpServer()).get('/relatorios'),
+      session,
+    )
+      .query(monthlyReportQuery())
+      .expect(200);
+    const beforeDelete =
+      expectApiSuccess<RelatorioResponse>(beforeDeleteResponse);
+
+    expectMoney(
+      beforeDelete.resumo.totalDespesas,
+      scenario.expected.currentMonthExpense,
+    );
+    expect(beforeDelete.transacoes.map((item) => item.id)).toContain(
+      scenario.debtPayment.transacaoId,
+    );
+    expect(beforeDelete.despesasPorCategoria).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          categoriaId: scenario.categories.debtPayment.id,
+          total: scenario.expected.debtPaymentExpense,
+        }),
+      ]),
+    );
+
+    await withAuth(
+      request(app.getHttpServer()).delete(
+        `/pagos-divida/${scenario.debtPayment.id}`,
+      ),
+      session,
+    ).expect(200);
+
+    const afterDeleteResponse = await withAuth(
+      request(app.getHttpServer()).get('/relatorios'),
+      session,
+    )
+      .query(monthlyReportQuery())
+      .expect(200);
+    const afterDelete = expectApiSuccess<RelatorioResponse>(afterDeleteResponse);
+
+    expectMoney(
+      afterDelete.resumo.totalDespesas,
+      scenario.expected.expenseByCategory.expense,
+    );
+    expect(afterDelete.resumo.totalTransacoes).toBe(2);
+    expect(afterDelete.transacoes.map((item) => item.id)).not.toContain(
+      scenario.debtPayment.transacaoId,
+    );
+    expect(afterDelete.despesasPorCategoria).toEqual([
+      {
+        categoriaId: scenario.categories.expense.id,
+        categoriaNome: 'Despesa relatorio-pagamento-deletado',
+        percentual: 100,
+        total: scenario.expected.expenseByCategory.expense,
+      },
+    ]);
+  });
+
   it('filters report transactions by account when contaId is provided', async () => {
     const session = await registerAndLoginTestUser(app, {
       cpf: '68199965000',

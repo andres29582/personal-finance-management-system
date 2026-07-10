@@ -17,6 +17,10 @@ import { Identifiable } from './http.helper';
 
 type EntityResponse = Identifiable & Record<string, unknown>;
 
+type AccountResponse = EntityResponse & {
+  saldoAtual: number | string;
+};
+
 type DebtPaymentResponse = EntityResponse & {
   transacaoId: string;
 };
@@ -208,7 +212,7 @@ export async function createConta(
   app: INestApplication,
   session: E2eAuthSession,
   overrides: Partial<Parameters<typeof makeContaPayload>[0]> = {},
-): Promise<EntityResponse> {
+): Promise<AccountResponse> {
   const response = await withAuth(
     request(app.getHttpServer()).post('/contas'),
     session,
@@ -216,7 +220,19 @@ export async function createConta(
     .send(makeContaPayload(overrides))
     .expect(201);
 
-  return expectApiSuccess<EntityResponse>(response);
+  return expectApiSuccess<AccountResponse>(response);
+}
+
+export async function listContas(
+  app: INestApplication,
+  session: E2eAuthSession,
+): Promise<AccountResponse[]> {
+  const response = await withAuth(
+    request(app.getHttpServer()).get('/contas'),
+    session,
+  ).expect(200);
+
+  return expectApiSuccess<AccountResponse[]>(response);
 }
 
 export async function createTransacao(
