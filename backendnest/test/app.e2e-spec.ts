@@ -201,6 +201,94 @@ describe('Financial flow (e2e)', () => {
     expectSaldo(contas, conta.id, 1000);
   });
 
+  it('blocks debt payment creation for an inactive debt without financial side effects', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '10000001090',
+      email: 'pagamento-divida.inactive-debt.e2e@example.com',
+      nome: 'Pagamento Divida Inativa E2E',
+    });
+
+    const pagamentoDividaCategoria = await createCategoria(session.token, {
+      nome: 'Pagamento divida inativa',
+      tipo: TipoCategoria.DESPESA,
+      cor: '#f97316',
+      icone: 'receipt',
+    });
+    const conta = await createConta(
+      session.token,
+      makeContaPayload({
+        nome: 'Conta divida inativa',
+        tipo: TipoConta.BANCO,
+        saldoInicial: 1000,
+      }),
+    );
+    const divida = await createDivida(app, session, {
+      contaId: conta.id,
+      montoTotal: 600,
+      nome: 'Divida inativa E2E',
+    });
+
+    await withAuth(
+      request(app.getHttpServer()).patch(`/dividas/${divida.id}/desativar`),
+      session,
+    ).expect(200);
+
+    const rejectedPayment = await withAuth(
+      request(app.getHttpServer()).post('/pagos-divida'),
+      session,
+    )
+      .send(
+        makePagoDividaPayload({
+          categoriaId: pagamentoDividaCategoria.id,
+          contaId: conta.id,
+          data: '2026-05-20',
+          descricao: 'Pagamento rejeitado para divida inativa',
+          dividaId: divida.id,
+          valor: 125,
+        }),
+      )
+      .expect(400);
+
+    expect(rejectedPayment.body).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({
+          code: 'PAGAMENTO_DIVIDA_INACTIVE_DEBT',
+          message:
+            'Nao e possivel registrar pagamento para uma divida inativa.',
+        }) as { code: string; message: string },
+      }),
+    );
+
+    const dividaAtual = await withAuth(
+      request(app.getHttpServer()).get(`/dividas/${divida.id}`),
+      session,
+    ).expect(200);
+    expect(unwrapSuccess<Record<string, unknown>>(dividaAtual)).toEqual(
+      expect.objectContaining({
+        ativa: false,
+        id: divida.id,
+      }),
+    );
+
+    const contas = await listFinancialContas(app, session);
+    expectSaldo(contas, conta.id, 1000);
+
+    const pagamentosDaDivida = await withAuth(
+      request(app.getHttpServer()).get(`/pagos-divida/divida/${divida.id}`),
+      session,
+    ).expect(200);
+    expect(unwrapSuccess<PagamentoDividaResponse[]>(pagamentosDaDivida)).toEqual(
+      [],
+    );
+
+    const transacoes = await withAuth(
+      request(app.getHttpServer()).get('/transacoes'),
+      session,
+    ).expect(200);
+    expect(unwrapSuccess<Identifiable[]>(transacoes)).toEqual([]);
+  });
+
   it('covers the critical MVP financial lifecycle in PostgreSQL', async () => {
     const userAPassword = 'SenhaForte123';
     const userBPassword = 'OutraSenha123';
