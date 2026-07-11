@@ -64,6 +64,10 @@ export type ForgotPasswordRequestDto = {
 
 export type ForgotPasswordResponseDto = {
   message: string;
+  /**
+   * Development/test-only helper returned by a local backend when explicitly enabled.
+   * Not part of the public production contract.
+   */
   resetToken?: string;
 };
 

@@ -6,7 +6,13 @@ describe('AuthController', () => {
   let authService: jest.Mocked<
     Pick<
       AuthService,
-      'logout' | 'refreshSession' | 'register' | 'resetPassword' | 'signIn'
+      | 'logout'
+      | 'refreshSession'
+      | 'register'
+      | 'requestPasswordReset'
+      | 'resetPassword'
+      | 'resetPasswordWithToken'
+      | 'signIn'
     >
   >;
 
@@ -15,7 +21,9 @@ describe('AuthController', () => {
       logout: jest.fn(),
       refreshSession: jest.fn(),
       register: jest.fn(),
+      requestPasswordReset: jest.fn(),
       resetPassword: jest.fn(),
+      resetPasswordWithToken: jest.fn(),
       signIn: jest.fn(),
     };
 
@@ -122,6 +130,39 @@ describe('AuthController', () => {
 
     expect(authService.logout).toHaveBeenCalledWith('user-1', 'session-1');
     expect(result.message).toContain('Sessao encerrada');
+  });
+
+  it('delegates forgot password to the service', async () => {
+    authService.requestPasswordReset.mockResolvedValue({
+      message:
+        'Se o e-mail estiver cadastrado, enviaremos instrucoes de recuperacao em instantes.',
+    });
+
+    const result = await controller.forgotPassword({
+      email: 'ana@example.com',
+    });
+
+    expect(authService.requestPasswordReset).toHaveBeenCalledWith(
+      'ana@example.com',
+    );
+    expect(result).not.toHaveProperty('resetToken');
+  });
+
+  it('delegates reset password by token to the service', async () => {
+    authService.resetPasswordWithToken.mockResolvedValue({
+      message: 'Senha atualizada com sucesso. Faca login com a nova senha.',
+    });
+
+    const result = await controller.resetPasswordWithToken({
+      token: 'token-from-request',
+      novaSenha: 'novaSenha123',
+    });
+
+    expect(authService.resetPasswordWithToken).toHaveBeenCalledWith(
+      'token-from-request',
+      'novaSenha123',
+    );
+    expect(result.message).toContain('Senha atualizada');
   });
 
   it('uses the user id from the authenticated request on resetPassword', async () => {

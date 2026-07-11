@@ -144,9 +144,6 @@ components:
             properties:
               message:
                 type: string
-              resetToken:
-                type: string
-                description: Retornado apenas quando AUTH_RETURN_RESET_TOKEN=true.
     RegisterSuccess:
       allOf:
       - $ref: '#/components/schemas/SuccessAny'
@@ -2129,6 +2126,7 @@ paths:
       tags:
       - Auth
       summary: Solicitar recuperacao de senha
+      description: Retorna mensagem generica. Auxiliares locais de desenvolvimento/teste ficam fora do contrato publico.
       requestBody:
         required: true
         content:

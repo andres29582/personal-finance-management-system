@@ -24,6 +24,10 @@ import {
   AuthTokenConfig,
   resolveAuthTokenConfig,
 } from './config/auth-token.config';
+import {
+  PasswordResetConfig,
+  resolvePasswordResetConfig,
+} from './config/password-reset.config';
 import { RegisterDto } from './dto/register.dto';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 
@@ -39,6 +43,7 @@ type JwtExpirationPayload = {
 @Injectable()
 export class AuthService {
   private readonly tokenConfig: AuthTokenConfig;
+  private readonly passwordResetConfig: PasswordResetConfig;
 
   constructor(
     private readonly usersService: UsersService,
@@ -50,6 +55,7 @@ export class AuthService {
     private readonly passwordResetTokenRepository: PasswordResetTokenRepository,
   ) {
     this.tokenConfig = resolveAuthTokenConfig(configService);
+    this.passwordResetConfig = resolvePasswordResetConfig(configService);
   }
 
   async register(dto: RegisterDto) {
@@ -286,9 +292,7 @@ export class AuthService {
 
     const plainToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(plainToken).digest('hex');
-    const ttlMinutes = Number(
-      this.configService.get<string>('PASSWORD_RESET_TTL_MINUTES') ?? '60',
-    );
+    const ttlMinutes = this.passwordResetConfig.ttlMinutes;
     const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
 
     await this.passwordResetTokenRepository.createToken({
@@ -307,12 +311,11 @@ export class AuthService {
       details: { email: user.email },
     });
 
-    const exposeToken =
-      this.configService.get<string>('AUTH_RETURN_RESET_TOKEN') === 'true';
-
     return {
       message: genericMessage,
-      ...(exposeToken ? { resetToken: plainToken } : {}),
+      ...(this.passwordResetConfig.returnResetToken
+        ? { resetToken: plainToken }
+        : {}),
     };
   }
 

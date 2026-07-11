@@ -44,6 +44,7 @@ describe('AuthService', () => {
     >
   >;
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
+  let configValues: Record<string, string | undefined>;
   let logsService: jest.Mocked<Pick<LogsService, 'logAuthEvent'>>;
   let passwordResetTokenRepository: jest.Mocked<
     Pick<
@@ -76,18 +77,18 @@ describe('AuthService', () => {
       revokeAllByUser: jest.fn(),
       rotate: jest.fn(),
     };
+    configValues = {
+      AUTH_RETURN_RESET_TOKEN: 'false',
+      JWT_ACCESS_SECRET: 'access-secret',
+      JWT_ACCESS_EXPIRES_IN: '15m',
+      JWT_REFRESH_SECRET: 'refresh-secret',
+      JWT_REFRESH_EXPIRES_IN: '30d',
+      JWT_SECRET: 'legacy-secret',
+      NODE_ENV: 'test',
+      PASSWORD_RESET_TTL_MINUTES: '60',
+    };
     configService = {
-      get: jest.fn((key: string) => {
-        const values: Record<string, string> = {
-          JWT_ACCESS_SECRET: 'access-secret',
-          JWT_ACCESS_EXPIRES_IN: '15m',
-          JWT_REFRESH_SECRET: 'refresh-secret',
-          JWT_REFRESH_EXPIRES_IN: '30d',
-          JWT_SECRET: 'legacy-secret',
-        };
-
-        return values[key];
-      }),
+      get: jest.fn((key: string) => configValues[key]),
     } as never;
     logsService = {
       logAuthEvent: jest.fn(),
@@ -98,7 +99,11 @@ describe('AuthService', () => {
       markUsed: jest.fn(),
     };
 
-    service = new AuthService(
+    service = createService();
+  });
+
+  function createService(): AuthService {
+    return new AuthService(
       usersService as unknown as UsersService,
       jwtService as unknown as JwtService,
       categoriasService as unknown as CategoriasService,
@@ -107,9 +112,10 @@ describe('AuthService', () => {
       logsService as unknown as LogsService,
       passwordResetTokenRepository as unknown as PasswordResetTokenRepository,
     );
-  });
+  }
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.clearAllMocks();
     jest.restoreAllMocks();
   });
@@ -472,6 +478,97 @@ describe('AuthService', () => {
     expect(
       JSON.stringify(logsService.logAuthEvent.mock.calls[0][0]),
     ).not.toContain('resetToken');
+  });
+
+  it('exposes password reset tokens only when enabled in test or development', async () => {
+    configValues.AUTH_RETURN_RESET_TOKEN = 'true';
+    configValues.NODE_ENV = 'test';
+    service = createService();
+    usersService.findByEmail.mockResolvedValue({
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as never);
+    passwordResetTokenRepository.createToken.mockResolvedValue({} as never);
+
+    const result = await service.requestPasswordReset('ana@example.com');
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        message:
+          'Se o e-mail estiver cadastrado, enviaremos instrucoes de recuperacao em instantes.',
+        resetToken: expect.stringMatching(/^[a-f0-9]{64}$/) as string,
+      }),
+    );
+  });
+
+  it('never exposes a password reset token for unknown emails', async () => {
+    configValues.AUTH_RETURN_RESET_TOKEN = 'true';
+    configValues.NODE_ENV = 'test';
+    service = createService();
+    usersService.findByEmail.mockResolvedValue(null);
+
+    const result = await service.requestPasswordReset('nao-existe@example.com');
+
+    expect(result).toEqual({
+      message:
+        'Se o e-mail estiver cadastrado, enviaremos instrucoes de recuperacao em instantes.',
+    });
+    expect(result).not.toHaveProperty('resetToken');
+    expect(passwordResetTokenRepository.createToken).not.toHaveBeenCalled();
+  });
+
+  it('stores only the password reset token hash', async () => {
+    configValues.AUTH_RETURN_RESET_TOKEN = 'true';
+    configValues.NODE_ENV = 'test';
+    service = createService();
+    usersService.findByEmail.mockResolvedValue({
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as never);
+    passwordResetTokenRepository.createToken.mockResolvedValue({} as never);
+
+    const result = await service.requestPasswordReset('ana@example.com');
+
+    expect(result.resetToken).toEqual(expect.any(String));
+    expect(passwordResetTokenRepository.createToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) as string,
+      }),
+    );
+    const storedToken =
+      passwordResetTokenRepository.createToken.mock.calls[0][0].tokenHash;
+    expect(storedToken).not.toBe(result.resetToken);
+  });
+
+  it('uses the configured password reset token ttl', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-11T12:00:00.000Z'));
+    configValues.PASSWORD_RESET_TTL_MINUTES = '15';
+    service = createService();
+    usersService.findByEmail.mockResolvedValue({
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as never);
+    passwordResetTokenRepository.createToken.mockResolvedValue({} as never);
+
+    await service.requestPasswordReset('ana@example.com');
+
+    expect(passwordResetTokenRepository.createToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expiresAt: new Date('2026-07-11T12:15:00.000Z'),
+      }),
+    );
+    jest.useRealTimers();
+  });
+
+  it('fails fast when password reset token exposure is enabled outside test or development', () => {
+    configValues.AUTH_RETURN_RESET_TOKEN = 'true';
+    configValues.JWT_ACCESS_SECRET = 'access-secret-for-production-tests-123';
+    configValues.JWT_REFRESH_SECRET = 'refresh-secret-for-production-tests-123';
+    configValues.NODE_ENV = 'production';
+
+    expect(() => createService()).toThrow(
+      'AUTH_RETURN_RESET_TOKEN nao pode ser habilitado fora de development/test.',
+    );
   });
 
   it('revokes the current session on logout', async () => {
