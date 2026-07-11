@@ -106,7 +106,7 @@ as migrations SQL precisam ser aplicadas manualmente na base.
 | `JWT_REFRESH_EXPIRES_IN` | Duracao do refresh token | `30d` |
 | `ML_API_URL` | URL base da API de ML | `http://127.0.0.1:8000` |
 | `ML_API_TIMEOUT_MS` | Timeout de chamada ML | `5000` |
-| `AUTH_RETURN_RESET_TOKEN` | Retorna token de reset no JSON em desenvolvimento | `false` |
+| `AUTH_RETURN_RESET_TOKEN` | Auxiliar local para retornar token de reset no JSON apenas em `development`/`test` | `false` |
 | `PASSWORD_RESET_TTL_MINUTES` | Validade do token de reset de senha | `60` |
 
 `JWT_ACCESS_SECRET` e `JWT_REFRESH_SECRET` devem ser valores aleatorios,
@@ -115,6 +115,10 @@ distintos e com pelo menos 32 caracteres em `production` e `demo`. O
 `development`/`test`; ele nao substitui os secrets especificos em ambientes
 expostos. Os valores vazios do `.env.example` sao marcadores de configuracao e
 nao credenciais utilizaveis.
+
+`AUTH_RETURN_RESET_TOKEN=true` e bloqueado fora de `NODE_ENV=development` ou
+`NODE_ENV=test`, pois o token plano de recuperacao nao faz parte do contrato
+publico de producao.
 
 ## Banco de dados e migrations
 

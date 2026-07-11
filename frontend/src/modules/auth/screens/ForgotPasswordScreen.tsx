@@ -6,6 +6,7 @@ import { resolveApiError } from '../../../../utils/api-error';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
 import { forgotPassword } from '../services/authService';
+import { getVisibleResetToken } from '../utils/resetTokenVisibility';
 
 export function ForgotPasswordScreen() {
   const router = useRouter();
@@ -29,9 +30,7 @@ export function ForgotPasswordScreen() {
       setLoading(true);
       const res = await forgotPassword({ email: email.trim() });
       setInfo(res.message);
-      if (res.resetToken) {
-        setDevToken(res.resetToken);
-      }
+      setDevToken(getVisibleResetToken(__DEV__, res.resetToken));
     } catch (err) {
       const resolved = await resolveApiError(err, 'Nao foi possivel enviar o pedido.');
       setError(resolved.message);

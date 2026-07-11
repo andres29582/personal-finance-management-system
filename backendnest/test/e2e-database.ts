@@ -20,6 +20,7 @@ export function configureE2eEnvironment(): E2eDatabaseConfig {
   process.env.DB_USERNAME = config.username;
   process.env.DB_PASSWORD = config.password;
   process.env.DB_NAME = config.database;
+  process.env.NODE_ENV = 'test';
   process.env.JWT_SECRET = 'e2e_jwt_secret';
   process.env.JWT_ACCESS_SECRET = 'e2e_access_secret';
   process.env.JWT_REFRESH_SECRET = 'e2e_refresh_secret';
@@ -27,7 +28,7 @@ export function configureE2eEnvironment(): E2eDatabaseConfig {
   process.env.JWT_REFRESH_EXPIRES_IN = '30d';
   process.env.THROTTLE_LIMIT = '1000';
   process.env.THROTTLE_TTL_MS = '60000';
-  process.env.AUTH_RETURN_RESET_TOKEN = 'false';
+  process.env.AUTH_RETURN_RESET_TOKEN = 'true';
 
   return config;
 }
