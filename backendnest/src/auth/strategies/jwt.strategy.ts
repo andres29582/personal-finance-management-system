@@ -6,6 +6,7 @@ import { Request } from 'express';
 import { AppUnauthorizedException } from '../../common/exceptions';
 import { RequestContextService } from '../../logs/request-context.service';
 import { AuthSessionsService } from '../auth-sessions.service';
+import { resolveAuthTokenConfig } from '../config/auth-token.config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -18,9 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       passReqToCallback: true,
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        configService.get<string>('JWT_ACCESS_SECRET') ??
-        configService.getOrThrow<string>('JWT_SECRET'),
+      secretOrKey: resolveAuthTokenConfig(configService).accessSecret,
     });
   }
 

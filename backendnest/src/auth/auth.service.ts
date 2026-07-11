@@ -20,6 +20,10 @@ import { LogsService } from '../logs/logs.service';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { AuthSessionsService } from './auth-sessions.service';
+import {
+  AuthTokenConfig,
+  resolveAuthTokenConfig,
+} from './config/auth-token.config';
 import { RegisterDto } from './dto/register.dto';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 
@@ -34,6 +38,8 @@ type JwtExpirationPayload = {
 
 @Injectable()
 export class AuthService {
+  private readonly tokenConfig: AuthTokenConfig;
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -42,7 +48,9 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
     private readonly passwordResetTokenRepository: PasswordResetTokenRepository,
-  ) {}
+  ) {
+    this.tokenConfig = resolveAuthTokenConfig(configService);
+  }
 
   async register(dto: RegisterDto) {
     const normalizedEmail = dto.email.trim().toLowerCase();
@@ -383,8 +391,8 @@ export class AuthService {
         sid: sessionId,
       },
       {
-        secret: this.getAccessTokenSecret(),
-        expiresIn: this.getAccessTokenExpiresIn() as never,
+        secret: this.tokenConfig.accessSecret,
+        expiresIn: this.tokenConfig.accessExpiresIn as never,
       },
     );
   }
@@ -396,8 +404,8 @@ export class AuthService {
         sid: sessionId,
       },
       {
-        secret: this.getRefreshTokenSecret(),
-        expiresIn: this.getRefreshTokenExpiresIn() as never,
+        secret: this.tokenConfig.refreshSecret,
+        expiresIn: this.tokenConfig.refreshExpiresIn as never,
       },
     );
   }
@@ -408,7 +416,7 @@ export class AuthService {
         sid: string;
         sub: string;
       }>(refreshToken, {
-        secret: this.getRefreshTokenSecret(),
+        secret: this.tokenConfig.refreshSecret,
       });
     } catch {
       throw new AppUnauthorizedException(
@@ -429,29 +437,6 @@ export class AuthService {
     }
 
     return new Date(decoded.exp * 1000);
-  }
-
-  private getAccessTokenSecret() {
-    return (
-      this.configService.get<string>('JWT_ACCESS_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'troque_esta_chave_de_acesso'
-    );
-  }
-
-  private getAccessTokenExpiresIn() {
-    return this.configService.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m';
-  }
-
-  private getRefreshTokenSecret() {
-    return (
-      this.configService.get<string>('JWT_REFRESH_SECRET') ??
-      `${this.getAccessTokenSecret()}_refresh`
-    );
-  }
-
-  private getRefreshTokenExpiresIn() {
-    return this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d';
   }
 
   private toPublicUser(user: User) {

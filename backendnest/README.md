@@ -99,15 +99,22 @@ as migrations SQL precisam ser aplicadas manualmente na base.
 | `DB_USERNAME` | Usuario PostgreSQL | `postgres` |
 | `DB_PASSWORD` | Senha PostgreSQL | `postgres` |
 | `DB_NAME` | Banco da aplicacao | `gestao_financeira` |
-| `JWT_SECRET` | Fallback legado para JWT | trocar localmente |
-| `JWT_ACCESS_SECRET` | Chave do access token | trocar localmente |
+| `JWT_SECRET` | Fallback legado permitido somente em `development`/`test` | vazio no `.env.example` |
+| `JWT_ACCESS_SECRET` | Chave do access token | obrigatoria em `production`/`demo` |
 | `JWT_ACCESS_EXPIRES_IN` | Duracao do access token | `15m` |
-| `JWT_REFRESH_SECRET` | Chave do refresh token | trocar localmente |
+| `JWT_REFRESH_SECRET` | Chave do refresh token | obrigatoria em `production`/`demo` |
 | `JWT_REFRESH_EXPIRES_IN` | Duracao do refresh token | `30d` |
 | `ML_API_URL` | URL base da API de ML | `http://127.0.0.1:8000` |
 | `ML_API_TIMEOUT_MS` | Timeout de chamada ML | `5000` |
 | `AUTH_RETURN_RESET_TOKEN` | Retorna token de reset no JSON em desenvolvimento | `false` |
 | `PASSWORD_RESET_TTL_MINUTES` | Validade do token de reset de senha | `60` |
+
+`JWT_ACCESS_SECRET` e `JWT_REFRESH_SECRET` devem ser valores aleatorios,
+distintos e com pelo menos 32 caracteres em `production` e `demo`. O
+`JWT_SECRET` existe apenas para compatibilidade local legada em
+`development`/`test`; ele nao substitui os secrets especificos em ambientes
+expostos. Os valores vazios do `.env.example` sao marcadores de configuracao e
+nao credenciais utilizaveis.
 
 ## Banco de dados e migrations
 
