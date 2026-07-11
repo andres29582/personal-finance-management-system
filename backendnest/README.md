@@ -85,6 +85,8 @@ Copy-Item .env.example .env
 
 Edite `.env` conforme seu ambiente. A aplicacao usa `synchronize: false`, entao
 as migrations SQL precisam ser aplicadas manualmente na base.
+Para PostgreSQL local, mantenha `NODE_ENV=development` e
+`DB_SSL_MODE=disable`.
 
 ## Variaveis de ambiente
 
@@ -99,6 +101,8 @@ as migrations SQL precisam ser aplicadas manualmente na base.
 | `DB_USERNAME` | Usuario PostgreSQL | `postgres` |
 | `DB_PASSWORD` | Senha PostgreSQL | `postgres` |
 | `DB_NAME` | Banco da aplicacao | `gestao_financeira` |
+| `DB_SSL_MODE` | Politica TLS PostgreSQL: `disable` ou `verify-full` | `disable` somente em `development`/`test` |
+| `DB_SSL_CA_BASE64` | CA PEM customizada codificada em Base64 | opcional em `verify-full` |
 | `JWT_SECRET` | Fallback legado permitido somente em `development`/`test` | vazio no `.env.example` |
 | `JWT_ACCESS_SECRET` | Chave do access token | obrigatoria em `production`/`demo` |
 | `JWT_ACCESS_EXPIRES_IN` | Duracao do access token | `15m` |
@@ -109,6 +113,21 @@ as migrations SQL precisam ser aplicadas manualmente na base.
 | `ML_INTERNAL_API_KEY` | Chave interna enviada ao servico ML | obrigatoria fora de `development`/`test` |
 | `AUTH_RETURN_RESET_TOKEN` | Auxiliar local para retornar token de reset no JSON apenas em `development`/`test` | `false` |
 | `PASSWORD_RESET_TTL_MINUTES` | Validade do token de reset de senha | `60` |
+
+A configuracao PostgreSQL e validada antes de qualquer tentativa de conexao.
+Somente `development` e `test` permitem `DB_SSL_MODE=disable`; qualquer outro
+valor de `NODE_ENV`, inclusive vazio ou desconhecido, exige `verify-full`. Esse
+modo usa verificacao de certificado (`rejectUnauthorized: true`). Quando a
+cadeia da CA ja e reconhecida pelo trust store do sistema, a CA customizada nao
+e necessaria. Caso contrario, `DB_SSL_CA_BASE64` deve conter o PEM da CA
+codificado em Base64. Nunca versione certificados reais, senhas ou credenciais
+do ambiente.
+
+Em ambientes expostos, use senha forte, uma base dedicada e um usuario de banco
+dedicado com apenas os privilegios necessarios. Nao reutilize as credenciais de
+exemplo. Valores ausentes, portas invalidas, TLS inseguro, senha previsivel,
+banco administrativo ou CA invalida fazem a aplicacao falhar no startup sem
+registrar a senha ou o conteudo da CA.
 
 `JWT_ACCESS_SECRET` e `JWT_REFRESH_SECRET` devem ser valores aleatorios,
 distintos e com pelo menos 32 caracteres em `production` e `demo`. O

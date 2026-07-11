@@ -49,6 +49,7 @@ import { ParticipantePlanejamento } from './planejamentos/entities/participante-
 import { GastoPlanejamento } from './planejamentos/entities/gasto-planejamento.entity';
 import { DivisaoGasto } from './planejamentos/entities/divisao-gasto.entity';
 import { AcertoPlanejamento } from './planejamentos/entities/acerto-planejamento.entity';
+import { resolveDatabaseConfig } from './config/database.config';
 
 @Module({
   imports: [
@@ -58,35 +59,35 @@ import { AcertoPlanejamento } from './planejamentos/entities/acerto-planejamento
 
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: Number(configService.get<string>('DB_PORT')),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_NAME'),
-        entities: [
-          User,
-          AuthSession,
-          PasswordResetToken,
-          AuditLog,
-          Conta,
-          Categoria,
-          Transacao,
-          Transferencia,
-          Divida,
-          PagoDivida,
-          Meta,
-          Alerta,
-          Orcamento,
-          Planejamento,
-          ParticipantePlanejamento,
-          GastoPlanejamento,
-          DivisaoGasto,
-          AcertoPlanejamento,
-        ],
-        synchronize: false,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const databaseConfig = resolveDatabaseConfig(configService);
+
+        return {
+          type: 'postgres',
+          ...databaseConfig,
+          entities: [
+            User,
+            AuthSession,
+            PasswordResetToken,
+            AuditLog,
+            Conta,
+            Categoria,
+            Transacao,
+            Transferencia,
+            Divida,
+            PagoDivida,
+            Meta,
+            Alerta,
+            Orcamento,
+            Planejamento,
+            ParticipantePlanejamento,
+            GastoPlanejamento,
+            DivisaoGasto,
+            AcertoPlanejamento,
+          ],
+          synchronize: false,
+        };
+      },
     }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
