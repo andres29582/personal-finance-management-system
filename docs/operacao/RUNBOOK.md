@@ -13,14 +13,24 @@ Para o banco local, confirme no ambiente do backend:
 
 ```text
 NODE_ENV=development
+CORS_ORIGINS=http://localhost:8081,http://localhost:19006,http://localhost:3000
+HTTP_BODY_LIMIT_BYTES=102400
 DB_SSL_MODE=disable
 ```
 
 Em qualquer ambiente exposto, use:
 
 ```text
+NODE_ENV=production
+CORS_ORIGINS=https://app.exemplo.com
+HTTP_BODY_LIMIT_BYTES=102400
 DB_SSL_MODE=verify-full
 ```
+
+Em ambiente exposto, `CORS_ORIGINS` e obrigatoria, aceita apenas origens HTTPS
+explicitas e nao aceita wildcard. Porta, payload e throttling invalidos fazem o
+backend falhar antes de escutar conexoes. Requisicoes sem `Origin` continuam
+suportadas; JSON e URL-encoded acima do limite retornam HTTP `413`.
 
 `DB_SSL_CA_BASE64` e necessaria somente quando a cadeia da CA nao estiver no
 trust store do sistema. Falhas de certificado nao devem ser contornadas com

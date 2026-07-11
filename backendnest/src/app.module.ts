@@ -50,6 +50,7 @@ import { GastoPlanejamento } from './planejamentos/entities/gasto-planejamento.e
 import { DivisaoGasto } from './planejamentos/entities/divisao-gasto.entity';
 import { AcertoPlanejamento } from './planejamentos/entities/acerto-planejamento.entity';
 import { resolveDatabaseConfig } from './config/database.config';
+import { resolveThrottlerConfig } from './config/throttler.config';
 
 @Module({
   imports: [
@@ -92,17 +93,11 @@ import { resolveDatabaseConfig } from './config/database.config';
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const ttl = Number(
-          configService.get<string>('THROTTLE_TTL_MS') ?? '60000',
-        );
-        const limit = Number(
-          configService.get<string>('THROTTLE_LIMIT') ?? '60',
-        );
+        const throttlerConfig = resolveThrottlerConfig(configService);
 
         return [
           {
-            ttl,
-            limit,
+            ...throttlerConfig,
           },
         ];
       },
