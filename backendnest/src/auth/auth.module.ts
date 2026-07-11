@@ -14,6 +14,7 @@ import { CategoriasModule } from '../categorias/categorias.module';
 import { UsersModule } from '../users/users.module';
 import { AuthSessionRepository } from './repositories/auth-session.repository';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
+import { resolveAuthTokenConfig } from './config/auth-token.config';
 
 @Module({
   imports: [
@@ -25,15 +26,12 @@ import { PasswordResetTokenRepository } from './repositories/password-reset-toke
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const expiresIn =
-          configService.get<string>('JWT_ACCESS_EXPIRES_IN') ?? '15m';
+        const tokenConfig = resolveAuthTokenConfig(configService);
 
         return {
-          secret:
-            configService.get<string>('JWT_ACCESS_SECRET') ??
-            configService.get<string>('JWT_SECRET'),
+          secret: tokenConfig.accessSecret,
           signOptions: {
-            expiresIn: expiresIn as never,
+            expiresIn: tokenConfig.accessExpiresIn as never,
           },
         };
       },
