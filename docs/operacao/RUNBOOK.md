@@ -9,6 +9,24 @@ Checklist para preparar uma entrega local confiavel do sistema financeiro.
 3. Copiar `frontend/.env.example` para `frontend/.env` se ainda nao existir.
 4. Confirmar que `EXPO_PUBLIC_API_URL=http://localhost:3000`.
 
+Para o banco local, confirme no ambiente do backend:
+
+```text
+NODE_ENV=development
+DB_SSL_MODE=disable
+```
+
+Em qualquer ambiente exposto, use:
+
+```text
+DB_SSL_MODE=verify-full
+```
+
+`DB_SSL_CA_BASE64` e necessaria somente quando a cadeia da CA nao estiver no
+trust store do sistema. Falhas de certificado nao devem ser contornadas com
+`rejectUnauthorized=false`. Senhas e o conteudo da CA nao devem aparecer em
+logs ou commits.
+
 ## 2. Dados demo
 
 O caminho oficial para carregar dados demo e:

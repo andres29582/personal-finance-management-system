@@ -111,9 +111,13 @@ hash SHA-256 do refresh token e compara hashes em validacoes futuras.
 
 ## Persistencia e migrations
 
-A persistencia principal usa PostgreSQL com TypeORM. A conexao e declarada em
-`AppModule` por `TypeOrmModule.forRootAsync`, lendo host, porta, usuario, senha
-e banco via `ConfigService`.
+A persistencia principal usa PostgreSQL com TypeORM. A configuracao da conexao
+e centralizada em `backendnest/src/config/database.config.ts` e resolvida pelo
+`AppModule` antes da tentativa de conexao, com validacao fail-fast de host,
+porta, credenciais, banco e TLS. Somente `development` e `test` permitem TLS
+desabilitado; ambientes expostos exigem `verify-full`, sempre com
+`rejectUnauthorized: true`. O usuario do banco deve ser dedicado e possuir
+apenas os privilegios necessarios.
 
 Entidades registradas no modulo raiz incluem usuarios, sessoes de auth, tokens
 de reset, logs de auditoria e os modelos financeiros principais: contas,
@@ -128,7 +132,11 @@ evolucao do schema. Hoje elas ficam em `backendnest/migrations/`:
 - `0003_add_usuario_cadastro_fields.sql`;
 - `0004_add_auth_session.sql`;
 - `0005_add_audit_log.sql`;
-- `0006_soft_delete_lgpd_password_reset.sql`.
+- `0006_soft_delete_lgpd_password_reset.sql`;
+- `0007_create_planejamentos_compartilhados.sql`.
+
+`synchronize: false` permanece obrigatorio, e as migrations continuam sendo
+aplicadas manualmente.
 
 Ao alterar entidades, DTOs persistidos ou repositories, a manutencao deve
 considerar:
