@@ -87,8 +87,8 @@ describe('RegisterScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Rua, avenida ou logradouro'), 'Test Street');
     fireEvent.changeText(screen.getByPlaceholderText('123 ou S/N'), '123');
     fireEvent.changeText(screen.getByPlaceholderText('Sua cidade'), 'Test City');
-    fireEvent.changeText(screen.getByPlaceholderText('Crie uma senha'), 'password123');
-    fireEvent.changeText(screen.getByPlaceholderText('Repita a senha'), 'password123');
+    fireEvent.changeText(screen.getByPlaceholderText('Entre 6 e 64 caracteres'), ' password123 ');
+    fireEvent.changeText(screen.getByPlaceholderText('Repita a senha'), ' password123 ');
 
     // Check privacy policy
     const privacyCheckbox = screen.getByRole('checkbox');
@@ -106,7 +106,7 @@ describe('RegisterScreen', () => {
         endereco: 'Test Street',
         numero: '123',
         cidade: 'Test City',
-        senha: 'password123',
+        senha: ' password123 ',
         aceitoPoliticaPrivacidade: true,
       });
       expect(mockReplace).toHaveBeenCalledWith('/login');
@@ -128,7 +128,7 @@ describe('RegisterScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Rua, avenida ou logradouro'), 'Test Street');
     fireEvent.changeText(screen.getByPlaceholderText('123 ou S/N'), '123');
     fireEvent.changeText(screen.getByPlaceholderText('Sua cidade'), 'Test City');
-    fireEvent.changeText(screen.getByPlaceholderText('Crie uma senha'), 'password123');
+    fireEvent.changeText(screen.getByPlaceholderText('Entre 6 e 64 caracteres'), 'password123');
     fireEvent.changeText(screen.getByPlaceholderText('Repita a senha'), 'password123');
 
     const privacyCheckbox = screen.getByRole('checkbox');

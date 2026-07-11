@@ -1,8 +1,9 @@
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString } from 'class-validator';
+import { IsValidPassword } from '../validators/password-policy';
 
 export class ResetPasswordDto {
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
+  @IsValidPassword()
   novaSenha: string;
 }

@@ -7,6 +7,7 @@ import { resolveApiError } from '../../../../utils/api-error';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
 import { resetPassword } from '../services/authService';
+import { validatePassword } from '../validators/passwordPolicy';
 
 export function ResetPasswordScreen() {
   const [novaSenha, setNovaSenha] = useState('');
@@ -37,8 +38,9 @@ export function ResetPasswordScreen() {
     setErro('');
     setSucesso('');
 
-    if (novaSenha.length < 6) {
-      setErro('A nova senha deve ter pelo menos 6 caracteres.');
+    const passwordValidation = validatePassword(novaSenha);
+    if (!passwordValidation.valid) {
+      setErro(passwordValidation.message);
       return;
     }
 
@@ -79,7 +81,7 @@ export function ResetPasswordScreen() {
     >
       <GlassField label="Nova senha" error={erro && !sucesso ? erro : undefined}>
         <GlassTextInput
-          placeholder="Minimo 6 caracteres"
+          placeholder="Entre 6 e 64 caracteres"
           secureTextEntry
           value={novaSenha}
           onChangeText={(value) => {
