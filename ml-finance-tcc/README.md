@@ -40,6 +40,10 @@ persistência (`deficit_M-1`).
 
 ## API
 
+O FastAPI deve ser tratado como servico interno. O frontend nao deve chamar o
+ML diretamente; o fluxo suportado e `frontend -> backend NestJS -> servico ML`.
+Por isso CORS nao e habilitado neste servico.
+
 ```powershell
 python -m uvicorn api.app:app --host 0.0.0.0 --port 8000
 ```
@@ -47,6 +51,23 @@ python -m uvicorn api.app:app --host 0.0.0.0 --port 8000
 `POST /predict` exige o contrato estrito V2 mostrado em
 `examples/predict_request.json`. Campos ausentes, extras, não numéricos,
 infinitos ou uma versão diferente são rejeitados.
+
+Em `development` e `test`, `ML_INTERNAL_API_KEY` e opcional para preservar o
+fluxo local. Quando configurada, mesmo nesses ambientes, `POST /predict` exige
+o header `X-ML-Internal-Key`. Fora de `development`/`test`, a chave e
+obrigatoria, deve ter pelo menos 32 caracteres e deve coincidir com a chave do
+backend.
+
+Variaveis de ambiente:
+
+```dotenv
+ML_ENV=development
+ML_INTERNAL_API_KEY=
+```
+
+`GET /health` permanece publico e minimo para health checks. A documentacao
+automatica FastAPI (`/docs`, `/redoc` e `/openapi.json`) fica disponivel apenas
+em `development` e `test`; nos demais ambientes responde `404`.
 
 Resposta:
 
@@ -57,6 +78,9 @@ Resposta:
   "probability": 0.2431
 }
 ```
+
+O startup da API carrega artefatos versionados ja existentes. Ele nao executa
+treinamento nem chama `python main.py train` automaticamente.
 
 ## Limitações
 

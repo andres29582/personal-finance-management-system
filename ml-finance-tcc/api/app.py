@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import math
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from api.runtime_config import MlRuntimeConfig, resolve_runtime_config
 from ml.feature_engineering import FEATURE_COLUMNS, SCHEMA_VERSION
 from persistence.model_repository import ModelRepository
 
@@ -32,21 +33,6 @@ async def lifespan(app: FastAPI):
         _model.n_jobs = 1
     yield
     _model, _preprocessor, _manifest = None, None, {}
-
-
-app = FastAPI(
-    title="ML Finance TCC",
-    description="Previsao temporal de deficit mensal sem fuga de informacao.",
-    version="2.0.0",
-    lifespan=lifespan,
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 class PredictionFeaturesV2(BaseModel):
@@ -85,12 +71,29 @@ class PredictResponseV2(BaseModel):
     probability: float = Field(ge=0, le=1)
 
 
-@app.get("/health")
+def require_internal_key(config: MlRuntimeConfig):
+    def dependency(
+        x_ml_internal_key: str | None = Header(
+            default=None,
+            alias="X-ML-Internal-Key",
+        ),
+    ) -> None:
+        if config.internal_api_key is None:
+            return
+
+        if x_ml_internal_key is None or not secrets.compare_digest(
+            x_ml_internal_key,
+            config.internal_api_key,
+        ):
+            raise HTTPException(status_code=401, detail="Nao autorizado.")
+
+    return dependency
+
+
 def health() -> dict[str, object]:
     return {"status": "ok", "schema_version": SCHEMA_VERSION}
 
 
-@app.post("/predict", response_model=PredictResponseV2)
 def predict(payload: PredictRequestV2) -> PredictResponseV2:
     if _model is None or _preprocessor is None:
         raise HTTPException(status_code=503, detail="Modelo nao carregado.")
@@ -108,3 +111,26 @@ def predict(payload: PredictRequestV2) -> PredictResponseV2:
         prediction=prediction,
         probability=probability,
     )
+
+
+def create_app(config: MlRuntimeConfig | None = None) -> FastAPI:
+    runtime_config = config or resolve_runtime_config()
+    application = FastAPI(
+        title="ML Finance TCC",
+        description="Previsao temporal de deficit mensal sem fuga de informacao.",
+        version="2.0.0",
+        lifespan=lifespan,
+        docs_url="/docs" if runtime_config.docs_enabled else None,
+        redoc_url="/redoc" if runtime_config.docs_enabled else None,
+        openapi_url="/openapi.json" if runtime_config.docs_enabled else None,
+    )
+    application.get("/health")(health)
+    application.post(
+        "/predict",
+        response_model=PredictResponseV2,
+        dependencies=[Depends(require_internal_key(runtime_config))],
+    )(predict)
+    return application
+
+
+app = create_app()

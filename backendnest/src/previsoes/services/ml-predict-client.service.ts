@@ -1,5 +1,10 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import {
+  Inject,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { ML_API_CONFIG } from '../config/ml-api.config';
+import type { MlApiConfig } from '../config/ml-api.config';
 import {
   ML_PREDICTION_FEATURES,
   ML_PREDICTION_SCHEMA_VERSION,
@@ -12,29 +17,40 @@ import type { MlPredictResponse } from '../types/ml-predict-response.type';
 
 @Injectable()
 export class MlPredictClientService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    @Inject(ML_API_CONFIG)
+    private readonly mlApiConfig: MlApiConfig,
+  ) {}
 
   async predict(features: DeficitFeatures): Promise<MlPredictResponse> {
     this.assertFeatures(features);
-    const baseUrl =
-      this.configService.get<string>('ML_API_URL') ?? 'http://127.0.0.1:8000';
-    const timeoutMs = Number(
-      this.configService.get<string>('ML_API_TIMEOUT_MS') ?? '5000',
-    );
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.mlApiConfig.timeoutMs,
+    );
     const payload: MlPredictRequestV2 = {
       schema_version: ML_PREDICTION_SCHEMA_VERSION,
       features,
     };
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.mlApiConfig.internalApiKey) {
+      headers['X-ML-Internal-Key'] = this.mlApiConfig.internalApiKey;
+    }
 
     try {
-      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/predict`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+      const response = await fetch(
+        `${this.mlApiConfig.baseUrl.replace(/\/$/, '')}/predict`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        },
+      );
       if (!response.ok) {
         throw new ServiceUnavailableException(
           `API de Machine Learning indisponivel ou retornou erro (${response.status}).`,

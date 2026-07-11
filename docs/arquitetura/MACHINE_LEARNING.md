@@ -41,6 +41,12 @@ Essa separacao mantem dados financeiros e autenticacao concentrados no backend,
 enquanto o servico Python permanece focado em inferencia e compatibilidade do
 modelo.
 
+O servico FastAPI de ML e um componente interno. A fronteira permitida para
+inferencia e `frontend -> backend NestJS -> servico ML`; chamadas diretas do
+browser ao ML nao fazem parte da arquitetura. A API ML remove CORS para nao
+sinalizar suporte a integracao direta pelo frontend, ja que CORS nao autentica
+comunicacao backend-to-backend.
+
 No estado atual, o treinamento parte de um painel sintetico gerado dentro de
 `ml-finance-tcc/`. Dados financeiros reais persistidos no PostgreSQL sao usados
 pelo backend apenas para montar o vetor de inferencia do usuario autenticado.
@@ -84,8 +90,17 @@ A API FastAPI esta em `ml-finance-tcc/api/app.py`.
 
 Endpoints principais:
 
-- `GET /health`: retorna o status da API e `schema_version`.
-- `POST /predict`: recebe o contrato V2 estrito e devolve uma previsao.
+- `GET /health`: publico, minimo e destinado a health checks internos.
+- `POST /predict`: recebe o contrato V2 estrito, exige `X-ML-Internal-Key`
+  quando a chave interna esta configurada e devolve uma previsao.
+
+Em `development` e `test`, a chave interna pode ficar ausente para preservar o
+desenvolvimento local. Em qualquer outro ambiente explicito, ela e obrigatoria,
+validada no startup e comparada de forma segura em `POST /predict`. A resposta
+de autorizacao e generica e nao revela se a chave estava ausente ou incorreta.
+
+`/docs`, `/redoc` e `/openapi.json` permanecem disponiveis em
+`development`/`test`, mas sao desabilitados em ambientes expostos.
 
 O payload de inferencia tem a forma:
 
@@ -269,6 +284,11 @@ contrato invalido ou erro HTTP do servico ML em erro de indisponibilidade.
 Como o backend reconstrui as features localmente, a API ML nao recebe tokens,
 identidade do usuario nem dados transacionais brutos. Ela recebe apenas o vetor
 numerico ja agregado.
+
+A chave interna compartilhada complementa o isolamento de rede, mas nao o
+substitui. Em deploys futuros, o servico ML deve permanecer em rede privada ou
+segmentada, acessivel pelo backend e por health checks internos, nao pelo
+frontend.
 
 ## Limitacoes atuais
 

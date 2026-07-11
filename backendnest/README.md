@@ -106,6 +106,7 @@ as migrations SQL precisam ser aplicadas manualmente na base.
 | `JWT_REFRESH_EXPIRES_IN` | Duracao do refresh token | `30d` |
 | `ML_API_URL` | URL base da API de ML | `http://127.0.0.1:8000` |
 | `ML_API_TIMEOUT_MS` | Timeout de chamada ML | `5000` |
+| `ML_INTERNAL_API_KEY` | Chave interna enviada ao servico ML | obrigatoria fora de `development`/`test` |
 | `AUTH_RETURN_RESET_TOKEN` | Auxiliar local para retornar token de reset no JSON apenas em `development`/`test` | `false` |
 | `PASSWORD_RESET_TTL_MINUTES` | Validade do token de reset de senha | `60` |
 
@@ -119,6 +120,12 @@ nao credenciais utilizaveis.
 `AUTH_RETURN_RESET_TOKEN=true` e bloqueado fora de `NODE_ENV=development` ou
 `NODE_ENV=test`, pois o token plano de recuperacao nao faz parte do contrato
 publico de producao.
+
+`ML_INTERNAL_API_KEY` e opcional em `development`/`test`. Quando configurada, o
+backend envia o header `X-ML-Internal-Key` ao servico ML. Fora de
+`development`/`test`, ela e obrigatoria, deve ter pelo menos 32 caracteres, nao
+deve usar placeholders previsiveis e deve coincidir com a configuracao do
+servico ML.
 
 ## Banco de dados e migrations
 
@@ -297,7 +304,9 @@ Erros de dominio padronizados seguem:
 ## Integracao com Machine Learning
 
 O endpoint `GET /previsoes/deficit?mes=YYYY-MM` monta features financeiras do
-usuario e chama a API ML em `ML_API_URL`. O cliente valida o contrato V2:
+usuario e chama a API ML interna em `ML_API_URL`. Quando `ML_INTERNAL_API_KEY`
+esta configurada, o cliente envia `X-ML-Internal-Key`. O cliente valida o
+contrato V2:
 
 - `schema_version` esperado;
 - lista exata de features numericas;
