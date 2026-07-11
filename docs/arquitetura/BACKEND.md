@@ -107,6 +107,15 @@ O fluxo HTTP de autenticacao entra por `AuthController`:
 7. Reset de senha revoga sessoes existentes para reduzir o risco de tokens
    antigos continuarem validos.
 
+A politica central de novas senhas aceita de 6 a 64 caracteres Unicode, exige
+no maximo 72 bytes UTF-8 por compatibilidade com o bcrypt e rejeita valores
+formados apenas por espacos. Cadastro e redefinicao preservam a senha exatamente
+como recebida, sem `trim`, normalizacao ou truncamento antes do hash. O login nao
+aplica essa politica, preservando a compatibilidade com senhas legadas. Uma
+migracao futura para Argon2id deve ser avaliada em implementacao separada; o
+minimo atual de 6 caracteres e apenas uma regra de compatibilidade, nao uma
+afirmacao de politica forte ou de aderencia completa a recomendacoes modernas.
+
 `AuthService` concentra a maior parte das regras sensiveis:
 
 - validacao de credenciais;

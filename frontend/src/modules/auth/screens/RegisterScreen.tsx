@@ -13,6 +13,7 @@ import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import { GlassButton, GlassField, GlassTextInput } from '../../../shared/ui';
 import { CepLookupResponse } from '../../../shared/types/cep';
 import { register } from '../services/authService';
+import { validatePassword } from '../validators/passwordPolicy';
 
 type RegisterField =
   | 'cep'
@@ -103,13 +104,12 @@ export function RegisterScreen() {
       nextErrors.cidade = 'Informe sua cidade.';
     }
 
-    if (!senha.trim()) {
-      nextErrors.senha = 'Informe uma senha.';
-    } else if (senha.trim().length < 6) {
-      nextErrors.senha = 'A senha deve ter pelo menos 6 caracteres.';
+    const passwordValidation = validatePassword(senha);
+    if (!passwordValidation.valid) {
+      nextErrors.senha = passwordValidation.message;
     }
 
-    if (!confirmarSenha.trim()) {
+    if (!confirmarSenha) {
       nextErrors.confirmarSenha = 'Confirme a senha.';
     } else if (confirmarSenha !== senha) {
       nextErrors.confirmarSenha = 'As senhas precisam ser iguais.';
@@ -274,7 +274,7 @@ export function RegisterScreen() {
 
       <GlassField label="Senha" error={errors.senha}>
         <GlassTextInput
-          placeholder="Crie uma senha"
+          placeholder="Entre 6 e 64 caracteres"
           secureTextEntry
           value={senha}
           onChangeText={(value) => {

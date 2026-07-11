@@ -7,9 +7,9 @@ import {
   IsString,
   Matches,
   MaxLength,
-  MinLength,
 } from 'class-validator';
 import { normalizeDigits } from '../../common/br-documents.util';
+import { IsValidPassword } from '../validators/password-policy';
 
 function trimStringValue(value: unknown): unknown {
   return typeof value === 'string' ? value.trim() : value;
@@ -69,7 +69,7 @@ export class RegisterDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
+  @IsValidPassword()
   senha: string;
 
   @Transform(({ value }: { value: unknown }) => {

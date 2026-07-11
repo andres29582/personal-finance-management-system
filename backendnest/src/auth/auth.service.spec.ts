@@ -181,6 +181,32 @@ describe('AuthService', () => {
     });
   });
 
+  it('hashes the registration password exactly as received', async () => {
+    usersService.findByEmail.mockResolvedValue(null);
+    usersService.findByCpf.mockResolvedValue(null);
+    usersService.create.mockResolvedValue({
+      id: 'user-1',
+      email: 'ana@example.com',
+      nome: 'Ana',
+    } as never);
+    (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
+    const password = ' senha com espacos ';
+
+    await service.register({
+      aceitoPoliticaPrivacidade: true,
+      cep: '01001000',
+      cidade: 'Sao Paulo',
+      cpf: '52998224725',
+      email: 'ana@example.com',
+      endereco: 'Rua A',
+      nome: 'Ana',
+      numero: '1',
+      senha: password,
+    });
+
+    expect(bcrypt.hash).toHaveBeenCalledWith(password, 10);
+  });
+
   it('rejects registration with an invalid cpf', async () => {
     const promise = service.register({
       aceitoPoliticaPrivacidade: true,
@@ -322,6 +348,26 @@ describe('AuthService', () => {
         userId: 'user-1',
       }),
     );
+  });
+
+  it('compares a legacy short password without applying the new policy', async () => {
+    usersService.findByEmail.mockResolvedValue({
+      id: 'user-1',
+      email: 'legacy@example.com',
+      nome: 'Legacy',
+      senhaHash: 'legacy-hash',
+    } as never);
+    jwtService.signAsync
+      .mockResolvedValueOnce('refresh-token-1')
+      .mockResolvedValueOnce('access-token-1');
+    jwtService.decode.mockReturnValue({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+    await service.signIn('legacy@example.com', 'old');
+
+    expect(bcrypt.compare).toHaveBeenCalledWith('old', 'legacy-hash');
   });
 
   it('rejects invalid passwords on sign in', async () => {
@@ -601,7 +647,8 @@ describe('AuthService', () => {
     } as never);
     (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
 
-    const result = await service.resetPassword('user-1', 'novaSenha123');
+    const password = ' novaSenha123 ';
+    const result = await service.resetPassword('user-1', password);
 
     expect(usersService.updatePassword).toHaveBeenCalledWith(
       'user-1',
@@ -615,6 +662,26 @@ describe('AuthService', () => {
         event: 'PASSWORD_RESET_SUCCESS',
         userId: 'user-1',
       }),
+    );
+    expect(bcrypt.hash).toHaveBeenCalledWith(password, 10);
+  });
+
+  it('hashes a token-reset password exactly as received', async () => {
+    const password = ' nova senha com espacos ';
+    passwordResetTokenRepository.findLatestByHash.mockResolvedValue({
+      id: 'reset-token-1',
+      userId: 'user-1',
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    } as never);
+    usersService.findById.mockResolvedValue({ id: 'user-1' } as never);
+    (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+    await service.resetPasswordWithToken('plain-token', password);
+
+    expect(bcrypt.hash).toHaveBeenCalledWith(password, 10);
+    expect(logsService.logAuthEvent).toHaveBeenCalledWith(
+      expect.not.objectContaining({ password, senha: password }),
     );
   });
 });
