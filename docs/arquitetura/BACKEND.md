@@ -33,6 +33,16 @@ O bootstrap em `backendnest/src/main.ts` aplica:
 - interceptor global de resposta;
 - filtro global de excecoes de dominio.
 
+A configuracao HTTP e resolvida e validada centralmente em `src/config` antes
+do servidor escutar conexoes. Somente `development` e `test` podem usar a
+allowlist CORS local padrao; ambientes expostos exigem origens HTTPS explicitas
+e nunca aceitam wildcard. CORS controla navegadores, nao autentica chamadas, e
+requisicoes nativas ou server-to-server sem `Origin` permanecem suportadas. A
+porta, o limite dos parsers JSON/URL-encoded e os parametros de throttling sao
+validados com limites fechados e comportamento fail-fast. Helmet permanece
+ativo sem protecoes desabilitadas, e o Swagger continua apenas como contrato
+estatico em `backendnest/swagger.yaml`, sem endpoint de documentacao no runtime.
+
 ## Stack tecnica
 
 - **NestJS 11**: estrutura modular, controllers, providers, guards, pipes e

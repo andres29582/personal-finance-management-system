@@ -58,6 +58,7 @@ src/
   previsoes/        # deficit features e cliente ML
   logs/             # auditoria, request context e filtros de log
   common/           # filtros, interceptors, utilitarios e DTOs base
+  config/           # configuracao validada de HTTP, throttling e banco
 ```
 
 O modulo raiz (`src/app.module.ts`) registra os modulos de dominio, TypeORM,
@@ -94,6 +95,7 @@ Para PostgreSQL local, mantenha `NODE_ENV=development` e
 | --- | --- | --- |
 | `PORT` | Porta HTTP da API | `3000` |
 | `CORS_ORIGINS` | Origens liberadas para o frontend | `http://localhost:8081,http://localhost:19006,http://localhost:3000` |
+| `HTTP_BODY_LIMIT_BYTES` | Limite global de JSON e URL-encoded (1 KiB a 1 MiB) | `102400` (100 KiB) |
 | `THROTTLE_TTL_MS` | Janela global de rate limit | `60000` |
 | `THROTTLE_LIMIT` | Limite global de requisicoes por janela | `60` |
 | `DB_HOST` | Host PostgreSQL | `localhost` |
@@ -113,6 +115,24 @@ Para PostgreSQL local, mantenha `NODE_ENV=development` e
 | `ML_INTERNAL_API_KEY` | Chave interna enviada ao servico ML | obrigatoria fora de `development`/`test` |
 | `AUTH_RETURN_RESET_TOKEN` | Auxiliar local para retornar token de reset no JSON apenas em `development`/`test` | `false` |
 | `PASSWORD_RESET_TTL_MINUTES` | Validade do token de reset de senha | `60` |
+
+A configuracao do runtime HTTP falha no startup quando recebe valores
+invalidos. `PORT` deve ser um inteiro entre `1` e `65535` (padrao `3000`).
+`HTTP_BODY_LIMIT_BYTES` deve ser um inteiro entre `1024` e `1048576`; JSON ou
+URL-encoded acima desse limite recebe HTTP `413`, sem eco do corpo.
+
+Somente `development` e `test` usam as origens locais padrao quando
+`CORS_ORIGINS` estiver ausente. Qualquer outro valor de `NODE_ENV`, inclusive
+vazio ou desconhecido, e ambiente exposto: a allowlist e obrigatoria e aceita
+apenas origens HTTPS absolutas, sem path, query, fragmento, credenciais ou
+wildcard. Origens sao normalizadas e deduplicadas. Uma origem de navegador nao
+autorizada nao recebe `Access-Control-Allow-Origin`; CORS nao substitui
+autenticacao. Requisicoes sem header `Origin` continuam aceitas para o
+aplicativo Expo nativo, health checks e comunicacao server-to-server.
+
+O throttling global preserva os defaults de `60000` ms e `60` requisicoes. TTL
+deve ser inteiro entre `1000` e `3600000`, e limite deve ser inteiro entre `1`
+e `10000`; valores invalidos tambem interrompem o startup.
 
 A configuracao PostgreSQL e validada antes de qualquer tentativa de conexao.
 Somente `development` e `test` permitem `DB_SSL_MODE=disable`; qualquer outro
