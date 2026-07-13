@@ -1035,19 +1035,34 @@ describe('PlanejamentosService', () => {
   });
 
   it('allows owner to mark a pending settlement as paid', async () => {
-    const acerto = criarAcertoPersistido({
+    const acertoPendente = criarEntidadeAcertoPersistido({
       deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
     });
-    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      buscarAcertoPorIdEPlanejamento: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      salvarAcerto: jest.fn(),
+      salvarAcertos: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
     );
-    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
-      acerto as never,
+    repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      acertoPendente,
     );
-    repository.salvarAcerto.mockResolvedValue({
-      ...acerto,
-      status: AcertoStatus.PAGO,
-    } as never);
+    repositoryTransacional.salvarAcerto.mockResolvedValue(acertoPago);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPago],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
 
     const result = await service.pagarAcerto(
       'planejamento-1',
@@ -1055,62 +1070,264 @@ describe('PlanejamentosService', () => {
       'user-1',
     );
 
-    expect(repository.buscarAcertoPorIdEPlanejamento).toHaveBeenCalledWith(
-      'acerto-1',
-      'planejamento-1',
-    );
-    expect(repository.salvarAcerto).toHaveBeenCalledWith(
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(
+      repositoryTransacional.buscarAcertoPorIdEPlanejamento,
+    ).toHaveBeenCalledWith('acerto-1', 'planejamento-1');
+    expect(repositoryTransacional.salvarAcerto).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'acerto-1',
         status: AcertoStatus.PAGO,
         dataPagamento: expect.any(Date) as Date,
       }),
     );
-    expect(result).toEqual(
-      expect.objectContaining({ status: AcertoStatus.PAGO }),
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledWith('planejamento-1', 'user-1');
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.salvarAcerto.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
     );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toBe(acertoPago);
+    expect(result.status).toBe(AcertoStatus.PAGO);
   });
 
   it('allows debtor participant to mark a pending settlement as paid', async () => {
-    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+    const acertoPendente = criarEntidadeAcertoPersistido({
+      deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
+    });
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      buscarAcertoPorIdEPlanejamento: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      salvarAcerto: jest.fn(),
+      salvarAcertos: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
     );
-    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
-      criarAcertoPersistido({
-        deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
-      }) as never,
+    repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      acertoPendente,
     );
-    repository.salvarAcerto.mockResolvedValue({
-      id: 'acerto-1',
-      status: AcertoStatus.PAGO,
-    } as never);
+    repositoryTransacional.salvarAcerto.mockResolvedValue(acertoPago);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        usuarioCriadorId: 'owner-1',
+        acertos: [acertoPago],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
 
-    await service.pagarAcerto('planejamento-1', 'acerto-1', 'user-2');
+    const result = await service.pagarAcerto(
+      'planejamento-1',
+      'acerto-1',
+      'user-2',
+    );
 
-    expect(repository.salvarAcerto).toHaveBeenCalledWith(
+    expect(repositoryTransacional.salvarAcerto).toHaveBeenCalledWith(
       expect.objectContaining({ status: AcertoStatus.PAGO }),
     );
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toBe(acertoPago);
   });
 
   it('rejects creditor participant when marking a settlement as paid', async () => {
-    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      buscarAcertoPorIdEPlanejamento: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      salvarAcerto: jest.fn(),
+      salvarAcertos: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
     );
-    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
-      criarAcertoPersistido({
+    repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      criarEntidadeAcertoPersistido({
         deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
         paraParticipante: criarParticipantePersistido(
           'participante-1',
           'user-3',
         ),
-      }) as never,
+      }),
     );
 
     await expect(
       service.pagarAcerto('planejamento-1', 'acerto-1', 'user-3'),
     ).rejects.toBeInstanceOf(ForbiddenResourceException);
 
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcerto).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).not.toHaveBeenCalled();
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
+  });
+
+  it('rejects payment when settlement is not pending', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      criarEntidadeAcertoPersistido({ status: AcertoStatus.PAGO }),
+    );
+
+    await expect(
+      service.pagarAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_ACERTO_PAGAR_STATUS_INVALIDO',
+    });
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('cancels obsolete pending settlements after persisting the target payment', async () => {
+    const acertoPendente = criarEntidadeAcertoPersistido();
+    const pendenteObsoleto = criarEntidadeAcertoPersistido({
+      id: 'acerto-pendente-obsoleto',
+    });
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPendente);
+    repository.salvarAcerto.mockResolvedValue(acertoPago);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPago, pendenteObsoleto],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.salvarAcertos.mockResolvedValue([]);
+
+    const result = await service.pagarAcerto(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+
+    expect(repository.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'acerto-pendente-obsoleto',
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+      }),
+    ]);
+    expect(repository.salvarAcerto.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.salvarAcertos.mock.invocationCallOrder[0],
+    );
+    expect(result).toBe(acertoPago);
+  });
+
+  it('creates only the newly calculated pending balance after payment', async () => {
+    const acertoPendente = criarEntidadeAcertoPersistido();
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    const novaPendencia = criarEntidadeAcertoPersistido({
+      id: 'acerto-saldo-restante',
+      valorCentavos: 2000,
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPendente);
+    repository.salvarAcerto.mockResolvedValue(acertoPago);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPago],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 14000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 7000),
+              criarDivisaoPersistida('participante-2', 7000),
+            ],
+          }),
+        ],
+      }),
+    );
+    repository.salvarAcertos.mockResolvedValue([novaPendencia]);
+
+    const result = await service.pagarAcerto(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+
+    expect(repository.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        deParticipanteId: 'participante-2',
+        paraParticipanteId: 'participante-1',
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 2000,
+      }),
+    ]);
+    expect(repository.salvarAcertos.mock.calls[0][0]).toHaveLength(1);
+    expect(repository.salvarAcerto.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.salvarAcertos.mock.invocationCallOrder[0],
+    );
+    expect(result).toBe(acertoPago);
+  });
+
+  it('propagates reconciliation failures from the payment transaction', async () => {
+    const erroReconciliacao = new Error('falha na reconciliacao');
+    const acertoPendente = criarEntidadeAcertoPersistido();
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPendente);
+    repository.salvarAcerto.mockResolvedValue(acertoPago);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPago],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 14000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 7000),
+              criarDivisaoPersistida('participante-2', 7000),
+            ],
+          }),
+        ],
+      }),
+    );
+    repository.salvarAcertos.mockRejectedValue(erroReconciliacao);
+
+    await expect(
+      service.pagarAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toBe(erroReconciliacao);
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcerto).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
   });
 
   it('rejects settlement changes when user has no planejamento access', async () => {

@@ -368,25 +368,40 @@ export class PlanejamentosService {
     acertoId: string,
     usuarioId: string,
   ): Promise<AcertoPlanejamento> {
-    const { planejamento, acerto } = await this.buscarContextoAcerto(
-      planejamentoId,
-      acertoId,
-      usuarioId,
-    );
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const { planejamento, acerto } =
+          await this.buscarContextoAcertoComRepository(
+            repository,
+            planejamentoId,
+            acertoId,
+            usuarioId,
+          );
 
-    this.assertUsuarioPodePagarAcerto(planejamento, acerto, usuarioId);
-    this.assertTransicaoAcertoPermitida(
-      acerto.status,
-      [AcertoStatus.PENDENTE],
-      'PLANEJAMENTO_ACERTO_PAGAR_STATUS_INVALIDO',
-      'Apenas acertos pendentes podem ser marcados como pagos.',
-    );
+        this.assertUsuarioPodePagarAcerto(planejamento, acerto, usuarioId);
+        this.assertTransicaoAcertoPermitida(
+          acerto.status,
+          [AcertoStatus.PENDENTE],
+          'PLANEJAMENTO_ACERTO_PAGAR_STATUS_INVALIDO',
+          'Apenas acertos pendentes podem ser marcados como pagos.',
+        );
 
-    return this.planejamentosRepository.salvarAcerto({
-      ...acerto,
-      status: AcertoStatus.PAGO,
-      dataPagamento: new Date(),
-    });
+        const acertoPago = await repository.salvarAcerto({
+          ...acerto,
+          status: AcertoStatus.PAGO,
+          dataPagamento: new Date(),
+        });
+        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+
+        await this.reconciliarAcertos(repository, planejamentoAtualizado);
+
+        return acertoPago;
+      },
+    );
   }
 
   async cancelarAcerto(
@@ -682,19 +697,6 @@ export class PlanejamentosService {
     }
 
     return planejamento;
-  }
-
-  private async buscarContextoAcerto(
-    planejamentoId: string,
-    acertoId: string,
-    usuarioId: string,
-  ): Promise<{ planejamento: Planejamento; acerto: AcertoPlanejamento }> {
-    return this.buscarContextoAcertoComRepository(
-      this.planejamentosRepository,
-      planejamentoId,
-      acertoId,
-      usuarioId,
-    );
   }
 
   private async buscarContextoAcertoComRepository(
