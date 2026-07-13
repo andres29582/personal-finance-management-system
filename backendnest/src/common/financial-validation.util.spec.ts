@@ -4,30 +4,48 @@ import {
   assertPositiveFinancialValue,
 } from './financial-validation.util';
 
+function captureValidationException(
+  action: () => void,
+): ValidationAppException {
+  try {
+    action();
+  } catch (error: unknown) {
+    expect(error).toBeInstanceOf(ValidationAppException);
+
+    if (!(error instanceof ValidationAppException)) {
+      throw error;
+    }
+
+    return error;
+  }
+
+  throw new Error('Expected ValidationAppException to be thrown.');
+}
+
 describe('financial validation utils', () => {
   it('throws a typed error for non-positive values', () => {
-    expect(() => assertPositiveFinancialValue(0, 'Valor')).toThrow(
-      ValidationAppException,
+    const error = captureValidationException(() =>
+      assertPositiveFinancialValue(0, 'Valor'),
     );
-    expect(() => assertPositiveFinancialValue(0, 'Valor')).toThrow(
-      expect.objectContaining({
-        code: 'FINANCIAL_VALUE_MUST_BE_POSITIVE',
-        message: 'Valor deve ser maior que zero.',
-        statusCode: 422,
-      }),
-    );
+
+    expect(error).toMatchObject({
+      code: 'FINANCIAL_VALUE_MUST_BE_POSITIVE',
+      field: undefined,
+      message: 'Valor deve ser maior que zero.',
+      statusCode: 422,
+    });
   });
 
   it('throws a typed error for negative values', () => {
-    expect(() => assertNonNegativeFinancialValue(-1, 'Comissao')).toThrow(
-      ValidationAppException,
+    const error = captureValidationException(() =>
+      assertNonNegativeFinancialValue(-1, 'Comissao'),
     );
-    expect(() => assertNonNegativeFinancialValue(-1, 'Comissao')).toThrow(
-      expect.objectContaining({
-        code: 'FINANCIAL_VALUE_MUST_BE_NON_NEGATIVE',
-        message: 'Comissao nao pode ser negativo.',
-        statusCode: 422,
-      }),
-    );
+
+    expect(error).toMatchObject({
+      code: 'FINANCIAL_VALUE_MUST_BE_NON_NEGATIVE',
+      field: undefined,
+      message: 'Comissao nao pode ser negativo.',
+      statusCode: 422,
+    });
   });
 });
