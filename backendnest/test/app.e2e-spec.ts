@@ -191,9 +191,7 @@ describe('Financial flow (e2e)', () => {
       session,
     ).expect(404);
     await withAuth(
-      request(app.getHttpServer()).get(
-        `/transacoes/${pagamento.transacaoId}`,
-      ),
+      request(app.getHttpServer()).get(`/transacoes/${pagamento.transacaoId}`),
       session,
     ).expect(404);
 
@@ -278,9 +276,9 @@ describe('Financial flow (e2e)', () => {
       request(app.getHttpServer()).get(`/pagos-divida/divida/${divida.id}`),
       session,
     ).expect(200);
-    expect(unwrapSuccess<PagamentoDividaResponse[]>(pagamentosDaDivida)).toEqual(
-      [],
-    );
+    expect(
+      unwrapSuccess<PagamentoDividaResponse[]>(pagamentosDaDivida),
+    ).toEqual([]);
 
     const transacoes = await withAuth(
       request(app.getHttpServer()).get('/transacoes'),
