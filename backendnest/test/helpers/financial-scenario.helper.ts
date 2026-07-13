@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import type { E2eApplication } from '../e2e-app';
 import request from 'supertest';
 import { TipoCategoria } from '../../src/categorias/enums/tipo-categoria.enum';
 import { TipoConta } from '../../src/contas/enums/tipo-conta.enum';
@@ -60,7 +60,7 @@ export type MonthlyFinancialScenario = {
 };
 
 export async function createMonthlyFinancialScenario(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   label = 'monthly',
 ): Promise<MonthlyFinancialScenario> {
@@ -194,7 +194,7 @@ export async function createMonthlyFinancialScenario(
 }
 
 export async function createCategoria(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   overrides: Partial<Parameters<typeof makeCategoriaPayload>[0]> = {},
 ): Promise<EntityResponse> {
@@ -209,7 +209,7 @@ export async function createCategoria(
 }
 
 export async function createConta(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   overrides: Partial<Parameters<typeof makeContaPayload>[0]> = {},
 ): Promise<AccountResponse> {
@@ -224,7 +224,7 @@ export async function createConta(
 }
 
 export async function listContas(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
 ): Promise<AccountResponse[]> {
   const response = await withAuth(
@@ -236,7 +236,7 @@ export async function listContas(
 }
 
 export async function createTransacao(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   overrides: Partial<Parameters<typeof makeTransacaoPayload>[0]> = {},
 ): Promise<EntityResponse> {
@@ -251,7 +251,7 @@ export async function createTransacao(
 }
 
 export async function createTransferencia(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   overrides: Partial<Parameters<typeof makeTransferenciaPayload>[0]> = {},
 ): Promise<EntityResponse> {
@@ -266,7 +266,7 @@ export async function createTransferencia(
 }
 
 export async function createDivida(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   overrides: Partial<Parameters<typeof makeDividaPayload>[0]> = {},
 ): Promise<EntityResponse> {
@@ -281,7 +281,7 @@ export async function createDivida(
 }
 
 export async function createPagoDivida(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   overrides: Partial<Parameters<typeof makePagoDividaPayload>[0]> = {},
 ): Promise<DebtPaymentResponse> {
@@ -296,7 +296,7 @@ export async function createPagoDivida(
 }
 
 export async function createMeta(
-  app: INestApplication,
+  app: E2eApplication,
   session: E2eAuthSession,
   body: Record<string, unknown>,
 ): Promise<EntityResponse> {

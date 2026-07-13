@@ -1,7 +1,6 @@
-import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
-import { createE2eApp } from './e2e-app';
+import { createE2eApp, type E2eApplication } from './e2e-app';
 import { configureE2eEnvironment, prepareE2eDatabase } from './e2e-database';
 import {
   makeLoginPayload,
@@ -17,7 +16,7 @@ type ForgotPasswordResponse = {
 jest.setTimeout(60000);
 
 describe('Auth password reset (e2e)', () => {
-  let app: INestApplication;
+  let app: E2eApplication;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();

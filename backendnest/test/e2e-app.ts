@@ -1,8 +1,11 @@
 import { INestApplication, Provider, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { Server } from 'node:http';
 import { AppModule } from '../src/app.module';
 import { AppExceptionFilter } from '../src/common/filters/exception.filter';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
+
+export type E2eApplication = INestApplication<Server>;
 
 type CreateE2eAppOptions = {
   overrideProviders?: Provider[];
@@ -10,7 +13,7 @@ type CreateE2eAppOptions = {
 
 export async function createE2eApp(
   options: CreateE2eAppOptions = {},
-): Promise<INestApplication> {
+): Promise<E2eApplication> {
   const testingModuleBuilder = Test.createTestingModule({
     imports: [AppModule],
   });
@@ -25,7 +28,7 @@ export async function createE2eApp(
 
   const moduleFixture = await testingModuleBuilder.compile();
 
-  const app = moduleFixture.createNestApplication();
+  const app = moduleFixture.createNestApplication<E2eApplication>();
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -34,6 +37,7 @@ export async function createE2eApp(
       transform: true,
     }),
   );
+
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new AppExceptionFilter());
 

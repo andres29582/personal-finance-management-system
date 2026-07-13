@@ -1,10 +1,9 @@
-import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { TipoCategoria } from '../src/categorias/enums/tipo-categoria.enum';
 import { TipoConta } from '../src/contas/enums/tipo-conta.enum';
 import { MlPredictClientService } from '../src/previsoes/services/ml-predict-client.service';
 import { TipoTransacao } from '../src/transacoes/enums/tipo-transacao.enum';
-import { createE2eApp } from './e2e-app';
+import { createE2eApp, type E2eApplication } from './e2e-app';
 import { configureE2eEnvironment, prepareE2eDatabase } from './e2e-database';
 import {
   makeLoginPayload,
@@ -42,7 +41,7 @@ type PrevisaoDeficitResponse = {
 jest.setTimeout(60000);
 
 describe('Previsoes (e2e)', () => {
-  let app: INestApplication;
+  let app: E2eApplication;
   let predictMock: jest.Mock;
 
   beforeAll(async () => {

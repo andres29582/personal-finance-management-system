@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import type { E2eApplication } from '../e2e-app';
 import request, { Test } from 'supertest';
 import {
   makeLoginPayload,
@@ -38,7 +38,7 @@ export type E2eAuthSession = {
 };
 
 export async function registerTestUser(
-  app: INestApplication,
+  app: E2eApplication,
   input: RegisterAndLoginInput,
 ): Promise<PublicUserResponse> {
   const senha = input.senha ?? 'SenhaForte123';
@@ -58,7 +58,7 @@ export async function registerTestUser(
 }
 
 export async function loginTestUser(
-  app: INestApplication,
+  app: E2eApplication,
   input: Pick<RegisterAndLoginInput, 'email'> & { senha?: string },
 ): Promise<LoginResponse> {
   const response = await request(app.getHttpServer())
@@ -75,7 +75,7 @@ export async function loginTestUser(
 }
 
 export async function registerAndLoginTestUser(
-  app: INestApplication,
+  app: E2eApplication,
   input: RegisterAndLoginInput,
 ): Promise<E2eAuthSession> {
   const senha = input.senha ?? 'SenhaForte123';
