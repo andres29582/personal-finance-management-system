@@ -18,28 +18,31 @@ import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { PlanejamentosRepository } from './planejamentos.repository';
 import { PlanejamentosService } from './planejamentos.service';
 
+type PlanejamentosRepositoryMock = jest.Mocked<
+  Pick<
+    PlanejamentosRepository,
+    | 'buscarAcessivelComParticipantes'
+    | 'buscarAcertoPorIdEPlanejamento'
+    | 'buscarComGastosDivisoesAcertos'
+    | 'buscarGastoPorIdEPlanejamento'
+    | 'buscarParticipanteAtivoDuplicado'
+    | 'buscarParticipanteAtivoPorUsuario'
+    | 'executarEmTransacao'
+    | 'listarAcessiveisPorUsuario'
+    | 'listarGastosPorPlanejamento'
+    | 'salvarAcerto'
+    | 'salvarAcertos'
+    | 'salvarDivisoes'
+    | 'salvarGasto'
+    | 'salvarParticipante'
+    | 'salvarPlanejamento'
+  >
+>;
+
 describe('PlanejamentosService', () => {
   let service: PlanejamentosService;
-  let repository: jest.Mocked<
-    Pick<
-      PlanejamentosRepository,
-      | 'buscarAcessivelComParticipantes'
-      | 'buscarAcertoPorIdEPlanejamento'
-      | 'buscarComGastosDivisoesAcertos'
-      | 'buscarGastoPorIdEPlanejamento'
-      | 'buscarParticipanteAtivoDuplicado'
-      | 'buscarParticipanteAtivoPorUsuario'
-      | 'executarEmTransacao'
-      | 'listarAcessiveisPorUsuario'
-      | 'listarGastosPorPlanejamento'
-      | 'salvarAcerto'
-      | 'salvarAcertos'
-      | 'salvarDivisoes'
-      | 'salvarGasto'
-      | 'salvarParticipante'
-      | 'salvarPlanejamento'
-    >
-  >;
+  let repository: PlanejamentosRepositoryMock;
+  let repositoryTransacional: PlanejamentosRepositoryMock;
 
   beforeEach(() => {
     repository = {
@@ -59,8 +62,9 @@ describe('PlanejamentosService', () => {
       salvarParticipante: jest.fn(),
       salvarPlanejamento: jest.fn(),
     };
+    repositoryTransacional = repository;
     repository.executarEmTransacao.mockImplementation((operacao) =>
-      operacao(repository as unknown as PlanejamentosRepository),
+      operacao(repositoryTransacional as unknown as PlanejamentosRepository),
     );
 
     service = new PlanejamentosService(
@@ -1133,37 +1137,123 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
   });
 
-  it('allows owner to cancel pending or paid settlements', async () => {
+  it('cancels a paid settlement and recreates the corresponding pending settlement in one transaction', async () => {
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-04T00:00:00.000Z'),
+    });
+    const acertoCancelado = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.CANCELADO,
+      dataPagamento: null,
+    });
+    const novaPendencia = criarEntidadeAcertoPersistido({
+      id: 'acerto-novo',
+    });
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      buscarAcertoPorIdEPlanejamento: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      salvarAcerto: jest.fn(),
+      salvarAcertos: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      acertoPago,
+    );
+    repositoryTransacional.salvarAcerto.mockResolvedValue(acertoCancelado);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoCancelado],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repositoryTransacional.salvarAcertos.mockResolvedValue([novaPendencia]);
+
+    const result = await service.cancelarAcerto(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcerto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+      }),
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledWith('planejamento-1', 'user-1');
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        deParticipanteId: 'participante-2',
+        paraParticipanteId: 'participante-1',
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+        valorCentavos: 5000,
+      }),
+    ]);
+    expect(
+      repository.executarEmTransacao.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toBe(acertoCancelado);
+    expect(result.status).toBe(AcertoStatus.CANCELADO);
+  });
+
+  it('cancels a pending settlement without forgiving the debt and creates a new equivalent pending record', async () => {
+    const acertoPendente = criarEntidadeAcertoPersistido();
+    const acertoCancelado = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.CANCELADO,
+      dataPagamento: null,
+    });
+    const novaPendencia = criarEntidadeAcertoPersistido({
+      id: 'acerto-novo',
+    });
     repository.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
     );
-    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
-      criarAcertoPersistido({ status: AcertoStatus.PENDENTE }) as never,
-    );
-    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValueOnce(
-      criarAcertoPersistido({ status: AcertoStatus.PAGO }) as never,
-    );
-    repository.salvarAcerto.mockImplementation((acerto) =>
-      Promise.resolve(acerto as never),
-    );
-
-    await service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-1');
-    await service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-1');
-
-    expect(repository.salvarAcerto).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        status: AcertoStatus.CANCELADO,
-        dataPagamento: null,
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPendente);
+    repository.salvarAcerto.mockResolvedValue(acertoCancelado);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoCancelado],
+        gastos: [criarGastoComPendencia()],
       }),
     );
-    expect(repository.salvarAcerto).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        status: AcertoStatus.CANCELADO,
-        dataPagamento: null,
-      }),
+    repository.salvarAcertos.mockResolvedValue([novaPendencia]);
+
+    const result = await service.cancelarAcerto(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
     );
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        deParticipanteId: acertoPendente.deParticipanteId,
+        paraParticipanteId: acertoPendente.paraParticipanteId,
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: acertoPendente.valorCentavos,
+      }),
+    ]);
+    expect(repository.salvarAcertos.mock.calls[0][0][0]?.id).not.toBe(
+      'acerto-1',
+    );
+    expect(result).toBe(acertoCancelado);
+    expect(result.status).toBe(AcertoStatus.CANCELADO);
   });
 
   it('rejects non-owner canceling or reopening settlements', async () => {
@@ -1184,29 +1274,174 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
   });
 
-  it('allows owner to reopen a canceled settlement as pending', async () => {
-    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+  it('reopens a canceled settlement when an exactly equivalent current suggestion exists', async () => {
+    const acertoCancelado = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.CANCELADO,
+      dataPagamento: new Date('2026-07-04T00:00:00.000Z'),
+    });
+    const acertoReaberto = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PENDENTE,
+      dataPagamento: null,
+    });
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      buscarAcertoPorIdEPlanejamento: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      salvarAcerto: jest.fn(),
+      salvarAcertos: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
     );
-    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
-      criarAcertoPersistido({
-        status: AcertoStatus.CANCELADO,
-        dataPagamento: new Date('2026-07-04T00:00:00.000Z'),
-      }) as never,
+    repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      acertoCancelado,
     );
-    repository.salvarAcerto.mockResolvedValue({
-      id: 'acerto-1',
-      status: AcertoStatus.PENDENTE,
-    } as never);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoCancelado],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoReaberto],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repositoryTransacional.salvarAcerto.mockResolvedValue(acertoReaberto);
 
-    await service.reabrirAcerto('planejamento-1', 'acerto-1', 'user-1');
+    const result = await service.reabrirAcerto(
+      'planejamento-1',
+      'acerto-1',
+      'user-1',
+    );
 
-    expect(repository.salvarAcerto).toHaveBeenCalledWith(
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcerto).toHaveBeenCalledWith(
       expect.objectContaining({
         status: AcertoStatus.PENDENTE,
         dataPagamento: null,
       }),
     );
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toBe(acertoReaberto);
+    expect(result.status).toBe(AcertoStatus.PENDENTE);
+  });
+
+  it('cancels an equivalent pending settlement before reopening the historical record', async () => {
+    const acertoCancelado = criarEntidadeAcertoPersistido({
+      id: 'acerto-historico',
+      status: AcertoStatus.CANCELADO,
+    });
+    const pendenteEquivalente = criarEntidadeAcertoPersistido({
+      id: 'acerto-pendente-atual',
+      status: AcertoStatus.PENDENTE,
+    });
+    const pendenteCancelado = criarEntidadeAcertoPersistido({
+      ...pendenteEquivalente,
+      status: AcertoStatus.CANCELADO,
+      dataPagamento: null,
+    });
+    const acertoReaberto = criarEntidadeAcertoPersistido({
+      ...acertoCancelado,
+      status: AcertoStatus.PENDENTE,
+      dataPagamento: null,
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      acertoCancelado,
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoCancelado, pendenteEquivalente],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoReaberto, pendenteCancelado],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.salvarAcerto
+      .mockResolvedValueOnce(pendenteCancelado)
+      .mockResolvedValueOnce(acertoReaberto);
+
+    const result = await service.reabrirAcerto(
+      'planejamento-1',
+      'acerto-historico',
+      'user-1',
+    );
+
+    expect(repository.salvarAcerto).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: 'acerto-pendente-atual',
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+      }),
+    );
+    expect(repository.salvarAcerto).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        id: 'acerto-historico',
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+      }),
+    );
+    expect(repository.salvarAcerto.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.salvarAcerto.mock.invocationCallOrder[1],
+    );
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toBe(acertoReaberto);
+    expect(result.status).toBe(AcertoStatus.PENDENTE);
+  });
+
+  it('rejects reopening a canceled settlement that is obsolete for the current financial suggestions', async () => {
+    const acertoCancelado = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.CANCELADO,
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
+      acertoCancelado,
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoCancelado],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 8000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 4000),
+              criarDivisaoPersistida('participante-2', 4000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.reabrirAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO',
+      message:
+        'O acerto cancelado nao corresponde a uma pendencia atual do planejamento.',
+    });
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
   });
 
   it('rejects invalid settlement status transitions and protects confirmed settlements', async () => {
@@ -1428,6 +1663,17 @@ describe('PlanejamentosService', () => {
       valorCentavos: 1000,
       ...overrides,
     };
+  }
+
+  function criarGastoComPendencia(): Record<string, unknown> {
+    return criarGastoPersistido({
+      pagoPorParticipanteId: 'participante-1',
+      valorCentavos: 10000,
+      divisoes: [
+        criarDivisaoPersistida('participante-1', 5000),
+        criarDivisaoPersistida('participante-2', 5000),
+      ],
+    });
   }
 
   function criarDivisaoPersistida(
