@@ -202,7 +202,8 @@ describe('Relatorios (e2e)', () => {
     )
       .query(monthlyReportQuery())
       .expect(200);
-    const afterDelete = expectApiSuccess<RelatorioResponse>(afterDeleteResponse);
+    const afterDelete =
+      expectApiSuccess<RelatorioResponse>(afterDeleteResponse);
 
     expectMoney(
       afterDelete.resumo.totalDespesas,
