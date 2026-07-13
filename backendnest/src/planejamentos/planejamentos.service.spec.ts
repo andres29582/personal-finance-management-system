@@ -14,6 +14,7 @@ import {
   PlanejamentoStatus,
   PlanejamentoTipo,
 } from './enums';
+import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { PlanejamentosRepository } from './planejamentos.repository';
 import { PlanejamentosService } from './planejamentos.service';
 
@@ -717,6 +718,141 @@ describe('PlanejamentosService', () => {
     expect(result).toEqual([acertoPendente]);
   });
 
+  it('cancels a pending settlement when no current suggestion remains', async () => {
+    const acertoPendente = criarAcertoPersistido({
+      dataPagamento: new Date('2026-07-01T00:00:00.000Z'),
+      observacao: 'Historico preservado',
+    });
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ acertos: [acertoPendente] }),
+    );
+
+    const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'acerto-1',
+        dataPagamento: null,
+        observacao: 'Historico preservado',
+        status: AcertoStatus.CANCELADO,
+      }),
+    ]);
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([]);
+  });
+
+  it('cancels the old pending value and creates the newly calculated value', async () => {
+    const acertoAntigo = criarAcertoPersistido({ valorCentavos: 4000 });
+    const acertoNovo = criarEntidadeAcertoPersistido({
+      id: 'acerto-novo',
+      valorCentavos: 5000,
+    });
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoAntigo],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+    repository.salvarAcertos.mockResolvedValue([acertoNovo]);
+
+    const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(repository.salvarAcertos).toHaveBeenNthCalledWith(1, [
+      expect.objectContaining({
+        id: 'acerto-1',
+        status: AcertoStatus.CANCELADO,
+        valorCentavos: 4000,
+      }),
+    ]);
+    expect(repository.salvarAcertos).toHaveBeenNthCalledWith(2, [
+      expect.objectContaining({
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 5000,
+      }),
+    ]);
+    expect(result).toEqual([acertoNovo]);
+  });
+
+  it('preserves a valid pending settlement, then cancels an obsolete one before creating and returning a new one', async () => {
+    const acertoPendente = criarAcertoPersistido({
+      id: 'acerto-pendente',
+      deParticipanteId: 'participante-2',
+      paraParticipanteId: 'participante-1',
+      valorCentavos: 5000,
+      status: AcertoStatus.PENDENTE,
+    });
+    const acertoObsoleto = criarAcertoPersistido({
+      id: 'acerto-obsoleto',
+      valorCentavos: 1000,
+    });
+    const acertoNovo = criarEntidadeAcertoPersistido({
+      id: 'acerto-novo',
+      deParticipanteId: 'participante-4',
+      paraParticipanteId: 'participante-3',
+      valorCentavos: 3000,
+    });
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          criarParticipantePersistido('participante-2'),
+          criarParticipantePersistido('participante-3'),
+          criarParticipantePersistido('participante-4'),
+        ],
+        acertos: [acertoPendente, acertoObsoleto],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+          criarGastoPersistido({
+            id: 'gasto-2',
+            pagoPorParticipanteId: 'participante-3',
+            valorCentavos: 6000,
+            divisoes: [
+              criarDivisaoPersistida('participante-3', 3000),
+              criarDivisaoPersistida('participante-4', 3000),
+            ],
+          }),
+        ],
+      }),
+    );
+    repository.salvarAcertos.mockResolvedValue([acertoNovo]);
+
+    const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(repository.salvarAcertos).toHaveBeenNthCalledWith(1, [
+      expect.objectContaining({
+        id: 'acerto-obsoleto',
+        status: AcertoStatus.CANCELADO,
+      }),
+    ]);
+    expect(repository.salvarAcertos).toHaveBeenNthCalledWith(2, [
+      expect.objectContaining({
+        deParticipanteId: 'participante-4',
+        paraParticipanteId: 'participante-3',
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 3000,
+      }),
+    ]);
+    expect(result).toEqual([acertoPendente, acertoNovo]);
+    expect(result).not.toContain(acertoObsoleto);
+  });
+
   it('does not duplicate pending settlements while preserving existing records', async () => {
     const acertoPendente = criarAcertoPersistido({
       id: 'acerto-pendente',
@@ -766,6 +902,42 @@ describe('PlanejamentosService', () => {
 
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(result).toEqual([acertoPendente]);
+    expect(acertoPago.status).toBe(AcertoStatus.PAGO);
+    expect(acertoConfirmado.status).toBe(AcertoStatus.CONFIRMADO);
+    expect(acertoCancelado.status).toBe(AcertoStatus.CANCELADO);
+  });
+
+  it('preserves paid, confirmed, and previously canceled settlements without changes', async () => {
+    const acertoPago = criarAcertoPersistido({
+      id: 'acerto-pago',
+      valorCentavos: 1000,
+      status: AcertoStatus.PAGO,
+    });
+    const acertoConfirmado = criarAcertoPersistido({
+      id: 'acerto-confirmado',
+      deParticipanteId: 'participante-1',
+      paraParticipanteId: 'participante-2',
+      valorCentavos: 1000,
+      status: AcertoStatus.CONFIRMADO,
+    });
+    const acertoCancelado = criarAcertoPersistido({
+      id: 'acerto-cancelado',
+      deParticipanteId: 'participante-1',
+      paraParticipanteId: 'participante-2',
+      valorCentavos: 1000,
+      status: AcertoStatus.CANCELADO,
+    });
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPago, acertoConfirmado, acertoCancelado],
+      }),
+    );
+
+    const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.executarEmTransacao).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
     expect(acertoPago.status).toBe(AcertoStatus.PAGO);
     expect(acertoConfirmado.status).toBe(AcertoStatus.CONFIRMADO);
     expect(acertoCancelado.status).toBe(AcertoStatus.CANCELADO);
@@ -1283,5 +1455,14 @@ describe('PlanejamentosService', () => {
       valorCentavos: 5000,
       ...overrides,
     };
+  }
+
+  function criarEntidadeAcertoPersistido(
+    overrides: Record<string, unknown> = {},
+  ): AcertoPlanejamento {
+    return Object.assign(
+      new AcertoPlanejamento(),
+      criarAcertoPersistido(overrides),
+    );
   }
 });
