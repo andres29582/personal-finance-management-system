@@ -1,9 +1,8 @@
-import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { TipoCategoria } from '../src/categorias/enums/tipo-categoria.enum';
 import { TipoConta } from '../src/contas/enums/tipo-conta.enum';
 import { TipoTransacao } from '../src/transacoes/enums/tipo-transacao.enum';
-import { createE2eApp } from './e2e-app';
+import { createE2eApp, type E2eApplication } from './e2e-app';
 import { configureE2eEnvironment, prepareE2eDatabase } from './e2e-database';
 import { registerAndLoginTestUser, withAuth } from './helpers/auth.e2e-helper';
 import { E2E_DATES } from './helpers/date.helper';
@@ -42,7 +41,7 @@ type AuditLogResponse = {
 jest.setTimeout(60000);
 
 describe('Audit logs (e2e)', () => {
-  let app: INestApplication;
+  let app: E2eApplication;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();
