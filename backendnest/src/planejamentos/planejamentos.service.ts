@@ -84,49 +84,77 @@ export class PlanejamentosService {
     );
     const acertosPendentesExistentes =
       this.filtrarAcertosPendentes(planejamento);
-    const novosAcertos = sugestoes
-      .filter(
-        (sugestao) =>
-          !this.existeAcertoPendenteEquivalente(
-            sugestao,
-            acertosPendentesExistentes,
-          ),
-      )
-      .map((sugestao) => {
-        this.assertParticipanteIdAtivo(
-          participantesPorId,
-          sugestao.devedorParticipanteId,
-          'PLANEJAMENTO_ACERTO_DEVEDOR_INVALIDO',
-          'O devedor do acerto precisa ser participante ativo do planejamento.',
-        );
-        this.assertParticipanteIdAtivo(
-          participantesPorId,
-          sugestao.recebedorParticipanteId,
-          'PLANEJAMENTO_ACERTO_RECEBEDOR_INVALIDO',
-          'O recebedor do acerto precisa ser participante ativo do planejamento.',
-        );
+    const pendentesPorChave = this.agruparAcertosPendentesPorChave(
+      acertosPendentesExistentes,
+    );
+    const pendentesPreservados: AcertoPlanejamento[] = [];
+    const novosAcertos: Parameters<
+      PlanejamentosRepository['salvarAcertos']
+    >[0] = [];
 
-        return {
-          id: randomUUID(),
-          planejamentoId,
-          deParticipanteId: sugestao.devedorParticipanteId,
-          paraParticipanteId: sugestao.recebedorParticipanteId,
-          valorCentavos: sugestao.valorCentavos,
-          status: AcertoStatus.PENDENTE,
-          dataPagamento: null,
-          observacao: null,
-        };
+    for (const sugestao of sugestoes) {
+      this.assertParticipanteIdAtivo(
+        participantesPorId,
+        sugestao.devedorParticipanteId,
+        'PLANEJAMENTO_ACERTO_DEVEDOR_INVALIDO',
+        'O devedor do acerto precisa ser participante ativo do planejamento.',
+      );
+      this.assertParticipanteIdAtivo(
+        participantesPorId,
+        sugestao.recebedorParticipanteId,
+        'PLANEJAMENTO_ACERTO_RECEBEDOR_INVALIDO',
+        'O recebedor do acerto precisa ser participante ativo do planejamento.',
+      );
+
+      const chave = this.criarChaveAcerto(
+        sugestao.devedorParticipanteId,
+        sugestao.recebedorParticipanteId,
+        sugestao.valorCentavos,
+      );
+      const pendenteEquivalente = pendentesPorChave.get(chave)?.shift();
+
+      if (pendenteEquivalente) {
+        pendentesPreservados.push(pendenteEquivalente);
+        continue;
+      }
+
+      novosAcertos.push({
+        id: randomUUID(),
+        planejamentoId,
+        deParticipanteId: sugestao.devedorParticipanteId,
+        paraParticipanteId: sugestao.recebedorParticipanteId,
+        valorCentavos: sugestao.valorCentavos,
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+        observacao: null,
       });
+    }
 
-    if (novosAcertos.length === 0) {
-      return acertosPendentesExistentes;
+    const acertosObsoletos = [...pendentesPorChave.values()]
+      .flat()
+      .map((acerto) => ({
+        ...acerto,
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+      }));
+
+    if (acertosObsoletos.length === 0 && novosAcertos.length === 0) {
+      return pendentesPreservados;
     }
 
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => [
-        ...acertosPendentesExistentes,
-        ...(await repository.salvarAcertos(novosAcertos)),
-      ],
+      async (repository) => {
+        if (acertosObsoletos.length > 0) {
+          await repository.salvarAcertos(acertosObsoletos);
+        }
+
+        const acertosCriados =
+          novosAcertos.length > 0
+            ? await repository.salvarAcertos(novosAcertos)
+            : [];
+
+        return [...pendentesPreservados, ...acertosCriados];
+      },
     );
   }
 
@@ -642,20 +670,32 @@ export class PlanejamentosService {
     );
   }
 
-  private existeAcertoPendenteEquivalente(
-    sugestao: {
-      devedorParticipanteId: string;
-      recebedorParticipanteId: string;
-      valorCentavos: number;
-    },
+  private agruparAcertosPendentesPorChave(
     acertos: AcertoPlanejamento[],
-  ): boolean {
-    return acertos.some(
-      (acerto) =>
-        acerto.deParticipanteId === sugestao.devedorParticipanteId &&
-        acerto.paraParticipanteId === sugestao.recebedorParticipanteId &&
-        acerto.valorCentavos === sugestao.valorCentavos,
-    );
+  ): Map<string, AcertoPlanejamento[]> {
+    const acertosPorChave = new Map<string, AcertoPlanejamento[]>();
+
+    for (const acerto of acertos) {
+      const chave = this.criarChaveAcerto(
+        acerto.deParticipanteId,
+        acerto.paraParticipanteId,
+        acerto.valorCentavos,
+      );
+      const acertosDaChave = acertosPorChave.get(chave) ?? [];
+
+      acertosDaChave.push(acerto);
+      acertosPorChave.set(chave, acertosDaChave);
+    }
+
+    return acertosPorChave;
+  }
+
+  private criarChaveAcerto(
+    devedorParticipanteId: string,
+    recebedorParticipanteId: string,
+    valorCentavos: number,
+  ): string {
+    return `${devedorParticipanteId}:${recebedorParticipanteId}:${valorCentavos}`;
   }
 
   private assertParticipanteIdAtivo(
