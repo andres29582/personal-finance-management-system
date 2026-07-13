@@ -47,6 +47,16 @@ export type AcertoPlanejamentoSugerido = {
   recebedorParticipante: ParticipantePlanejamento;
 };
 
+type AcertosParaSalvar = Parameters<
+  PlanejamentosRepository['salvarAcertos']
+>[0];
+
+type PlanoReconciliacaoAcertos = {
+  pendentesPreservados: AcertoPlanejamento[];
+  acertosObsoletos: AcertosParaSalvar;
+  novosAcertos: AcertosParaSalvar;
+};
+
 @Injectable()
 export class PlanejamentosService {
   constructor(
@@ -72,9 +82,24 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<AcertoPlanejamento[]> {
     const planejamento = await this.buscarPlanejamentoParaAcertos(
+      this.planejamentosRepository,
       planejamentoId,
       usuarioId,
     );
+    const plano = this.criarPlanoReconciliacaoAcertos(planejamento);
+
+    if (!this.planoReconciliacaoTemMudancas(plano)) {
+      return plano.pendentesPreservados;
+    }
+
+    return this.planejamentosRepository.executarEmTransacao((repository) =>
+      this.reconciliarAcertos(repository, planejamento, plano),
+    );
+  }
+
+  private criarPlanoReconciliacaoAcertos(
+    planejamento: Planejamento,
+  ): PlanoReconciliacaoAcertos {
     const participantesAtivos = this.listarParticipantesAtivos(planejamento);
     const participantesPorId =
       this.mapearParticipantesPorId(participantesAtivos);
@@ -88,9 +113,7 @@ export class PlanejamentosService {
       acertosPendentesExistentes,
     );
     const pendentesPreservados: AcertoPlanejamento[] = [];
-    const novosAcertos: Parameters<
-      PlanejamentosRepository['salvarAcertos']
-    >[0] = [];
+    const novosAcertos: AcertosParaSalvar = [];
 
     for (const sugestao of sugestoes) {
       this.assertParticipanteIdAtivo(
@@ -120,7 +143,7 @@ export class PlanejamentosService {
 
       novosAcertos.push({
         id: randomUUID(),
-        planejamentoId,
+        planejamentoId: planejamento.id,
         deParticipanteId: sugestao.devedorParticipanteId,
         paraParticipanteId: sugestao.recebedorParticipanteId,
         valorCentavos: sugestao.valorCentavos,
@@ -138,24 +161,30 @@ export class PlanejamentosService {
         dataPagamento: null,
       }));
 
-    if (acertosObsoletos.length === 0 && novosAcertos.length === 0) {
-      return pendentesPreservados;
+    return { pendentesPreservados, acertosObsoletos, novosAcertos };
+  }
+
+  private planoReconciliacaoTemMudancas(
+    plano: PlanoReconciliacaoAcertos,
+  ): boolean {
+    return plano.acertosObsoletos.length > 0 || plano.novosAcertos.length > 0;
+  }
+
+  private async reconciliarAcertos(
+    repository: PlanejamentosRepository,
+    planejamento: Planejamento,
+    plano = this.criarPlanoReconciliacaoAcertos(planejamento),
+  ): Promise<AcertoPlanejamento[]> {
+    if (plano.acertosObsoletos.length > 0) {
+      await repository.salvarAcertos(plano.acertosObsoletos);
     }
 
-    return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
-        if (acertosObsoletos.length > 0) {
-          await repository.salvarAcertos(acertosObsoletos);
-        }
+    const acertosCriados =
+      plano.novosAcertos.length > 0
+        ? await repository.salvarAcertos(plano.novosAcertos)
+        : [];
 
-        const acertosCriados =
-          novosAcertos.length > 0
-            ? await repository.salvarAcertos(novosAcertos)
-            : [];
-
-        return [...pendentesPreservados, ...acertosCriados];
-      },
-    );
+    return [...plano.pendentesPreservados, ...acertosCriados];
   }
 
   async findAll(
@@ -308,6 +337,7 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<AcertoPlanejamentoSugerido[]> {
     const planejamento = await this.buscarPlanejamentoParaAcertos(
+      this.planejamentosRepository,
       planejamentoId,
       usuarioId,
     );
@@ -364,25 +394,40 @@ export class PlanejamentosService {
     acertoId: string,
     usuarioId: string,
   ): Promise<AcertoPlanejamento> {
-    const { planejamento, acerto } = await this.buscarContextoAcerto(
-      planejamentoId,
-      acertoId,
-      usuarioId,
-    );
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const { planejamento, acerto } =
+          await this.buscarContextoAcertoComRepository(
+            repository,
+            planejamentoId,
+            acertoId,
+            usuarioId,
+          );
 
-    this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
-    this.assertTransicaoAcertoPermitida(
-      acerto.status,
-      [AcertoStatus.PENDENTE, AcertoStatus.PAGO],
-      'PLANEJAMENTO_ACERTO_CANCELAR_STATUS_INVALIDO',
-      'Apenas acertos pendentes ou pagos podem ser cancelados.',
-    );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertTransicaoAcertoPermitida(
+          acerto.status,
+          [AcertoStatus.PENDENTE, AcertoStatus.PAGO],
+          'PLANEJAMENTO_ACERTO_CANCELAR_STATUS_INVALIDO',
+          'Apenas acertos pendentes ou pagos podem ser cancelados.',
+        );
 
-    return this.planejamentosRepository.salvarAcerto({
-      ...acerto,
-      status: AcertoStatus.CANCELADO,
-      dataPagamento: null,
-    });
+        const acertoCancelado = await repository.salvarAcerto({
+          ...acerto,
+          status: AcertoStatus.CANCELADO,
+          dataPagamento: null,
+        });
+        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+
+        await this.reconciliarAcertos(repository, planejamentoAtualizado);
+
+        return acertoCancelado;
+      },
+    );
   }
 
   async reabrirAcerto(
@@ -390,25 +435,88 @@ export class PlanejamentosService {
     acertoId: string,
     usuarioId: string,
   ): Promise<AcertoPlanejamento> {
-    const { planejamento, acerto } = await this.buscarContextoAcerto(
-      planejamentoId,
-      acertoId,
-      usuarioId,
-    );
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const { planejamento, acerto } =
+          await this.buscarContextoAcertoComRepository(
+            repository,
+            planejamentoId,
+            acertoId,
+            usuarioId,
+          );
 
-    this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
-    this.assertTransicaoAcertoPermitida(
-      acerto.status,
-      [AcertoStatus.CANCELADO],
-      'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
-      'Apenas acertos cancelados podem ser reabertos.',
-    );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertTransicaoAcertoPermitida(
+          acerto.status,
+          [AcertoStatus.CANCELADO],
+          'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
+          'Apenas acertos cancelados podem ser reabertos.',
+        );
 
-    return this.planejamentosRepository.salvarAcerto({
-      ...acerto,
-      status: AcertoStatus.PENDENTE,
-      dataPagamento: null,
-    });
+        const planejamentoCompleto = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+        const chaveAcerto = this.criarChaveAcerto(
+          acerto.deParticipanteId,
+          acerto.paraParticipanteId,
+          acerto.valorCentavos,
+        );
+        const sugestaoEquivalente = this.calcularSugestoesAtuais(
+          planejamentoCompleto,
+        ).some(
+          (sugestao) =>
+            this.criarChaveAcerto(
+              sugestao.devedorParticipanteId,
+              sugestao.recebedorParticipanteId,
+              sugestao.valorCentavos,
+            ) === chaveAcerto,
+        );
+
+        if (!sugestaoEquivalente) {
+          throw new ValidationAppException(
+            'PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO',
+            'O acerto cancelado nao corresponde a uma pendencia atual do planejamento.',
+          );
+        }
+
+        const pendenteEquivalente = this.filtrarAcertosPendentes(
+          planejamentoCompleto,
+        ).find(
+          (acertoPendente) =>
+            acertoPendente.id !== acerto.id &&
+            this.criarChaveAcerto(
+              acertoPendente.deParticipanteId,
+              acertoPendente.paraParticipanteId,
+              acertoPendente.valorCentavos,
+            ) === chaveAcerto,
+        );
+
+        if (pendenteEquivalente) {
+          await repository.salvarAcerto({
+            ...pendenteEquivalente,
+            status: AcertoStatus.CANCELADO,
+            dataPagamento: null,
+          });
+        }
+
+        const acertoReaberto = await repository.salvarAcerto({
+          ...acerto,
+          status: AcertoStatus.PENDENTE,
+          dataPagamento: null,
+        });
+        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+
+        await this.reconciliarAcertos(repository, planejamentoAtualizado);
+
+        return acertoReaberto;
+      },
+    );
   }
 
   private async criarPlanejamentoComProprietario(
@@ -557,14 +665,14 @@ export class PlanejamentosService {
   }
 
   private async buscarPlanejamentoParaAcertos(
+    repository: PlanejamentosRepository,
     planejamentoId: string,
     usuarioId: string,
   ): Promise<Planejamento> {
-    const planejamento =
-      await this.planejamentosRepository.buscarComGastosDivisoesAcertos(
-        planejamentoId,
-        usuarioId,
-      );
+    const planejamento = await repository.buscarComGastosDivisoesAcertos(
+      planejamentoId,
+      usuarioId,
+    );
 
     if (!planejamento) {
       throw new ResourceNotFoundException(
@@ -581,12 +689,36 @@ export class PlanejamentosService {
     acertoId: string,
     usuarioId: string,
   ): Promise<{ planejamento: Planejamento; acerto: AcertoPlanejamento }> {
-    const planejamento = await this.findOne(planejamentoId, usuarioId);
-    const acerto =
-      await this.planejamentosRepository.buscarAcertoPorIdEPlanejamento(
-        acertoId,
-        planejamentoId,
+    return this.buscarContextoAcertoComRepository(
+      this.planejamentosRepository,
+      planejamentoId,
+      acertoId,
+      usuarioId,
+    );
+  }
+
+  private async buscarContextoAcertoComRepository(
+    repository: PlanejamentosRepository,
+    planejamentoId: string,
+    acertoId: string,
+    usuarioId: string,
+  ): Promise<{ planejamento: Planejamento; acerto: AcertoPlanejamento }> {
+    const planejamento = await repository.buscarAcessivelComParticipantes(
+      planejamentoId,
+      usuarioId,
+    );
+
+    if (!planejamento) {
+      throw new ResourceNotFoundException(
+        'PLANEJAMENTO_NOT_FOUND',
+        'Planejamento nao encontrado.',
       );
+    }
+
+    const acerto = await repository.buscarAcertoPorIdEPlanejamento(
+      acertoId,
+      planejamentoId,
+    );
 
     if (!acerto) {
       throw new ResourceNotFoundException(
@@ -596,6 +728,15 @@ export class PlanejamentosService {
     }
 
     return { planejamento, acerto };
+  }
+
+  private calcularSugestoesAtuais(planejamento: Planejamento) {
+    const participantesAtivos = this.listarParticipantesAtivos(planejamento);
+
+    return this.calcularAcertosPersistidos(
+      planejamento,
+      participantesAtivos.map((participante) => participante.id),
+    );
   }
 
   private assertUsuarioProprietarioDoPlanejamento(
