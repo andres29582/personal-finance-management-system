@@ -3524,6 +3524,10 @@ paths:
       tags:
       - Planejamentos
       summary: Adicionar participante ao planejamento
+      description: >-
+        Adiciona o participante atomicamente ao planejamento. Criacoes
+        concorrentes de participante ativo com mesmo nome manual, email ou
+        usuario vinculado sao serializadas; duplicidades retornam 409.
       security:
       - BearerAuth: []
       parameters:
