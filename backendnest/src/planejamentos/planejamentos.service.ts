@@ -395,7 +395,7 @@ export class PlanejamentosService {
     return this.planejamentosRepository.executarEmTransacao(
       async (repository) => {
         const { planejamento, acerto } =
-          await this.buscarContextoAcertoComRepository(
+          await this.buscarContextoAcertoBloqueadoComRepository(
             repository,
             planejamentoId,
             acertoId,
@@ -436,7 +436,7 @@ export class PlanejamentosService {
     return this.planejamentosRepository.executarEmTransacao(
       async (repository) => {
         const { planejamento, acerto } =
-          await this.buscarContextoAcertoComRepository(
+          await this.buscarContextoAcertoBloqueadoComRepository(
             repository,
             planejamentoId,
             acertoId,
@@ -477,7 +477,7 @@ export class PlanejamentosService {
     return this.planejamentosRepository.executarEmTransacao(
       async (repository) => {
         const { planejamento, acerto } =
-          await this.buscarContextoAcertoComRepository(
+          await this.buscarContextoAcertoBloqueadoComRepository(
             repository,
             planejamentoId,
             acertoId,
@@ -743,23 +743,33 @@ export class PlanejamentosService {
     return planejamento;
   }
 
-  private async buscarContextoAcertoComRepository(
+  private async buscarContextoAcertoBloqueadoComRepository(
     repository: PlanejamentosRepository,
     planejamentoId: string,
     acertoId: string,
     usuarioId: string,
   ): Promise<{ planejamento: Planejamento; acerto: AcertoPlanejamento }> {
-    const planejamento = await repository.buscarAcessivelComParticipantes(
+    await this.buscarPlanejamentoAcessivelComRepository(
+      repository,
       planejamentoId,
       usuarioId,
     );
 
-    if (!planejamento) {
+    const planejamentoBloqueado =
+      await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+    if (!planejamentoBloqueado) {
       throw new ResourceNotFoundException(
         'PLANEJAMENTO_NOT_FOUND',
         'Planejamento nao encontrado.',
       );
     }
+
+    const planejamento = await this.buscarPlanejamentoAcessivelComRepository(
+      repository,
+      planejamentoId,
+      usuarioId,
+    );
 
     const acerto = await repository.buscarAcertoPorIdEPlanejamento(
       acertoId,
