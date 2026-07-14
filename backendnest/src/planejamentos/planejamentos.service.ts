@@ -11,6 +11,7 @@ import {
   CreateGastoPlanejamentoDto,
   CreatePlanejamentoDto,
   FindPlanejamentosDto,
+  UpdateGastoPlanejamentoDto,
 } from './dto';
 import { calcularAcertosMinimos, calcularDivisaoIgualitaria } from './domain';
 import {
@@ -332,7 +333,10 @@ export class PlanejamentosService {
           'O pagador precisa ser participante ativo do planejamento.',
         );
 
-        const divisoesCalculadas = this.calcularDivisoes(dto);
+        const divisoesCalculadas = this.calcularDivisoes(
+          dto.valorCentavos,
+          dto.participantesIds,
+        );
 
         for (const divisao of divisoesCalculadas) {
           this.assertParticipantePertenceAoPlanejamento(
@@ -420,6 +424,220 @@ export class PlanejamentosService {
     }
 
     return gasto;
+  }
+
+  async atualizarGasto(
+    planejamentoId: string,
+    gastoId: string,
+    usuarioId: string,
+    dto: UpdateGastoPlanejamentoDto,
+  ): Promise<GastoPlanejamento> {
+    if (Object.values(dto).every((value) => value === undefined)) {
+      throw new ValidationAppException(
+        'PLANEJAMENTO_GASTO_ATUALIZACAO_VAZIA',
+        'Informe ao menos um campo para atualizar o gasto.',
+      );
+    }
+
+    await this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const planejamentoInicial =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(
+          planejamentoInicial,
+          usuarioId,
+        );
+
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+
+        const gasto = await repository.buscarGastoPorIdEPlanejamento(
+          gastoId,
+          planejamentoId,
+        );
+
+        if (!gasto) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_GASTO_NOT_FOUND',
+            'Gasto do planejamento nao encontrado.',
+          );
+        }
+
+        if (gasto.status !== GastoStatus.ATIVO) {
+          throw new ValidationAppException(
+            'PLANEJAMENTO_GASTO_ATUALIZAR_STATUS_INVALIDO',
+            'Apenas gastos ativos podem ser atualizados.',
+            { details: { statusAtual: gasto.status } },
+          );
+        }
+
+        const divisoesAtivas = (gasto.divisoes ?? []).filter(
+          (divisao) => divisao.status === DivisaoStatus.ATIVA,
+        );
+        const participantesAtuaisIds = divisoesAtivas
+          .map((divisao) => divisao.participanteId)
+          .sort((a, b) => a.localeCompare(b));
+        const valorCentavos =
+          dto.valorCentavos !== undefined
+            ? dto.valorCentavos
+            : gasto.valorCentavos;
+        const pagoPorParticipanteId =
+          dto.pagoPorParticipanteId !== undefined
+            ? dto.pagoPorParticipanteId
+            : gasto.pagoPorParticipanteId;
+        const participantesIds = dto.participantesIds ?? participantesAtuaisIds;
+
+        if (dto.participantesIds !== undefined) {
+          this.calcularDivisoes(valorCentavos, dto.participantesIds);
+        }
+
+        const participantesEfetivosIds = [...participantesIds].sort((a, b) =>
+          a.localeCompare(b),
+        );
+        const valorAlterado = valorCentavos !== gasto.valorCentavos;
+        const pagadorAlterado =
+          pagoPorParticipanteId !== gasto.pagoPorParticipanteId;
+        const participantesAlterados =
+          dto.participantesIds !== undefined &&
+          !this.conjuntosIguais(participantesAtuaisIds, dto.participantesIds);
+        const divisoesAlteradas = valorAlterado || participantesAlterados;
+        const alteracaoFinanceira = divisoesAlteradas || pagadorAlterado;
+
+        if (
+          alteracaoFinanceira &&
+          dto.participantesIds === undefined &&
+          participantesAtuaisIds.length === 0
+        ) {
+          throw new ValidationAppException(
+            'PLANEJAMENTO_GASTO_DIVISOES_ATIVAS_OBRIGATORIAS',
+            'O gasto precisa ter divisoes ativas para a atualizacao financeira.',
+          );
+        }
+
+        if (pagadorAlterado) {
+          this.assertParticipantePertenceAoPlanejamento(
+            planejamento,
+            pagoPorParticipanteId,
+            'PLANEJAMENTO_PAGADOR_INVALIDO',
+            'O pagador precisa ser participante ativo do planejamento.',
+          );
+        }
+
+        const participantesAtuaisSet = new Set(participantesAtuaisIds);
+        const participantesNovosIds = participantesAlterados
+          ? participantesEfetivosIds.filter(
+              (participanteId) => !participantesAtuaisSet.has(participanteId),
+            )
+          : [];
+
+        for (const participanteId of participantesNovosIds) {
+          this.assertParticipantePertenceAoPlanejamento(
+            planejamento,
+            participanteId,
+            'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
+            'Todos os participantes da divisao precisam pertencer ao planejamento.',
+          );
+        }
+
+        const descricao =
+          dto.descricao !== undefined ? dto.descricao : gasto.descricao;
+        const dataGasto =
+          dto.dataGasto !== undefined ? dto.dataGasto : gasto.dataGasto;
+        const comportamento =
+          dto.comportamento !== undefined
+            ? dto.comportamento
+            : gasto.comportamento;
+        const categoria =
+          dto.categoria !== undefined ? dto.categoria : gasto.categoria;
+        const observacao =
+          dto.observacao !== undefined ? dto.observacao : gasto.observacao;
+        const mesReferencia =
+          dto.mesReferencia !== undefined
+            ? dto.mesReferencia
+            : gasto.mesReferencia;
+        const alteracaoDescritiva =
+          descricao !== gasto.descricao ||
+          dataGasto !== gasto.dataGasto ||
+          comportamento !== gasto.comportamento ||
+          categoria !== gasto.categoria ||
+          observacao !== gasto.observacao ||
+          mesReferencia !== gasto.mesReferencia;
+
+        if (!alteracaoFinanceira && !alteracaoDescritiva) {
+          return gasto.id;
+        }
+
+        const gastoSalvo = await repository.salvarGasto({
+          id: gasto.id,
+          descricao,
+          valorCentavos,
+          dataGasto,
+          categoria,
+          comportamento,
+          pagoPorParticipanteId,
+          observacao,
+          mesReferencia,
+          ultimaAlteracaoValorEm: valorAlterado
+            ? new Date()
+            : gasto.ultimaAlteracaoValorEm,
+        });
+
+        if (!alteracaoFinanceira) {
+          return gastoSalvo.id;
+        }
+
+        if (divisoesAlteradas) {
+          const divisoesCalculadas = this.calcularDivisoes(
+            valorCentavos,
+            participantesEfetivosIds,
+          );
+
+          await repository.salvarDivisoes([
+            ...divisoesAtivas.map((divisao) => ({
+              ...divisao,
+              status: DivisaoStatus.CANCELADA,
+            })),
+            ...divisoesCalculadas.map((divisao) => ({
+              id: randomUUID(),
+              gastoId,
+              participanteId: divisao.participanteId,
+              valorDevidoCentavos: divisao.valorCentavos,
+              status: DivisaoStatus.ATIVA,
+            })),
+          ]);
+        }
+
+        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+        await this.reconciliarAcertos(repository, planejamentoAtualizado);
+
+        return gastoSalvo.id;
+      },
+    );
+
+    return this.findGasto(planejamentoId, gastoId, usuarioId);
   }
 
   async cancelarGasto(
@@ -816,12 +1034,9 @@ export class PlanejamentosService {
     );
   }
 
-  private calcularDivisoes(dto: CreateGastoPlanejamentoDto) {
+  private calcularDivisoes(valorCentavos: number, participantesIds: string[]) {
     try {
-      return calcularDivisaoIgualitaria(
-        dto.valorCentavos,
-        dto.participantesIds,
-      );
+      return calcularDivisaoIgualitaria(valorCentavos, participantesIds);
     } catch (error) {
       if (error instanceof PlanejamentoDominioError) {
         throw new ValidationAppException(error.code, error.message);
@@ -829,6 +1044,20 @@ export class PlanejamentosService {
 
       throw error;
     }
+  }
+
+  private conjuntosIguais(primeiro: string[], segundo: string[]): boolean {
+    if (primeiro.length !== segundo.length) {
+      return false;
+    }
+
+    const primeiroConjunto = new Set(primeiro);
+    const segundoConjunto = new Set(segundo);
+
+    return (
+      primeiroConjunto.size === segundoConjunto.size &&
+      [...primeiroConjunto].every((item) => segundoConjunto.has(item))
+    );
   }
 
   private calcularAcertosPersistidos(

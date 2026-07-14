@@ -7,3 +7,4 @@ export * from './find-gasto-planejamento-params.dto';
 export * from './find-gastos-planejamento-params.dto';
 export * from './find-planejamento-params.dto';
 export * from './find-planejamentos.dto';
+export * from './update-gasto-planejamento.dto';

@@ -718,6 +718,877 @@ describe('PlanejamentosService', () => {
     ).rejects.toBeInstanceOf(ResourceNotFoundException);
   });
 
+  it('updates only descriptive expense fields without touching financial state', async () => {
+    const { gasto, gastoCompleto } = prepararAtualizacaoGasto();
+
+    const result = await service.atualizarGasto(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+      {
+        descricao: 'Mercado atualizado',
+        dataGasto: '2026-07-05',
+        comportamento: GastoComportamento.VARIAVEL,
+        categoria: 'Casa',
+        observacao: 'Nova observacao',
+        mesReferencia: '2026-08',
+      },
+    );
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: gasto.id,
+        descricao: 'Mercado atualizado',
+        dataGasto: '2026-07-05',
+        comportamento: GastoComportamento.VARIAVEL,
+        categoria: 'Casa',
+        observacao: 'Nova observacao',
+        mesReferencia: '2026-08',
+        ultimaAlteracaoValorEm: gasto.ultimaAlteracaoValorEm,
+      }),
+    );
+    const payload = repositoryTransacional.salvarGasto.mock.calls[0][0];
+    expect(payload).not.toHaveProperty('pagoPorParticipante');
+    expect(payload).not.toHaveProperty('divisoes');
+    expect(payload).not.toHaveProperty('planejamento');
+    expect(payload).not.toHaveProperty('createdAt');
+    expect(payload).not.toHaveProperty('updatedAt');
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
+      'gasto-1',
+      'planejamento-1',
+    );
+    expect(result).toBe(gastoCompleto);
+  });
+
+  it('updates only the description when the historical payer is inactive', async () => {
+    prepararAtualizacaoGasto({
+      planejamentoOverrides: {
+        participantes: [
+          {
+            ...criarParticipantePersistido('participante-1'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          criarParticipantePersistido('participante-2'),
+          criarParticipantePersistido('participante-3'),
+        ],
+      },
+    });
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      descricao: 'Mercado atualizado',
+    });
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        descricao: 'Mercado atualizado',
+        pagoPorParticipanteId: 'participante-1',
+      }),
+    );
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('clears only the observation when a historical split participant is inactive', async () => {
+    prepararAtualizacaoGasto({
+      planejamentoOverrides: {
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          {
+            ...criarParticipantePersistido('participante-2'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          criarParticipantePersistido('participante-3'),
+        ],
+      },
+    });
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      observacao: null,
+    });
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({ observacao: null }),
+    );
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('clears nullable descriptive expense fields', async () => {
+    prepararAtualizacaoGasto();
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      categoria: null,
+      observacao: null,
+      mesReferencia: null,
+    });
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoria: null,
+        observacao: null,
+        mesReferencia: null,
+      }),
+    );
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('updates value, recreates equal splits, reconciles settlements, and queries the root repository after commit', async () => {
+    const { divisaoCancelada, gasto, gastoCompleto } =
+      prepararAtualizacaoGasto();
+
+    const result = await service.atualizarGasto(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+      { valorCentavos: 10001 },
+    );
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: gasto.id,
+        valorCentavos: 10001,
+        ultimaAlteracaoValorEm: expect.any(Date) as Date,
+      }),
+    );
+    const divisoesSalvas =
+      repositoryTransacional.salvarDivisoes.mock.calls[0][0];
+    expect(divisoesSalvas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'divisao-ativa-1',
+          status: DivisaoStatus.CANCELADA,
+        }),
+        expect.objectContaining({
+          id: 'divisao-ativa-2',
+          status: DivisaoStatus.CANCELADA,
+        }),
+        expect.objectContaining({
+          gastoId: 'gasto-1',
+          participanteId: 'participante-1',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5001,
+        }),
+        expect.objectContaining({
+          gastoId: 'gasto-1',
+          participanteId: 'participante-2',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+      ]),
+    );
+    expect(divisoesSalvas).toHaveLength(4);
+    expect(divisoesSalvas).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: divisaoCancelada.id }),
+      ]),
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledWith('planejamento-1', 'user-1');
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'acerto-1',
+        status: AcertoStatus.CANCELADO,
+      }),
+    ]);
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    );
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    ).toBeLessThan(
+      repositoryTransacional.buscarGastoPorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.buscarGastoPorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    );
+    expect(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarGastoPorIdEPlanejamento.mock.invocationCallOrder[0],
+    );
+    expect(result).toBe(gastoCompleto);
+  });
+
+  it('updates only the value while preserving inactive historical participants', async () => {
+    prepararAtualizacaoGasto({
+      planejamentoOverrides: {
+        participantes: [
+          {
+            ...criarParticipantePersistido('participante-1'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          {
+            ...criarParticipantePersistido('participante-2'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          criarParticipantePersistido('participante-3'),
+        ],
+      },
+    });
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      valorCentavos: 12001,
+    });
+
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'divisao-ativa-1',
+          status: DivisaoStatus.CANCELADA,
+        }),
+        expect.objectContaining({
+          id: 'divisao-ativa-2',
+          status: DivisaoStatus.CANCELADA,
+        }),
+        expect.objectContaining({
+          participanteId: 'participante-1',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 6001,
+        }),
+        expect.objectContaining({
+          participanteId: 'participante-2',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 6000,
+        }),
+      ]),
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+  });
+
+  it('reconciles a payer-only change without recreating splits or changing the value timestamp', async () => {
+    const { gasto } = prepararAtualizacaoGasto({
+      gastoOverrides: {
+        pagoPorParticipanteId: 'pagador-antigo',
+        pagoPorParticipante: { id: 'pagador-antigo' },
+      },
+      planejamentoOverrides: {
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          criarParticipantePersistido('participante-2'),
+          criarParticipantePersistido('pagador-antigo'),
+          criarParticipantePersistido('pagador-novo'),
+        ],
+      },
+    });
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      pagoPorParticipanteId: 'pagador-novo',
+    });
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: gasto.id,
+        pagoPorParticipanteId: 'pagador-novo',
+        ultimaAlteracaoValorEm: gasto.ultimaAlteracaoValorEm,
+      }),
+    );
+    const payload = repositoryTransacional.salvarGasto.mock.calls[0][0];
+    expect(payload).not.toHaveProperty('pagoPorParticipante');
+    expect(payload).not.toHaveProperty('divisoes');
+    expect(payload).not.toHaveProperty('planejamento');
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(gasto.divisoes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'divisao-ativa-1',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+        expect.objectContaining({
+          id: 'divisao-ativa-2',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+      ]),
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not recreate or redistribute splits when payer changes with the same inverted participant set', async () => {
+    const divisaoParticipanteA = {
+      ...criarDivisaoPersistida('participante-1', 5001),
+      id: 'divisao-ativa-a',
+      gastoId: 'gasto-1',
+    };
+    const divisaoParticipanteB = {
+      ...criarDivisaoPersistida('participante-2', 5000),
+      id: 'divisao-ativa-b',
+      gastoId: 'gasto-1',
+    };
+    prepararAtualizacaoGasto({
+      gastoOverrides: {
+        valorCentavos: 10001,
+        divisoes: [divisaoParticipanteB, divisaoParticipanteA],
+      },
+    });
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      pagoPorParticipanteId: 'participante-2',
+      participantesIds: ['participante-2', 'participante-1'],
+    });
+
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(divisaoParticipanteA).toMatchObject({
+      status: DivisaoStatus.ATIVA,
+      valorDevidoCentavos: 5001,
+    });
+    expect(divisaoParticipanteB).toMatchObject({
+      status: DivisaoStatus.ATIVA,
+      valorDevidoCentavos: 5000,
+    });
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses canonical participant order when a value change recalculates inverted participant ids', async () => {
+    const divisaoParticipanteA = {
+      ...criarDivisaoPersistida('participante-1', 5001),
+      id: 'divisao-ativa-a',
+      gastoId: 'gasto-1',
+    };
+    const divisaoParticipanteB = {
+      ...criarDivisaoPersistida('participante-2', 5000),
+      id: 'divisao-ativa-b',
+      gastoId: 'gasto-1',
+    };
+    prepararAtualizacaoGasto({
+      gastoOverrides: {
+        valorCentavos: 10001,
+        divisoes: [divisaoParticipanteB, divisaoParticipanteA],
+      },
+    });
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      valorCentavos: 10003,
+      participantesIds: ['participante-2', 'participante-1'],
+    });
+
+    const divisoesAtivas =
+      repositoryTransacional.salvarDivisoes.mock.calls[0][0].filter(
+        (divisao) => divisao.status === DivisaoStatus.ATIVA,
+      );
+    expect(
+      divisoesAtivas.map((divisao) => ({
+        participanteId: divisao.participanteId,
+        valorDevidoCentavos: divisao.valorDevidoCentavos,
+      })),
+    ).toEqual([
+      { participanteId: 'participante-1', valorDevidoCentavos: 5002 },
+      { participanteId: 'participante-2', valorDevidoCentavos: 5001 },
+    ]);
+  });
+
+  it('produces the same split values for financially equivalent participant orders', async () => {
+    const capturarDivisoesAtivas = async (participantesIds: string[]) => {
+      const divisaoParticipanteA = {
+        ...criarDivisaoPersistida('participante-1', 5001),
+        id: 'divisao-ativa-a',
+        gastoId: 'gasto-1',
+      };
+      const divisaoParticipanteB = {
+        ...criarDivisaoPersistida('participante-2', 5000),
+        id: 'divisao-ativa-b',
+        gastoId: 'gasto-1',
+      };
+      prepararAtualizacaoGasto({
+        gastoOverrides: {
+          valorCentavos: 10001,
+          divisoes: [divisaoParticipanteB, divisaoParticipanteA],
+        },
+      });
+
+      await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        valorCentavos: 10003,
+        participantesIds,
+      });
+
+      return repositoryTransacional.salvarDivisoes.mock.calls[0][0]
+        .filter((divisao) => divisao.status === DivisaoStatus.ATIVA)
+        .map((divisao) => ({
+          participanteId: divisao.participanteId,
+          valorDevidoCentavos: divisao.valorDevidoCentavos,
+        }));
+    };
+
+    const divisoesOrdemCanonica = await capturarDivisoesAtivas([
+      'participante-1',
+      'participante-2',
+    ]);
+    const divisoesOrdemInvertida = await capturarDivisoesAtivas([
+      'participante-2',
+      'participante-1',
+    ]);
+
+    expect(divisoesOrdemCanonica).toEqual([
+      { participanteId: 'participante-1', valorDevidoCentavos: 5002 },
+      { participanteId: 'participante-2', valorDevidoCentavos: 5001 },
+    ]);
+    expect(divisoesOrdemInvertida).toEqual(divisoesOrdemCanonica);
+  });
+
+  it('accepts an active new participant and calculates new active splits', async () => {
+    prepararAtualizacaoGasto();
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      participantesIds: ['participante-3', 'participante-1'],
+    });
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          participanteId: 'participante-3',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+        expect.objectContaining({
+          participanteId: 'participante-1',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+      ]),
+    );
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+  });
+
+  it('is idempotent when informed values equal the persisted expense', async () => {
+    const { gastoCompleto } = prepararAtualizacaoGasto({
+      planejamentoOverrides: {
+        participantes: [
+          {
+            ...criarParticipantePersistido('participante-1'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          {
+            ...criarParticipantePersistido('participante-2'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          criarParticipantePersistido('participante-3'),
+        ],
+      },
+    });
+
+    const result = await service.atualizarGasto(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+      {
+        descricao: 'Mercado',
+        valorCentavos: 10000,
+        pagoPorParticipanteId: 'participante-1',
+        categoria: 'Alimentacao',
+      },
+    );
+
+    expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toBe(gastoCompleto);
+  });
+
+  it('keeps an inactive historical participant when the participant set changes', async () => {
+    prepararAtualizacaoGasto({
+      planejamentoOverrides: {
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          {
+            ...criarParticipantePersistido('participante-2'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          criarParticipantePersistido('participante-3'),
+        ],
+      },
+    });
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      participantesIds: ['participante-2', 'participante-3'],
+    });
+
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          participanteId: 'participante-2',
+          status: DivisaoStatus.ATIVA,
+        }),
+        expect.objectContaining({
+          participanteId: 'participante-3',
+          status: DivisaoStatus.ATIVA,
+        }),
+      ]),
+    );
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores participant ordering when the active participant set is unchanged', async () => {
+    prepararAtualizacaoGasto();
+
+    await service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      participantesIds: ['participante-2', 'participante-1'],
+    });
+
+    expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate participant ids even when their apparent set matches the current one', async () => {
+    prepararAtualizacaoGasto();
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        participantesIds: [
+          'participante-1',
+          'participante-2',
+          'participante-1',
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'PARTICIPANTE_DUPLICADO' });
+
+    expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty expense update before starting a transaction', async () => {
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: undefined,
+        categoria: undefined,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_GASTO_ATUALIZACAO_VAZIA',
+      statusCode: 422,
+      message: 'Informe ao menos um campo para atualizar o gasto.',
+    });
+
+    expect(repository.executarEmTransacao).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inaccessible planejamento before acquiring the update lock', async () => {
+    prepararAtualizacaoGasto();
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValueOnce(
+      null,
+    );
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: 'Atualizado',
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-owner before acquiring the update lock', async () => {
+    prepararAtualizacaoGasto({
+      planejamentoOverrides: { usuarioCriadorId: 'owner-1' },
+    });
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: 'Atualizado',
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_OWNER_REQUIRED' });
+
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('returns not found when the planejamento disappears while acquiring the update lock', async () => {
+    prepararAtualizacaoGasto();
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      null,
+    );
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: 'Atualizado',
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      repositoryTransacional.buscarGastoPorIdEPlanejamento,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('revalidates ownership after acquiring the update lock', async () => {
+    const { planejamento } = prepararAtualizacaoGasto();
+    repositoryTransacional.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(planejamento)
+      .mockResolvedValueOnce({
+        ...planejamento,
+        usuarioCriadorId: 'owner-alterado',
+      } as never);
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: 'Atualizado',
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_OWNER_REQUIRED' });
+
+    expect(
+      repositoryTransacional.buscarGastoPorIdEPlanejamento,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('returns not found when the scoped expense lookup fails after the lock', async () => {
+    prepararAtualizacaoGasto();
+    repositoryTransacional.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+      null,
+    );
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: 'Atualizado',
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_GASTO_NOT_FOUND' });
+
+    expect(
+      repositoryTransacional.buscarGastoPorIdEPlanejamento,
+    ).toHaveBeenCalledWith('gasto-1', 'planejamento-1');
+    expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it.each([GastoStatus.CANCELADO, GastoStatus.PENDENTE_REVISAO])(
+    'rejects updating an expense with status %s',
+    async (status) => {
+      prepararAtualizacaoGasto({ gastoOverrides: { status } });
+
+      await expect(
+        service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+          descricao: 'Atualizado',
+        }),
+      ).rejects.toMatchObject({
+        code: 'PLANEJAMENTO_GASTO_ATUALIZAR_STATUS_INVALIDO',
+        statusCode: 422,
+        details: { statusAtual: status },
+      });
+
+      expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects changing the payer to an inactive participant after the lock', async () => {
+    prepararAtualizacaoGasto({
+      planejamentoOverrides: {
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          criarParticipantePersistido('participante-2'),
+          {
+            ...criarParticipantePersistido('participante-3'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+        ],
+      },
+    });
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        pagoPorParticipanteId: 'participante-3',
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_PAGADOR_INVALIDO' });
+
+    expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('rejects introducing an inactive split participant after the lock', async () => {
+    prepararAtualizacaoGasto({
+      planejamentoOverrides: {
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          criarParticipantePersistido('participante-2'),
+          {
+            ...criarParticipantePersistido('participante-3'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+        ],
+      },
+    });
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        participantesIds: ['participante-1', 'participante-3'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
+    });
+
+    expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('rejects a financial update without informed participants or active splits', async () => {
+    prepararAtualizacaoGasto({ gastoOverrides: { divisoes: [] } });
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        valorCentavos: 12000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_GASTO_DIVISOES_ATIVAS_OBRIGATORIAS',
+      statusCode: 422,
+    });
+
+    expect(repositoryTransacional.salvarGasto).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+  });
+
+  it('propagates update lock failures without loading the expense', async () => {
+    const erroLock = new Error('falha no lock da atualizacao');
+    prepararAtualizacaoGasto();
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockRejectedValue(
+      erroLock,
+    );
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: 'Atualizado',
+      }),
+    ).rejects.toBe(erroLock);
+
+    expect(
+      repositoryTransacional.buscarGastoPorIdEPlanejamento,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('propagates expense update persistence failures without querying after commit', async () => {
+    const erroPersistencia = new Error('falha ao salvar gasto atualizado');
+    prepararAtualizacaoGasto();
+    repositoryTransacional.salvarGasto.mockRejectedValue(erroPersistencia);
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        valorCentavos: 12000,
+      }),
+    ).rejects.toBe(erroPersistencia);
+
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('propagates split update failures before aggregate reload', async () => {
+    const erroPersistencia = new Error('falha ao recriar divisoes');
+    prepararAtualizacaoGasto();
+    repositoryTransacional.salvarDivisoes.mockRejectedValue(erroPersistencia);
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        valorCentavos: 12000,
+      }),
+    ).rejects.toBe(erroPersistencia);
+
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('propagates financial aggregate reload failures before reconciliation', async () => {
+    const erroRecarga = new Error('falha ao recarregar agregado');
+    prepararAtualizacaoGasto();
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockRejectedValue(
+      erroRecarga,
+    );
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        valorCentavos: 12000,
+      }),
+    ).rejects.toBe(erroRecarga);
+
+    expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('propagates reconciliation failures and skips the post-commit expense query', async () => {
+    const erroReconciliacao = new Error(
+      'falha na reconciliacao da atualizacao',
+    );
+    prepararAtualizacaoGasto();
+    repositoryTransacional.salvarAcertos.mockRejectedValue(erroReconciliacao);
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        valorCentavos: 12000,
+      }),
+    ).rejects.toBe(erroReconciliacao);
+
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
+
   it('cancels an active expense and only its active splits transactionally', async () => {
     const planejamentoDoProprietario = criarPlanejamentoComParticipantes();
     const divisaoAtiva = {
@@ -3138,5 +4009,99 @@ describe('PlanejamentosService', () => {
       new AcertoPlanejamento(),
       criarAcertoPersistido(overrides),
     );
+  }
+
+  function prepararAtualizacaoGasto(
+    options: {
+      gastoOverrides?: Record<string, unknown>;
+      planejamentoOverrides?: Record<string, unknown>;
+      agregadoOverrides?: Record<string, unknown>;
+    } = {},
+  ) {
+    const divisaoAtiva1 = {
+      ...criarDivisaoPersistida('participante-1', 5000),
+      id: 'divisao-ativa-1',
+      gastoId: 'gasto-1',
+    };
+    const divisaoAtiva2 = {
+      ...criarDivisaoPersistida('participante-2', 5000),
+      id: 'divisao-ativa-2',
+      gastoId: 'gasto-1',
+    };
+    const divisaoCancelada = {
+      ...criarDivisaoPersistida('participante-3', 1000),
+      id: 'divisao-cancelada',
+      gastoId: 'gasto-1',
+      status: DivisaoStatus.CANCELADA,
+    };
+    const gasto = criarGastoPersistido({
+      descricao: 'Mercado',
+      valorCentavos: 10000,
+      dataGasto: '2026-07-04',
+      categoria: 'Alimentacao',
+      comportamento: GastoComportamento.EVENTUAL,
+      observacao: 'Compra compartilhada',
+      mesReferencia: '2026-07',
+      ultimaAlteracaoValorEm: new Date('2026-07-01T12:00:00.000Z'),
+      comprovanteUrl: 'https://example.com/comprovante.pdf',
+      comprovanteNome: 'comprovante.pdf',
+      requerRevisaoMensal: false,
+      divisoes: [divisaoAtiva2, divisaoCancelada, divisaoAtiva1],
+      ...options.gastoOverrides,
+    });
+    const planejamento = criarPlanejamentoComParticipantes({
+      participantes: [
+        criarParticipantePersistido('participante-1'),
+        criarParticipantePersistido('participante-2'),
+        criarParticipantePersistido('participante-3'),
+      ],
+      ...options.planejamentoOverrides,
+    });
+    const gastoCompleto = {
+      ...gasto,
+      descricao: 'Gasto completo apos commit',
+    } as never;
+
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      buscarGastoPorIdEPlanejamento: jest.fn(),
+      salvarAcertos: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamento,
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamento,
+    );
+    repositoryTransacional.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+      gasto as never,
+    );
+    repositoryTransacional.salvarGasto.mockImplementation((gastoParaSalvar) =>
+      Promise.resolve(gastoParaSalvar as never),
+    );
+    repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [criarAcertoPersistido()],
+        gastos: [],
+        ...options.agregadoOverrides,
+      }),
+    );
+    repositoryTransacional.salvarAcertos.mockResolvedValue([]);
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue(gastoCompleto);
+
+    return {
+      divisaoAtiva1,
+      divisaoAtiva2,
+      divisaoCancelada,
+      gasto,
+      gastoCompleto,
+      planejamento,
+    };
   }
 });
