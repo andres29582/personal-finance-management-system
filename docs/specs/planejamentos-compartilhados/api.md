@@ -34,6 +34,7 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
 | `GET` | `/planejamentos/:planejamentoId/gastos` | Lista gastos do planejamento. |
 | `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consulta gasto do planejamento. |
+| `PATCH` | `/planejamentos/:planejamentoId/gastos/:gastoId/cancelar` | Cancela logicamente o gasto e reconcilia os acertos atomicamente; operacao exclusiva do proprietario. |
 | `GET` | `/planejamentos/:planejamentoId/acertos` | Lista acertos oficiais persistidos. |
 | `POST` | `/planejamentos/:planejamentoId/acertos/sincronizar` | Executa sincronizacao explicita e idempotente dos acertos pendentes para reparacao ou recuperacao operacional. |
 | `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/pagar` | Marca acerto como pago. |
@@ -56,7 +57,6 @@ contrato disponivel no backend atual.
 | `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
 | `DELETE` | `/planejamentos/:id/participantes/:participanteId` | Remove participante logicamente. |
 | `PATCH` | `/planejamentos/:id/gastos/:gastoId` | Edita gasto e recalcula divisoes. |
-| `DELETE` | `/planejamentos/:id/gastos/:gastoId` | Cancela gasto logicamente. |
 | `GET` | `/planejamentos/:id/resumo` | Retorna resumo financeiro do planejamento. |
 | `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
 
@@ -233,6 +233,24 @@ Ao alterar `valorCentavos`, `pagoPorParticipanteId` ou
 `participantesDivisao`, o backend deve recalcular divisoes, saldos e acertos.
 Se existirem acertos `PAGO`, eles devem permanecer como historico financeiro, e
 novos acertos `PENDENTE` devem representar apenas a compensacao restante.
+
+### Cancelar gasto
+
+`PATCH /planejamentos/:planejamentoId/gastos/:gastoId/cancelar`
+
+Operacao sem corpo e exclusiva do proprietario do planejamento. O gasto e
+preservado com status `CANCELADO`; somente suas divisoes `ATIVA` passam para
+`CANCELADA`, sem remocao fisica. O cancelamento e a reconciliacao dos acertos
+pendentes ocorrem na mesma transacao, preservando acertos `PAGO`, `CONFIRMADO`
+e `CANCELADO` como historico e criando pendencias compensatorias quando
+necessario. A operacao nao cria transacoes financeiras pessoais.
+
+Erros relevantes:
+
+- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
+- `404 PLANEJAMENTO_NOT_FOUND`: usuario sem acesso ou planejamento inexistente;
+- `404 PLANEJAMENTO_GASTO_NOT_FOUND`: gasto inexistente ou de outro planejamento;
+- `422 PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO`: gasto nao esta `ATIVO`.
 
 ## Endpoint de resumo
 

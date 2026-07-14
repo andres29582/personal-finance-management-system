@@ -3640,6 +3640,52 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: getGastoPlanejamentoById
+  /planejamentos/{planejamentoId}/gastos/{gastoId}/cancelar:
+    patch:
+      tags:
+      - Planejamentos
+      summary: Cancelar gasto do planejamento
+      description: >-
+        Operacao exclusiva do proprietario. Cancela logicamente o gasto e
+        apenas suas divisoes ativas, preserva todos os registros historicos e
+        reconcilia os acertos pendentes na mesma transacao. Qualquer falha
+        causa rollback integral e nenhuma transacao financeira pessoal e
+        criada.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/PlanejamentoIdParam'
+      - $ref: '#/components/parameters/GastoIdParam'
+      responses:
+        '200':
+          description: Gasto cancelado logicamente com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GastoPlanejamentoSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            PLANEJAMENTO_NOT_FOUND ou PLANEJAMENTO_GASTO_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO - gasto nao esta ATIVO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      operationId: cancelGastoPlanejamento
   /planejamentos/{planejamentoId}/acertos:
     get:
       tags:

@@ -718,6 +718,469 @@ describe('PlanejamentosService', () => {
     ).rejects.toBeInstanceOf(ResourceNotFoundException);
   });
 
+  it('cancels an active expense and only its active splits transactionally', async () => {
+    const planejamentoDoProprietario = criarPlanejamentoComParticipantes();
+    const divisaoAtiva = {
+      ...criarDivisaoPersistida('participante-1', 5000),
+      id: 'divisao-ativa',
+      gastoId: 'gasto-1',
+    };
+    const divisaoCancelada = {
+      ...criarDivisaoPersistida('participante-2', 5000),
+      id: 'divisao-cancelada',
+      gastoId: 'gasto-1',
+      status: DivisaoStatus.CANCELADA,
+    };
+    const gastoAtivo = criarGastoPersistido({
+      divisoes: [divisaoAtiva, divisaoCancelada],
+      valorCentavos: 10000,
+    });
+    const gastoCancelado = {
+      ...gastoAtivo,
+      status: GastoStatus.CANCELADO,
+    } as never;
+    const acertoPendente = criarAcertoPersistido();
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      buscarGastoPorIdEPlanejamento: jest.fn(),
+      salvarAcertos: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+      gastoAtivo as never,
+    );
+    repositoryTransacional.salvarGasto.mockResolvedValue(gastoCancelado);
+    repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPendente],
+        gastos: [gastoCancelado],
+      }),
+    );
+    repositoryTransacional.salvarAcertos.mockResolvedValue([]);
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue({
+      ...gastoCancelado,
+      divisoes: [
+        { ...divisaoAtiva, status: DivisaoStatus.CANCELADA },
+        divisaoCancelada,
+      ],
+    } as never);
+
+    const result = await service.cancelarGasto(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+    );
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'gasto-1',
+        status: GastoStatus.CANCELADO,
+      }),
+    );
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'divisao-ativa',
+        status: DivisaoStatus.CANCELADA,
+      }),
+    ]);
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'divisao-cancelada' }),
+      ]),
+    );
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'acerto-1',
+        status: AcertoStatus.CANCELADO,
+      }),
+    ]);
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    );
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    ).toBeLessThan(
+      repositoryTransacional.buscarGastoPorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
+    expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
+      'gasto-1',
+      'planejamento-1',
+    );
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({ status: GastoStatus.CANCELADO }),
+    );
+  });
+
+  it('cancels an active expense with only canceled splits without saving splits', async () => {
+    const planejamentoDoProprietario = criarPlanejamentoComParticipantes();
+    const divisaoCancelada = {
+      ...criarDivisaoPersistida('participante-1', 1000),
+      gastoId: 'gasto-1',
+      status: DivisaoStatus.CANCELADA,
+    };
+    const gastoAtivo = criarGastoPersistido({
+      divisoes: [divisaoCancelada],
+      valorCentavos: 1000,
+    });
+    const gastoCancelado = {
+      ...gastoAtivo,
+      status: GastoStatus.CANCELADO,
+    } as never;
+    const acertoPendente = criarAcertoPersistido();
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      buscarGastoPorIdEPlanejamento: jest.fn(),
+      salvarAcertos: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+      gastoAtivo as never,
+    );
+    repositoryTransacional.salvarGasto.mockResolvedValue(gastoCancelado);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPendente],
+        gastos: [gastoCancelado],
+      }),
+    );
+    repositoryTransacional.salvarAcertos.mockResolvedValue([]);
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue(gastoCancelado);
+
+    const result = await service.cancelarGasto(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+    );
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'gasto-1',
+        status: GastoStatus.CANCELADO,
+      }),
+    );
+    expect(repositoryTransacional.salvarDivisoes).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledWith('planejamento-1', 'user-1');
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'acerto-1',
+        status: AcertoStatus.CANCELADO,
+      }),
+    ]);
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
+    expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
+      'gasto-1',
+      'planejamento-1',
+    );
+    expect(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    );
+    expect(result).toBe(gastoCancelado);
+    expect(result.status).toBe(GastoStatus.CANCELADO);
+  });
+
+  it('propagates settlement reconciliation failures from expense cancellation', async () => {
+    const erroReconciliacao = new Error(
+      'falha na reconciliacao do cancelamento',
+    );
+    const gasto = criarGastoPersistido({
+      divisoes: [criarDivisaoPersistida('participante-1', 1000)],
+    });
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      buscarGastoPorIdEPlanejamento: jest.fn(),
+      salvarAcertos: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repositoryTransacional.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+      gasto as never,
+    );
+    repositoryTransacional.salvarGasto.mockResolvedValue({
+      ...gasto,
+      status: GastoStatus.CANCELADO,
+    } as never);
+    repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [criarAcertoPersistido()],
+        gastos: [],
+      }),
+    );
+    repositoryTransacional.salvarAcertos.mockRejectedValue(erroReconciliacao);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toBe(erroReconciliacao);
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(
+      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('rejects expense cancellation without access before acquiring the lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_NOT_FOUND',
+      statusCode: 404,
+    });
+
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+  });
+
+  it('rejects expense cancellation by a non-owner before acquiring the lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+    );
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_OWNER_REQUIRED',
+      statusCode: 403,
+    });
+
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('returns not found when planejamento disappears while locking expense cancellation', async () => {
+    repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(null);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('revalidates planejamento ownership after locking expense cancellation', async () => {
+    repository.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(criarPlanejamentoComParticipantes())
+      .mockResolvedValueOnce(
+        criarPlanejamentoComParticipantes({
+          usuarioCriadorId: 'owner-alterado',
+        }),
+      );
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_OWNER_REQUIRED',
+      statusCode: 403,
+    });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[1],
+    );
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
+  it('returns not found when the scoped expense lookup returns null after acquiring the lock', async () => {
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue(null);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_GASTO_NOT_FOUND',
+      statusCode: 404,
+    });
+
+    expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
+      'gasto-1',
+      'planejamento-1',
+    );
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarGastoPorIdEPlanejamento.mock.invocationCallOrder[0],
+    );
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+  });
+
+  it.each([GastoStatus.CANCELADO, GastoStatus.PENDENTE_REVISAO])(
+    'rejects cancellation of an expense with status %s',
+    async (status) => {
+      repository.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+        criarGastoPersistido({ status }) as never,
+      );
+
+      await expect(
+        service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+      ).rejects.toMatchObject({
+        code: 'PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO',
+        statusCode: 422,
+      });
+
+      expect(repository.salvarGasto).not.toHaveBeenCalled();
+      expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+      expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+      expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    },
+  );
+
+  it('propagates expense cancellation lock failures without loading the expense', async () => {
+    const erroLock = new Error('falha ao adquirir lock');
+    repository.bloquearPlanejamentoParaAtualizacao.mockRejectedValue(erroLock);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toBe(erroLock);
+
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+  });
+
+  it('propagates expense persistence failures before saving divisions', async () => {
+    const erroPersistencia = new Error('falha ao salvar gasto cancelado');
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+      criarGastoPersistido({
+        divisoes: [criarDivisaoPersistida('participante-1', 1000)],
+      }) as never,
+    );
+    repository.salvarGasto.mockRejectedValue(erroPersistencia);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toBe(erroPersistencia);
+
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('propagates split persistence failures before settlement reconciliation', async () => {
+    const erroPersistencia = new Error('falha ao salvar divisoes canceladas');
+    const gasto = criarGastoPersistido({
+      divisoes: [criarDivisaoPersistida('participante-1', 1000)],
+    });
+    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue(gasto as never);
+    repository.salvarGasto.mockResolvedValue({
+      ...gasto,
+      status: GastoStatus.CANCELADO,
+    } as never);
+    repository.salvarDivisoes.mockRejectedValue(erroPersistencia);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toBe(erroPersistencia);
+
+    expect(repository.salvarGasto).toHaveBeenCalledTimes(1);
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
   it('returns an empty settlement list when planejamento has no expenses', async () => {
     repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
       criarPlanejamentoComParticipantes({

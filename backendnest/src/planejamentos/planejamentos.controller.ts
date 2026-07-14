@@ -102,6 +102,18 @@ export class PlanejamentosController {
     );
   }
 
+  @Patch(':planejamentoId/gastos/:gastoId/cancelar')
+  cancelarGasto(
+    @Param() params: FindGastoPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.cancelarGasto(
+      params.planejamentoId,
+      params.gastoId,
+      req.user.id,
+    );
+  }
+
   @Get(':planejamentoId/acertos')
   findAcertos(
     @Param() params: FindAcertosPlanejamentoParamsDto,
