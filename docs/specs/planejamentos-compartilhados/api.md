@@ -31,11 +31,11 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
 | `POST` | `/planejamentos/:id/participantes` | Adiciona participante manual. |
-| `POST` | `/planejamentos/:planejamentoId/gastos` | Registra gasto compartilhado. |
+| `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
 | `GET` | `/planejamentos/:planejamentoId/gastos` | Lista gastos do planejamento. |
 | `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consulta gasto do planejamento. |
 | `GET` | `/planejamentos/:planejamentoId/acertos` | Lista acertos oficiais persistidos. |
-| `POST` | `/planejamentos/:planejamentoId/acertos/sincronizar` | Sincroniza acertos pendentes. |
+| `POST` | `/planejamentos/:planejamentoId/acertos/sincronizar` | Executa sincronizacao explicita e idempotente dos acertos pendentes para reparacao ou recuperacao operacional. |
 | `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/pagar` | Marca acerto como pago. |
 | `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/cancelar` | Cancela acerto mantendo historico. |
 | `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/reabrir` | Reabre acerto para pendente. |
@@ -169,6 +169,11 @@ Resposta conceitual:
 
 `POST /planejamentos/:id/gastos`
 
+Registra o gasto, suas divisoes e reconcilia os acertos pendentes do
+planejamento na mesma transacao. Qualquer falha durante a persistencia ou a
+reconciliacao causa rollback integral. A operacao nao cria automaticamente
+transacoes financeiras pessoais.
+
 ```json
 {
   "descricao": "Luz",
@@ -285,6 +290,10 @@ Consulta de acertos nao deve alterar o banco de dados. Os acertos oficiais devem
 ter sido materializados por operacoes de escrita anteriores. Gastos
 `PENDENTE_REVISAO` nao devem gerar acertos oficiais ate serem revisados e
 confirmados.
+
+`POST /planejamentos/:planejamentoId/acertos/sincronizar` permanece disponivel
+como sincronizacao explicita e idempotente para reparacao ou recuperacao
+operacional dos acertos pendentes.
 
 Resposta conceitual:
 

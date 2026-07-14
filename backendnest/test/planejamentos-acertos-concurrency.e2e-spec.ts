@@ -2,9 +2,13 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
+import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
+import { GastoPlanejamento } from '../src/planejamentos/entities/gasto-planejamento.entity';
+import { ParticipantePlanejamento } from '../src/planejamentos/entities/participante-planejamento.entity';
 import {
   AcertoStatus,
   GastoComportamento,
+  ParticipanteStatus,
   PlanejamentoTipo,
 } from '../src/planejamentos/enums';
 import { createE2eApp, type E2eApplication } from './e2e-app';
@@ -322,5 +326,278 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
     expect(pagos).toHaveLength(1);
     expect(pagos[0]?.id).toBe(acertoPendente.id);
     expect(acertosPersistidos).toHaveLength(1);
+  });
+
+  it('serializes expense creation with explicit settlement synchronization', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '11144477735',
+      email: 'planejamento.criar-gasto-sincronizar.e2e@example.com',
+      nome: 'Criar Gasto Sincronizar E2E',
+    });
+    const authorization = `Bearer ${session.token}`;
+    const planejamentoResponse = await request(app.getHttpServer())
+      .post('/planejamentos')
+      .set('Authorization', authorization)
+      .send({
+        nome: 'Viagem com mutacao concorrente',
+        tipo: PlanejamentoTipo.VIAGEM,
+      })
+      .expect(201);
+    const planejamento =
+      unwrapSuccess<PlanejamentoResponse>(planejamentoResponse);
+    const participanteProprietario = planejamento.participantes.find(
+      (participante) => participante.usuarioId === session.userId,
+    );
+
+    expect(participanteProprietario).toBeDefined();
+
+    const participanteResponse = await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/participantes`)
+      .set('Authorization', authorization)
+      .send({ nome: 'Participante devedor concorrente' })
+      .expect(201);
+    const participanteDevedor =
+      unwrapSuccess<ParticipanteResponse>(participanteResponse);
+
+    await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', authorization)
+      .send({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-13',
+        descricao: 'Hospedagem inicial',
+        pagoPorParticipanteId: participanteProprietario?.id,
+        participantesIds: [
+          participanteProprietario?.id,
+          participanteDevedor.id,
+        ],
+        valorCentavos: 10000,
+      })
+      .expect(201);
+
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    const acertoInicial = await acertoRepository.findOneByOrFail({
+      planejamentoId: planejamento.id,
+      status: AcertoStatus.PENDENTE,
+    });
+
+    await request(app.getHttpServer())
+      .patch(
+        `/planejamentos/${planejamento.id}/acertos/${acertoInicial.id}/pagar`,
+      )
+      .set('Authorization', authorization)
+      .expect(200);
+
+    const acertoCancelado = await acertoRepository.save(
+      Object.assign(new AcertoPlanejamento(), {
+        id: randomUUID(),
+        planejamentoId: planejamento.id,
+        deParticipanteId: participanteProprietario?.id,
+        paraParticipanteId: participanteDevedor.id,
+        valorCentavos: 1234,
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+        observacao: 'Historico cancelado preservado',
+      }),
+    );
+
+    const [criacaoResponse, sincronizacaoResponse] = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/gastos`)
+        .set('Authorization', authorization)
+        .send({
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-14',
+          descricao: 'Almoco concorrente',
+          pagoPorParticipanteId: participanteProprietario?.id,
+          participantesIds: [
+            participanteProprietario?.id,
+            participanteDevedor.id,
+          ],
+          valorCentavos: 4000,
+        }),
+      request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/acertos/sincronizar`)
+        .set('Authorization', authorization),
+    ]);
+
+    expect(criacaoResponse.status).toBe(201);
+    expect(sincronizacaoResponse.status).toBe(201);
+
+    const gastoPersistido = await dataSource
+      .getRepository(GastoPlanejamento)
+      .findOne({
+        where: {
+          descricao: 'Almoco concorrente',
+          planejamentoId: planejamento.id,
+        },
+        relations: { divisoes: true },
+      });
+
+    expect(gastoPersistido).toEqual(
+      expect.objectContaining({
+        valorCentavos: 4000,
+      }),
+    );
+    expect(gastoPersistido?.divisoes).toHaveLength(2);
+    expect(
+      gastoPersistido?.divisoes.reduce(
+        (total, divisao) => total + divisao.valorDevidoCentavos,
+        0,
+      ),
+    ).toBe(4000);
+
+    const acertosPersistidos = await acertoRepository.find({
+      where: { planejamentoId: planejamento.id },
+    });
+    const pendentes = acertosPersistidos.filter(
+      (acerto) => acerto.status === AcertoStatus.PENDENTE,
+    );
+
+    expect(pendentes).toHaveLength(1);
+    expect(pendentes[0]).toEqual(
+      expect.objectContaining({
+        deParticipanteId: participanteDevedor.id,
+        paraParticipanteId: participanteProprietario?.id,
+        valorCentavos: 2000,
+      }),
+    );
+    expect(acertosPersistidos).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: acertoInicial.id,
+          status: AcertoStatus.PAGO,
+        }),
+        expect.objectContaining({
+          id: acertoCancelado.id,
+          status: AcertoStatus.CANCELADO,
+        }),
+      ]),
+    );
+  });
+
+  it('rolls back expense and splits when settlement reconciliation fails', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '10000001090',
+      email: 'planejamento.rollback-gasto.e2e@example.com',
+      nome: 'Rollback Gasto E2E',
+    });
+    const authorization = `Bearer ${session.token}`;
+    const planejamentoResponse = await request(app.getHttpServer())
+      .post('/planejamentos')
+      .set('Authorization', authorization)
+      .send({
+        nome: 'Viagem com rollback',
+        tipo: PlanejamentoTipo.VIAGEM,
+      })
+      .expect(201);
+    const planejamento =
+      unwrapSuccess<PlanejamentoResponse>(planejamentoResponse);
+    const participanteProprietario = planejamento.participantes.find(
+      (participante) => participante.usuarioId === session.userId,
+    );
+
+    expect(participanteProprietario).toBeDefined();
+
+    const participanteAtivoResponse = await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/participantes`)
+      .set('Authorization', authorization)
+      .send({ nome: 'Participante ativo' })
+      .expect(201);
+    const participanteAtivo = unwrapSuccess<ParticipanteResponse>(
+      participanteAtivoResponse,
+    );
+    const participanteRemovidoResponse = await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/participantes`)
+      .set('Authorization', authorization)
+      .send({ nome: 'Participante removido' })
+      .expect(201);
+    const participanteRemovido = unwrapSuccess<ParticipanteResponse>(
+      participanteRemovidoResponse,
+    );
+    const participanteRepository = dataSource.getRepository(
+      ParticipantePlanejamento,
+    );
+    await participanteRepository.update(participanteRemovido.id, {
+      status: ParticipanteStatus.REMOVIDO,
+    });
+
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    const acertoHistoricoPago = await acertoRepository.save(
+      Object.assign(new AcertoPlanejamento(), {
+        id: randomUUID(),
+        planejamentoId: planejamento.id,
+        deParticipanteId: participanteRemovido.id,
+        paraParticipanteId: participanteProprietario?.id,
+        valorCentavos: 100,
+        status: AcertoStatus.PAGO,
+        dataPagamento: new Date('2026-07-14T12:00:00.000Z'),
+        observacao: 'Estado historico invalido para forcar rollback',
+      }),
+    );
+
+    const gastoRepository = dataSource.getRepository(GastoPlanejamento);
+    const divisaoRepository = dataSource.getRepository(DivisaoGasto);
+    const contarDivisoesDoPlanejamento = () =>
+      divisaoRepository
+        .createQueryBuilder('divisao')
+        .innerJoin('divisao.gasto', 'gasto')
+        .where('gasto.planejamentoId = :planejamentoId', {
+          planejamentoId: planejamento.id,
+        })
+        .getCount();
+    const gastosAntes = await gastoRepository.count({
+      where: { planejamentoId: planejamento.id },
+    });
+    const divisoesAntes = await contarDivisoesDoPlanejamento();
+
+    const resposta = await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', authorization)
+      .send({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-14',
+        descricao: 'Gasto que deve sofrer rollback',
+        pagoPorParticipanteId: participanteProprietario?.id,
+        participantesIds: [participanteProprietario?.id, participanteAtivo.id],
+        valorCentavos: 2000,
+      });
+
+    expect(resposta.status).toBe(422);
+    expect(resposta.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'PARTICIPANTE_INVALIDO',
+        }) as object,
+        success: false,
+      }),
+    );
+    expect(
+      await gastoRepository.count({
+        where: { planejamentoId: planejamento.id },
+      }),
+    ).toBe(gastosAntes);
+    expect(await contarDivisoesDoPlanejamento()).toBe(divisoesAntes);
+    expect(
+      await gastoRepository.findOneBy({
+        descricao: 'Gasto que deve sofrer rollback',
+        planejamentoId: planejamento.id,
+      }),
+    ).toBeNull();
+    expect(
+      await acertoRepository.findOneByOrFail({ id: acertoHistoricoPago.id }),
+    ).toEqual(
+      expect.objectContaining({
+        dataPagamento: acertoHistoricoPago.dataPagamento,
+        deParticipanteId: acertoHistoricoPago.deParticipanteId,
+        id: acertoHistoricoPago.id,
+        observacao: acertoHistoricoPago.observacao,
+        paraParticipanteId: acertoHistoricoPago.paraParticipanteId,
+        planejamentoId: acertoHistoricoPago.planejamentoId,
+        status: AcertoStatus.PAGO,
+        updatedAt: acertoHistoricoPago.updatedAt,
+        valorCentavos: acertoHistoricoPago.valorCentavos,
+      }),
+    );
   });
 });
