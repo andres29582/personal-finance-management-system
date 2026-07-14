@@ -125,12 +125,16 @@ export class PlanejamentosService {
   private criarPlanoReconciliacaoAcertos(
     planejamento: Planejamento,
   ): PlanoReconciliacaoAcertos {
-    const participantesAtivos = this.listarParticipantesAtivos(planejamento);
-    const participantesPorId =
-      this.mapearParticipantesPorId(participantesAtivos);
+    const participantesFinanceiramenteRelevantes =
+      this.listarParticipantesFinanceiramenteRelevantes(planejamento);
+    const participantesPorId = this.mapearParticipantesPorId(
+      participantesFinanceiramenteRelevantes,
+    );
     const sugestoes = this.calcularAcertosPersistidos(
       planejamento,
-      participantesAtivos.map((participante) => participante.id),
+      participantesFinanceiramenteRelevantes.map(
+        (participante) => participante.id,
+      ),
     );
     const acertosPendentesExistentes =
       this.filtrarAcertosPendentes(planejamento);
@@ -141,17 +145,17 @@ export class PlanejamentosService {
     const novosAcertos: AcertosParaSalvar = [];
 
     for (const sugestao of sugestoes) {
-      this.assertParticipanteIdAtivo(
+      this.assertParticipanteIdFinanceiramenteRelevante(
         participantesPorId,
         sugestao.devedorParticipanteId,
         'PLANEJAMENTO_ACERTO_DEVEDOR_INVALIDO',
-        'O devedor do acerto precisa ser participante ativo do planejamento.',
+        'O devedor do acerto precisa ser participante financeiramente relevante do planejamento.',
       );
-      this.assertParticipanteIdAtivo(
+      this.assertParticipanteIdFinanceiramenteRelevante(
         participantesPorId,
         sugestao.recebedorParticipanteId,
         'PLANEJAMENTO_ACERTO_RECEBEDOR_INVALIDO',
-        'O recebedor do acerto precisa ser participante ativo do planejamento.',
+        'O recebedor do acerto precisa ser participante financeiramente relevante do planejamento.',
       );
 
       const chave = this.criarChaveAcerto(
@@ -741,12 +745,16 @@ export class PlanejamentosService {
       planejamentoId,
       usuarioId,
     );
-    const participantesAtivos = this.listarParticipantesAtivos(planejamento);
-    const participantesPorId =
-      this.mapearParticipantesPorId(participantesAtivos);
+    const participantesFinanceiramenteRelevantes =
+      this.listarParticipantesFinanceiramenteRelevantes(planejamento);
+    const participantesPorId = this.mapearParticipantesPorId(
+      participantesFinanceiramenteRelevantes,
+    );
     const acertos = this.calcularAcertosPersistidos(
       planejamento,
-      participantesAtivos.map((participante) => participante.id),
+      participantesFinanceiramenteRelevantes.map(
+        (participante) => participante.id,
+      ),
     );
 
     return acertos.map((acerto) => ({
@@ -1163,11 +1171,14 @@ export class PlanejamentosService {
   }
 
   private calcularSugestoesAtuais(planejamento: Planejamento) {
-    const participantesAtivos = this.listarParticipantesAtivos(planejamento);
+    const participantesFinanceiramenteRelevantes =
+      this.listarParticipantesFinanceiramenteRelevantes(planejamento);
 
     return this.calcularAcertosPersistidos(
       planejamento,
-      participantesAtivos.map((participante) => participante.id),
+      participantesFinanceiramenteRelevantes.map(
+        (participante) => participante.id,
+      ),
     );
   }
 
@@ -1227,6 +1238,56 @@ export class PlanejamentosService {
     );
   }
 
+  private listarParticipantesFinanceiramenteRelevantes(
+    planejamento: Planejamento,
+  ): ParticipantePlanejamento[] {
+    const participantesRelevantesIds = new Set(
+      this.listarParticipantesAtivos(planejamento).map(
+        (participante) => participante.id,
+      ),
+    );
+
+    for (const gasto of planejamento.gastos ?? []) {
+      if (gasto.status !== GastoStatus.ATIVO || gasto.deletedAt) {
+        continue;
+      }
+
+      participantesRelevantesIds.add(gasto.pagoPorParticipanteId);
+
+      for (const divisao of gasto.divisoes ?? []) {
+        if (divisao.status === DivisaoStatus.ATIVA) {
+          participantesRelevantesIds.add(divisao.participanteId);
+        }
+      }
+    }
+
+    for (const acerto of planejamento.acertos ?? []) {
+      if (
+        acerto.status !== AcertoStatus.PAGO &&
+        acerto.status !== AcertoStatus.CONFIRMADO
+      ) {
+        continue;
+      }
+
+      participantesRelevantesIds.add(acerto.deParticipanteId);
+      participantesRelevantesIds.add(acerto.paraParticipanteId);
+    }
+
+    const participantesAdicionadosIds = new Set<string>();
+
+    return (planejamento.participantes ?? []).filter((participante) => {
+      if (
+        !participantesRelevantesIds.has(participante.id) ||
+        participantesAdicionadosIds.has(participante.id)
+      ) {
+        return false;
+      }
+
+      participantesAdicionadosIds.add(participante.id);
+      return true;
+    });
+  }
+
   private mapearParticipantesPorId(
     participantes: ParticipantePlanejamento[],
   ): Map<string, ParticipantePlanejamento> {
@@ -1271,7 +1332,7 @@ export class PlanejamentosService {
     return `${devedorParticipanteId}:${recebedorParticipanteId}:${valorCentavos}`;
   }
 
-  private assertParticipanteIdAtivo(
+  private assertParticipanteIdFinanceiramenteRelevante(
     participantesPorId: Map<string, ParticipantePlanejamento>,
     participanteId: string,
     code: string,
