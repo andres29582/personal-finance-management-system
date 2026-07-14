@@ -90,6 +90,44 @@ describe('PlanejamentosRepository', () => {
     expect(result).toEqual({ id: 'planejamento-transacao' });
   });
 
+  it('usa o repository de planejamento do manager para adquirir o lock', async () => {
+    const managerPlanejamentoRepository = criarRepositoryMock<Planejamento>();
+    const manager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === Planejamento) {
+          return comoRepositoryTypeOrm(managerPlanejamentoRepository);
+        }
+
+        return comoRepositoryTypeOrm(criarRepositoryMock());
+      }),
+    };
+    const planejamento = Object.assign(new Planejamento(), {
+      id: 'planejamento-transacao',
+    });
+    dataSource.transaction.mockImplementation(
+      (
+        callback: (
+          entityManager: typeof manager,
+        ) => Promise<Planejamento | null>,
+      ) => callback(manager),
+    );
+    managerPlanejamentoRepository.findOne.mockResolvedValue(planejamento);
+
+    const result = await repository.executarEmTransacao((transacional) =>
+      transacional.bloquearPlanejamentoParaAtualizacao(
+        'planejamento-transacao',
+      ),
+    );
+
+    expect(managerPlanejamentoRepository.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lock: { mode: 'pessimistic_write' },
+      }),
+    );
+    expect(planejamentoRepository.findOne).not.toHaveBeenCalled();
+    expect(result).toBe(planejamento);
+  });
+
   it('busca planejamento por id sempre com usuario criador e sem removidos logicamente', async () => {
     planejamentoRepository.findOne.mockResolvedValue(null);
 
@@ -195,6 +233,33 @@ describe('PlanejamentosRepository', () => {
     expect(argumento.relations).toEqual({
       participantes: true,
     });
+  });
+
+  it('bloqueia somente o planejamento ativo solicitado para atualizacao', async () => {
+    const planejamento = Object.assign(new Planejamento(), {
+      id: 'planejamento-id',
+    });
+    planejamentoRepository.findOne
+      .mockResolvedValueOnce(planejamento)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      repository.bloquearPlanejamentoParaAtualizacao('planejamento-id'),
+    ).resolves.toBe(planejamento);
+    await expect(
+      repository.bloquearPlanejamentoParaAtualizacao('planejamento-ausente'),
+    ).resolves.toBeNull();
+
+    const argumento = obterObjetoDaPrimeiraChamada(
+      planejamentoRepository.findOne,
+    );
+    const where = obterObjeto(argumento.where);
+    const lock = obterObjeto(argumento.lock);
+
+    expect(where.id).toBe('planejamento-id');
+    expect(where.deletedAt).toBeDefined();
+    expect(lock.mode).toBe('pessimistic_write');
+    expect(argumento.relations).toBeUndefined();
   });
 
   it('busca planejamento com gastos, pagadores, divisoes e acertos mantendo escopo por usuario criador', async () => {

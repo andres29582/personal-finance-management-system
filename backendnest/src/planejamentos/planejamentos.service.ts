@@ -81,19 +81,43 @@ export class PlanejamentosService {
     planejamentoId: string,
     usuarioId: string,
   ): Promise<AcertoPlanejamento[]> {
-    const planejamento = await this.buscarPlanejamentoParaAcertos(
-      this.planejamentosRepository,
-      planejamentoId,
-      usuarioId,
-    );
-    const plano = this.criarPlanoReconciliacaoAcertos(planejamento);
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        await this.buscarPlanejamentoAcessivelComRepository(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
 
-    if (!this.planoReconciliacaoTemMudancas(plano)) {
-      return plano.pendentesPreservados;
-    }
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
 
-    return this.planejamentosRepository.executarEmTransacao((repository) =>
-      this.reconciliarAcertos(repository, planejamento, plano),
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+        const plano = this.criarPlanoReconciliacaoAcertos(
+          planejamentoAtualizado,
+        );
+
+        if (!this.planoReconciliacaoTemMudancas(plano)) {
+          return plano.pendentesPreservados;
+        }
+
+        return this.reconciliarAcertos(
+          repository,
+          planejamentoAtualizado,
+          plano,
+        );
+      },
     );
   }
 
@@ -685,6 +709,26 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<Planejamento> {
     const planejamento = await repository.buscarComGastosDivisoesAcertos(
+      planejamentoId,
+      usuarioId,
+    );
+
+    if (!planejamento) {
+      throw new ResourceNotFoundException(
+        'PLANEJAMENTO_NOT_FOUND',
+        'Planejamento nao encontrado.',
+      );
+    }
+
+    return planejamento;
+  }
+
+  private async buscarPlanejamentoAcessivelComRepository(
+    repository: PlanejamentosRepository,
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<Planejamento> {
+    const planejamento = await repository.buscarAcessivelComParticipantes(
       planejamentoId,
       usuarioId,
     );

@@ -127,6 +127,20 @@ export class PlanejamentosRepository {
     });
   }
 
+  async bloquearPlanejamentoParaAtualizacao(
+    planejamentoId: string,
+  ): Promise<Planejamento | null> {
+    return this.planejamentoRepository.findOne({
+      where: {
+        id: planejamentoId,
+        deletedAt: IsNull(),
+      },
+      lock: {
+        mode: 'pessimistic_write',
+      },
+    });
+  }
+
   async buscarComGastosDivisoesAcertos(
     id: string,
     usuarioId: string,
