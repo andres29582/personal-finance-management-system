@@ -1,5 +1,4 @@
 import {
-  AppConflictException,
   ForbiddenResourceException,
   ResourceNotFoundException,
   ValidationAppException,
@@ -2279,12 +2278,27 @@ describe('PlanejamentosService', () => {
   });
 
   it('adds a manual participant after confirming planejamento access', async () => {
-    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+    const planejamentoDoProprietario = {
       id: 'planejamento-1',
       usuarioCriadorId: 'user-1',
-    } as never);
-    repository.buscarParticipanteAtivoDuplicado.mockResolvedValue(null);
-    repository.salvarParticipante.mockResolvedValue({
+    } as never;
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarParticipanteAtivoDuplicado: jest.fn(),
+      salvarParticipante: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.buscarParticipanteAtivoDuplicado.mockResolvedValue(
+      null,
+    );
+    repositoryTransacional.salvarParticipante.mockResolvedValue({
       id: 'participante-1',
     } as never);
 
@@ -2293,7 +2307,8 @@ describe('PlanejamentosService', () => {
       email: 'bruno@example.com',
     });
 
-    expect(repository.salvarParticipante).toHaveBeenCalledWith(
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarParticipante).toHaveBeenCalledWith(
       expect.objectContaining({
         email: 'bruno@example.com',
         nome: 'Bruno',
@@ -2303,16 +2318,64 @@ describe('PlanejamentosService', () => {
         usuarioId: null,
       }),
     );
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    );
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    ).toBeLessThan(
+      repositoryTransacional.buscarParticipanteAtivoDuplicado.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.buscarParticipanteAtivoDuplicado.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarParticipante.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
     expect(result).toEqual({ id: 'participante-1' });
   });
 
   it('adds a linked participant when usuarioId is provided', async () => {
-    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+    const planejamentoDoProprietario = {
       id: 'planejamento-1',
       usuarioCriadorId: 'user-1',
-    } as never);
-    repository.buscarParticipanteAtivoDuplicado.mockResolvedValue(null);
-    repository.salvarParticipante.mockResolvedValue({
+    } as never;
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarParticipanteAtivoDuplicado: jest.fn(),
+      salvarParticipante: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoDoProprietario,
+    );
+    repositoryTransacional.buscarParticipanteAtivoDuplicado.mockResolvedValue(
+      null,
+    );
+    repositoryTransacional.salvarParticipante.mockResolvedValue({
       id: 'participante-1',
     } as never);
 
@@ -2321,7 +2384,7 @@ describe('PlanejamentosService', () => {
       usuarioId: 'user-2',
     });
 
-    expect(repository.salvarParticipante).toHaveBeenCalledWith(
+    expect(repositoryTransacional.salvarParticipante).toHaveBeenCalledWith(
       expect.objectContaining({
         email: null,
         nome: 'Carla',
@@ -2329,9 +2392,34 @@ describe('PlanejamentosService', () => {
         usuarioId: 'user-2',
       }),
     );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
   });
 
-  it('rejects participant creation when authenticated user is not owner', async () => {
+  it('rejects participant creation without access before acquiring the lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+    await expect(
+      service.addParticipante('planejamento-1', 'user-1', {
+        nome: 'Bruno',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_NOT_FOUND',
+      statusCode: 404,
+    });
+
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('rejects accessible non-owner before acquiring the lock', async () => {
     repository.buscarAcessivelComParticipantes.mockResolvedValue({
       id: 'planejamento-1',
       usuarioCriadorId: 'owner-1',
@@ -2341,13 +2429,97 @@ describe('PlanejamentosService', () => {
       service.addParticipante('planejamento-1', 'user-1', {
         nome: 'Bruno',
       }),
-    ).rejects.toBeInstanceOf(ForbiddenResourceException);
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_OWNER_REQUIRED',
+      statusCode: 403,
+    });
 
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
     expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
   });
 
-  it('rejects duplicated active participants', async () => {
+  it('returns not found when planejamento disappears while locking participant creation', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+      id: 'planejamento-1',
+      usuarioCriadorId: 'user-1',
+    } as never);
+    repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(null);
+
+    await expect(
+      service.addParticipante('planejamento-1', 'user-1', {
+        nome: 'Bruno',
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
+    expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('revalidates planejamento ownership after acquiring the participant creation lock', async () => {
+    const planejamentoInicial = {
+      id: 'planejamento-1',
+      usuarioCriadorId: 'user-1',
+    } as never;
+    const planejamentoComProprietarioAlterado = {
+      id: 'planejamento-1',
+      usuarioCriadorId: 'owner-alterado',
+    } as never;
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarParticipanteAtivoDuplicado: jest.fn(),
+      salvarParticipante: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(planejamentoInicial)
+      .mockResolvedValueOnce(planejamentoComProprietarioAlterado);
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoInicial,
+    );
+
+    await expect(
+      service.addParticipante('planejamento-1', 'user-1', {
+        nome: 'Bruno',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_OWNER_REQUIRED',
+      statusCode: 403,
+    });
+
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+    ).toHaveBeenCalledWith('planejamento-1');
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    );
+    expect(
+      repositoryTransacional.buscarParticipanteAtivoDuplicado,
+    ).not.toHaveBeenCalled();
+    expect(repositoryTransacional.salvarParticipante).not.toHaveBeenCalled();
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicated active participants only after acquiring the lock', async () => {
     repository.buscarAcessivelComParticipantes.mockResolvedValue({
       id: 'planejamento-1',
       usuarioCriadorId: 'user-1',
@@ -2361,9 +2533,62 @@ describe('PlanejamentosService', () => {
         nome: 'Bruno',
         usuarioId: 'user-2',
       }),
-    ).rejects.toBeInstanceOf(AppConflictException);
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_PARTICIPANTE_DUPLICADO',
+      statusCode: 409,
+    });
 
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[1],
+    );
+    expect(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[1],
+    ).toBeLessThan(
+      repository.buscarParticipanteAtivoDuplicado.mock.invocationCallOrder[0],
+    );
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('propagates planejamento lock failures without checking duplicates', async () => {
+    const erroLock = new Error('falha ao adquirir lock do planejamento');
+    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+      id: 'planejamento-1',
+      usuarioCriadorId: 'user-1',
+    } as never);
+    repository.bloquearPlanejamentoParaAtualizacao.mockRejectedValue(erroLock);
+
+    await expect(
+      service.addParticipante('planejamento-1', 'user-1', {
+        nome: 'Bruno',
+      }),
+    ).rejects.toBe(erroLock);
+
+    expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('propagates participant persistence failures from the transaction', async () => {
+    const erroPersistencia = new Error('falha ao salvar participante');
+    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+      id: 'planejamento-1',
+      usuarioCriadorId: 'user-1',
+    } as never);
+    repository.buscarParticipanteAtivoDuplicado.mockResolvedValue(null);
+    repository.salvarParticipante.mockRejectedValue(erroPersistencia);
+
+    await expect(
+      service.addParticipante('planejamento-1', 'user-1', {
+        nome: 'Bruno',
+      }),
+    ).rejects.toBe(erroPersistencia);
+
+    expect(repository.buscarParticipanteAtivoDuplicado).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(repository.salvarParticipante).toHaveBeenCalledTimes(1);
   });
 
   function criarPlanejamentoComParticipantes(

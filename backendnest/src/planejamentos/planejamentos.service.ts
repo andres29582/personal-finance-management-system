@@ -243,20 +243,56 @@ export class PlanejamentosService {
     usuarioId: string,
     dto: AddParticipantePlanejamentoDto,
   ): Promise<ParticipantePlanejamento> {
-    await this.assertUsuarioProprietario(planejamentoId, usuarioId);
-    await this.assertParticipanteAtivoNaoDuplicado(planejamentoId, dto);
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const planejamentoInicial =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(
+          planejamentoInicial,
+          usuarioId,
+        );
 
-    return this.planejamentosRepository.salvarParticipante({
-      id: randomUUID(),
-      planejamentoId,
-      usuarioId: dto.usuarioId ?? null,
-      nome: dto.nome,
-      email: dto.email ?? null,
-      tipo: dto.usuarioId
-        ? ParticipanteTipo.VINCULADO
-        : ParticipanteTipo.MANUAL,
-      status: ParticipanteStatus.ATIVO,
-    });
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+
+        await this.assertParticipanteAtivoNaoDuplicadoComRepository(
+          repository,
+          planejamentoId,
+          dto,
+        );
+
+        return repository.salvarParticipante({
+          id: randomUUID(),
+          planejamentoId,
+          usuarioId: dto.usuarioId ?? null,
+          nome: dto.nome,
+          email: dto.email ?? null,
+          tipo: dto.usuarioId
+            ? ParticipanteTipo.VINCULADO
+            : ParticipanteTipo.MANUAL,
+          status: ParticipanteStatus.ATIVO,
+        });
+      },
+    );
   }
 
   async createGasto(
@@ -666,28 +702,17 @@ export class PlanejamentosService {
     return emailPrefix || 'Proprietario';
   }
 
-  private async assertUsuarioProprietario(
-    planejamentoId: string,
-    usuarioId: string,
-  ): Promise<void> {
-    const planejamento = await this.findOne(planejamentoId, usuarioId);
-
-    this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
-  }
-
-  private async assertParticipanteAtivoNaoDuplicado(
+  private async assertParticipanteAtivoNaoDuplicadoComRepository(
+    repository: PlanejamentosRepository,
     planejamentoId: string,
     dto: AddParticipantePlanejamentoDto,
   ): Promise<void> {
     const participanteExistente =
-      await this.planejamentosRepository.buscarParticipanteAtivoDuplicado(
-        planejamentoId,
-        {
-          usuarioId: dto.usuarioId,
-          email: dto.email,
-          nome: dto.nome,
-        },
-      );
+      await repository.buscarParticipanteAtivoDuplicado(planejamentoId, {
+        usuarioId: dto.usuarioId,
+        email: dto.email,
+        nome: dto.nome,
+      });
 
     if (!participanteExistente) {
       return;

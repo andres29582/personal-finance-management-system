@@ -30,7 +30,7 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `POST` | `/planejamentos` | Cria planejamento compartilhado. |
 | `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
-| `POST` | `/planejamentos/:id/participantes` | Adiciona participante manual. |
+| `POST` | `/planejamentos/:id/participantes` | Adiciona participante atomicamente; duplicidades ativas por nome manual, email ou usuario vinculado retornam conflito `409`. |
 | `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
 | `GET` | `/planejamentos/:planejamentoId/gastos` | Lista gastos do planejamento. |
 | `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consulta gasto do planejamento. |
