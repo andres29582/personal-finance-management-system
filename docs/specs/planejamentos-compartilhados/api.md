@@ -34,6 +34,7 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
 | `GET` | `/planejamentos/:planejamentoId/gastos` | Lista gastos do planejamento. |
 | `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consulta gasto do planejamento. |
+| `PATCH` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Atualiza parcialmente um gasto ativo e, quando houver alteracao financeira, reconcilia seus efeitos de forma transacional; operacao exclusiva do proprietario. |
 | `PATCH` | `/planejamentos/:planejamentoId/gastos/:gastoId/cancelar` | Cancela logicamente o gasto e reconcilia os acertos atomicamente; operacao exclusiva do proprietario. |
 | `GET` | `/planejamentos/:planejamentoId/acertos` | Lista acertos oficiais persistidos. |
 | `POST` | `/planejamentos/:planejamentoId/acertos/sincronizar` | Executa sincronizacao explicita e idempotente dos acertos pendentes para reparacao ou recuperacao operacional. |
@@ -56,7 +57,6 @@ contrato disponivel no backend atual.
 | `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
 | `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
 | `DELETE` | `/planejamentos/:id/participantes/:participanteId` | Remove participante logicamente. |
-| `PATCH` | `/planejamentos/:id/gastos/:gastoId` | Edita gasto e recalcula divisoes. |
 | `GET` | `/planejamentos/:id/resumo` | Retorna resumo financeiro do planejamento. |
 | `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
 
@@ -179,10 +179,15 @@ transacoes financeiras pessoais.
   "descricao": "Luz",
   "valorCentavos": 18500,
   "dataGasto": "2026-07-10",
+  "comportamento": "VARIAVEL",
   "pagoPorParticipanteId": "uuid",
-  "comportamentoFinanceiro": "VARIAVEL",
-  "participantesDivisao": ["uuid-ana", "uuid-bruno", "uuid-carla"],
-  "observacaoComprovante": "Conta enviada no grupo"
+  "participantesIds": [
+    "uuid-ana",
+    "uuid-bruno",
+    "uuid-carla"
+  ],
+  "observacao": "Conta enviada no grupo",
+  "mesReferencia": "2026-07"
 }
 ```
 
@@ -190,49 +195,110 @@ Resposta conceitual:
 
 ```json
 {
-  "id": "uuid",
-  "planejamentoId": "uuid",
-  "descricao": "Luz",
-  "valorCentavos": 18500,
-  "dataGasto": "2026-07-10",
-  "pagoPorParticipanteId": "uuid",
-  "comportamentoFinanceiro": "VARIAVEL",
-  "status": "ATIVO",
-  "divisoes": [
-    {
-      "participanteId": "uuid-ana",
-      "valorCentavos": 6167
-    },
-    {
-      "participanteId": "uuid-bruno",
-      "valorCentavos": 6167
-    },
-    {
-      "participanteId": "uuid-carla",
-      "valorCentavos": 6166
-    }
-  ]
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "planejamentoId": "uuid",
+    "descricao": "Luz",
+    "valorCentavos": 18500,
+    "dataGasto": "2026-07-10",
+    "comportamento": "VARIAVEL",
+    "pagoPorParticipanteId": "uuid",
+    "observacao": "Conta enviada no grupo",
+    "mesReferencia": "2026-07",
+    "status": "ATIVO",
+    "divisoes": [
+      {
+        "participanteId": "uuid-ana",
+        "valorDevidoCentavos": 6167,
+        "status": "ATIVA"
+      },
+      {
+        "participanteId": "uuid-bruno",
+        "valorDevidoCentavos": 6167,
+        "status": "ATIVA"
+      },
+      {
+        "participanteId": "uuid-carla",
+        "valorDevidoCentavos": 6166,
+        "status": "ATIVA"
+      }
+    ]
+  },
+  "timestamp": "2026-07-10T12:00:00.000Z",
+  "requestId": "uuid-request"
 }
 ```
 
 ### Editar gasto
 
-`PATCH /planejamentos/:id/gastos/:gastoId`
+`PATCH /planejamentos/:planejamentoId/gastos/:gastoId`
 
 ```json
 {
   "descricao": "Luz revisada",
   "valorCentavos": 19240,
+  "dataGasto": "2026-07-11",
+  "comportamento": "VARIAVEL",
   "pagoPorParticipanteId": "uuid-bruno",
-  "participantesDivisao": ["uuid-ana", "uuid-bruno", "uuid-carla"],
-  "status": "ATIVO"
+  "participantesIds": [
+    "uuid-ana",
+    "uuid-bruno",
+    "uuid-carla"
+  ],
+  "categoria": null,
+  "observacao": "Valor conferido",
+  "mesReferencia": "2026-07"
 }
 ```
 
-Ao alterar `valorCentavos`, `pagoPorParticipanteId` ou
-`participantesDivisao`, o backend deve recalcular divisoes, saldos e acertos.
-Se existirem acertos `PAGO`, eles devem permanecer como historico financeiro, e
-novos acertos `PENDENTE` devem representar apenas a compensacao restante.
+Todos os campos sao opcionais, mas o body deve conter ao menos uma propriedade.
+`categoria`, `observacao` e `mesReferencia` aceitam `null` para limpeza.
+`status` nao e editavel por este endpoint. A operacao e exclusiva do
+proprietario, e somente gastos com status `ATIVO` podem ser atualizados.
+
+O efeito depende dos campos realmente alterados:
+
+- alteracao somente descritiva salva o gasto, sem recriar divisoes nem
+  reconciliar acertos;
+- mudanca somente do pagador preserva as divisoes, recalcula os saldos e
+  reconcilia os acertos pendentes;
+- mudanca de `valorCentavos` ou do conjunto de `participantesIds` cancela
+  somente as divisoes `ATIVA`, preserva divisoes ja `CANCELADA`, cria novas
+  divisoes `ATIVA` e reconcilia os acertos na mesma transacao.
+
+A ordem de `participantesIds` nao possui significado financeiro, mas listas
+com identificadores duplicados sao invalidas. Referencias historicas ja
+vinculadas podem permanecer mesmo que o participante tenha sido inativado
+posteriormente; pagadores ou participantes realmente novos precisam estar
+ativos.
+
+Acertos `PAGO`, `CONFIRMADO` e `CANCELADO` permanecem como historico. Acertos
+`PENDENTE` sao reconciliados e podem gerar compensacoes. Uma alteracao real de
+`valorCentavos` atualiza `ultimaAlteracaoValorEm`. A operacao nao cria
+transacoes financeiras pessoais. Qualquer falha na transacao causa rollback
+integral.
+
+Erros relevantes:
+
+- `400 VALIDATION_ERROR`: campo com tipo, formato, limite ou enum invalido
+  conforme a validacao estrutural;
+- `401 UNAUTHORIZED`: JWT ausente ou invalido;
+- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
+- `404 PLANEJAMENTO_NOT_FOUND`: usuario sem acesso ou planejamento inexistente;
+- `404 PLANEJAMENTO_GASTO_NOT_FOUND`: gasto inexistente ou de outro
+  planejamento;
+- `422 PLANEJAMENTO_GASTO_ATUALIZACAO_VAZIA`: nenhum campo efetivo foi
+  informado para atualizacao;
+- `422 PLANEJAMENTO_GASTO_ATUALIZAR_STATUS_INVALIDO`: gasto nao esta `ATIVO`;
+- `422 PLANEJAMENTO_GASTO_DIVISOES_ATIVAS_OBRIGATORIAS`: atualizacao financeira
+  sem participantes informados e sem divisoes ativas existentes;
+- `422 PLANEJAMENTO_PAGADOR_INVALIDO`: novo pagador nao e participante ativo;
+- `422 PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO`: participante realmente novo
+  da divisao nao esta ativo;
+- `422 PARTICIPANTE_DUPLICADO`: `participantesIds` contem duplicidade;
+- `422 VALOR_MENOR_QUE_PARTICIPANTES`: o valor nao permite distribuir ao menos
+  um centavo para cada participante.
 
 ### Cancelar gasto
 

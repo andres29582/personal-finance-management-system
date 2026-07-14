@@ -13,6 +13,7 @@ describe('PlanejamentosController', () => {
     Pick<
       PlanejamentosService,
       | 'addParticipante'
+      | 'atualizarGasto'
       | 'cancelarAcerto'
       | 'cancelarGasto'
       | 'create'
@@ -40,6 +41,7 @@ describe('PlanejamentosController', () => {
   beforeEach(() => {
     planejamentosService = {
       addParticipante: jest.fn(),
+      atualizarGasto: jest.fn(),
       cancelarAcerto: jest.fn(),
       cancelarGasto: jest.fn(),
       create: jest.fn(),
@@ -187,6 +189,44 @@ describe('PlanejamentosController', () => {
       'user-1',
     );
     expect(result).toEqual({ id: 'gasto-1' });
+  });
+
+  it('delegates atualizarGasto once using route ids, authenticated user id, and partial dto', async () => {
+    const params = {
+      gastoId: 'gasto-1',
+      planejamentoId: 'planejamento-1',
+    };
+    const dto = {
+      descricao: 'Mercado atualizado',
+      valorCentavos: 15000,
+    };
+    const gastoAtualizado = {
+      id: 'gasto-1',
+      descricao: 'Mercado atualizado',
+      valorCentavos: 15000,
+    };
+    planejamentosService.atualizarGasto.mockResolvedValue(
+      gastoAtualizado as never,
+    );
+
+    const result = await controller.atualizarGasto(params, dto, request);
+
+    expect(planejamentosService.atualizarGasto).toHaveBeenCalledTimes(1);
+    expect(planejamentosService.atualizarGasto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+      dto,
+    );
+    expect(planejamentosService.cancelarGasto).not.toHaveBeenCalled();
+    expect(planejamentosService.create).not.toHaveBeenCalled();
+    expect(planejamentosService.addParticipante).not.toHaveBeenCalled();
+    expect(planejamentosService.createGasto).not.toHaveBeenCalled();
+    expect(planejamentosService.sincronizarAcertos).not.toHaveBeenCalled();
+    expect(planejamentosService.pagarAcerto).not.toHaveBeenCalled();
+    expect(planejamentosService.cancelarAcerto).not.toHaveBeenCalled();
+    expect(planejamentosService.reabrirAcerto).not.toHaveBeenCalled();
+    expect(result).toBe(gastoAtualizado);
   });
 
   it('delegates cancelarGasto using route ids and authenticated user id', async () => {

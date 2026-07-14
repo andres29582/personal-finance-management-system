@@ -21,6 +21,7 @@ import {
   FindGastosPlanejamentoParamsDto,
   FindPlanejamentoParamsDto,
   FindPlanejamentosDto,
+  UpdateGastoPlanejamentoDto,
 } from './dto';
 import { PlanejamentosService } from './planejamentos.service';
 
@@ -99,6 +100,20 @@ export class PlanejamentosController {
       params.planejamentoId,
       params.gastoId,
       req.user.id,
+    );
+  }
+
+  @Patch(':planejamentoId/gastos/:gastoId')
+  atualizarGasto(
+    @Param() params: FindGastoPlanejamentoParamsDto,
+    @Body() dto: UpdateGastoPlanejamentoDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.atualizarGasto(
+      params.planejamentoId,
+      params.gastoId,
+      req.user.id,
+      dto,
     );
   }
 

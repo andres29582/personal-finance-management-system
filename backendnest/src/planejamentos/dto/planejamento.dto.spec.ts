@@ -9,6 +9,7 @@ import {
   FindGastosPlanejamentoParamsDto,
   FindPlanejamentoParamsDto,
   FindPlanejamentosDto,
+  UpdateGastoPlanejamentoDto,
 } from './index';
 import {
   GastoComportamento,
@@ -139,6 +140,77 @@ describe('Planejamento DTO validation', () => {
         'pagoPorParticipanteId',
         'participantesIds',
         'mesReferencia',
+      ]),
+    );
+  });
+
+  it('accepts a valid partial financial expense update', async () => {
+    const dto = Object.assign(new UpdateGastoPlanejamentoDto(), {
+      valorCentavos: 10001,
+      pagoPorParticipanteId: uuid,
+      participantesIds: [uuid],
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('accepts a valid partial descriptive expense update with nullable fields', async () => {
+    const dto = Object.assign(new UpdateGastoPlanejamentoDto(), {
+      descricao: 'Mercado atualizado',
+      categoria: null,
+      observacao: null,
+      mesReferencia: null,
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rejects invalid partial expense update fields', async () => {
+    const dto = Object.assign(new UpdateGastoPlanejamentoDto(), {
+      descricao: '',
+      valorCentavos: 0,
+      dataGasto: '04/07/2026',
+      comportamento: 'INVALIDO',
+      pagoPorParticipanteId: 'pagador-invalido',
+      participantesIds: [],
+      mesReferencia: '07-2026',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining([
+        'descricao',
+        'valorCentavos',
+        'dataGasto',
+        'comportamento',
+        'pagoPorParticipanteId',
+        'participantesIds',
+        'mesReferencia',
+      ]),
+    );
+  });
+
+  it('rejects null for non-nullable partial expense update fields', async () => {
+    const dto = Object.assign(new UpdateGastoPlanejamentoDto(), {
+      descricao: null,
+      valorCentavos: null,
+      dataGasto: null,
+      comportamento: null,
+      pagoPorParticipanteId: null,
+      participantesIds: null,
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining([
+        'descricao',
+        'valorCentavos',
+        'dataGasto',
+        'comportamento',
+        'pagoPorParticipanteId',
+        'participantesIds',
       ]),
     );
   });
