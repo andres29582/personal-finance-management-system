@@ -14,6 +14,7 @@ describe('PlanejamentosController', () => {
       PlanejamentosService,
       | 'addParticipante'
       | 'cancelarAcerto'
+      | 'cancelarGasto'
       | 'create'
       | 'createGasto'
       | 'findAcertos'
@@ -40,6 +41,7 @@ describe('PlanejamentosController', () => {
     planejamentosService = {
       addParticipante: jest.fn(),
       cancelarAcerto: jest.fn(),
+      cancelarGasto: jest.fn(),
       create: jest.fn(),
       createGasto: jest.fn(),
       findAcertos: jest.fn(),
@@ -185,6 +187,28 @@ describe('PlanejamentosController', () => {
       'user-1',
     );
     expect(result).toEqual({ id: 'gasto-1' });
+  });
+
+  it('delegates cancelarGasto using route ids and authenticated user id', async () => {
+    planejamentosService.cancelarGasto.mockResolvedValue({
+      id: 'gasto-1',
+      status: 'CANCELADO',
+    } as never);
+
+    const result = await controller.cancelarGasto(
+      {
+        gastoId: 'gasto-1',
+        planejamentoId: 'planejamento-1',
+      },
+      request,
+    );
+
+    expect(planejamentosService.cancelarGasto).toHaveBeenCalledWith(
+      'planejamento-1',
+      'gasto-1',
+      'user-1',
+    );
+    expect(result).toEqual({ id: 'gasto-1', status: 'CANCELADO' });
   });
 
   it('delegates findAcertos using planejamento route id and authenticated user id', async () => {

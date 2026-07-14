@@ -422,6 +422,98 @@ export class PlanejamentosService {
     return gasto;
   }
 
+  async cancelarGasto(
+    planejamentoId: string,
+    gastoId: string,
+    usuarioId: string,
+  ): Promise<GastoPlanejamento> {
+    const gastoCancelado =
+      await this.planejamentosRepository.executarEmTransacao(
+        async (repository) => {
+          const planejamentoInicial =
+            await this.buscarPlanejamentoAcessivelComRepository(
+              repository,
+              planejamentoId,
+              usuarioId,
+            );
+          this.assertUsuarioProprietarioDoPlanejamento(
+            planejamentoInicial,
+            usuarioId,
+          );
+
+          const planejamentoBloqueado =
+            await repository.bloquearPlanejamentoParaAtualizacao(
+              planejamentoId,
+            );
+
+          if (!planejamentoBloqueado) {
+            throw new ResourceNotFoundException(
+              'PLANEJAMENTO_NOT_FOUND',
+              'Planejamento nao encontrado.',
+            );
+          }
+
+          const planejamento =
+            await this.buscarPlanejamentoAcessivelComRepository(
+              repository,
+              planejamentoId,
+              usuarioId,
+            );
+          this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+
+          const gasto = await repository.buscarGastoPorIdEPlanejamento(
+            gastoId,
+            planejamentoId,
+          );
+
+          if (!gasto) {
+            throw new ResourceNotFoundException(
+              'PLANEJAMENTO_GASTO_NOT_FOUND',
+              'Gasto do planejamento nao encontrado.',
+            );
+          }
+
+          if (gasto.status !== GastoStatus.ATIVO) {
+            throw new ValidationAppException(
+              'PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO',
+              'Apenas gastos ativos podem ser cancelados.',
+              { details: { statusAtual: gasto.status } },
+            );
+          }
+
+          const gastoSalvo = await repository.salvarGasto({
+            ...gasto,
+            status: GastoStatus.CANCELADO,
+          });
+          const divisoesAtivas = (gasto.divisoes ?? []).filter(
+            (divisao) => divisao.status === DivisaoStatus.ATIVA,
+          );
+
+          if (divisoesAtivas.length > 0) {
+            await repository.salvarDivisoes(
+              divisoesAtivas.map((divisao) => ({
+                ...divisao,
+                status: DivisaoStatus.CANCELADA,
+              })),
+            );
+          }
+
+          const planejamentoAtualizado =
+            await this.buscarPlanejamentoParaAcertos(
+              repository,
+              planejamentoId,
+              usuarioId,
+            );
+
+          await this.reconciliarAcertos(repository, planejamentoAtualizado);
+
+          return gastoSalvo;
+        },
+      );
+
+    return this.findGasto(planejamentoId, gastoCancelado.id, usuarioId);
+  }
+
   async findAcertos(
     planejamentoId: string,
     usuarioId: string,
