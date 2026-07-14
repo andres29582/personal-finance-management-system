@@ -264,27 +264,49 @@ export class PlanejamentosService {
     usuarioId: string,
     dto: CreateGastoPlanejamentoDto,
   ): Promise<GastoPlanejamento> {
-    const planejamento = await this.findOne(planejamentoId, usuarioId);
-    this.assertParticipantePertenceAoPlanejamento(
-      planejamento,
-      dto.pagoPorParticipanteId,
-      'PLANEJAMENTO_PAGADOR_INVALIDO',
-      'O pagador precisa ser participante ativo do planejamento.',
-    );
-
-    const divisoesCalculadas = this.calcularDivisoes(dto);
-
-    for (const divisao of divisoesCalculadas) {
-      this.assertParticipantePertenceAoPlanejamento(
-        planejamento,
-        divisao.participanteId,
-        'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
-        'Todos os participantes da divisao precisam pertencer ao planejamento.',
-      );
-    }
-
     const gasto = await this.planejamentosRepository.executarEmTransacao(
       async (repository) => {
+        await this.buscarPlanejamentoAcessivelComRepository(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+
+        this.assertParticipantePertenceAoPlanejamento(
+          planejamento,
+          dto.pagoPorParticipanteId,
+          'PLANEJAMENTO_PAGADOR_INVALIDO',
+          'O pagador precisa ser participante ativo do planejamento.',
+        );
+
+        const divisoesCalculadas = this.calcularDivisoes(dto);
+
+        for (const divisao of divisoesCalculadas) {
+          this.assertParticipantePertenceAoPlanejamento(
+            planejamento,
+            divisao.participanteId,
+            'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
+            'Todos os participantes da divisao precisam pertencer ao planejamento.',
+          );
+        }
+
         const gastoId = randomUUID();
         const gastoSalvo = await repository.salvarGasto({
           id: gastoId,
@@ -314,6 +336,14 @@ export class PlanejamentosService {
             status: DivisaoStatus.ATIVA,
           })),
         );
+
+        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+
+        await this.reconciliarAcertos(repository, planejamentoAtualizado);
 
         return gastoSalvo;
       },

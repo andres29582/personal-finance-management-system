@@ -3557,6 +3557,11 @@ paths:
       tags:
       - Planejamentos
       summary: Criar gasto do planejamento
+      description: >-
+        Persiste atomicamente o gasto, suas divisoes e a reconciliacao dos
+        acertos pendentes do planejamento. Qualquer falha de persistencia ou
+        reconciliacao causa rollback integral. A operacao nao cria
+        automaticamente transacoes financeiras pessoais.
       security:
       - BearerAuth: []
       parameters:

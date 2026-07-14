@@ -251,13 +251,45 @@ describe('PlanejamentosService', () => {
   });
 
   it('creates a shared expense for users with planejamento access using equal split', async () => {
-    repository.buscarAcessivelComParticipantes.mockResolvedValue(
-      criarPlanejamentoComParticipantes(),
-    );
-    repository.salvarGasto.mockResolvedValue({
+    const planejamentoAntesDoLock = criarPlanejamentoComParticipantes({
+      participantes: [],
+    });
+    const planejamentoDepoisDoLock = criarPlanejamentoComParticipantes();
+    const gastoSalvo = {
       id: 'gasto-1',
-    } as never);
-    repository.salvarDivisoes.mockResolvedValue([] as never);
+    } as never;
+    const acertoCriado = criarEntidadeAcertoPersistido();
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      salvarAcertos: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(planejamentoAntesDoLock)
+      .mockResolvedValueOnce(planejamentoDepoisDoLock);
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoDepoisDoLock,
+    );
+    repositoryTransacional.salvarGasto.mockResolvedValue(gastoSalvo);
+    repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [
+          criarGastoPersistido({
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5001),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+            valorCentavos: 10001,
+          }),
+        ],
+      }),
+    );
+    repositoryTransacional.salvarAcertos.mockResolvedValue([acertoCriado]);
     repository.buscarGastoPorIdEPlanejamento.mockResolvedValue({
       id: 'gasto-1',
       divisoes: [
@@ -281,7 +313,7 @@ describe('PlanejamentosService', () => {
       valorCentavos: 10001,
     });
 
-    expect(repository.salvarGasto).toHaveBeenCalledWith(
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
       expect.objectContaining({
         comportamento: GastoComportamento.EVENTUAL,
         dataGasto: '2026-07-04',
@@ -293,7 +325,7 @@ describe('PlanejamentosService', () => {
         valorCentavos: 10001,
       }),
     );
-    expect(repository.salvarDivisoes).toHaveBeenCalledWith([
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledWith([
       expect.objectContaining({
         participanteId: 'participante-1',
         status: DivisaoStatus.ATIVA,
@@ -306,14 +338,131 @@ describe('PlanejamentosService', () => {
       }),
     ]);
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes,
+    ).toHaveBeenNthCalledWith(1, 'planejamento-1', 'user-1');
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+    ).toHaveBeenCalledWith('planejamento-1');
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes,
+    ).toHaveBeenNthCalledWith(2, 'planejamento-1', 'user-1');
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos,
+    ).toHaveBeenCalledWith('planejamento-1', 'user-1');
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        deParticipanteId: 'participante-2',
+        paraParticipanteId: 'participante-1',
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 5000,
+      }),
+    ]);
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    );
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    ).toBeLessThan(
+      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    );
+    expect(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarGastoPorIdEPlanejamento.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
+    expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
+      'gasto-1',
+      'planejamento-1',
+    );
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(result.id).toBe('gasto-1');
   });
 
-  it('rejects shared expense creation when user has no planejamento access', async () => {
-    repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+  it.each([
+    {
+      descricao: 'duplicated split participants',
+      participantesIds: ['participante-1', 'participante-1'],
+      valorCentavos: 1000,
+    },
+    {
+      descricao: 'invalid expense value',
+      participantesIds: ['participante-1'],
+      valorCentavos: 0,
+    },
+  ])(
+    'preserves access error precedence for $descricao',
+    async ({ participantesIds, valorCentavos }) => {
+      repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+      await expect(
+        service.createGasto('planejamento-1', 'user-3', {
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-04',
+          descricao: 'Mercado',
+          pagoPorParticipanteId: 'participante-1',
+          participantesIds,
+          valorCentavos,
+        }),
+      ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+
+      expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+      expect(
+        repository.bloquearPlanejamentoParaAtualizacao,
+      ).not.toHaveBeenCalled();
+      expect(repository.salvarGasto).not.toHaveBeenCalled();
+      expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+      expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+      expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns not found when the planejamento disappears while locking expense creation', async () => {
+    repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(null);
 
     await expect(
-      service.createGasto('planejamento-1', 'user-3', {
+      service.createGasto('planejamento-1', 'user-1', {
         comportamento: GastoComportamento.EVENTUAL,
         dataGasto: '2026-07-04',
         descricao: 'Mercado',
@@ -321,9 +470,14 @@ describe('PlanejamentosService', () => {
         participantesIds: ['participante-1'],
         valorCentavos: 1000,
       }),
-    ).rejects.toBeInstanceOf(ResourceNotFoundException);
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
 
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
     expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
   });
 
   it('rejects shared expense when payer does not belong to planejamento', async () => {
@@ -344,6 +498,16 @@ describe('PlanejamentosService', () => {
       code: 'PLANEJAMENTO_PAGADOR_INVALIDO',
     });
 
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[1],
+    );
     expect(repository.salvarGasto).not.toHaveBeenCalled();
   });
 
@@ -365,6 +529,16 @@ describe('PlanejamentosService', () => {
       code: 'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
     });
 
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[1],
+    );
     expect(repository.salvarGasto).not.toHaveBeenCalled();
   });
 
@@ -386,7 +560,15 @@ describe('PlanejamentosService', () => {
       code: 'PARTICIPANTE_DUPLICADO',
     });
 
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
     expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
   });
 
   it('rejects empty split participants using domain validation', async () => {
@@ -407,7 +589,15 @@ describe('PlanejamentosService', () => {
       code: 'PARTICIPANTES_OBRIGATORIOS',
     });
 
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
     expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
   });
 
   it('rejects non-positive shared expense values using domain validation', async () => {
@@ -428,7 +618,47 @@ describe('PlanejamentosService', () => {
       code: 'VALOR_CENTAVOS_DEVE_SER_POSITIVO',
     });
 
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
     expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('propagates settlement reconciliation failures from expense creation', async () => {
+    const erroReconciliacao = new Error('falha na reconciliacao do gasto');
+    repository.salvarGasto.mockResolvedValue({ id: 'gasto-1' } as never);
+    repository.salvarDivisoes.mockResolvedValue([] as never);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.salvarAcertos.mockRejectedValue(erroReconciliacao);
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-1', 'participante-2'],
+        valorCentavos: 10000,
+      }),
+    ).rejects.toBe(erroReconciliacao);
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.salvarGasto).toHaveBeenCalledTimes(1);
+    expect(repository.salvarDivisoes).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(repository.salvarDivisoes.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.salvarAcertos.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
   });
 
   it('lists shared expenses only after confirming planejamento access', async () => {
