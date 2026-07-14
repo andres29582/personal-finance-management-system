@@ -1180,11 +1180,15 @@ describe('PlanejamentosService', () => {
       ...repository,
       buscarAcessivelComParticipantes: jest.fn(),
       buscarAcertoPorIdEPlanejamento: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
       buscarComGastosDivisoesAcertos: jest.fn(),
       salvarAcerto: jest.fn(),
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
@@ -1208,12 +1212,39 @@ describe('PlanejamentosService', () => {
     expect(
       repositoryTransacional.buscarAcertoPorIdEPlanejamento,
     ).toHaveBeenCalledWith('acerto-1', 'planejamento-1');
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    );
+    expect(
+      repositoryTransacional.buscarAcessivelComParticipantes.mock
+        .invocationCallOrder[1],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcertoPorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    );
     expect(repositoryTransacional.salvarAcerto).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'acerto-1',
         status: AcertoStatus.PAGO,
         dataPagamento: expect.any(Date) as Date,
       }),
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarAcerto.mock.invocationCallOrder[0],
     );
     expect(
       repositoryTransacional.buscarComGastosDivisoesAcertos,
@@ -1226,6 +1257,9 @@ describe('PlanejamentosService', () => {
         .invocationCallOrder[0],
     );
     expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
     expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
     expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
@@ -1246,11 +1280,15 @@ describe('PlanejamentosService', () => {
       ...repository,
       buscarAcessivelComParticipantes: jest.fn(),
       buscarAcertoPorIdEPlanejamento: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
       buscarComGastosDivisoesAcertos: jest.fn(),
       salvarAcerto: jest.fn(),
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
       criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
@@ -1283,11 +1321,15 @@ describe('PlanejamentosService', () => {
       ...repository,
       buscarAcessivelComParticipantes: jest.fn(),
       buscarAcertoPorIdEPlanejamento: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
       buscarComGastosDivisoesAcertos: jest.fn(),
       salvarAcerto: jest.fn(),
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
       criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
@@ -1488,6 +1530,74 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
   });
 
+  it.each(['pagarAcerto', 'cancelarAcerto', 'reabrirAcerto'] as const)(
+    'does not lock or load the settlement without planejamento access in %s',
+    async (transicao) => {
+      repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+      await expect(
+        service[transicao]('planejamento-1', 'acerto-1', 'user-3'),
+      ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+
+      expect(
+        repository.bloquearPlanejamentoParaAtualizacao,
+      ).not.toHaveBeenCalled();
+      expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pagarAcerto', 'cancelarAcerto', 'reabrirAcerto'] as const)(
+    'returns PLANEJAMENTO_NOT_FOUND when the planejamento disappears at the lock in %s',
+    async (transicao) => {
+      repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(null);
+
+      await expect(
+        service[transicao]('planejamento-1', 'acerto-1', 'user-1'),
+      ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+
+      expect(
+        repository.bloquearPlanejamentoParaAtualizacao,
+      ).toHaveBeenCalledWith('planejamento-1');
+      expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pagarAcerto', 'cancelarAcerto', 'reabrirAcerto'] as const)(
+    'returns PLANEJAMENTO_ACERTO_NOT_FOUND only after locking in %s',
+    async (transicao) => {
+      repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(null);
+
+      await expect(
+        service[transicao]('planejamento-1', 'acerto-outro', 'user-1'),
+      ).rejects.toMatchObject({ code: 'PLANEJAMENTO_ACERTO_NOT_FOUND' });
+
+      expect(
+        repository.bloquearPlanejamentoParaAtualizacao.mock
+          .invocationCallOrder[0],
+      ).toBeLessThan(
+        repository.buscarAcertoPorIdEPlanejamento.mock.invocationCallOrder[0],
+      );
+      expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pagarAcerto', 'cancelarAcerto', 'reabrirAcerto'] as const)(
+    'propagates planejamento lock failures without loading the settlement in %s',
+    async (transicao) => {
+      const erroLock = new Error(`falha no lock de ${transicao}`);
+      repository.bloquearPlanejamentoParaAtualizacao.mockRejectedValue(
+        erroLock,
+      );
+
+      await expect(
+        service[transicao]('planejamento-1', 'acerto-1', 'user-1'),
+      ).rejects.toBe(erroLock);
+
+      expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
+      expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    },
+  );
+
   it('cancels a paid settlement and recreates the corresponding pending settlement in one transaction', async () => {
     const acertoPago = criarEntidadeAcertoPersistido({
       status: AcertoStatus.PAGO,
@@ -1504,11 +1614,15 @@ describe('PlanejamentosService', () => {
       ...repository,
       buscarAcessivelComParticipantes: jest.fn(),
       buscarAcertoPorIdEPlanejamento: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
       buscarComGastosDivisoesAcertos: jest.fn(),
       salvarAcerto: jest.fn(),
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
@@ -1530,6 +1644,22 @@ describe('PlanejamentosService', () => {
     );
 
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+    ).toHaveBeenCalledWith('planejamento-1');
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcertoPorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarAcerto.mock.invocationCallOrder[0],
+    );
     expect(repositoryTransacional.salvarAcerto).toHaveBeenCalledWith(
       expect.objectContaining({
         status: AcertoStatus.CANCELADO,
@@ -1555,6 +1685,9 @@ describe('PlanejamentosService', () => {
         .invocationCallOrder[0],
     );
     expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
     expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
     expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
@@ -1592,6 +1725,9 @@ describe('PlanejamentosService', () => {
     );
 
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+    ).toHaveBeenCalledWith('planejamento-1');
     expect(repository.salvarAcertos).toHaveBeenCalledWith([
       expect.objectContaining({
         deParticipanteId: acertoPendente.deParticipanteId,
@@ -1638,11 +1774,15 @@ describe('PlanejamentosService', () => {
       ...repository,
       buscarAcessivelComParticipantes: jest.fn(),
       buscarAcertoPorIdEPlanejamento: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
       buscarComGastosDivisoesAcertos: jest.fn(),
       salvarAcerto: jest.fn(),
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
@@ -1669,6 +1809,9 @@ describe('PlanejamentosService', () => {
     );
 
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+    ).toHaveBeenCalledWith('planejamento-1');
     expect(repositoryTransacional.salvarAcerto).toHaveBeenCalledWith(
       expect.objectContaining({
         status: AcertoStatus.PENDENTE,
@@ -1676,7 +1819,23 @@ describe('PlanejamentosService', () => {
       }),
     );
     expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.buscarAcertoPorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repositoryTransacional.salvarAcerto.mock.invocationCallOrder[0],
+    );
     expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
     expect(repository.buscarAcertoPorIdEPlanejamento).not.toHaveBeenCalled();
     expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
