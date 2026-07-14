@@ -541,6 +541,45 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarGasto).not.toHaveBeenCalled();
   });
 
+  it('rejects a removed participant as payer or split in a new expense', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          {
+            ...criarParticipantePersistido('participante-2'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+        ],
+      }),
+    );
+    const dtoBase = {
+      comportamento: GastoComportamento.EVENTUAL,
+      dataGasto: '2026-07-04',
+      descricao: 'Mercado',
+      valorCentavos: 1000,
+    };
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        ...dtoBase,
+        pagoPorParticipanteId: 'participante-2',
+        participantesIds: ['participante-1'],
+      }),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_PAGADOR_INVALIDO' });
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        ...dtoBase,
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-1', 'participante-2'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO',
+    });
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+  });
+
   it('rejects duplicated split participants using domain validation', async () => {
     repository.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
@@ -2120,6 +2159,205 @@ describe('PlanejamentosService', () => {
       'user-2',
     );
     expect(result).toHaveLength(1);
+  });
+
+  it('keeps a removed payer of an active expense in settlement calculation', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          {
+            ...criarParticipantePersistido('participante-1'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+          criarParticipantePersistido('participante-2'),
+        ],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.findAcertos('planejamento-1', 'user-2'),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        devedorParticipanteId: 'participante-2',
+        recebedorParticipanteId: 'participante-1',
+        valorCentavos: 5000,
+      }),
+    ]);
+  });
+
+  it('keeps a removed participant of an active split in settlement calculation', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          {
+            ...criarParticipantePersistido('participante-2'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+        ],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: 'participante-1',
+            valorCentavos: 10000,
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 5000),
+              criarDivisaoPersistida('participante-2', 5000),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.findAcertos('planejamento-1', 'user-1'),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        devedorParticipanteId: 'participante-2',
+        recebedorParticipanteId: 'participante-1',
+        valorCentavos: 5000,
+      }),
+    ]);
+  });
+
+  it.each([AcertoStatus.PAGO, AcertoStatus.CONFIRMADO])(
+    'keeps removed participants referenced by a %s settlement in calculation',
+    async (status) => {
+      repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+        criarPlanejamentoComParticipantes({
+          participantes: [
+            criarParticipantePersistido('participante-1'),
+            {
+              ...criarParticipantePersistido('participante-2'),
+              status: ParticipanteStatus.REMOVIDO,
+            },
+          ],
+          acertos: [criarAcertoPersistido({ status })],
+        }),
+      );
+
+      await expect(
+        service.findAcertos('planejamento-1', 'user-1'),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          devedorParticipanteId: 'participante-1',
+          recebedorParticipanteId: 'participante-2',
+          valorCentavos: 5000,
+        }),
+      ]);
+    },
+  );
+
+  it('does not keep a removed participant referenced only by canceled expenses or splits', async () => {
+    const participanteRemovido = {
+      ...criarParticipantePersistido('participante-3'),
+      status: ParticipanteStatus.REMOVIDO,
+    };
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          criarParticipantePersistido('participante-2'),
+          participanteRemovido,
+        ],
+        gastos: [
+          criarGastoPersistido({
+            pagoPorParticipanteId: participanteRemovido.id,
+            status: GastoStatus.CANCELADO,
+            divisoes: [criarDivisaoPersistida(participanteRemovido.id, 1000)],
+          }),
+          criarGastoPersistido({
+            id: 'gasto-2',
+            divisoes: [
+              criarDivisaoPersistida('participante-1', 1000),
+              {
+                ...criarDivisaoPersistida(participanteRemovido.id, 1000),
+                status: DivisaoStatus.CANCELADA,
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.findAcertos('planejamento-1', 'user-1'),
+    ).resolves.toEqual([]);
+  });
+
+  it('does not keep a removed participant referenced only by a soft-deleted active expense', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipantePersistido('participante-1'),
+          {
+            ...criarParticipantePersistido('participante-2'),
+            status: ParticipanteStatus.REMOVIDO,
+          },
+        ],
+        gastos: [
+          criarGastoPersistido({
+            deletedAt: new Date('2026-07-14T12:00:00.000Z'),
+            pagoPorParticipanteId: 'participante-2',
+            status: GastoStatus.ATIVO,
+            divisoes: [criarDivisaoPersistida('participante-2', 1000)],
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.findAcertos('planejamento-1', 'user-1'),
+    ).resolves.toEqual([]);
+  });
+
+  it.each([AcertoStatus.CANCELADO, AcertoStatus.PENDENTE])(
+    'does not keep a removed participant referenced only by a %s settlement',
+    async (status) => {
+      repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+        criarPlanejamentoComParticipantes({
+          participantes: [
+            criarParticipantePersistido('participante-1'),
+            {
+              ...criarParticipantePersistido('participante-2'),
+              status: ParticipanteStatus.REMOVIDO,
+            },
+          ],
+          acertos: [criarAcertoPersistido({ status })],
+        }),
+      );
+
+      await expect(
+        service.findAcertos('planejamento-1', 'user-1'),
+      ).resolves.toEqual([]);
+    },
+  );
+
+  it('deduplicates financially relevant participant ids deterministically', async () => {
+    const participanteDuplicado = criarParticipantePersistido('participante-1');
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          participanteDuplicado,
+          { ...participanteDuplicado },
+          criarParticipantePersistido('participante-2'),
+        ],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+
+    await expect(
+      service.findAcertos('planejamento-1', 'user-1'),
+    ).resolves.toHaveLength(1);
   });
 
   it('does not calculate settlements when user has no planejamento access', async () => {

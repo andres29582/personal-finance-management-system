@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto';
 import request from 'supertest';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
 import { GastoPlanejamento } from '../src/planejamentos/entities/gasto-planejamento.entity';
 import { ParticipantePlanejamento } from '../src/planejamentos/entities/participante-planejamento.entity';
+import { Planejamento } from '../src/planejamentos/entities/planejamento.entity';
 import {
   AcertoStatus,
   GastoComportamento,
@@ -27,6 +28,13 @@ type PlanejamentoResponse = Identifiable & {
 type AcertoResponse = Identifiable & {
   deParticipanteId: string;
   paraParticipanteId: string;
+  status: AcertoStatus;
+  valorCentavos: number;
+};
+
+type AcertoSugeridoResponse = {
+  devedorParticipanteId: string;
+  recebedorParticipanteId: string;
   status: AcertoStatus;
   valorCentavos: number;
 };
@@ -476,6 +484,123 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
     );
   });
 
+  it('preserves a removed participant financial obligation without accepting it in a new expense', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '12345678909',
+      email: 'planejamento.participante-historico.e2e@example.com',
+      nome: 'Participante Historico E2E',
+    });
+    const authorization = `Bearer ${session.token}`;
+    const planejamentoResponse = await request(app.getHttpServer())
+      .post('/planejamentos')
+      .set('Authorization', authorization)
+      .send({
+        nome: 'Viagem com participante historico',
+        tipo: PlanejamentoTipo.VIAGEM,
+      })
+      .expect(201);
+    const planejamento =
+      unwrapSuccess<PlanejamentoResponse>(planejamentoResponse);
+    const participanteProprietario = planejamento.participantes.find(
+      (participante) => participante.usuarioId === session.userId,
+    );
+
+    expect(participanteProprietario).toBeDefined();
+
+    try {
+      const participanteResponse = await request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/participantes`)
+        .set('Authorization', authorization)
+        .send({ nome: 'Participante removido' })
+        .expect(201);
+      const participanteRemovido =
+        unwrapSuccess<ParticipanteResponse>(participanteResponse);
+
+      await request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/gastos`)
+        .set('Authorization', authorization)
+        .send({
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-14',
+          descricao: 'Hospedagem com participante historico',
+          pagoPorParticipanteId: participanteProprietario?.id,
+          participantesIds: [
+            participanteProprietario?.id,
+            participanteRemovido.id,
+          ],
+          valorCentavos: 10000,
+        })
+        .expect(201);
+
+      await dataSource
+        .getRepository(ParticipantePlanejamento)
+        .update(participanteRemovido.id, {
+          status: ParticipanteStatus.REMOVIDO,
+        });
+
+      const acertosResponse = await request(app.getHttpServer())
+        .get(`/planejamentos/${planejamento.id}/acertos`)
+        .set('Authorization', authorization)
+        .expect(200);
+      const acertos = unwrapSuccess<AcertoSugeridoResponse[]>(acertosResponse);
+
+      expect(acertos).toEqual([
+        expect.objectContaining({
+          devedorParticipanteId: participanteRemovido.id,
+          recebedorParticipanteId: participanteProprietario?.id,
+          status: AcertoStatus.PENDENTE,
+          valorCentavos: 5000,
+        }),
+      ]);
+
+      const novoGastoResponse = await request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/gastos`)
+        .set('Authorization', authorization)
+        .send({
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-14',
+          descricao: 'Novo gasto invalido',
+          pagoPorParticipanteId: participanteRemovido.id,
+          participantesIds: [participanteProprietario?.id],
+          valorCentavos: 2000,
+        });
+
+      expect(novoGastoResponse.status).toBe(422);
+      expect(novoGastoResponse.body).toEqual(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'PLANEJAMENTO_PAGADOR_INVALIDO',
+          }) as object,
+          success: false,
+        }),
+      );
+    } finally {
+      const gastos = await dataSource.getRepository(GastoPlanejamento).find({
+        select: { id: true },
+        where: { planejamentoId: planejamento.id },
+      });
+      const gastosIds = gastos.map((gasto) => gasto.id);
+
+      await dataSource
+        .getRepository(AcertoPlanejamento)
+        .delete({ planejamentoId: planejamento.id });
+      if (gastosIds.length > 0) {
+        await dataSource
+          .getRepository(DivisaoGasto)
+          .delete({ gastoId: In(gastosIds) });
+      }
+      await dataSource
+        .getRepository(GastoPlanejamento)
+        .delete({ planejamentoId: planejamento.id });
+      await dataSource
+        .getRepository(ParticipantePlanejamento)
+        .delete({ planejamentoId: planejamento.id });
+      await dataSource
+        .getRepository(Planejamento)
+        .delete({ id: planejamento.id });
+    }
+  });
+
   it('rolls back expense and splits when settlement reconciliation fails', async () => {
     const session = await registerAndLoginTestUser(app, {
       cpf: '10000001090',
@@ -535,6 +660,23 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
         observacao: 'Estado historico invalido para forcar rollback',
       }),
     );
+
+    // A referencia fora do agregado preserva a falha de integridade que
+    // exercita o rollback sem tratar participante removido historico como erro.
+    const planejamentoExternoResponse = await request(app.getHttpServer())
+      .post('/planejamentos')
+      .set('Authorization', authorization)
+      .send({
+        nome: 'Planejamento externo para inconsistencia',
+        tipo: PlanejamentoTipo.VIAGEM,
+      })
+      .expect(201);
+    const planejamentoExterno = unwrapSuccess<PlanejamentoResponse>(
+      planejamentoExternoResponse,
+    );
+    await participanteRepository.update(participanteRemovido.id, {
+      planejamentoId: planejamentoExterno.id,
+    });
 
     const gastoRepository = dataSource.getRepository(GastoPlanejamento);
     const divisaoRepository = dataSource.getRepository(DivisaoGasto);
