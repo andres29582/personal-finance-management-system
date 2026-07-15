@@ -37,6 +37,7 @@ type PlanejamentosRepositoryMock = jest.Mocked<
     | 'buscarGastoPorIdEPlanejamento'
     | 'buscarParticipanteAtivoDuplicado'
     | 'buscarParticipanteAtivoPorUsuario'
+    | 'buscarParticipantePorIdEPlanejamento'
     | 'executarEmTransacao'
     | 'listarAcessiveisPorUsuario'
     | 'listarGastosPorPlanejamento'
@@ -64,6 +65,7 @@ describe('PlanejamentosService', () => {
       buscarGastoPorIdEPlanejamento: jest.fn(),
       buscarParticipanteAtivoDuplicado: jest.fn(),
       buscarParticipanteAtivoPorUsuario: jest.fn(),
+      buscarParticipantePorIdEPlanejamento: jest.fn(),
       executarEmTransacao: jest.fn(),
       listarAcessiveisPorUsuario: jest.fn(),
       listarGastosPorPlanejamento: jest.fn(),
@@ -4161,6 +4163,302 @@ describe('PlanejamentosService', () => {
       1,
     );
     expect(repository.salvarParticipante).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes an active participant transactionally and reloads it after commit', async () => {
+    const planejamento = criarPlanejamentoComParticipantes();
+    const participanteAtivo = {
+      id: 'participante-2',
+      planejamentoId: 'planejamento-1',
+      status: ParticipanteStatus.ATIVO,
+      usuarioId: 'user-2',
+    } as never;
+    const participanteRemovido = {
+      ...participanteAtivo,
+      status: ParticipanteStatus.REMOVIDO,
+    } as never;
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(planejamento);
+    repository.buscarParticipantePorIdEPlanejamento
+      .mockResolvedValueOnce(participanteAtivo)
+      .mockResolvedValueOnce(participanteRemovido);
+    repository.salvarParticipante.mockResolvedValue(participanteRemovido);
+
+    const result = await service.removerParticipante(
+      'planejamento-1',
+      'participante-2',
+      'user-1',
+    );
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(
+      repository.buscarParticipantePorIdEPlanejamento,
+    ).toHaveBeenNthCalledWith(1, 'participante-2', 'planejamento-1');
+    expect(repository.salvarParticipante).toHaveBeenCalledWith({
+      id: 'participante-2',
+      planejamentoId: 'planejamento-1',
+      status: ParticipanteStatus.REMOVIDO,
+    });
+    expect(repository.salvarParticipante.mock.calls[0][0]).not.toHaveProperty(
+      'participantes',
+    );
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[1],
+    );
+    expect(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[1],
+    ).toBeLessThan(
+      repository.buscarParticipantePorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repository.buscarParticipantePorIdEPlanejamento.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(repository.salvarParticipante.mock.invocationCallOrder[0]);
+    expect(
+      repository.salvarParticipante.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarParticipantePorIdEPlanejamento.mock
+        .invocationCallOrder[1],
+    );
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(result).toBe(participanteRemovido);
+  });
+
+  it('rejects inaccessible planejamento before acquiring the participant removal lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+    await expect(
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_NOT_FOUND',
+      statusCode: 404,
+    });
+
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('returns planejamento not found when it disappears before the participant removal lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(null);
+
+    await expect(
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_NOT_FOUND',
+      statusCode: 404,
+    });
+
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(
+      repository.buscarParticipantePorIdEPlanejamento,
+    ).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('rejects an accessible non-owner before acquiring the participant removal lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+    );
+
+    await expect(
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_OWNER_REQUIRED',
+      statusCode: 403,
+    });
+
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('revalidates owner after acquiring the participant removal lock', async () => {
+    repository.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(criarPlanejamentoComParticipantes())
+      .mockResolvedValueOnce(
+        criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-2' }),
+      );
+
+    await expect(
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_OWNER_REQUIRED',
+      statusCode: 403,
+    });
+
+    expect(
+      repository.buscarParticipantePorIdEPlanejamento,
+    ).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it('returns not found for an absent participant or one from another planejamento', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarParticipantePorIdEPlanejamento.mockResolvedValue(null);
+
+    await expect(
+      service.removerParticipante(
+        'planejamento-1',
+        'participante-de-outro-planejamento',
+        'user-1',
+      ),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_PARTICIPANTE_NOT_FOUND',
+      statusCode: 404,
+    });
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it.each([ParticipanteStatus.REMOVIDO, ParticipanteStatus.PENDENTE])(
+    'rejects participant removal when current status is %s',
+    async (status) => {
+      repository.buscarAcessivelComParticipantes.mockResolvedValue(
+        criarPlanejamentoComParticipantes(),
+      );
+      repository.buscarParticipantePorIdEPlanejamento.mockResolvedValue({
+        id: 'participante-2',
+        planejamentoId: 'planejamento-1',
+        status,
+        usuarioId: 'user-2',
+      } as never);
+
+      await expect(
+        service.removerParticipante(
+          'planejamento-1',
+          'participante-2',
+          'user-1',
+        ),
+      ).rejects.toMatchObject({
+        code: 'PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO',
+        statusCode: 422,
+      });
+      expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not allow removing the participant linked to the planejamento owner', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarParticipantePorIdEPlanejamento.mockResolvedValue({
+      id: 'participante-owner',
+      planejamentoId: 'planejamento-1',
+      status: ParticipanteStatus.ATIVO,
+      usuarioId: 'user-1',
+    } as never);
+
+    await expect(
+      service.removerParticipante(
+        'planejamento-1',
+        'participante-owner',
+        'user-1',
+      ),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL',
+      statusCode: 422,
+    });
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['lock', 'bloquearPlanejamentoParaAtualizacao'],
+    ['persistence', 'salvarParticipante'],
+  ] as const)(
+    'propagates %s failure and does not reload the participant after transaction failure',
+    async (_cenario, metodo) => {
+      const erro = new Error('falha transacional');
+      repository.buscarAcessivelComParticipantes.mockResolvedValue(
+        criarPlanejamentoComParticipantes(),
+      );
+      repository.buscarParticipantePorIdEPlanejamento.mockResolvedValue({
+        id: 'participante-2',
+        planejamentoId: 'planejamento-1',
+        status: ParticipanteStatus.ATIVO,
+        usuarioId: 'user-2',
+      } as never);
+      repository[metodo].mockRejectedValue(erro);
+
+      await expect(
+        service.removerParticipante(
+          'planejamento-1',
+          'participante-2',
+          'user-1',
+        ),
+      ).rejects.toBe(erro);
+
+      expect(
+        repository.buscarParticipantePorIdEPlanejamento,
+      ).toHaveBeenCalledTimes(metodo === 'salvarParticipante' ? 1 : 0);
+    },
+  );
+
+  it('serializes two unit-level removals so only one changes the participant status', async () => {
+    let status = ParticipanteStatus.ATIVO;
+    let fila = Promise.resolve();
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarParticipantePorIdEPlanejamento.mockImplementation(() =>
+      Promise.resolve({
+        id: 'participante-2',
+        planejamentoId: 'planejamento-1',
+        status,
+        usuarioId: 'user-2',
+      } as never),
+    );
+    repository.salvarParticipante.mockImplementation((partial) => {
+      status = partial.status as ParticipanteStatus;
+      return Promise.resolve({ ...partial, usuarioId: 'user-2' } as never);
+    });
+    repository.executarEmTransacao.mockImplementation((operacao) => {
+      const execucao = fila.then(() =>
+        operacao(repository as unknown as PlanejamentosRepository),
+      );
+      fila = execucao.then(
+        () => undefined,
+        () => undefined,
+      );
+      return execucao;
+    });
+
+    const resultados = await Promise.allSettled([
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
+    ]);
+
+    expect(resultados.map((resultado) => resultado.status).sort()).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
+    const rejeitado = resultados.find(
+      (resultado): resultado is PromiseRejectedResult =>
+        resultado.status === 'rejected',
+    );
+    expect(rejeitado?.reason).toMatchObject({
+      code: 'PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO',
+    });
+    expect(repository.salvarParticipante).toHaveBeenCalledTimes(1);
+    expect(status).toBe(ParticipanteStatus.REMOVIDO);
   });
 
   function criarPlanejamentoComParticipantes(

@@ -9,6 +9,7 @@ import {
   FindGastosPlanejamentoParamsDto,
   FindPlanejamentoParamsDto,
   FindPlanejamentosDto,
+  RemoveParticipantePlanejamentoParamsDto,
   UpdateGastoPlanejamentoDto,
 } from './index';
 import {
@@ -86,6 +87,25 @@ describe('Planejamento DTO validation', () => {
 
     await expect(validate(manual)).resolves.toHaveLength(0);
     await expect(validate(vinculado)).resolves.toHaveLength(0);
+  });
+
+  it('validates both ids used to remove a participant', async () => {
+    const validos = Object.assign(
+      new RemoveParticipantePlanejamentoParamsDto(),
+      { planejamentoId: uuid, participanteId: uuid },
+    );
+    const invalidos = Object.assign(
+      new RemoveParticipantePlanejamentoParamsDto(),
+      { planejamentoId: 'invalido', participanteId: 'invalido' },
+    );
+
+    await expect(validate(validos)).resolves.toHaveLength(0);
+    await expect(validate(invalidos)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'planejamentoId' }),
+        expect.objectContaining({ property: 'participanteId' }),
+      ]),
+    );
   });
 
   it('rejects invalid participant payloads', async () => {

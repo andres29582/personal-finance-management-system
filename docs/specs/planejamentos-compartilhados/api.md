@@ -56,7 +56,7 @@ contrato disponivel no backend atual.
 | `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
 | `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
 | `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
-| `DELETE` | `/planejamentos/:id/participantes/:participanteId` | Remove participante logicamente. |
+| `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remove participante ativo logicamente, sem recalcular obrigacoes existentes; operacao exclusiva do proprietario. |
 | `GET` | `/planejamentos/:id/resumo` | Retorna resumo financeiro do planejamento. |
 | `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
 
@@ -164,6 +164,32 @@ Resposta conceitual:
   "telefone": "+5511988888888"
 }
 ```
+
+### Remover participante
+
+`DELETE /planejamentos/:planejamentoId/participantes/:participanteId`
+
+Operacao sem corpo e exclusiva do proprietario. A operacao e executada de forma
+transacional e serializada no agregado do planejamento, altera somente o status
+de `ATIVO` para `REMOVIDO` e retorna o participante recarregado depois do commit.
+O participante do usuario criador nao pode ser removido.
+
+Nenhum gasto, divisao ou acerto e cancelado ou alterado. A operacao nao executa
+reconciliacao, nao cria transacoes financeiras pessoais e preserva o
+participante nas relacoes e calculos historicos enquanto ele for financeiramente
+relevante. Participantes removidos nao podem ser usados como novos pagadores ou
+introduzidos em novas divisoes.
+
+Erros:
+
+- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario autenticado nao e proprietario;
+- `404 PLANEJAMENTO_NOT_FOUND`: planejamento inexistente ou inacessivel;
+- `404 PLANEJAMENTO_PARTICIPANTE_NOT_FOUND`: participante inexistente ou de
+  outro planejamento;
+- `422 PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO`: participante nao
+  esta `ATIVO`;
+- `422 PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL`: participante
+  representa o usuario criador do planejamento.
 
 ### Registrar gasto
 

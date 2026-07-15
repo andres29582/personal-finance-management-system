@@ -13,7 +13,11 @@ import {
   FindPlanejamentosDto,
   UpdateGastoPlanejamentoDto,
 } from './dto';
-import { calcularAcertosMinimos, calcularDivisaoIgualitaria } from './domain';
+import {
+  calcularAcertosMinimos,
+  calcularDivisaoIgualitaria,
+  participanteRepresentaProprietario,
+} from './domain';
 import {
   AcertoPlanejamentoCalculo,
   GastoPlanejamentoCalculo,
@@ -298,6 +302,94 @@ export class PlanejamentosService {
         });
       },
     );
+  }
+
+  async removerParticipante(
+    planejamentoId: string,
+    participanteId: string,
+    usuarioId: string,
+  ): Promise<ParticipantePlanejamento> {
+    await this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const planejamentoInicial =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(
+          planejamentoInicial,
+          usuarioId,
+        );
+
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+
+        const participante =
+          await repository.buscarParticipantePorIdEPlanejamento(
+            participanteId,
+            planejamentoId,
+          );
+
+        if (!participante) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_PARTICIPANTE_NOT_FOUND',
+            'Participante do planejamento nao encontrado.',
+          );
+        }
+
+        if (participante.status !== ParticipanteStatus.ATIVO) {
+          throw new ValidationAppException(
+            'PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO',
+            'Somente participante ativo pode ser removido.',
+            { details: { statusAtual: participante.status } },
+          );
+        }
+
+        if (participanteRepresentaProprietario(planejamento, participante)) {
+          throw new ValidationAppException(
+            'PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL',
+            'O participante proprietario do planejamento nao pode ser removido.',
+          );
+        }
+
+        await repository.salvarParticipante({
+          id: participante.id,
+          planejamentoId: participante.planejamentoId,
+          status: ParticipanteStatus.REMOVIDO,
+        });
+      },
+    );
+
+    const participanteAtualizado =
+      await this.planejamentosRepository.buscarParticipantePorIdEPlanejamento(
+        participanteId,
+        planejamentoId,
+      );
+
+    if (!participanteAtualizado) {
+      throw new ResourceNotFoundException(
+        'PLANEJAMENTO_PARTICIPANTE_NOT_FOUND',
+        'Participante do planejamento nao encontrado.',
+      );
+    }
+
+    return participanteAtualizado;
   }
 
   async createGasto(
