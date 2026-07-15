@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -21,6 +22,7 @@ import {
   FindGastosPlanejamentoParamsDto,
   FindPlanejamentoParamsDto,
   FindPlanejamentosDto,
+  RemoveParticipantePlanejamentoParamsDto,
   UpdateGastoPlanejamentoDto,
 } from './dto';
 import { PlanejamentosService } from './planejamentos.service';
@@ -64,6 +66,18 @@ export class PlanejamentosController {
       params.id,
       req.user.id,
       dto,
+    );
+  }
+
+  @Delete(':planejamentoId/participantes/:participanteId')
+  removerParticipante(
+    @Param() params: RemoveParticipantePlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.removerParticipante(
+      params.planejamentoId,
+      params.participanteId,
+      req.user.id,
     );
   }
 

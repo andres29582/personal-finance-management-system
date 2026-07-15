@@ -197,6 +197,9 @@ describe('Financial controllers security', () => {
       findOne: jest.fn().mockResolvedValue({ id: 'planejamento-1' }),
       pagarAcerto: jest.fn().mockResolvedValue({ id: 'acerto-1' }),
       reabrirAcerto: jest.fn().mockResolvedValue({ id: 'acerto-1' }),
+      removerParticipante: jest
+        .fn()
+        .mockResolvedValue({ id: 'participante-1', status: 'REMOVIDO' }),
       sincronizarAcertos: jest.fn().mockResolvedValue([]),
     };
     const controller = new PlanejamentosController(
@@ -213,6 +216,13 @@ describe('Financial controllers security', () => {
     await controller.addParticipante({ id: 'planejamento-1' }, req, {
       nome: 'Bruno',
     });
+    await controller.removerParticipante(
+      {
+        planejamentoId: 'planejamento-1',
+        participanteId: 'participante-1',
+      },
+      req,
+    );
     await controller.createGasto({ planejamentoId: 'planejamento-1' }, req, {
       descricao: 'Mercado',
     } as never);
@@ -245,6 +255,11 @@ describe('Financial controllers security', () => {
       'planejamento-1',
       'user-1',
       { nome: 'Bruno' },
+    );
+    expect(service.removerParticipante).toHaveBeenCalledWith(
+      'planejamento-1',
+      'participante-1',
+      'user-1',
     );
     expect(service.createGasto).toHaveBeenCalledWith(
       'planejamento-1',

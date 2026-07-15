@@ -226,6 +226,18 @@ export class PlanejamentosRepository {
     });
   }
 
+  async buscarParticipantePorIdEPlanejamento(
+    id: string,
+    planejamentoId: string,
+  ): Promise<ParticipantePlanejamento | null> {
+    return this.participanteRepository.findOne({
+      where: {
+        id,
+        planejamentoId,
+      },
+    });
+  }
+
   async buscarParticipanteAtivoDuplicado(
     planejamentoId: string,
     filtros: BuscarParticipanteDuplicadoFiltros,

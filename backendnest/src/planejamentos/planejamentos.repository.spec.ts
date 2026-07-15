@@ -319,6 +319,22 @@ describe('PlanejamentosRepository', () => {
     });
   });
 
+  it('busca participante por id somente dentro do planejamento informado', async () => {
+    participanteRepository.findOne.mockResolvedValue(null);
+
+    await repository.buscarParticipantePorIdEPlanejamento(
+      'participante-id',
+      'planejamento-id',
+    );
+
+    expect(obterWhereDaPrimeiraChamada(participanteRepository.findOne)).toEqual(
+      {
+        id: 'participante-id',
+        planejamentoId: 'planejamento-id',
+      },
+    );
+  });
+
   it('busca participante ativo duplicado por usuario e email', async () => {
     participanteRepository.findOne.mockResolvedValue(null);
 

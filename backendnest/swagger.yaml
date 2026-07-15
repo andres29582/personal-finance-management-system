@@ -74,6 +74,13 @@ components:
       schema:
         type: string
         format: uuid
+    ParticipanteIdParam:
+      name: participanteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     GastoIdParam:
       name: gastoId
       in: path
@@ -3598,6 +3605,61 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
       operationId: addParticipantePlanejamento
+  /planejamentos/{planejamentoId}/participantes/{participanteId}:
+    delete:
+      tags:
+      - Planejamentos
+      summary: Remover participante do planejamento
+      description: >-
+        Operacao exclusiva do proprietario. A operacao e executada de forma
+        transacional e serializada no agregado do planejamento. Altera somente
+        o status do participante ATIVO para REMOVIDO e retorna o registro
+        recarregado apos o commit. Gastos,
+        divisoes, acertos e obrigacoes existentes permanecem inalterados; a
+        remocao nao executa reconciliacao nem cria transacoes financeiras
+        pessoais.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/PlanejamentoIdParam'
+      - $ref: '#/components/parameters/ParticipanteIdParam'
+      responses:
+        '200':
+          description: Participante removido logicamente com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParticipantePlanejamentoSuccess'
+        '400':
+          description: planejamentoId ou participanteId nao e um UUID valido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            PLANEJAMENTO_NOT_FOUND ou PLANEJAMENTO_PARTICIPANTE_NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO ou
+            PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      operationId: removeParticipantePlanejamento
   /planejamentos/{planejamentoId}/gastos:
     post:
       tags:

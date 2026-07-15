@@ -25,6 +25,7 @@ describe('PlanejamentosController', () => {
       | 'findOne'
       | 'pagarAcerto'
       | 'reabrirAcerto'
+      | 'removerParticipante'
       | 'sincronizarAcertos'
     >
   >;
@@ -53,6 +54,7 @@ describe('PlanejamentosController', () => {
       findOne: jest.fn(),
       pagarAcerto: jest.fn(),
       reabrirAcerto: jest.fn(),
+      removerParticipante: jest.fn(),
       sincronizarAcertos: jest.fn(),
     };
 
@@ -124,6 +126,31 @@ describe('PlanejamentosController', () => {
       dto,
     );
     expect(result).toEqual({ id: 'participante-1' });
+  });
+
+  it('delegates removerParticipante using both route ids and authenticated user id', async () => {
+    planejamentosService.removerParticipante.mockResolvedValue({
+      id: 'participante-1',
+      status: 'REMOVIDO',
+    } as never);
+
+    const result = await controller.removerParticipante(
+      {
+        planejamentoId: 'planejamento-1',
+        participanteId: 'participante-1',
+      },
+      request,
+    );
+
+    expect(planejamentosService.removerParticipante).toHaveBeenCalledWith(
+      'planejamento-1',
+      'participante-1',
+      'user-1',
+    );
+    expect(result).toEqual({
+      id: 'participante-1',
+      status: 'REMOVIDO',
+    });
   });
 
   it('delegates createGasto using planejamento route id and authenticated user id', async () => {
