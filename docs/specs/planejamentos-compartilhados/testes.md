@@ -8,9 +8,9 @@
 
 ## Objetivo
 
-Definir a estrategia inicial de testes para o futuro modulo de Planejamentos
-Compartilhados. Esta fase nao implementa testes; apenas registra a cobertura
-esperada para orientar a implementacao.
+Definir e acompanhar a estrategia de testes do modulo de Planejamentos
+Compartilhados. O modulo ja possui cobertura unitaria, de controller e E2E; os
+itens ainda nao implementados permanecem como cobertura esperada de roadmap.
 
 Os testes devem cobrir regras financeiras, DTOs, services, controllers e fluxos
 E2E autenticados, com foco especial em isolamento de dados entre usuarios e
@@ -147,6 +147,12 @@ Casos por endpoint:
 ## Testes E2E
 
 E2E deve usar o padrao existente do backend com PostgreSQL, Supertest e JWT.
+
+O contrato atual de fechamento possui suite E2E dedicada cobrindo fechamento
+com acerto pendente, autorizacao exclusiva do proprietario, repeticao e
+concorrencia de fechamento, rollback por gasto `PENDENTE_REVISAO`, bloqueio das
+cinco mutacoes estruturais implementadas e continuidade de sincronizacao,
+pagamento, cancelamento e reabertura de acertos em `FECHADO`.
 
 Fluxo minimo recomendado:
 

@@ -56,6 +56,14 @@ export class PlanejamentosController {
     return this.planejamentosService.findOne(params.id, req.user.id);
   }
 
+  @Patch(':id/fechar')
+  fechar(
+    @Param() params: FindPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.fechar(params.id, req.user.id);
+  }
+
   @Post(':id/participantes')
   addParticipante(
     @Param() params: FindPlanejamentoParamsDto,

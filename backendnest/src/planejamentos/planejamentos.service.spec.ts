@@ -2561,14 +2561,20 @@ describe('PlanejamentosService', () => {
     expect(result).toEqual([acertoCriado]);
   });
 
-  it('keeps settlement synchronization idempotent when pending suggestion already exists', async () => {
+  it('keeps settlement synchronization available and idempotent when a closed planejamento already has the pending suggestion', async () => {
     const acertoPendente = criarAcertoPersistido({
       deParticipanteId: 'participante-2',
       paraParticipanteId: 'participante-1',
       valorCentavos: 5000,
     });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+      }),
+    );
     repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
       criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
         acertos: [acertoPendente],
         gastos: [
           criarGastoPersistido({
@@ -2971,7 +2977,296 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
   });
 
-  it('allows owner to mark a pending settlement as paid', async () => {
+  it('rejects adding a participant to a closed planejamento after locking it', async () => {
+    prepararPlanejamentoFechadoAposLock();
+
+    await expect(
+      service.addParticipante('planejamento-1', 'user-1', {
+        nome: 'Novo participante',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
+      details: { statusAtual: PlanejamentoStatus.FECHADO },
+      statusCode: 422,
+    });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('rejects removing a participant from a closed planejamento after locking it', async () => {
+    prepararPlanejamentoFechadoAposLock();
+
+    await expect(
+      service.removerParticipante(
+        'planejamento-1',
+        'participante-2',
+        'user-1',
+      ),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
+      details: { statusAtual: PlanejamentoStatus.FECHADO },
+      statusCode: 422,
+    });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(
+      repository.buscarParticipantePorIdEPlanejamento,
+    ).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('rejects creating an expense in a closed planejamento after locking it', async () => {
+    prepararPlanejamentoFechadoAposLock();
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-15',
+        descricao: 'Gasto bloqueado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-1', 'participante-2'],
+        valorCentavos: 10000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
+      details: { statusAtual: PlanejamentoStatus.FECHADO },
+      statusCode: 422,
+    });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('rejects updating an expense in a closed planejamento after locking it', async () => {
+    prepararPlanejamentoFechadoAposLock();
+
+    await expect(
+      service.atualizarGasto(
+        'planejamento-1',
+        'gasto-1',
+        'user-1',
+        { descricao: 'Atualizacao bloqueada' },
+      ),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
+      details: { statusAtual: PlanejamentoStatus.FECHADO },
+      statusCode: 422,
+    });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('rejects canceling an expense in a closed planejamento after locking it', async () => {
+    prepararPlanejamentoFechadoAposLock();
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
+      details: { statusAtual: PlanejamentoStatus.FECHADO },
+      statusCode: 422,
+    });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
+  it('closes an open planejamento after locking and reconciling settlements in one transaction', async () => {
+    const planejamentoAberto = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.ABERTO,
+    });
+    const planejamentoFechado = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.FECHADO,
+    });
+    const acertoCriado = criarEntidadeAcertoPersistido();
+    repository.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(planejamentoAberto)
+      .mockResolvedValueOnce(planejamentoFechado);
+    repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoAberto,
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.ABERTO,
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.salvarAcertos.mockResolvedValue([acertoCriado]);
+    repository.salvarPlanejamento.mockResolvedValue(
+      planejamentoFechado as never,
+    );
+
+    const result = await service.fechar('planejamento-1', 'user-1');
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(repository.salvarAcertos).toHaveBeenCalledWith([
+      expect.objectContaining({
+        deParticipanteId: 'participante-2',
+        paraParticipanteId: 'participante-1',
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 5000,
+      }),
+    ]);
+    expect(repository.salvarPlanejamento).toHaveBeenCalledWith({
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.FECHADO,
+    });
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarComGastosDivisoesAcertos.mock.invocationCallOrder[0],
+    );
+    expect(repository.salvarAcertos.mock.invocationCallOrder[0]).toBeLessThan(
+      repository.salvarPlanejamento.mock.invocationCallOrder[0],
+    );
+    expect(result).toBe(planejamentoFechado);
+  });
+
+  it('preserves an equivalent pending settlement while closing', async () => {
+    const planejamentoAberto = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.ABERTO,
+    });
+    const planejamentoFechado = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.FECHADO,
+    });
+    const acertoPendente = criarAcertoPersistido();
+    repository.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(planejamentoAberto)
+      .mockResolvedValueOnce(planejamentoFechado);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.ABERTO,
+        acertos: [acertoPendente],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.salvarPlanejamento.mockResolvedValue(
+      planejamentoFechado as never,
+    );
+
+    await expect(
+      service.fechar('planejamento-1', 'user-1'),
+    ).resolves.toBe(planejamentoFechado);
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(acertoPendente).toMatchObject({
+      id: 'acerto-1',
+      status: AcertoStatus.PENDENTE,
+      valorCentavos: 5000,
+    });
+    expect(repository.salvarPlanejamento).toHaveBeenCalledWith({
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.FECHADO,
+    });
+  });
+
+  it('revalidates planejamento ownership after acquiring the closing lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.ABERTO,
+      }),
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.ABERTO,
+        usuarioCriadorId: 'user-2',
+      }),
+    );
+
+    await expect(
+      service.fechar('planejamento-1', 'user-1'),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_OWNER_REQUIRED' });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    PlanejamentoStatus.FECHADO,
+    PlanejamentoStatus.ARQUIVADO,
+    PlanejamentoStatus.CANCELADO,
+  ])('rejects closing a planejamento with status %s', async (status) => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ status }),
+    );
+
+    await expect(
+      service.fechar('planejamento-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_FECHAR_STATUS_INVALIDO',
+      details: { statusAtual: status },
+      statusCode: 422,
+    });
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('rejects closing when an active pending-review expense exists', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.ABERTO,
+        gastos: [
+          criarGastoPersistido({ status: GastoStatus.PENDENTE_REVISAO }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.fechar('planejamento-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO',
+      statusCode: 422,
+    });
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('allows owner to mark a pending settlement as paid in a closed planejamento', async () => {
     const acertoPendente = criarEntidadeAcertoPersistido({
       deParticipante: criarParticipantePersistido('participante-2', 'user-2'),
     });
@@ -2989,10 +3284,14 @@ describe('PlanejamentosService', () => {
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
-      criarPlanejamentoComParticipantes(),
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+      }),
     );
     repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
-      criarPlanejamentoComParticipantes(),
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+      }),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
       acertoPendente,
@@ -3000,6 +3299,7 @@ describe('PlanejamentosService', () => {
     repositoryTransacional.salvarAcerto.mockResolvedValue(acertoPago);
     repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
       criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
         acertos: [acertoPago],
         gastos: [criarGastoComPendencia()],
       }),
@@ -3401,7 +3701,7 @@ describe('PlanejamentosService', () => {
     },
   );
 
-  it('cancels a paid settlement and recreates the corresponding pending settlement in one transaction', async () => {
+  it('cancels a paid settlement in a closed planejamento and recreates the corresponding pending settlement in one transaction', async () => {
     const acertoPago = criarEntidadeAcertoPersistido({
       status: AcertoStatus.PAGO,
       dataPagamento: new Date('2026-07-04T00:00:00.000Z'),
@@ -3423,10 +3723,14 @@ describe('PlanejamentosService', () => {
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
-      criarPlanejamentoComParticipantes(),
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+      }),
     );
     repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
-      criarPlanejamentoComParticipantes(),
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+      }),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
       acertoPago,
@@ -3434,6 +3738,7 @@ describe('PlanejamentosService', () => {
     repositoryTransacional.salvarAcerto.mockResolvedValue(acertoCancelado);
     repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
       criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
         acertos: [acertoCancelado],
         gastos: [criarGastoComPendencia()],
       }),
@@ -3564,7 +3869,7 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
   });
 
-  it('reopens a canceled settlement when an exactly equivalent current suggestion exists', async () => {
+  it('reopens a canceled settlement in a closed planejamento when an exactly equivalent current suggestion exists', async () => {
     const acertoCancelado = criarEntidadeAcertoPersistido({
       status: AcertoStatus.CANCELADO,
       dataPagamento: new Date('2026-07-04T00:00:00.000Z'),
@@ -3583,22 +3888,28 @@ describe('PlanejamentosService', () => {
       salvarAcertos: jest.fn(),
     };
     repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
-      criarPlanejamentoComParticipantes(),
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+      }),
     );
     repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
-      criarPlanejamentoComParticipantes(),
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+      }),
     );
     repositoryTransacional.buscarAcertoPorIdEPlanejamento.mockResolvedValue(
       acertoCancelado,
     );
     repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
       criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
         acertos: [acertoCancelado],
         gastos: [criarGastoComPendencia()],
       }),
     );
     repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
       criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
         acertos: [acertoReaberto],
         gastos: [criarGastoComPendencia()],
       }),
@@ -3854,6 +4165,7 @@ describe('PlanejamentosService', () => {
   it('adds a manual participant after confirming planejamento access', async () => {
     const planejamentoDoProprietario = {
       id: 'planejamento-1',
+      status: PlanejamentoStatus.ABERTO,
       usuarioCriadorId: 'user-1',
     } as never;
     repositoryTransacional = {
@@ -3931,6 +4243,7 @@ describe('PlanejamentosService', () => {
   it('adds a linked participant when usuarioId is provided', async () => {
     const planejamentoDoProprietario = {
       id: 'planejamento-1',
+      status: PlanejamentoStatus.ABERTO,
       usuarioCriadorId: 'user-1',
     } as never;
     repositoryTransacional = {
@@ -4018,6 +4331,7 @@ describe('PlanejamentosService', () => {
   it('returns not found when planejamento disappears while locking participant creation', async () => {
     repository.buscarAcessivelComParticipantes.mockResolvedValue({
       id: 'planejamento-1',
+      status: PlanejamentoStatus.ABERTO,
       usuarioCriadorId: 'user-1',
     } as never);
     repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(null);
@@ -4096,6 +4410,7 @@ describe('PlanejamentosService', () => {
   it('rejects duplicated active participants only after acquiring the lock', async () => {
     repository.buscarAcessivelComParticipantes.mockResolvedValue({
       id: 'planejamento-1',
+      status: PlanejamentoStatus.ABERTO,
       usuarioCriadorId: 'user-1',
     } as never);
     repository.buscarParticipanteAtivoDuplicado.mockResolvedValue({
@@ -4148,6 +4463,7 @@ describe('PlanejamentosService', () => {
     const erroPersistencia = new Error('falha ao salvar participante');
     repository.buscarAcessivelComParticipantes.mockResolvedValue({
       id: 'planejamento-1',
+      status: PlanejamentoStatus.ABERTO,
       usuarioCriadorId: 'user-1',
     } as never);
     repository.buscarParticipanteAtivoDuplicado.mockResolvedValue(null);
@@ -4466,6 +4782,7 @@ describe('PlanejamentosService', () => {
   ) {
     return {
       id: 'planejamento-1',
+      status: PlanejamentoStatus.ABERTO,
       participantes: [
         criarParticipantePersistido('participante-1'),
         criarParticipantePersistido('participante-2'),
@@ -4475,6 +4792,22 @@ describe('PlanejamentosService', () => {
       acertos: [],
       ...overrides,
     } as never;
+  }
+
+  function prepararPlanejamentoFechadoAposLock(): void {
+    const planejamentoAberto = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.ABERTO,
+    });
+    const planejamentoFechado = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.FECHADO,
+    });
+
+    repository.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(planejamentoAberto)
+      .mockResolvedValueOnce(planejamentoFechado);
+    repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoAberto,
+    );
   }
 
   function criarParticipantePersistido(id: string, usuarioId?: string) {

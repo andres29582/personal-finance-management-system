@@ -30,6 +30,7 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `POST` | `/planejamentos` | Cria planejamento compartilhado. |
 | `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
+| `PATCH` | `/planejamentos/:id/fechar` | Fecha operacionalmente um planejamento `ABERTO`, com lock, reconciliacao final e preservacao dos acertos pendentes. |
 | `POST` | `/planejamentos/:id/participantes` | Adiciona participante atomicamente; duplicidades ativas por nome manual, email ou usuario vinculado retornam conflito `409`. |
 | `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remove participante ativo logicamente, sem recalcular obrigacoes existentes; operacao exclusiva do proprietario. |
 | `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
@@ -51,7 +52,6 @@ contrato disponivel no backend atual.
 | Metodo | Rota | Descricao |
 | --- | --- | --- |
 | `PATCH` | `/planejamentos/:id` | Edita dados basicos do planejamento. |
-| `PATCH` | `/planejamentos/:id/fechar` | Fecha planejamento quando nao houver pendencias impeditivas. |
 | `PATCH` | `/planejamentos/:id/arquivar` | Arquiva planejamento sem exclusao fisica. |
 | `PATCH` | `/planejamentos/:id/cancelar` | Cancela planejamento logicamente. |
 | `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
@@ -111,10 +111,15 @@ Campos editaveis no MVP:
 
 ### Alterar status do planejamento
 
-Endpoints preferenciais:
+Endpoint implementado:
 
 ```text
 PATCH /planejamentos/:id/fechar
+```
+
+Endpoints de roadmap:
+
+```text
 PATCH /planejamentos/:id/arquivar
 PATCH /planejamentos/:id/cancelar
 ```
@@ -142,6 +147,22 @@ gastos e as alteracoes de pagador ou divisoes. Consulta, pagamento e correcao de
 acertos existentes, alem de sincronizacao para consistencia operacional que nao
 altere a origem das obrigacoes, continuam permitidos. Portanto,
 `FECHADO + PENDENTE` e valido.
+
+O fechamento implementado nao recebe body e retorna o planejamento com status
+`FECHADO`. Erros de dominio atuais:
+
+- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
+- `404 PLANEJAMENTO_NOT_FOUND`: planejamento inexistente ou inacessivel;
+- `422 PLANEJAMENTO_FECHAR_STATUS_INVALIDO`: planejamento nao esta `ABERTO`,
+  com `statusAtual` nos detalhes;
+- `422 PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO`: existe gasto com revisao
+  pendente.
+
+As mutacoes estruturais implementadas exigem planejamento `ABERTO`: adicionar
+ou remover participante e criar, editar ou cancelar gasto. Quando o planejamento
+esta `FECHADO`, `ARQUIVADO` ou `CANCELADO`, elas retornam
+`422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`, com `statusAtual` nos
+detalhes. Consultas e operacoes de acerto nao usam esse bloqueio estrutural.
 
 ### Adicionar participante
 
@@ -205,7 +226,9 @@ Erros:
 - `422 PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO`: participante nao
   esta `ATIVO`;
 - `422 PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL`: participante
-  representa o usuario criador do planejamento.
+  representa o usuario criador do planejamento;
+- `422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`: planejamento nao esta
+  `ABERTO`.
 
 ### Registrar gasto
 
@@ -340,7 +363,9 @@ Erros relevantes:
   da divisao nao esta ativo;
 - `422 PARTICIPANTE_DUPLICADO`: `participantesIds` contem duplicidade;
 - `422 VALOR_MENOR_QUE_PARTICIPANTES`: o valor nao permite distribuir ao menos
-  um centavo para cada participante.
+  um centavo para cada participante;
+- `422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`: planejamento nao esta
+  `ABERTO`.
 
 ### Cancelar gasto
 
@@ -359,6 +384,8 @@ Erros relevantes:
 - `404 PLANEJAMENTO_NOT_FOUND`: usuario sem acesso ou planejamento inexistente;
 - `404 PLANEJAMENTO_GASTO_NOT_FOUND`: gasto inexistente ou de outro planejamento;
 - `422 PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO`: gasto nao esta `ATIVO`.
+- `422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`: planejamento nao esta
+  `ABERTO`.
 
 ## Endpoint de resumo
 

@@ -3568,6 +3568,51 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: getPlanejamentoById
+  /planejamentos/{id}/fechar:
+    patch:
+      tags:
+      - Planejamentos
+      summary: Fechar planejamento operacionalmente
+      description: >-
+        Operacao exclusiva do proprietario. Transiciona o planejamento de
+        ABERTO para FECHADO em transacao serializada, depois da reconciliacao
+        final dos acertos. Acertos pendentes sao preservados e nao impedem o
+        fechamento. Gastos PENDENTE_REVISAO impedem a operacao.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Planejamento fechado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanejamentoSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            PLANEJAMENTO_FECHAR_STATUS_INVALIDO - planejamento nao esta ABERTO;
+            ou PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO - existe gasto com
+            revisao pendente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      operationId: closePlanejamento
   /planejamentos/{id}/participantes:
     post:
       tags:
@@ -3604,6 +3649,14 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          description: >-
+            PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
+            esta ABERTO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: addParticipantePlanejamento
   /planejamentos/{planejamentoId}/participantes/{participanteId}:
     delete:
@@ -3654,7 +3707,9 @@ paths:
         '422':
           description: >-
             PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO ou
-            PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL.
+            PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL; ou
+            PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
+            esta ABERTO.
           content:
             application/json:
               schema:
@@ -3696,7 +3751,14 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
+            esta ABERTO; ou outra regra de negocio de pagador, participante ou
+            divisao invalida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: createGastoPlanejamento
     get:
       tags:
@@ -3800,7 +3862,9 @@ paths:
             PLANEJAMENTO_GASTO_DIVISOES_ATIVAS_OBRIGATORIAS,
             PLANEJAMENTO_PAGADOR_INVALIDO,
             PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO,
-            PARTICIPANTE_DUPLICADO ou VALOR_MENOR_QUE_PARTICIPANTES.
+            PARTICIPANTE_DUPLICADO, VALOR_MENOR_QUE_PARTICIPANTES ou
+            PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
+            esta ABERTO.
           content:
             application/json:
               schema:
@@ -3846,7 +3910,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: >-
-            PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO - gasto nao esta ATIVO.
+            PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO - gasto nao esta ATIVO;
+            ou PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento
+            nao esta ABERTO.
           content:
             application/json:
               schema:

@@ -247,6 +247,54 @@ export class PlanejamentosService {
     return planejamento;
   }
 
+  async fechar(id: string, usuarioId: string): Promise<Planejamento> {
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const planejamentoInicial =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            id,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(
+          planejamentoInicial,
+          usuarioId,
+        );
+
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(id);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          id,
+          usuarioId,
+        );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertPlanejamentoAbertoParaFechamento(planejamento);
+        this.assertPlanejamentoSemGastosPendentesRevisao(planejamento);
+
+        await this.reconciliarAcertos(repository, planejamento);
+        await repository.salvarPlanejamento({
+          id,
+          status: PlanejamentoStatus.FECHADO,
+        });
+
+        return this.buscarPlanejamentoAcessivelComRepository(
+          repository,
+          id,
+          usuarioId,
+        );
+      },
+    );
+  }
+
   async addParticipante(
     planejamentoId: string,
     usuarioId: string,
@@ -282,6 +330,7 @@ export class PlanejamentosService {
             usuarioId,
           );
         this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertPlanejamentoAbertoParaMutacaoEstrutural(planejamento);
 
         await this.assertParticipanteAtivoNaoDuplicadoComRepository(
           repository,
@@ -339,6 +388,7 @@ export class PlanejamentosService {
             usuarioId,
           );
         this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertPlanejamentoAbertoParaMutacaoEstrutural(planejamento);
 
         const participante =
           await repository.buscarParticipantePorIdEPlanejamento(
@@ -421,6 +471,7 @@ export class PlanejamentosService {
             planejamentoId,
             usuarioId,
           );
+        this.assertPlanejamentoAbertoParaMutacaoEstrutural(planejamento);
 
         this.assertParticipantePertenceAoPlanejamento(
           planejamento,
@@ -565,6 +616,7 @@ export class PlanejamentosService {
             usuarioId,
           );
         this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertPlanejamentoAbertoParaMutacaoEstrutural(planejamento);
 
         const gasto = await repository.buscarGastoPorIdEPlanejamento(
           gastoId,
@@ -774,6 +826,7 @@ export class PlanejamentosService {
               usuarioId,
             );
           this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+          this.assertPlanejamentoAbertoParaMutacaoEstrutural(planejamento);
 
           const gasto = await repository.buscarGastoPorIdEPlanejamento(
             gastoId,
@@ -1285,6 +1338,52 @@ export class PlanejamentosService {
     throw new ForbiddenResourceException(
       'PLANEJAMENTO_OWNER_REQUIRED',
       'Apenas o proprietario do planejamento pode executar esta acao.',
+    );
+  }
+
+  private assertPlanejamentoAbertoParaFechamento(
+    planejamento: Planejamento,
+  ): void {
+    if (planejamento.status === PlanejamentoStatus.ABERTO) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_FECHAR_STATUS_INVALIDO',
+      'Somente planejamento aberto pode ser fechado.',
+      { details: { statusAtual: planejamento.status } },
+    );
+  }
+
+  private assertPlanejamentoAbertoParaMutacaoEstrutural(
+    planejamento: Planejamento,
+  ): void {
+    if (planejamento.status === PlanejamentoStatus.ABERTO) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
+      'Somente planejamentos abertos podem sofrer alteracoes estruturais.',
+      { details: { statusAtual: planejamento.status } },
+    );
+  }
+
+  private assertPlanejamentoSemGastosPendentesRevisao(
+    planejamento: Planejamento,
+  ): void {
+    const possuiGastoPendenteRevisao = (planejamento.gastos ?? []).some(
+      (gasto) =>
+        gasto.status === GastoStatus.PENDENTE_REVISAO && !gasto.deletedAt,
+    );
+
+    if (!possuiGastoPendenteRevisao) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO',
+      'Planejamento com gasto pendente de revisao nao pode ser fechado.',
     );
   }
 
