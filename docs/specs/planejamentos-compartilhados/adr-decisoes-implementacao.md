@@ -143,3 +143,45 @@ Consequencia:
 
 - payloads com valor insuficiente para a quantidade de participantes devem ser
   rejeitados por regra de negocio ou validacao de dominio.
+
+## Decisao 8 - Lifecycle operacional separado da situacao financeira
+
+O estado do planejamento e operacional. A situacao financeira e derivada dos
+fatos financeiros e nao sera persistida nesta fase.
+
+Decisao definitiva:
+
+```text
+FECHADO congela a origem das obrigacoes financeiras, mas nao impede a liquidacao
+ou correcao posterior dos acertos existentes.
+```
+
+Consequencias:
+
+- fechamento nao significa quitacao e acertos pendentes nao impedem fechar;
+- `FECHADO + PENDENTE` e uma combinacao valida;
+- em `FECHADO`, entidades e historico permanecem visiveis, mas ficam bloqueadas
+  a adicao, remocao ou edicao de participantes, a criacao, edicao ou cancelamento
+  de gastos e as alteracoes de pagador ou divisoes;
+- pagamentos, cancelamentos de marcacao incorreta, reaberturas validas e
+  reconciliacao operacional de acertos existentes continuam permitidos;
+- como regra de dominio, a data efetiva do pagamento deve ser registrada quando
+  informada; o contrato atual nao recebe essa data e usa o instante em que o
+  acerto e marcado como pago;
+- pagamento tardio nao reabre o planejamento e nao altera seu periodo original;
+- `ARQUIVADO` e somente leitura e exige planejamento `FECHADO` sem obrigacao
+  financeira residual valida;
+- a quitacao considera gastos validos, divisoes ativas, acertos pagos, acertos
+  cancelados ou obsoletos e a reconciliacao atual, nao apenas a inexistencia
+  fisica de linhas `PENDENTE`;
+- o comportamento de `CANCELADO` com gastos ou acertos existentes permanece
+  pendente de decisao antes da implementacao do endpoint;
+- `QUITADO` nao integra e nao deve ser adicionado a `PlanejamentoStatus`.
+
+Representacao conceitual derivada:
+
+```ts
+type SituacaoFinanceiraPlanejamento =
+  | 'PENDENTE'
+  | 'QUITADO';
+```

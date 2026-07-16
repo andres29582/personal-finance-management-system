@@ -96,6 +96,11 @@ Cobertura minima:
 - garantir que consultas `GET` de resumo e acertos nao alterem o banco de dados;
 - marcar acerto como pago;
 - reabrir acerto pago;
+- fechar planejamento com acertos pendentes e preservar esses acertos;
+- bloquear alteracoes estruturais e de gastos depois do fechamento;
+- permitir pagamento e correcao de acertos existentes depois do fechamento;
+- arquivar somente planejamento `FECHADO` e financeiramente `QUITADO`;
+- manter planejamento `ARQUIVADO` em somente leitura;
 - replicar planejamento mensal;
 - marcar gastos variaveis replicados como `PENDENTE_REVISAO`;
 - nao criar transacoes pessoais automaticamente.
@@ -127,7 +132,7 @@ Casos por endpoint:
 | `POST /planejamentos/:id/participantes` | adiciona participante. |
 | `GET /planejamentos/:id/participantes` | lista participantes. |
 | `PATCH /planejamentos/:id/participantes/:participanteId` | edita participante. |
-| `DELETE /planejamentos/:id/participantes/:participanteId` | remove logicamente. |
+| `DELETE /planejamentos/:planejamentoId/participantes/:participanteId` | contrato atual implementado: remove logicamente. |
 | `POST /planejamentos/:id/gastos` | registra gasto e retorna divisoes. |
 | `GET /planejamentos/:id/gastos` | lista gastos. |
 | `PATCH /planejamentos/:id/gastos/:gastoId` | edita gasto. |
@@ -244,6 +249,31 @@ Fluxo minimo recomendado:
 - Confirmar revisao altera status para `ATIVO`.
 - Sistema informa mes de origem do valor replicado.
 - Sistema informa ultima alteracao de valor quando houver.
+
+## Casos de lifecycle e situacao financeira
+
+- Fechar exige usuario autenticado proprietario e planejamento `ABERTO`.
+- Fechar e transacional, serializado no agregado e executa reconciliacao final.
+- Gasto `PENDENTE_REVISAO` bloqueia fechamento.
+- Acerto `PENDENTE` nao bloqueia fechamento e permanece preservado.
+- Planejamento pode ficar `FECHADO + PENDENTE`.
+- Planejamento `FECHADO` mantem entidades e historico visiveis, mas bloqueia
+  adicionar, remover ou editar participante, criar, editar ou cancelar gasto e
+  alterar pagador ou divisoes.
+- Planejamento `FECHADO` permite consultar historico, sincronizar acertos para
+  consistencia operacional e pagar, cancelar ou reabrir acertos existentes.
+- No contrato atual, pagamento marcado em 05/07 para obrigacao consolidada no
+  fechamento de 30/06 registra o instante da marcacao em 05/07, sem reabrir o
+  planejamento ou alterar junho/2026.
+- Em evolucao futura, quando `dataPagamento` for informada em DTO, o sistema
+  registra essa data efetiva em vez do instante da marcacao.
+- Situacao `QUITADO` e derivada depois de considerar gastos validos, divisoes
+  ativas, acertos pagos, cancelados ou obsoletos e reconciliacao atual.
+- Ausencia fisica de linha `PENDENTE` nao basta para concluir `QUITADO`.
+- Arquivar exige `FECHADO + QUITADO` e torna o agregado somente leitura.
+- `PlanejamentoStatus` nao recebe o valor `QUITADO`.
+- Cancelamento com obrigacoes existentes permanece sem comportamento definido e
+  deve bloquear implementacao do endpoint ate decisao de dominio.
 
 ## Casos de nao criacao automatica de transacoes pessoais
 

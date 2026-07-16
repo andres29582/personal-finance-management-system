@@ -27,12 +27,85 @@
 | RN-PLAN-04 | O status inicial deve ser `ABERTO`, salvo regra futura explicita. |
 | RN-PLAN-05 | A descricao e opcional. |
 | RN-PLAN-06 | O mes de referencia e opcional para planejamentos gerais e recomendado para planejamentos mensais de casa compartilhada. |
-| RN-PLAN-07 | Planejamentos `CANCELADO` ou `ARQUIVADO` nao devem aceitar novos gastos no MVP. |
-| RN-PLAN-08 | Planejamentos fechados devem bloquear novas alteracoes financeiras, salvo reabertura futura explicitamente definida. |
+| RN-PLAN-07 | O status do planejamento representa seu ciclo operacional; a situacao financeira e derivada dos fatos financeiros. |
+| RN-PLAN-08 | Planejamento `FECHADO` deve bloquear a adicao, remocao ou edicao de participantes, bem como a criacao, edicao ou cancelamento de gastos e alteracoes de pagador ou divisoes, preservando integralmente a visibilidade das entidades e do historico. A liquidacao e a correcao de acertos existentes continuam permitidas. |
 | RN-PLAN-09 | Fechamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/fechar`. |
 | RN-PLAN-10 | Arquivamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/arquivar`. |
 | RN-PLAN-11 | Cancelamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/cancelar`; se `DELETE /planejamentos/:id` for mantido, deve representar cancelamento logico. |
 | RN-PLAN-12 | Planejamento com gasto `PENDENTE_REVISAO` nao pode ser fechado. |
+| RN-PLAN-13 | Acertos pendentes nao impedem o fechamento do planejamento. |
+| RN-PLAN-14 | Somente planejamento `FECHADO` e financeiramente `QUITADO` pode ser arquivado. |
+| RN-PLAN-15 | Planejamento `ARQUIVADO` e historico finalizado e de somente leitura. |
+| RN-PLAN-16 | Planejamento `CANCELADO` representa abandono ou invalidacao, nao conclusao normal. |
+| RN-PLAN-17 | O efeito do cancelamento sobre gastos e acertos existentes deve ser decidido antes da implementacao do endpoint; nenhuma regra destrutiva fica presumida. |
+| RN-PLAN-18 | `QUITADO` nao deve ser adicionado ao enum operacional `PlanejamentoStatus`. |
+
+## Ciclo operacional e situacao financeira
+
+Decisao central:
+
+```text
+FECHADO congela a origem das obrigacoes financeiras, mas nao impede a liquidacao
+ou correcao posterior dos acertos existentes.
+```
+
+O fechamento consolida os gastos e bloqueia alteracoes estruturais ou financeiras
+na origem das obrigacoes, mas nao exige a quitacao dos acertos pendentes. Assim,
+`FECHADO + PENDENTE` e uma combinacao valida.
+
+A situacao financeira e derivada e nao deve ser persistida nesta fase:
+
+```ts
+type SituacaoFinanceiraPlanejamento =
+  | 'PENDENTE'
+  | 'QUITADO';
+```
+
+`QUITADO` significa ausencia de obrigacao financeira residual valida depois de
+considerar gastos validos, divisoes ativas, acertos pagos, acertos cancelados ou
+obsoletos e a reconciliacao atual. A mera inexistencia fisica de linhas
+`PENDENTE` nao e suficiente.
+
+Combinacoes validas:
+
+```text
+ABERTO + PENDENTE
+ABERTO + QUITADO
+FECHADO + PENDENTE
+FECHADO + QUITADO
+ARQUIVADO + QUITADO
+```
+
+### Matriz de operacoes por estado
+
+| Operacao | ABERTO | FECHADO | ARQUIVADO | CANCELADO |
+| --- | --- | --- | --- | --- |
+| Consultar historico | Permitido | Permitido | Permitido | Permitido |
+| Adicionar/remover participante | Permitido | Bloqueado | Bloqueado | Bloqueado |
+| Criar/editar/cancelar gasto | Permitido | Bloqueado | Bloqueado | Bloqueado |
+| Alterar pagador/divisoes | Permitido | Bloqueado | Bloqueado | Bloqueado |
+| Sincronizar acertos | Permitido | Permitido para consistencia operacional | Bloqueado | A definir |
+| Marcar acerto como pago | Permitido | Permitido | Bloqueado | A definir |
+| Cancelar/reabrir acerto | Permitido | Permitido | Bloqueado | A definir |
+| Fechar | Permitido conforme validacoes | Nao aplicavel | Bloqueado | Bloqueado |
+| Arquivar | Bloqueado | Permitido somente quando `QUITADO` | Nao aplicavel | Bloqueado |
+
+Em `FECHADO`, sincronizacao e reconciliacao podem manter a consistencia
+operacional dos acertos, desde que nao alterem gastos, divisoes nem a origem das
+obrigacoes.
+
+### Pre-condicoes para fechamento
+
+O fechamento deve exigir:
+
+- usuario autenticado proprietario do planejamento;
+- planejamento em `ABERTO`;
+- operacao transacional e serializada no agregado;
+- ausencia de gastos `PENDENTE_REVISAO`;
+- reconciliacao final dos acertos;
+- preservacao dos acertos pendentes.
+
+A quitacao total nao e pre-condicao para fechamento.
 
 ## Regras de participantes
 
@@ -173,6 +246,11 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-PAGAR-05 | Marcar como pago deve registrar auditoria. |
 | RN-PAGAR-06 | Marcar como pago nao deve criar transacao financeira pessoal automaticamente. |
 | RN-PAGAR-07 | Confirmacao pelo recebedor fica fora do MVP. |
+| RN-PAGAR-08 | Acerto existente pode ser marcado como pago em planejamento `ABERTO` ou `FECHADO`. |
+| RN-PAGAR-09 | Como regra de dominio, a data efetiva do pagamento deve ser registrada quando informada. |
+| RN-PAGAR-10 | Pagamento posterior ao fechamento nao reabre o planejamento, nao altera seu periodo, nao cria gasto e nao modifica divisoes. |
+| RN-PAGAR-11 | No contrato atual, o endpoint nao recebe data de pagamento e registra em `dataPagamento` o instante em que o acerto e marcado como `PAGO`. |
+| RN-PAGAR-12 | Aceitar `dataPagamento` e `observacao` em DTO opcional e uma evolucao futura compativel, fora desta branch e sem alteracao do Swagger atual. |
 
 ## Regras para cancelar ou reabrir acerto pago
 
@@ -187,6 +265,7 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-REABRIR-07 | Se gastos forem editados apos um acerto pago, a implementacao deve preservar o acerto historico e recalcular pendencias restantes de forma explicita. |
 | RN-REABRIR-08 | Cancelar ou reabrir acerto pago deve remover o efeito financeiro daquele pagamento. |
 | RN-REABRIR-09 | Apos cancelar ou reabrir acerto pago, o sistema deve recalcular os acertos pendentes. |
+| RN-REABRIR-10 | Cancelar uma marcacao incorreta ou reabrir um acerto permanece permitido em planejamento `FECHADO`, quando a transicao do acerto for valida. |
 
 ## Regras de edicao e cancelamento de gastos
 

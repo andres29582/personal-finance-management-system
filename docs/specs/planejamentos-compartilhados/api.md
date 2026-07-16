@@ -31,6 +31,7 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
 | `POST` | `/planejamentos/:id/participantes` | Adiciona participante atomicamente; duplicidades ativas por nome manual, email ou usuario vinculado retornam conflito `409`. |
+| `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remove participante ativo logicamente, sem recalcular obrigacoes existentes; operacao exclusiva do proprietario. |
 | `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
 | `GET` | `/planejamentos/:planejamentoId/gastos` | Lista gastos do planejamento. |
 | `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consulta gasto do planejamento. |
@@ -56,7 +57,6 @@ contrato disponivel no backend atual.
 | `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
 | `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
 | `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
-| `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remove participante ativo logicamente, sem recalcular obrigacoes existentes; operacao exclusiva do proprietario. |
 | `GET` | `/planejamentos/:id/resumo` | Retorna resumo financeiro do planejamento. |
 | `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
 
@@ -122,10 +122,26 @@ PATCH /planejamentos/:id/cancelar
 Regras conceituais:
 
 - `fechar` deve bloquear fechamento enquanto houver gastos `PENDENTE_REVISAO`;
-- `arquivar` preserva historico e nao exclui registros;
-- `cancelar` e cancelamento logico;
+- `fechar` exige proprietario autenticado, planejamento `ABERTO`, transacao
+  serializada no agregado e reconciliacao final dos acertos;
+- `fechar` preserva acertos pendentes e nao exige quitacao total;
+- `arquivar` exige planejamento `FECHADO` sem obrigacao financeira residual
+  valida, preserva historico e torna o planejamento somente leitura;
+- `cancelar` e cancelamento logico, mas seu efeito sobre obrigacoes existentes
+  permanece a definir antes da implementacao;
 - se `DELETE /planejamentos/:id` for mantido, ele deve ser tratado como
   cancelamento logico, nunca exclusao fisica.
+
+O status do planejamento representa seu ciclo operacional. A situacao financeira
+e derivada, nao persistida nesta fase, e conceitualmente possui os valores
+`PENDENTE` e `QUITADO`. Nao deve existir `PlanejamentoStatus.QUITADO`.
+
+Em `FECHADO`, entidades e historico permanecem visiveis. Ficam bloqueadas a
+adicao, remocao ou edicao de participantes, a criacao, edicao ou cancelamento de
+gastos e as alteracoes de pagador ou divisoes. Consulta, pagamento e correcao de
+acertos existentes, alem de sincronizacao para consistencia operacional que nao
+altere a origem das obrigacoes, continuam permitidos. Portanto,
+`FECHADO + PENDENTE` e valido.
 
 ### Adicionar participante
 
@@ -428,12 +444,24 @@ Resposta conceitual:
 
 `PATCH /planejamentos/:id/acertos/:acertoId/pagar`
 
-Payload opcional:
+O pagamento de acerto existente e permitido em planejamento `ABERTO` ou
+`FECHADO`. Pagamento tardio nao reabre o planejamento, nao altera o periodo
+original, nao cria gasto e nao modifica divisoes.
 
-```json
-{
-  "observacao": "Pago via Pix"
-}
+Regra de dominio: a data efetiva do pagamento deve ser registrada quando
+informada.
+
+Comportamento do contrato atual: o endpoint nao recebe DTO nem data de pagamento;
+o service atribui `new Date()` a `dataPagamento`, registrando o instante em que o
+acerto e marcado como `PAGO`.
+
+Evolucao futura compativel, fora desta branch e sem alteracao do Swagger atual:
+
+```ts
+type PagarAcertoDto = {
+  dataPagamento?: string;
+  observacao?: string;
+};
 ```
 
 Resposta conceitual:
@@ -442,7 +470,7 @@ Resposta conceitual:
 {
   "id": "uuid",
   "status": "PAGO",
-  "pagoEm": "2026-07-03T10:30:00.000Z"
+  "dataPagamento": "2026-07-03T10:30:00.000Z"
 }
 ```
 

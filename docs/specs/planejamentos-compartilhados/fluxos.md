@@ -130,7 +130,9 @@ Resultado esperado:
 3. Backend valida se o acerto pertence ao planejamento.
 4. Backend valida se o acerto esta `PENDENTE`.
 5. Backend altera status para `PAGO`.
-6. Backend grava `pagoEm`.
+6. No contrato atual, que nao recebe DTO de data, backend grava em
+   `dataPagamento` o instante retornado por `new Date()` quando o acerto e
+   marcado como pago.
 7. Backend registra auditoria.
 8. Backend retorna acerto atualizado.
 
@@ -139,6 +141,13 @@ Resultado esperado:
 - acerto fica marcado como pago;
 - nenhuma transacao pessoal e criada automaticamente;
 - historico e auditoria preservam a acao.
+
+O fluxo e permitido em planejamento `ABERTO` ou `FECHADO`. O pagamento em
+planejamento `FECHADO` liquida obrigacao consolidada e nao reabre o planejamento,
+nao altera o periodo original, nao cria gasto e nao modifica divisoes.
+
+Como regra de dominio, a data efetiva do pagamento deve ser registrada quando
+informada. Aceitar essa data em DTO e evolucao futura fora desta branch.
 
 ## Fluxo de cancelamento ou reabertura de acerto
 
@@ -160,6 +169,41 @@ Resultado esperado:
 - acao e reversivel ou rastreavel;
 - pagamentos historicos nao desaparecem silenciosamente;
 - resumo financeiro pode ser recalculado considerando o novo estado.
+
+## Fluxo de fechamento do planejamento
+
+1. Usuario autenticado proprietario solicita o fechamento.
+2. Backend bloqueia e serializa o agregado do planejamento em transacao.
+3. Backend valida que o planejamento esta `ABERTO`.
+4. Backend valida que nao ha gasto `PENDENTE_REVISAO`.
+5. Backend executa a reconciliacao final dos acertos.
+6. Backend preserva todos os acertos pendentes validos.
+7. Backend altera o estado operacional para `FECHADO` e registra auditoria.
+
+Acertos pendentes nao impedem o fechamento. Depois dele, participantes, gastos,
+pagador e divisoes ficam congelados, mas os acertos existentes ainda podem ser
+pagos ou corrigidos, e podem ser sincronizados para consistencia operacional sem
+alterar a origem das obrigacoes.
+
+## Fluxo de arquivamento do planejamento
+
+1. Usuario autenticado proprietario solicita o arquivamento.
+2. Backend valida que o planejamento esta `FECHADO`.
+3. Backend reconcilia e deriva a situacao financeira atual.
+4. Backend valida ausencia de obrigacao financeira residual valida, considerando
+   gastos validos, divisoes ativas, acertos pagos, cancelados ou obsoletos e a
+   reconciliacao atual.
+5. Backend altera o estado para `ARQUIVADO` e registra auditoria.
+
+Planejamento `ARQUIVADO` e somente leitura. A inexistencia fisica de linhas
+`PENDENTE`, isoladamente, nao prova quitacao.
+
+## Fluxo de cancelamento do planejamento
+
+`CANCELADO` representa abandono ou invalidacao, nao conclusao normal. O efeito do
+cancelamento sobre gastos, divisoes e acertos existentes permanece pendente de
+decisao. Nenhum comportamento destrutivo deve ser implementado antes dessa
+definicao de dominio.
 
 ## Fluxo de cancelamento de gasto
 
@@ -298,3 +342,25 @@ Resultado:
 - o sistema informa que os valores variaveis vieram de junho/2026;
 - acertos de junho nao sao copiados para julho;
 - nenhum gasto replicado cria transacao pessoal automaticamente.
+
+## Exemplo temporal de pagamento depois do fechamento
+
+```text
+Planejamento: Casa compartilhada - Junho/2026
+Fechado em: 30/06/2026
+Acerto pendente: participante deve R$ 150
+Pagamento realizado em: 05/07/2026
+```
+
+Resultado:
+
+```text
+planejamento.status = FECHADO
+acerto.status = PAGO
+acerto.dataPagamento = instante da marcacao como pago em 05/07/2026
+```
+
+O pagamento posterior nao reabre o planejamento, nao altera junho/2026, nao cria
+novo gasto e nao modifica divisoes. Ele apenas liquida uma obrigacao previamente
+consolidada. Em evolucao futura, uma data efetiva diferente do instante de
+marcacao podera ser informada por DTO.

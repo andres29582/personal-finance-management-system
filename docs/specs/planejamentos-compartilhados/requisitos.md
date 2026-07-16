@@ -123,6 +123,18 @@ O criador replica participantes e gastos de um planejamento mensal anterior para
 um novo mes. Gastos variaveis ou configurados como exigindo revisao devem nascer
 com status `PENDENTE_REVISAO`.
 
+### UC-11 - Fechar sem exigir quitacao e liquidar posteriormente
+
+O proprietario fecha um planejamento `ABERTO` depois de consolidar os gastos e
+reconciliar os acertos. Acertos pendentes sao preservados e podem ser pagos,
+cancelados ou reabertos posteriormente sem reabrir o planejamento nem alterar o
+periodo original.
+
+### UC-12 - Arquivar historico quitado
+
+O proprietario arquiva somente planejamento `FECHADO` sem obrigacao financeira
+residual valida. O planejamento `ARQUIVADO` passa a ser somente leitura.
+
 ## Escopo do MVP
 
 - Criar planejamento compartilhado.
@@ -211,6 +223,13 @@ com status `PENDENTE_REVISAO`.
 | RF-30 | O sistema deve registrar mes de referencia e ultima alteracao de valor de gastos replicados. |
 | RF-31 | O sistema deve registrar auditoria nas acoes principais. |
 | RF-32 | O sistema nao deve criar transacoes pessoais automaticamente a partir de gastos ou acertos do planejamento no MVP. |
+| RF-33 | O sistema deve tratar o status do planejamento como ciclo operacional e derivar separadamente sua situacao financeira como `PENDENTE` ou `QUITADO`. |
+| RF-34 | O sistema deve permitir fechar planejamento com acertos pendentes, desde que as demais pre-condicoes sejam satisfeitas. |
+| RF-35 | O sistema deve manter entidades e historico visiveis em planejamento `FECHADO`, bloqueando a adicao, remocao ou edicao de participantes, a criacao, edicao ou cancelamento de gastos e alteracoes de pagador ou divisoes. |
+| RF-36 | O sistema deve permitir pagar e corrigir acertos existentes de planejamento `FECHADO`; a data efetiva deve ser registrada quando informada. |
+| RF-37 | O sistema deve permitir arquivar somente planejamento `FECHADO` e financeiramente `QUITADO`. |
+| RF-38 | O sistema deve manter planejamento `ARQUIVADO` em somente leitura. |
+| RF-39 | O sistema nao deve adicionar `QUITADO` ao enum operacional `PlanejamentoStatus`. |
 
 ## Requisitos nao funcionais
 
@@ -273,6 +292,20 @@ com status `PENDENTE_REVISAO`.
     financeira automatica.
 28. Auditoria e obrigatoria nas acoes principais.
 29. Testes E2E devem validar autenticacao e isolamento de dados entre usuarios.
+30. O estado do planejamento e operacional; a situacao financeira e derivada e
+    nao persistida nesta fase.
+31. Fechamento consolida a origem das obrigacoes, mas nao exige quitacao.
+32. Pagamentos e correcoes posteriores de acertos existentes continuam
+    permitidos em planejamento `FECHADO`. Como regra de dominio, a data efetiva
+    do pagamento deve ser registrada quando informada; no contrato atual, que nao
+    recebe essa data, registra-se o instante da marcacao como pago.
+33. Pagamento tardio nao reabre o planejamento, nao altera o periodo original,
+    nao cria gasto e nao modifica divisoes.
+34. Arquivamento exige ausencia de obrigacao financeira residual valida e torna
+    o planejamento somente leitura.
+35. O efeito do cancelamento sobre obrigacoes existentes deve ser decidido antes
+    da implementacao do endpoint.
+36. `QUITADO` nao deve ser incluido em `PlanejamentoStatus`.
 
 ## Decisoes futuras
 
