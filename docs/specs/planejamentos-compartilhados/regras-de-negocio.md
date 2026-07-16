@@ -215,6 +215,9 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-SALDO-09 | O resumo financeiro oficial deve considerar gastos ativos, divisoes ativas e acertos pagos. |
 | RN-SALDO-10 | Acertos pendentes devem ser calculados sobre a pendencia restante apos considerar acertos pagos. |
 | RN-SALDO-11 | Gastos `PENDENTE_REVISAO` podem aparecer em totais provisorios separados, mas nao entram em acertos oficiais. |
+| RN-SALDO-12 | A obrigacao residual do resumo e a soma apenas dos `saldoAbertoCentavos` positivos; somar tambem o lado devedor duplicaria a mesma obrigacao. |
+| RN-SALDO-13 | O resumo e `QUITADO` quando todos os saldos abertos sao zero e `PENDENTE` quando existe qualquer saldo aberto diferente de zero. |
+| RN-SALDO-14 | Acertos `PAGO` e `CONFIRMADO` reduzem o saldo aberto; acertos `PENDENTE` e `CANCELADO` nao sao pagamentos efetivos. |
 
 ## Regras de acertos minimos
 

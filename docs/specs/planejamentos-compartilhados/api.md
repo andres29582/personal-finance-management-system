@@ -30,6 +30,7 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `POST` | `/planejamentos` | Cria planejamento compartilhado. |
 | `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
+| `GET` | `/planejamentos/:id/resumo` | Retorna o resumo financeiro derivado, sem persistencia, reconciliacao ou alteracao do agregado. |
 | `PATCH` | `/planejamentos/:id/fechar` | Fecha operacionalmente um planejamento `ABERTO`, com lock, reconciliacao final e preservacao dos acertos pendentes. |
 | `POST` | `/planejamentos/:id/participantes` | Adiciona participante atomicamente; duplicidades ativas por nome manual, email ou usuario vinculado retornam conflito `409`. |
 | `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remove participante ativo logicamente, sem recalcular obrigacoes existentes; operacao exclusiva do proprietario. |
@@ -57,7 +58,6 @@ contrato disponivel no backend atual.
 | `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
 | `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
 | `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
-| `GET` | `/planejamentos/:id/resumo` | Retorna resumo financeiro do planejamento. |
 | `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
 
 ## Payloads conceituais
@@ -391,49 +391,71 @@ Erros relevantes:
 
 `GET /planejamentos/:id/resumo`
 
-O resumo oficial deve considerar gastos ativos, divisoes ativas e acertos pagos.
-Gastos `PENDENTE_REVISAO` nao devem gerar acertos oficiais; eles podem aparecer
-em totais provisorios separados.
+Endpoint implementado. O resumo oficial considera gastos `ATIVO`, divisoes
+ativas e acertos `PAGO` ou `CONFIRMADO`. Gastos `CANCELADO` ou
+`PENDENTE_REVISAO` nao entram nos totais oficiais. A consulta e pura: nao abre
+transacao, nao adquire lock, nao reconcilia ou materializa acertos, nao persiste
+entidades e nao altera o status operacional.
 
-Resposta conceitual:
+Resposta (`data` do envelope global de sucesso):
 
 ```json
 {
   "planejamentoId": "uuid",
-  "totalCentavos": 394700,
+  "statusOperacional": "FECHADO",
+  "situacaoFinanceira": "PENDENTE",
+  "totalGastosAtivosCentavos": 10001,
+  "obrigacaoResidualCentavos": 5000,
   "participantes": [
     {
-      "participanteId": "uuid-ana",
-      "nome": "Ana",
-      "totalPagoCentavos": 300000,
-      "totalDevidoCentavos": 131567,
-      "saldoCentavos": 168433,
+      "participante": {
+        "id": "uuid-ana",
+        "nome": "Ana",
+        "tipo": "VINCULADO",
+        "status": "ATIVO"
+      },
+      "totalPagoCentavos": 10001,
+      "totalDevidoCentavos": 5001,
+      "totalPagoEmAcertosCentavos": 0,
+      "totalRecebidoEmAcertosCentavos": 0,
+      "saldoBrutoCentavos": 5000,
+      "saldoAbertoCentavos": 5000,
       "statusFinanceiro": "RECEBEDOR"
     },
     {
-      "participanteId": "uuid-bruno",
-      "nome": "Bruno",
-      "totalPagoCentavos": 94600,
-      "totalDevidoCentavos": 131567,
-      "saldoCentavos": -36967,
+      "participante": {
+        "id": "uuid-bruno",
+        "nome": "Bruno",
+        "tipo": "MANUAL",
+        "status": "ATIVO"
+      },
+      "totalPagoCentavos": 0,
+      "totalDevidoCentavos": 5000,
+      "totalPagoEmAcertosCentavos": 0,
+      "totalRecebidoEmAcertosCentavos": 0,
+      "saldoBrutoCentavos": -5000,
+      "saldoAbertoCentavos": -5000,
       "statusFinanceiro": "DEVEDOR"
-    }
-  ],
-  "gastosPendentesRevisao": [
-    {
-      "gastoId": "uuid",
-      "descricao": "Luz",
-      "valorReplicadoDeMes": "2026-06"
     }
   ]
 }
 ```
 
-`statusFinanceiro` conceitual:
+`situacaoFinanceira` e `QUITADO` somente quando todos os
+`saldoAbertoCentavos` sao zero; havendo qualquer saldo diferente de zero, e
+`PENDENTE`. `obrigacaoResidualCentavos` soma apenas saldos abertos positivos
+(lado credor), evitando contar a mesma obrigacao novamente pelo lado devedor.
 
-- `DEVEDOR`, quando `saldoCentavos < 0`;
-- `RECEBEDOR`, quando `saldoCentavos > 0`;
-- `QUITADO`, quando `saldoCentavos = 0`.
+Participantes ativos sao retornados na ordem deterministica do agregado.
+Participante removido continua no resumo enquanto referenciado por gasto ativo,
+divisao ativa ou acerto efetivo; removido sem relevancia financeira e excluido.
+Nao sao expostos `usuarioId`, email ou entidades completas.
+
+`statusFinanceiro`:
+
+- `DEVEDOR`, quando `saldoAbertoCentavos < 0`;
+- `RECEBEDOR`, quando `saldoAbertoCentavos > 0`;
+- `QUITADO`, quando `saldoAbertoCentavos = 0`.
 
 ## Endpoint de acertos
 

@@ -1757,6 +1757,104 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AcertoPlanejamento'
+    ParticipanteResumoFinanceiroPlanejamento:
+      type: object
+      required:
+      - id
+      - nome
+      - tipo
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
+        tipo:
+          type: string
+          enum:
+          - MANUAL
+          - CONVIDADO
+          - VINCULADO
+        status:
+          type: string
+          enum:
+          - ATIVO
+          - PENDENTE
+          - REMOVIDO
+    SaldoParticipanteResumoFinanceiroPlanejamento:
+      type: object
+      required:
+      - participante
+      - totalPagoCentavos
+      - totalDevidoCentavos
+      - totalPagoEmAcertosCentavos
+      - totalRecebidoEmAcertosCentavos
+      - saldoBrutoCentavos
+      - saldoAbertoCentavos
+      - statusFinanceiro
+      properties:
+        participante:
+          $ref: '#/components/schemas/ParticipanteResumoFinanceiroPlanejamento'
+        totalPagoCentavos:
+          type: integer
+        totalDevidoCentavos:
+          type: integer
+        totalPagoEmAcertosCentavos:
+          type: integer
+        totalRecebidoEmAcertosCentavos:
+          type: integer
+        saldoBrutoCentavos:
+          type: integer
+          description: Total pago menos total devido, antes dos acertos efetivos.
+        saldoAbertoCentavos:
+          type: integer
+          description: Saldo residual depois de acertos PAGO ou CONFIRMADO.
+        statusFinanceiro:
+          type: string
+          enum:
+          - DEVEDOR
+          - RECEBEDOR
+          - QUITADO
+    ResumoFinanceiroPlanejamento:
+      type: object
+      required:
+      - planejamentoId
+      - statusOperacional
+      - situacaoFinanceira
+      - totalGastosAtivosCentavos
+      - obrigacaoResidualCentavos
+      - participantes
+      properties:
+        planejamentoId:
+          type: string
+          format: uuid
+        statusOperacional:
+          type: string
+          description: Status atual do ciclo operacional, retornado sem modificacao.
+          enum:
+          - ABERTO
+          - FECHADO
+          - ARQUIVADO
+          - CANCELADO
+        situacaoFinanceira:
+          type: string
+          description: Situacao derivada dos saldos abertos, sem persistencia propria.
+          enum:
+          - PENDENTE
+          - QUITADO
+        totalGastosAtivosCentavos:
+          type: integer
+          minimum: 0
+          description: Soma dos gastos ATIVO em centavos inteiros.
+        obrigacaoResidualCentavos:
+          type: integer
+          minimum: 0
+          description: Soma dos saldos abertos positivos, contada apenas pelo lado credor para nao duplicar a mesma obrigacao.
+        participantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaldoParticipanteResumoFinanceiroPlanejamento'
     PublicUserSuccess:
       allOf:
       - $ref: '#/components/schemas/SuccessAny'
@@ -1876,6 +1974,13 @@ components:
         properties:
           data:
             $ref: '#/components/schemas/Planejamento'
+    ResumoFinanceiroPlanejamentoSuccess:
+      allOf:
+      - $ref: '#/components/schemas/SuccessAny'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/ResumoFinanceiroPlanejamento'
     ParticipantePlanejamentoSuccess:
       allOf:
       - $ref: '#/components/schemas/SuccessAny'
@@ -3568,6 +3673,35 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
       operationId: getPlanejamentoById
+  /planejamentos/{id}/resumo:
+    get:
+      tags:
+      - Planejamentos
+      summary: Obter resumo financeiro derivado do planejamento
+      description: >-
+        Consulta pura e sem efeitos colaterais. Considera somente gastos ATIVO
+        e acertos PAGO ou CONFIRMADO, nao persiste a situacao financeira, nao
+        reconcilia nem materializa acertos e nao modifica o status operacional.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Resumo financeiro derivado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumoFinanceiroPlanejamentoSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      operationId: getPlanejamentoFinancialSummary
   /planejamentos/{id}/fechar:
     patch:
       tags:

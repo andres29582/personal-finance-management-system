@@ -154,6 +154,12 @@ concorrencia de fechamento, rollback por gasto `PENDENTE_REVISAO`, bloqueio das
 cinco mutacoes estruturais implementadas e continuidade de sincronizacao,
 pagamento, cancelamento e reabertura de acertos em `FECHADO`.
 
+O resumo financeiro possui testes puros de dominio, testes de service e
+controller e suite E2E PostgreSQL dedicada. A cobertura valida totais e saldos
+por participante, obrigacao residual contada somente pelo lado credor,
+`ABERTO/FECHADO + PENDENTE/QUITADO`, gastos excluidos, isolamento de acesso e
+repeticao do `GET` sem alterar acertos, status ou timestamps do agregado.
+
 Fluxo minimo recomendado:
 
 1. Criar usuario A e usuario B.

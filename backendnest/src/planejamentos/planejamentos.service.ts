@@ -16,12 +16,15 @@ import {
 import {
   calcularAcertosMinimos,
   calcularDivisaoIgualitaria,
+  calcularResumoFinanceiroPlanejamento,
   participanteRepresentaProprietario,
 } from './domain';
 import {
   AcertoPlanejamentoCalculo,
   GastoPlanejamentoCalculo,
   PlanejamentoDominioError,
+  SituacaoFinanceiraPlanejamento,
+  StatusFinanceiroParticipante,
 } from './domain/types';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
@@ -50,6 +53,29 @@ export type AcertoPlanejamentoSugerido = {
   status: AcertoStatus.PENDENTE;
   devedorParticipante: ParticipantePlanejamento;
   recebedorParticipante: ParticipantePlanejamento;
+};
+
+export type ResumoFinanceiroPlanejamento = {
+  planejamentoId: string;
+  statusOperacional: PlanejamentoStatus;
+  situacaoFinanceira: SituacaoFinanceiraPlanejamento;
+  totalGastosAtivosCentavos: number;
+  obrigacaoResidualCentavos: number;
+  participantes: Array<{
+    participante: {
+      id: string;
+      nome: string;
+      tipo: ParticipanteTipo;
+      status: ParticipanteStatus;
+    };
+    totalPagoCentavos: number;
+    totalDevidoCentavos: number;
+    totalPagoEmAcertosCentavos: number;
+    totalRecebidoEmAcertosCentavos: number;
+    saldoBrutoCentavos: number;
+    saldoAbertoCentavos: number;
+    statusFinanceiro: StatusFinanceiroParticipante;
+  }>;
 };
 
 type AcertosParaSalvar = Parameters<
@@ -914,6 +940,52 @@ export class PlanejamentosService {
         acerto.recebedorParticipanteId,
       )!,
     }));
+  }
+
+  async findResumo(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<ResumoFinanceiroPlanejamento> {
+    const planejamento = await this.buscarPlanejamentoParaAcertos(
+      this.planejamentosRepository,
+      planejamentoId,
+      usuarioId,
+    );
+    const participantesFinanceiramenteRelevantes =
+      this.listarParticipantesFinanceiramenteRelevantes(planejamento);
+    const participantesPorId = this.mapearParticipantesPorId(
+      participantesFinanceiramenteRelevantes,
+    );
+    const resumo = calcularResumoFinanceiroPlanejamento(
+      participantesFinanceiramenteRelevantes.map(
+        (participante) => participante.id,
+      ),
+      this.mapearGastosParaCalculo(planejamento),
+      this.mapearAcertosParaCalculo(planejamento),
+    );
+
+    return {
+      planejamentoId: planejamento.id,
+      statusOperacional: planejamento.status,
+      situacaoFinanceira: resumo.situacaoFinanceira,
+      totalGastosAtivosCentavos: resumo.totalGastosAtivosCentavos,
+      obrigacaoResidualCentavos: resumo.obrigacaoResidualCentavos,
+      participantes: resumo.participantes.map(
+        ({ participanteId, ...saldo }) => {
+          const participante = participantesPorId.get(participanteId)!;
+
+          return {
+            participante: {
+              id: participante.id,
+              nome: participante.nome,
+              tipo: participante.tipo,
+              status: participante.status,
+            },
+            ...saldo,
+          };
+        },
+      ),
+    };
   }
 
   async pagarAcerto(
