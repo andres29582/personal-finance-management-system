@@ -18,6 +18,7 @@ describe('PlanejamentosController', () => {
       | 'cancelarGasto'
       | 'create'
       | 'createGasto'
+      | 'fechar'
       | 'findAcertos'
       | 'findAll'
       | 'findGasto'
@@ -47,6 +48,7 @@ describe('PlanejamentosController', () => {
       cancelarGasto: jest.fn(),
       create: jest.fn(),
       createGasto: jest.fn(),
+      fechar: jest.fn(),
       findAcertos: jest.fn(),
       findAll: jest.fn(),
       findGasto: jest.fn(),
@@ -103,6 +105,28 @@ describe('PlanejamentosController', () => {
       'user-1',
     );
     expect(result).toEqual({ id: 'planejamento-1' });
+  });
+
+  it('delegates fechar using route id and authenticated user id', async () => {
+    const planejamentoFechado = {
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.FECHADO,
+    };
+    planejamentosService.fechar.mockResolvedValue(
+      planejamentoFechado as never,
+    );
+
+    const result = await controller.fechar(
+      { id: 'planejamento-1' },
+      request,
+    );
+
+    expect(planejamentosService.fechar).toHaveBeenCalledTimes(1);
+    expect(planejamentosService.fechar).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toBe(planejamentoFechado);
   });
 
   it('delegates addParticipante using route id and authenticated user id', async () => {
