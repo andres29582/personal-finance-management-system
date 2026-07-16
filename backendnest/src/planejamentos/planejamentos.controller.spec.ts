@@ -24,6 +24,7 @@ describe('PlanejamentosController', () => {
       | 'findGasto'
       | 'findGastos'
       | 'findOne'
+      | 'findResumo'
       | 'pagarAcerto'
       | 'reabrirAcerto'
       | 'removerParticipante'
@@ -54,6 +55,7 @@ describe('PlanejamentosController', () => {
       findGasto: jest.fn(),
       findGastos: jest.fn(),
       findOne: jest.fn(),
+      findResumo: jest.fn(),
       pagarAcerto: jest.fn(),
       reabrirAcerto: jest.fn(),
       removerParticipante: jest.fn(),
@@ -107,19 +109,35 @@ describe('PlanejamentosController', () => {
     expect(result).toEqual({ id: 'planejamento-1' });
   });
 
+  it('delegates findResumo using route id and authenticated user id', async () => {
+    planejamentosService.findResumo.mockResolvedValue({
+      planejamentoId: 'planejamento-1',
+      situacaoFinanceira: 'PENDENTE',
+    } as never);
+
+    const result = await controller.findResumo(
+      { id: 'planejamento-1' },
+      request,
+    );
+
+    expect(planejamentosService.findResumo).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toEqual({
+      planejamentoId: 'planejamento-1',
+      situacaoFinanceira: 'PENDENTE',
+    });
+  });
+
   it('delegates fechar using route id and authenticated user id', async () => {
     const planejamentoFechado = {
       id: 'planejamento-1',
       status: PlanejamentoStatus.FECHADO,
     };
-    planejamentosService.fechar.mockResolvedValue(
-      planejamentoFechado as never,
-    );
+    planejamentosService.fechar.mockResolvedValue(planejamentoFechado as never);
 
-    const result = await controller.fechar(
-      { id: 'planejamento-1' },
-      request,
-    );
+    const result = await controller.fechar({ id: 'planejamento-1' }, request);
 
     expect(planejamentosService.fechar).toHaveBeenCalledTimes(1);
     expect(planejamentosService.fechar).toHaveBeenCalledWith(

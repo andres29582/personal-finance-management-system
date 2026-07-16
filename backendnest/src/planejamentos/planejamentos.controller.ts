@@ -56,6 +56,14 @@ export class PlanejamentosController {
     return this.planejamentosService.findOne(params.id, req.user.id);
   }
 
+  @Get(':id/resumo')
+  findResumo(
+    @Param() params: FindPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.findResumo(params.id, req.user.id);
+  }
+
   @Patch(':id/fechar')
   fechar(
     @Param() params: FindPlanejamentoParamsDto,

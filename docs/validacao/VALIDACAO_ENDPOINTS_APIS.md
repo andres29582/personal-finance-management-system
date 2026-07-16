@@ -14,7 +14,7 @@ Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o c
 
 Estado geral: **coerente como contrato OpenAPI oficial, com pendencias documentais complementares menores**.
 
-O backend possui **76 handlers HTTP reais** em controllers, e o `backendnest/swagger.yaml` documenta **76 operacoes**. A validacao mecanica confirmou a paridade entre controllers e Swagger.
+O backend possui **77 handlers HTTP reais** em controllers, e o `backendnest/swagger.yaml` documenta **77 operacoes**. A validacao mecanica confirmou a paridade entre controllers e Swagger.
 
 O Swagger agora cobre endpoints publicos e protegidos, payloads de entrada, query params conhecidos, status codes principais, `operationId` unico por operacao, envelope global de sucesso `{ success, data, timestamp, requestId }` e os dois formatos de erro observados no runtime:
 
@@ -74,16 +74,16 @@ Documentos revisados sobre fonte oficial:
 | Dashboard | 1 | 1 | Coberto |
 | Previsoes | 1 | 1 | Coberto |
 | Audit logs | 1 | 1 | Coberto |
-| Planejamentos | 16 | 16 | Coberto |
-| **Total** | **76** | **76** | **Coberto** |
+| Planejamentos | 17 | 17 | Coberto |
+| **Total** | **77** | **77** | **Coberto** |
 
 Validacao mecanica executada:
 
-- `rg '@(Get|Post|Patch|Delete|Put)\(' backendnest/src -g '*.controller.ts'`: 76 handlers.
-- `rg '^\s{4}(get|post|patch|delete|put):' backendnest/swagger.yaml`: 76 operacoes.
-- `rg '^\s+operationId:' backendnest/swagger.yaml`: 76 `operationId`, todos unicos.
+- `rg --no-ignore '@(Get|Post|Patch|Delete|Put)\(' backendnest/src -g '*.controller.ts'`: 77 handlers (o `--no-ignore` inclui `src/logs`, ocultado pelo padrao generico `logs` do `.gitignore`).
+- `rg '^\s{4}(get|post|patch|delete|put):' backendnest/swagger.yaml`: 77 operacoes.
+- `rg '^\s+operationId:' backendnest/swagger.yaml`: 77 `operationId`, todos unicos.
 - Parse YAML com Node.js/`js-yaml`: OK.
-- Validacao interna de `$ref`: 447 referencias locais, 0 ausentes.
+- Validacao interna de `$ref`: 455 referencias locais, 0 ausentes.
 - Validacao de path params: 0 erros.
 - Validacao de seguranca OpenAPI: endpoints publicos sem `BearerAuth`; endpoints protegidos com `BearerAuth`.
 - Compatibilidade OpenAPI 3.0: `exclusiveMinimum` usa formato booleano com `minimum`; nao ha `exclusiveMinimum` numerico.
@@ -94,16 +94,17 @@ Validacao mecanica executada:
 
 | ID | Situacao anterior | Correcao aplicada |
 | --- | --- | --- |
-| C-01 | Swagger tinha cobertura inferior aos handlers reais. | `backendnest/swagger.yaml` agora documenta as 76 operacoes correspondentes aos 76 handlers atuais. |
+| C-01 | Swagger tinha cobertura inferior aos handlers reais. | `backendnest/swagger.yaml` agora documenta as 77 operacoes correspondentes aos 77 handlers atuais. |
 | C-02 | Swagger nao representava o envelope global de sucesso. | Schemas de resposta de sucesso agora usam envelope `{ success, data, timestamp, requestId }`. |
 | C-03 | Contrato de auth estava defasado. | Payloads de cadastro/login/refresh/reset foram atualizados e endpoints publicos adicionais foram documentados. |
 | I-01 | Politica de autenticacao publica/protegida estava incorreta no Swagger. | Endpoints publicos e protegidos foram marcados individualmente. |
 | I-02 | `GET /transacoes` nao documentava filtros reais. | Query params `mes`, `tipo`, `contaId` e `categoriaId` foram documentados. |
 | I-03 | `PATCH /transacoes/:id` nao documentava `tipo`. | Campo `tipo` foi incluido no DTO OpenAPI de atualizacao. |
 | I-06 | Respostas 2xx ainda usavam `OkObject`/`OkArray` genericos em muitos endpoints. | Operacoes principais agora usam envelopes especificos por recurso/lista mantendo `{ success, data, timestamp, requestId }`. |
-| I-07 | Operacoes nao tinham `operationId`, prejudicando geracao de clientes/SDKs. | As 76 operacoes atuais possuem `operationId` unico e estavel. |
+| I-07 | Operacoes nao tinham `operationId`, prejudicando geracao de clientes/SDKs. | As 77 operacoes atuais possuem `operationId` unico e estavel. |
 | I-08 | Alguns schemas usavam `exclusiveMinimum: 0`, formato de JSON Schema/OpenAPI 3.1. | Corrigido para `minimum: 0` com `exclusiveMinimum: true`, compativel com OpenAPI 3.0. |
 | P-01 | A remocao logica de participante implementada ainda aparecia como roadmap na spec conceitual. | `DELETE /planejamentos/:planejamentoId/participantes/:participanteId` foi movido para `Contrato atual implementado`. |
+| P-02 | O resumo financeiro de Planejamentos ainda aparecia como roadmap e sem contrato OpenAPI explicito. | `GET /planejamentos/:id/resumo` foi implementado como consulta pura e documentado com schemas explicitos. |
 
 ### Pendencias restantes
 
@@ -128,7 +129,7 @@ Validacao mecanica executada:
 | Relatorios | `GET /relatorios` | Swagger documenta query params | Coerente |
 | Previsoes | `GET /previsoes/deficit` | Swagger documenta query params | Coerente |
 | Audit logs | `GET /audit-logs` | Swagger documenta query params | Coerente |
-| Planejamentos | 16 handlers implementados | Swagger documenta os 16 handlers reais, incluindo o fechamento operacional; spec conceitual classifica a remocao logica de participante e o fechamento como implementados | Coerente no contrato oficial |
+| Planejamentos | 17 handlers implementados | Swagger documenta os 17 handlers reais, incluindo fechamento e resumo financeiro; a spec conceitual classifica ambos como implementados | Coerente no contrato oficial |
 | Respostas de sucesso | Envelope global | Swagger aplica schemas envelopados | Coerente |
 | Schemas de resposta | Recursos e agregados retornados pelos services | Swagger usa schemas especificos onde aplicavel; `OkObject`/`OkArray` ficam como fallback nao referenciado | Coerente |
 
@@ -141,14 +142,14 @@ Validacao mecanica executada:
 | Refresh token | `POST /auth/refresh` rotaciona refresh token | Interceptor salva novo access/refresh token | Coerente |
 | Endpoints consumidos | Todos existem no backend | Services apontam para rotas reais | Coerente |
 | ML | Frontend chama `GET /previsoes/deficit`; nao chama FastAPI direto | Coerente com docs |
-| Planejamentos | Backend implementa modulo com 15 endpoints | Frontend consome listagem, criacao, detalhe, participantes, gastos e acertos | Coerente |
+| Planejamentos | Backend implementa modulo com 17 endpoints | Frontend consome o subconjunto de listagem, criacao, detalhe, participantes, gastos e acertos | Coerente; resumo ainda sem consumo frontend por estar fora do escopo desta entrega |
 
 Observacao atualizada em 2026-07-08: o frontend passou a consumir o modulo de
 Planejamentos Compartilhados nas telas e fluxos de listagem, criacao, detalhe,
 participantes, gastos e acertos. A observacao anterior de que o modulo nao era
 consumido pelo frontend deve ser tratada como historica.
 
-O backend expoe 15 endpoints de Planejamentos, cobertos pelo Swagger oficial, e
+O backend expoe 17 endpoints de Planejamentos, cobertos pelo Swagger oficial, e
 o fluxo local depende da migration
 `backendnest/migrations/0007_create_planejamentos_compartilhados.sql`, que cria
 as tabelas `planejamento`, `participante_planejamento`,
@@ -159,7 +160,7 @@ as tabelas `planejamento`, `participante_planejamento`,
 | Item | Swagger | Postman | Situacao |
 | --- | --- | --- | --- |
 | Existencia | `backendnest/swagger.yaml` existe e e fonte oficial | Nao encontrado | Postman ausente |
-| Cobertura | 76 operacoes para 76 handlers reais | N/A | Swagger completo frente aos controllers |
+| Cobertura | 77 operacoes para 77 handlers reais | N/A | Swagger completo frente aos controllers |
 | Envelope global | Aplicado nos schemas de sucesso | N/A | Coerente com runtime |
 | Schemas 2xx | Envelopes especificos por recurso/lista/agregado | N/A | Reduzido uso de genericos; `OkMessage` e `EmptyEnvelope` mantidos onde fazem sentido |
 | Formatos de erro | Dois formatos documentados | N/A | Coerente com runtime observado |
@@ -177,11 +178,11 @@ as tabelas `planejamento`, `participante_planejamento`,
 
 | Area | Comando | Resultado | Observacao |
 | --- | --- | --- | --- |
-| Backend | `npm test` | Passou: 55 suites, 315 tests | Primeira tentativa no sandbox falhou com `spawn EPERM`; passou fora do sandbox. |
-| Backend | `npm run test:e2e` | Passou: 5 suites, 18 tests | Run in band. |
+| Backend | `npm test -- --runInBand planejamentos` | Passou: 12 suites, 256 tests | Inclui dominio, service, controller, repository, DTOs e entidades de Planejamentos. |
+| Backend | `npm test -- --runInBand --config ./test/jest-e2e.json planejamentos-resumo-financeiro.e2e-spec.ts` | Passou: 1 suite, 3 tests | PostgreSQL, Supertest e JWT reais. |
 | Backend | `npm run build` | Passou | `nest build`. |
-| Backend | `.\node_modules\.bin\eslint.cmd "{src,apps,libs,test}/**/*.ts"` | Passou com 0 errors, 65 warnings | Sem `--fix`; warnings existentes de `@typescript-eslint/no-unsafe-argument`. |
-| OpenAPI | Parse YAML, refs, path params, seguranca, contagem e compatibilidade 3.0 | Passou | 76 operacoes, 76 `operationId` unicos, 447 referencias locais resolvidas, 0 ausentes, paridade integral com 76 handlers. |
+| Backend | `npm run lint` | Passou | ESLint com a configuracao oficial do projeto. |
+| OpenAPI | Parse YAML, refs, path params, seguranca, contagem e compatibilidade 3.0 | Passou | 77 operacoes, 77 `operationId` unicos, 455 referencias locais resolvidas, 0 ausentes, paridade integral com 77 handlers. |
 
 ## Recomendacoes de Manutencao
 

@@ -11,6 +11,8 @@ export type StatusAcertoPlanejamento =
 
 export type StatusFinanceiroParticipante = 'DEVEDOR' | 'RECEBEDOR' | 'QUITADO';
 
+export type SituacaoFinanceiraPlanejamento = 'PENDENTE' | 'QUITADO';
+
 export class PlanejamentoDominioError extends Error {
   constructor(
     public readonly code: string,
@@ -50,6 +52,13 @@ export type SaldoParticipantePlanejamento = {
   saldoBrutoCentavos: number;
   saldoAbertoCentavos: number;
   statusFinanceiro: StatusFinanceiroParticipante;
+};
+
+export type ResumoFinanceiroPlanejamentoDominio = {
+  situacaoFinanceira: SituacaoFinanceiraPlanejamento;
+  totalGastosAtivosCentavos: number;
+  obrigacaoResidualCentavos: number;
+  participantes: SaldoParticipantePlanejamento[];
 };
 
 export type AcertoMinimoPlanejamento = {

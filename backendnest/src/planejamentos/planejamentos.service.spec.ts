@@ -2109,6 +2109,333 @@ describe('PlanejamentosService', () => {
     expect(result).toEqual([]);
   });
 
+  it('returns the complete ABERTO and PENDENTE financial summary', async () => {
+    const participante1 = criarParticipanteParaResumo('participante-1', 'Ana');
+    const participante2 = criarParticipanteParaResumo(
+      'participante-2',
+      'Bruno',
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.ABERTO,
+        participantes: [participante1, participante2],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+
+    const result = await service.findResumo('planejamento-1', 'user-1');
+
+    expect(result).toEqual({
+      planejamentoId: 'planejamento-1',
+      statusOperacional: PlanejamentoStatus.ABERTO,
+      situacaoFinanceira: 'PENDENTE',
+      totalGastosAtivosCentavos: 10000,
+      obrigacaoResidualCentavos: 5000,
+      participantes: [
+        {
+          participante: {
+            id: 'participante-1',
+            nome: 'Ana',
+            tipo: ParticipanteTipo.VINCULADO,
+            status: ParticipanteStatus.ATIVO,
+          },
+          totalPagoCentavos: 10000,
+          totalDevidoCentavos: 5000,
+          totalPagoEmAcertosCentavos: 0,
+          totalRecebidoEmAcertosCentavos: 0,
+          saldoBrutoCentavos: 5000,
+          saldoAbertoCentavos: 5000,
+          statusFinanceiro: 'RECEBEDOR',
+        },
+        {
+          participante: {
+            id: 'participante-2',
+            nome: 'Bruno',
+            tipo: ParticipanteTipo.MANUAL,
+            status: ParticipanteStatus.ATIVO,
+          },
+          totalPagoCentavos: 0,
+          totalDevidoCentavos: 5000,
+          totalPagoEmAcertosCentavos: 0,
+          totalRecebidoEmAcertosCentavos: 0,
+          saldoBrutoCentavos: -5000,
+          saldoAbertoCentavos: -5000,
+          statusFinanceiro: 'DEVEDOR',
+        },
+      ],
+    });
+    expect(result.participantes[0].participante).not.toHaveProperty(
+      'usuarioId',
+    );
+    expect(result.participantes[0].participante).not.toHaveProperty('email');
+  });
+
+  it('returns the complete FECHADO and PENDENTE financial summary without changing operational status', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+        participantes: [
+          criarParticipanteParaResumo('participante-1', 'Ana'),
+          criarParticipanteParaResumo('participante-2', 'Bruno'),
+        ],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+
+    await expect(
+      service.findResumo('planejamento-1', 'user-1'),
+    ).resolves.toEqual({
+      planejamentoId: 'planejamento-1',
+      statusOperacional: PlanejamentoStatus.FECHADO,
+      situacaoFinanceira: 'PENDENTE',
+      totalGastosAtivosCentavos: 10000,
+      obrigacaoResidualCentavos: 5000,
+      participantes: [
+        {
+          participante: {
+            id: 'participante-1',
+            nome: 'Ana',
+            tipo: ParticipanteTipo.VINCULADO,
+            status: ParticipanteStatus.ATIVO,
+          },
+          totalPagoCentavos: 10000,
+          totalDevidoCentavos: 5000,
+          totalPagoEmAcertosCentavos: 0,
+          totalRecebidoEmAcertosCentavos: 0,
+          saldoBrutoCentavos: 5000,
+          saldoAbertoCentavos: 5000,
+          statusFinanceiro: 'RECEBEDOR',
+        },
+        {
+          participante: {
+            id: 'participante-2',
+            nome: 'Bruno',
+            tipo: ParticipanteTipo.MANUAL,
+            status: ParticipanteStatus.ATIVO,
+          },
+          totalPagoCentavos: 0,
+          totalDevidoCentavos: 5000,
+          totalPagoEmAcertosCentavos: 0,
+          totalRecebidoEmAcertosCentavos: 0,
+          saldoBrutoCentavos: -5000,
+          saldoAbertoCentavos: -5000,
+          statusFinanceiro: 'DEVEDOR',
+        },
+      ],
+    });
+  });
+
+  it('returns FECHADO and QUITADO after a paid settlement', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+        participantes: [
+          criarParticipanteParaResumo('participante-1', 'Ana'),
+          criarParticipanteParaResumo('participante-2', 'Bruno'),
+        ],
+        gastos: [criarGastoComPendencia()],
+        acertos: [criarAcertoPersistido({ status: AcertoStatus.PAGO })],
+      }),
+    );
+
+    const result = await service.findResumo('planejamento-1', 'user-1');
+
+    expect(result).toEqual({
+      planejamentoId: 'planejamento-1',
+      statusOperacional: PlanejamentoStatus.FECHADO,
+      situacaoFinanceira: 'QUITADO',
+      totalGastosAtivosCentavos: 10000,
+      obrigacaoResidualCentavos: 0,
+      participantes: [
+        {
+          participante: {
+            id: 'participante-1',
+            nome: 'Ana',
+            tipo: ParticipanteTipo.VINCULADO,
+            status: ParticipanteStatus.ATIVO,
+          },
+          totalPagoCentavos: 10000,
+          totalDevidoCentavos: 5000,
+          totalPagoEmAcertosCentavos: 0,
+          totalRecebidoEmAcertosCentavos: 5000,
+          saldoBrutoCentavos: 5000,
+          saldoAbertoCentavos: 0,
+          statusFinanceiro: 'QUITADO',
+        },
+        {
+          participante: {
+            id: 'participante-2',
+            nome: 'Bruno',
+            tipo: ParticipanteTipo.MANUAL,
+            status: ParticipanteStatus.ATIVO,
+          },
+          totalPagoCentavos: 0,
+          totalDevidoCentavos: 5000,
+          totalPagoEmAcertosCentavos: 5000,
+          totalRecebidoEmAcertosCentavos: 0,
+          saldoBrutoCentavos: -5000,
+          saldoAbertoCentavos: 0,
+          statusFinanceiro: 'QUITADO',
+        },
+      ],
+    });
+  });
+
+  it('keeps a removed but financially relevant participant in the summary', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipanteParaResumo('participante-1', 'Ana'),
+          criarParticipanteParaResumo('participante-2', 'Bruno', {
+            status: ParticipanteStatus.REMOVIDO,
+          }),
+        ],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+
+    const result = await service.findResumo('planejamento-1', 'user-1');
+
+    expect(result.participantes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          participante: expect.objectContaining({
+            id: 'participante-2',
+            status: ParticipanteStatus.REMOVIDO,
+          }) as object,
+          saldoAbertoCentavos: -5000,
+        }),
+      ]),
+    );
+  });
+
+  it('excludes a removed participant without financial relevance', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipanteParaResumo('participante-1', 'Ana'),
+          criarParticipanteParaResumo('participante-2', 'Bruno'),
+          criarParticipanteParaResumo('participante-3', 'Carla', {
+            status: ParticipanteStatus.REMOVIDO,
+          }),
+        ],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+
+    const result = await service.findResumo('planejamento-1', 'user-1');
+
+    expect(result.participantes.map((item) => item.participante.id)).toEqual([
+      'participante-1',
+      'participante-2',
+    ]);
+  });
+
+  it('ignores canceled, pending-review and soft-deleted expenses in the summary', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipanteParaResumo('participante-1', 'Ana'),
+          criarParticipanteParaResumo('participante-2', 'Bruno'),
+        ],
+        gastos: [
+          criarGastoPersistido({ status: GastoStatus.CANCELADO }),
+          criarGastoPersistido({
+            id: 'gasto-2',
+            status: GastoStatus.PENDENTE_REVISAO,
+          }),
+          criarGastoPersistido({
+            id: 'gasto-3',
+            deletedAt: new Date('2026-07-15T12:00:00.000Z'),
+          }),
+        ],
+      }),
+    );
+
+    await expect(
+      service.findResumo('planejamento-1', 'user-1'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        situacaoFinanceira: 'QUITADO',
+        totalGastosAtivosCentavos: 0,
+        obrigacaoResidualCentavos: 0,
+      }),
+    );
+  });
+
+  it('reduces the residual balance only with paid or confirmed settlements', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipanteParaResumo('participante-1', 'Ana'),
+          criarParticipanteParaResumo('participante-2', 'Bruno'),
+        ],
+        gastos: [criarGastoComPendencia()],
+        acertos: [
+          criarAcertoPersistido({
+            id: 'acerto-pago',
+            status: AcertoStatus.PAGO,
+            valorCentavos: 1000,
+          }),
+          criarAcertoPersistido({
+            id: 'acerto-confirmado',
+            status: AcertoStatus.CONFIRMADO,
+            valorCentavos: 1000,
+          }),
+          criarAcertoPersistido({
+            id: 'acerto-cancelado',
+            status: AcertoStatus.CANCELADO,
+            valorCentavos: 1000,
+          }),
+          criarAcertoPersistido({
+            id: 'acerto-pendente',
+            status: AcertoStatus.PENDENTE,
+            valorCentavos: 1000,
+          }),
+        ],
+      }),
+    );
+
+    const result = await service.findResumo('planejamento-1', 'user-1');
+
+    expect(result.obrigacaoResidualCentavos).toBe(3000);
+    expect(result.situacaoFinanceira).toBe('PENDENTE');
+  });
+
+  it('keeps PLANEJAMENTO_NOT_FOUND access isolation in the summary', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(null);
+
+    await expect(
+      service.findResumo('planejamento-1', 'user-sem-acesso'),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+  });
+
+  it('reads the financial summary without transaction, lock, reconciliation or persistence', async () => {
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        participantes: [
+          criarParticipanteParaResumo('participante-1', 'Ana'),
+          criarParticipanteParaResumo('participante-2', 'Bruno'),
+        ],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+
+    await service.findResumo('planejamento-1', 'user-1');
+
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledTimes(1);
+    expect(repository.executarEmTransacao).not.toHaveBeenCalled();
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    expect(repository.salvarGasto).not.toHaveBeenCalled();
+    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+    expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+  });
+
   it('calculates suggested settlements for the owner using persisted expenses', async () => {
     repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
       criarPlanejamentoComParticipantes({
@@ -3003,11 +3330,7 @@ describe('PlanejamentosService', () => {
     prepararPlanejamentoFechadoAposLock();
 
     await expect(
-      service.removerParticipante(
-        'planejamento-1',
-        'participante-2',
-        'user-1',
-      ),
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
     ).rejects.toMatchObject({
       code: 'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
       details: { statusAtual: PlanejamentoStatus.FECHADO },
@@ -3056,12 +3379,9 @@ describe('PlanejamentosService', () => {
     prepararPlanejamentoFechadoAposLock();
 
     await expect(
-      service.atualizarGasto(
-        'planejamento-1',
-        'gasto-1',
-        'user-1',
-        { descricao: 'Atualizacao bloqueada' },
-      ),
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        descricao: 'Atualizacao bloqueada',
+      }),
     ).rejects.toMatchObject({
       code: 'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
       details: { statusAtual: PlanejamentoStatus.FECHADO },
@@ -3120,9 +3440,7 @@ describe('PlanejamentosService', () => {
       }),
     );
     repository.salvarAcertos.mockResolvedValue([acertoCriado]);
-    repository.salvarPlanejamento.mockResolvedValue(
-      planejamentoFechado as never,
-    );
+    repository.salvarPlanejamento.mockResolvedValue(planejamentoFechado);
 
     const result = await service.fechar('planejamento-1', 'user-1');
 
@@ -3176,13 +3494,11 @@ describe('PlanejamentosService', () => {
         gastos: [criarGastoComPendencia()],
       }),
     );
-    repository.salvarPlanejamento.mockResolvedValue(
-      planejamentoFechado as never,
-    );
+    repository.salvarPlanejamento.mockResolvedValue(planejamentoFechado);
 
-    await expect(
-      service.fechar('planejamento-1', 'user-1'),
-    ).resolves.toBe(planejamentoFechado);
+    await expect(service.fechar('planejamento-1', 'user-1')).resolves.toBe(
+      planejamentoFechado,
+    );
 
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(acertoPendente).toMatchObject({
@@ -4815,6 +5131,23 @@ describe('PlanejamentosService', () => {
       id,
       status: ParticipanteStatus.ATIVO,
       usuarioId: usuarioId ?? id.replace('participante', 'user'),
+    };
+  }
+
+  function criarParticipanteParaResumo(
+    id: string,
+    nome: string,
+    overrides: Record<string, unknown> = {},
+  ) {
+    return {
+      ...criarParticipantePersistido(id),
+      email: `${nome.toLowerCase()}@example.com`,
+      nome,
+      tipo:
+        id === 'participante-1'
+          ? ParticipanteTipo.VINCULADO
+          : ParticipanteTipo.MANUAL,
+      ...overrides,
     };
   }
 
