@@ -16,6 +16,7 @@ describe('PlanejamentosController', () => {
       | 'arquivar'
       | 'atualizarGasto'
       | 'cancelarAcerto'
+      | 'cancelar'
       | 'cancelarGasto'
       | 'create'
       | 'createGasto'
@@ -48,6 +49,7 @@ describe('PlanejamentosController', () => {
       arquivar: jest.fn(),
       atualizarGasto: jest.fn(),
       cancelarAcerto: jest.fn(),
+      cancelar: jest.fn(),
       cancelarGasto: jest.fn(),
       create: jest.fn(),
       createGasto: jest.fn(),
@@ -166,6 +168,25 @@ describe('PlanejamentosController', () => {
       'user-1',
     );
     expect(result).toBe(planejamentoArquivado);
+  });
+
+  it('delegates cancelar using route id and authenticated user id without a body', async () => {
+    const planejamentoCancelado = {
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.CANCELADO,
+    };
+    planejamentosService.cancelar.mockResolvedValue(
+      planejamentoCancelado as never,
+    );
+
+    const result = await controller.cancelar({ id: 'planejamento-1' }, request);
+
+    expect(planejamentosService.cancelar).toHaveBeenCalledTimes(1);
+    expect(planejamentosService.cancelar).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toBe(planejamentoCancelado);
   });
 
   it('delegates addParticipante using route id and authenticated user id', async () => {

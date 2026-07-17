@@ -393,6 +393,77 @@ export class PlanejamentosService {
     );
   }
 
+  async cancelar(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<Planejamento> {
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const planejamentoInicial =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(
+          planejamentoInicial,
+          usuarioId,
+        );
+
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertPlanejamentoAbertoParaCancelamento(planejamento);
+
+        await this.reconciliarAcertos(repository, planejamento);
+
+        const planejamentoReconciliado =
+          await this.buscarPlanejamentoParaAcertos(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        const participantesFinanceiramenteRelevantes =
+          this.listarParticipantesFinanceiramenteRelevantes(
+            planejamentoReconciliado,
+          );
+        const resumo = calcularResumoFinanceiroPlanejamento(
+          participantesFinanceiramenteRelevantes.map(
+            (participante) => participante.id,
+          ),
+          this.mapearGastosParaCalculo(planejamentoReconciliado),
+          this.mapearAcertosParaCalculo(planejamentoReconciliado),
+        );
+
+        this.assertPlanejamentoQuitadoParaCancelamento(resumo);
+
+        await repository.salvarPlanejamento({
+          id: planejamentoId,
+          status: PlanejamentoStatus.CANCELADO,
+        });
+
+        return this.buscarPlanejamentoAcessivelComRepository(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+      },
+    );
+  }
+
   async addParticipante(
     planejamentoId: string,
     usuarioId: string,
@@ -1528,6 +1599,20 @@ export class PlanejamentosService {
     );
   }
 
+  private assertPlanejamentoAbertoParaCancelamento(
+    planejamento: Planejamento,
+  ): void {
+    if (planejamento.status === PlanejamentoStatus.ABERTO) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_CANCELAR_STATUS_INVALIDO',
+      'Somente planejamento aberto pode ser cancelado.',
+      { details: { statusAtual: planejamento.status } },
+    );
+  }
+
   private assertPlanejamentoQuitadoParaArquivamento(
     resumo: Pick<
       ResumoFinanceiroPlanejamento,
@@ -1541,6 +1626,28 @@ export class PlanejamentosService {
     throw new ValidationAppException(
       'PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA',
       'Somente planejamento financeiramente quitado pode ser arquivado.',
+      {
+        details: {
+          situacaoFinanceira: resumo.situacaoFinanceira,
+          obrigacaoResidualCentavos: resumo.obrigacaoResidualCentavos,
+        },
+      },
+    );
+  }
+
+  private assertPlanejamentoQuitadoParaCancelamento(
+    resumo: Pick<
+      ResumoFinanceiroPlanejamento,
+      'situacaoFinanceira' | 'obrigacaoResidualCentavos'
+    >,
+  ): void {
+    if (resumo.situacaoFinanceira === 'QUITADO') {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_CANCELAR_PENDENCIA_FINANCEIRA',
+      'Somente planejamento financeiramente quitado pode ser cancelado.',
       {
         details: {
           situacaoFinanceira: resumo.situacaoFinanceira,

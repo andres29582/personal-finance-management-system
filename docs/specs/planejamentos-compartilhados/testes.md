@@ -106,6 +106,12 @@ Cobertura minima:
 - serializar arquivamentos concorrentes no lock do planejamento;
 - permitir operacoes de acerto somente em `ABERTO` e `FECHADO`, bloqueando-as
   em `ARQUIVADO` e `CANCELADO`;
+- cancelar somente planejamento `ABERTO + QUITADO`, preservando historico;
+- permitir cancelamento com gasto `PENDENTE_REVISAO` sem obrigacao valida;
+- rejeitar cancelamento de `ABERTO + PENDENTE`, `FECHADO`, `ARQUIVADO` e
+  `CANCELADO`;
+- serializar cancelamentos concorrentes e a corrida entre fechar e cancelar;
+- reverter a reconciliacao se a persistencia de `CANCELADO` falhar;
 - replicar planejamento mensal;
 - marcar gastos variaveis replicados como `PENDENTE_REVISAO`;
 - nao criar transacoes pessoais automaticamente.
@@ -132,7 +138,7 @@ Casos por endpoint:
 | `PATCH /planejamentos/:id` | edita dados basicos. |
 | `PATCH /planejamentos/:id/fechar` | fecha planejamento sem pendencias impeditivas. |
 | `PATCH /planejamentos/:id/arquivar` | delega o ID validado e o usuario autenticado para arquivar `FECHADO + QUITADO`. |
-| `PATCH /planejamentos/:id/cancelar` | cancela logicamente. |
+| `PATCH /planejamentos/:id/cancelar` | delega o ID validado e o usuario autenticado, sem body, para cancelar `ABERTO + QUITADO`. |
 | `DELETE /planejamentos/:id` | se existir, cancela logicamente e nunca exclui fisicamente. |
 | `POST /planejamentos/:id/participantes` | adiciona participante. |
 | `GET /planejamentos/:id/participantes` | lista participantes. |
@@ -164,6 +170,12 @@ controller e suite E2E PostgreSQL dedicada. A cobertura valida totais e saldos
 por participante, obrigacao residual contada somente pelo lado credor,
 `ABERTO/FECHADO + PENDENTE/QUITADO`, gastos excluidos, isolamento de acesso e
 repeticao do `GET` sem alterar acertos, status ou timestamps do agregado.
+
+O cancelamento possui suite E2E PostgreSQL dedicada. A cobertura valida
+planejamento vazio e historico financeiro quitado, `PENDENTE_REVISAO`, estados
+e autorizacoes invalidos, preservacao integral do historico, consultas e
+somente leitura, concorrencia cancelar x cancelar, corrida fechar x cancelar e
+rollback real da reconciliacao quando a persistencia de `CANCELADO` falha.
 
 O arquivamento possui suite E2E PostgreSQL dedicada. A cobertura valida
 `FECHADO + QUITADO`, rejeicoes de status e pendencia financeira, isolamento de
@@ -302,9 +314,13 @@ Fluxo minimo recomendado:
   uma rejeicao por status `ARQUIVADO`, sem reconciliacao duplicada inconsistente.
 - Planejamento `ARQUIVADO` ou `CANCELADO` bloqueia sincronizacao, pagamento,
   cancelamento e reabertura de acertos; consultas permanecem disponiveis.
+- Cancelar exige `ABERTO + QUITADO`; `FECHADO + QUITADO` deve seguir para
+  `ARQUIVADO`, nunca para `CANCELADO`.
+- Cancelamento reconcilia e calcula o resumo oficial na mesma transacao, sem
+  usar a guarda de fechamento para gastos `PENDENTE_REVISAO`.
+- `CANCELADO` preserva participantes, gastos, divisoes, acertos e historico e
+  bloqueia mutacoes estruturais, financeiras e novas transicoes de lifecycle.
 - `PlanejamentoStatus` nao recebe o valor `QUITADO`.
-- Cancelamento com obrigacoes existentes permanece sem comportamento definido e
-  deve bloquear implementacao do endpoint ate decisao de dominio.
 
 ## Casos de nao criacao automatica de transacoes pessoais
 

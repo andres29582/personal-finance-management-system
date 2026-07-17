@@ -135,6 +135,15 @@ periodo original.
 O proprietario arquiva somente planejamento `FECHADO` sem obrigacao financeira
 residual valida. O planejamento `ARQUIVADO` passa a ser somente leitura.
 
+### UC-13 - Cancelar planejamento aberto quitado
+
+O proprietario cancela somente planejamento `ABERTO` sem obrigacao financeira
+residual valida. O cancelamento representa interrupcao antes do fechamento,
+preserva participantes, gastos, divisoes, acertos e historico e torna o agregado
+`CANCELADO` completamente somente leitura. A reconciliacao pode ajustar
+pendencias obsoletas, mas a transicao nao reverte pagamentos nem cancela gastos
+ou acertos em massa.
+
 ## Escopo do MVP
 
 - Criar planejamento compartilhado.
@@ -230,6 +239,8 @@ residual valida. O planejamento `ARQUIVADO` passa a ser somente leitura.
 | RF-37 | O sistema deve permitir arquivar somente planejamento `FECHADO` e financeiramente `QUITADO`. |
 | RF-38 | O sistema deve manter planejamento `ARQUIVADO` em somente leitura. |
 | RF-39 | O sistema nao deve adicionar `QUITADO` ao enum operacional `PlanejamentoStatus`. |
+| RF-40 | O sistema deve permitir cancelar somente planejamento `ABERTO` e financeiramente `QUITADO`, sem aceitar `FECHADO`, `ARQUIVADO` ou `CANCELADO`. |
+| RF-41 | O sistema deve preservar todo o historico em `CANCELADO`, sem cancelamento em massa de gastos ou acertos e sem reversao de pagamentos; a reconciliacao oficial pode ajustar pendencias obsoletas antes da transicao. |
 
 ## Requisitos nao funcionais
 
@@ -303,8 +314,9 @@ residual valida. O planejamento `ARQUIVADO` passa a ser somente leitura.
     nao cria gasto e nao modifica divisoes.
 34. Arquivamento exige ausencia de obrigacao financeira residual valida e torna
     o planejamento somente leitura.
-35. O efeito do cancelamento sobre obrigacoes existentes deve ser decidido antes
-    da implementacao do endpoint.
+35. Cancelamento exige planejamento `ABERTO + QUITADO`, preserva obrigacoes e
+    historico sem cancelamentos ou reversoes automaticas e torna o agregado
+    terminal e somente leitura.
 36. `QUITADO` nao deve ser incluido em `PlanejamentoStatus`.
 
 ## Decisoes futuras

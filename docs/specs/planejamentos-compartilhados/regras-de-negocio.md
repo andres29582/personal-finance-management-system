@@ -37,8 +37,11 @@
 | RN-PLAN-14 | Somente planejamento `FECHADO` e financeiramente `QUITADO` pode ser arquivado. |
 | RN-PLAN-15 | Planejamento `ARQUIVADO` e historico finalizado e de somente leitura. |
 | RN-PLAN-16 | Planejamento `CANCELADO` representa abandono ou invalidacao, nao conclusao normal. |
-| RN-PLAN-17 | O efeito do cancelamento sobre gastos e acertos existentes deve ser decidido antes da implementacao do endpoint; nenhuma regra destrutiva fica presumida. |
+| RN-PLAN-17 | Cancelamento preserva participantes, gastos, divisoes, acertos e historico; a transicao nao cancela gastos ou acertos em massa, nao reverte pagamentos e nao elimina obrigacoes validas. A reconciliacao oficial pode ajustar apenas acertos `PENDENTE` obsoletos. |
 | RN-PLAN-18 | `QUITADO` nao deve ser adicionado ao enum operacional `PlanejamentoStatus`. |
+| RN-PLAN-19 | Somente planejamento `ABERTO` e financeiramente `QUITADO` pode ser cancelado. |
+| RN-PLAN-20 | Planejamento `CANCELADO` e terminal, somente leitura e representa interrupcao ou abandono antes do fechamento normal. |
+| RN-PLAN-21 | Gasto `PENDENTE_REVISAO` nao bloqueia cancelamento por si so e permanece preservado como historico, sem integrar o resumo financeiro oficial enquanto nao for valido. |
 
 ## Ciclo operacional e situacao financeira
 
@@ -74,6 +77,7 @@ ABERTO + QUITADO
 FECHADO + PENDENTE
 FECHADO + QUITADO
 ARQUIVADO + QUITADO
+CANCELADO + QUITADO
 ```
 
 ### Matriz de operacoes por estado
@@ -89,6 +93,7 @@ ARQUIVADO + QUITADO
 | Cancelar/reabrir acerto | Permitido | Permitido | Bloqueado | Bloqueado |
 | Fechar | Permitido conforme validacoes | Nao aplicavel | Bloqueado | Bloqueado |
 | Arquivar | Bloqueado | Permitido somente quando `QUITADO` | Nao aplicavel | Bloqueado |
+| Cancelar | Permitido somente quando `QUITADO` | Bloqueado | Bloqueado | Nao aplicavel |
 
 Em `FECHADO`, sincronizacao e reconciliacao podem manter a consistencia
 operacional dos acertos, desde que nao alterem gastos, divisoes nem a origem das
@@ -106,6 +111,14 @@ O fechamento deve exigir:
 - preservacao dos acertos pendentes.
 
 A quitacao total nao e pre-condicao para fechamento.
+
+### Pre-condicoes para cancelamento
+
+O cancelamento deve exigir proprietario autenticado, planejamento `ABERTO`,
+operacao transacional serializada no agregado, reconciliacao dos acertos e
+situacao financeira oficial `QUITADO`. Diferentemente do fechamento, gasto
+`PENDENTE_REVISAO` nao e impedimento isolado. O estado `CANCELADO` preserva todo
+o historico e bloqueia qualquer mutacao posterior.
 
 ## Regras de participantes
 

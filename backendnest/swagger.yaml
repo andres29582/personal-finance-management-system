@@ -3796,6 +3796,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
       operationId: archivePlanejamento
+  /planejamentos/{id}/cancelar:
+    patch:
+      tags:
+      - Planejamentos
+      summary: Cancelar planejamento aberto e quitado
+      description: >-
+        Operacao transacional, sem body e exclusiva do proprietario. Requer
+        planejamento ABERTO e situacao financeira derivada QUITADO, representando
+        interrupcao ou abandono antes do fechamento normal. A operacao e
+        serializada por lock pessimista no planejamento e reconcilia os acertos
+        antes de recalcular o resumo financeiro. A transicao de status nao apaga
+        nem cancela em massa gastos ou acertos, nao invalida divisoes, nao remove
+        participantes e nao reverte pagamentos; somente a reconciliacao oficial
+        pode ajustar acertos PENDENTE obsoletos, preservando o historico. Depois
+        da transicao para CANCELADO, o agregado permanece consultavel e se torna
+        somente leitura.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Planejamento cancelado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanejamentoSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            PLANEJAMENTO_CANCELAR_STATUS_INVALIDO - planejamento nao esta
+            ABERTO; ou PLANEJAMENTO_CANCELAR_PENDENCIA_FINANCEIRA - o resumo
+            financeiro derivado ainda possui obrigacao residual.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      operationId: cancelPlanejamento
   /planejamentos/{id}/participantes:
     post:
       tags:
