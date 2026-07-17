@@ -3582,6 +3582,257 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
   });
 
+  it('archives a closed and financially settled planejamento in the required transactional order', async () => {
+    const planejamentoFechado = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.FECHADO,
+      acertos: [criarAcertoPersistido({ status: AcertoStatus.PAGO })],
+      gastos: [criarGastoComPendencia()],
+    });
+    const planejamentoArquivado = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.ARQUIVADO,
+    });
+    repository.buscarAcessivelComParticipantes
+      .mockResolvedValueOnce(planejamentoFechado)
+      .mockResolvedValueOnce(planejamentoArquivado);
+    repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamentoFechado,
+    );
+    repository.buscarComGastosDivisoesAcertos
+      .mockResolvedValueOnce(planejamentoFechado)
+      .mockResolvedValueOnce(planejamentoFechado);
+    repository.salvarPlanejamento.mockResolvedValue(planejamentoArquivado);
+
+    const result = await service.arquivar('planejamento-1', 'user-1');
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledTimes(2);
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarPlanejamento).toHaveBeenCalledWith({
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.ARQUIVADO,
+    });
+    expect(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    );
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarComGastosDivisoesAcertos.mock.invocationCallOrder[0],
+    );
+    expect(
+      repository.buscarComGastosDivisoesAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarComGastosDivisoesAcertos.mock.invocationCallOrder[1],
+    );
+    expect(
+      repository.buscarComGastosDivisoesAcertos.mock.invocationCallOrder[1],
+    ).toBeLessThan(repository.salvarPlanejamento.mock.invocationCallOrder[0]);
+    expect(repository.salvarPlanejamento).toHaveBeenCalledTimes(1);
+    expect(result).toBe(planejamentoArquivado);
+  });
+
+  it.each([
+    PlanejamentoStatus.ABERTO,
+    PlanejamentoStatus.ARQUIVADO,
+    PlanejamentoStatus.CANCELADO,
+  ])('rejects archiving a planejamento with status %s', async (status) => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ status }),
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ status }),
+    );
+
+    await expect(
+      service.arquivar('planejamento-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_ARQUIVAR_STATUS_INVALIDO',
+      details: { statusAtual: status },
+      statusCode: 422,
+    });
+
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('rejects a closed planejamento with residual financial obligation after reconciliation', async () => {
+    const planejamentoPendente = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.FECHADO,
+      gastos: [criarGastoComPendencia()],
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoPendente,
+    );
+    repository.buscarComGastosDivisoesAcertos
+      .mockResolvedValueOnce(planejamentoPendente)
+      .mockResolvedValueOnce(planejamentoPendente);
+    repository.salvarAcertos.mockResolvedValue([
+      criarEntidadeAcertoPersistido(),
+    ]);
+
+    await expect(
+      service.arquivar('planejamento-1', 'user-1'),
+    ).rejects.toMatchObject({
+      code: 'PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA',
+      details: {
+        situacaoFinanceira: 'PENDENTE',
+        obrigacaoResidualCentavos: 5000,
+      },
+      statusCode: 422,
+    });
+
+    expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledTimes(2);
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('validates access and ownership before acquiring the archiving lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValueOnce(null);
+
+    await expect(
+      service.arquivar('planejamento-1', 'user-sem-acesso'),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_NOT_FOUND' });
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+
+    jest.clearAllMocks();
+    repository.executarEmTransacao.mockImplementation((operacao) =>
+      operacao(repository as unknown as PlanejamentosRepository),
+    );
+    repository.buscarAcessivelComParticipantes.mockResolvedValueOnce(
+      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'user-2' }),
+    );
+
+    await expect(
+      service.arquivar('planejamento-1', 'user-1'),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_OWNER_REQUIRED' });
+    expect(
+      repository.bloquearPlanejamentoParaAtualizacao,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('revalidates ownership on the complete aggregate reloaded after the archiving lock', async () => {
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ status: PlanejamentoStatus.FECHADO }),
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.FECHADO,
+        usuarioCriadorId: 'user-2',
+      }),
+    );
+
+    await expect(
+      service.arquivar('planejamento-1', 'user-1'),
+    ).rejects.toMatchObject({ code: 'PLANEJAMENTO_OWNER_REQUIRED' });
+
+    expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
+      'planejamento-1',
+    );
+    expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('propagates reconciliation failures so the archiving transaction can roll back', async () => {
+    const erroReconciliacao = new Error('falha na reconciliacao');
+    const planejamentoPendente = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.FECHADO,
+      gastos: [criarGastoComPendencia()],
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoPendente,
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      planejamentoPendente,
+    );
+    repository.salvarAcertos.mockRejectedValue(erroReconciliacao);
+
+    await expect(service.arquivar('planejamento-1', 'user-1')).rejects.toBe(
+      erroReconciliacao,
+    );
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+  });
+
+  it('propagates status persistence failures from the archiving transaction', async () => {
+    const erroPersistencia = new Error('falha ao arquivar');
+    const planejamentoQuitado = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.FECHADO,
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoQuitado,
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      planejamentoQuitado,
+    );
+    repository.salvarPlanejamento.mockRejectedValue(erroPersistencia);
+
+    await expect(service.arquivar('planejamento-1', 'user-1')).rejects.toBe(
+      erroPersistencia,
+    );
+
+    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(repository.salvarPlanejamento).toHaveBeenCalledWith({
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.ARQUIVADO,
+    });
+  });
+
+  it.each([
+    'sincronizarAcertos',
+    'pagarAcerto',
+    'cancelarAcerto',
+    'reabrirAcerto',
+  ] as const)(
+    'blocks %s after the lock when planejamento is archived or canceled',
+    async (operacao) => {
+      for (const status of [
+        PlanejamentoStatus.ARQUIVADO,
+        PlanejamentoStatus.CANCELADO,
+      ]) {
+        jest.clearAllMocks();
+        repository.executarEmTransacao.mockImplementation((callback) =>
+          callback(repository as unknown as PlanejamentosRepository),
+        );
+        repository.buscarAcessivelComParticipantes.mockResolvedValue(
+          criarPlanejamentoComParticipantes({ status }),
+        );
+        repository.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+          criarPlanejamentoComParticipantes({ status }),
+        );
+        repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+          criarPlanejamentoComParticipantes({ status }),
+        );
+
+        const chamada =
+          operacao === 'sincronizarAcertos'
+            ? service.sincronizarAcertos('planejamento-1', 'user-1')
+            : service[operacao]('planejamento-1', 'acerto-1', 'user-1');
+
+        await expect(chamada).rejects.toMatchObject({
+          code: 'PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO',
+          details: { statusAtual: status },
+          statusCode: 422,
+        });
+        expect(
+          repository.bloquearPlanejamentoParaAtualizacao,
+        ).toHaveBeenCalledWith('planejamento-1');
+        expect(repository.salvarAcerto).not.toHaveBeenCalled();
+        expect(repository.salvarAcertos).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it('allows owner to mark a pending settlement as paid in a closed planejamento', async () => {
     const acertoPendente = criarEntidadeAcertoPersistido({
       deParticipante: criarParticipantePersistido('participante-2', 'user-2'),

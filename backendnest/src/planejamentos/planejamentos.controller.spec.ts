@@ -13,6 +13,7 @@ describe('PlanejamentosController', () => {
     Pick<
       PlanejamentosService,
       | 'addParticipante'
+      | 'arquivar'
       | 'atualizarGasto'
       | 'cancelarAcerto'
       | 'cancelarGasto'
@@ -44,6 +45,7 @@ describe('PlanejamentosController', () => {
   beforeEach(() => {
     planejamentosService = {
       addParticipante: jest.fn(),
+      arquivar: jest.fn(),
       atualizarGasto: jest.fn(),
       cancelarAcerto: jest.fn(),
       cancelarGasto: jest.fn(),
@@ -145,6 +147,25 @@ describe('PlanejamentosController', () => {
       'user-1',
     );
     expect(result).toBe(planejamentoFechado);
+  });
+
+  it('delegates arquivar using route id and authenticated user id', async () => {
+    const planejamentoArquivado = {
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.ARQUIVADO,
+    };
+    planejamentosService.arquivar.mockResolvedValue(
+      planejamentoArquivado as never,
+    );
+
+    const result = await controller.arquivar({ id: 'planejamento-1' }, request);
+
+    expect(planejamentosService.arquivar).toHaveBeenCalledTimes(1);
+    expect(planejamentosService.arquivar).toHaveBeenCalledWith(
+      'planejamento-1',
+      'user-1',
+    );
+    expect(result).toBe(planejamentoArquivado);
   });
 
   it('delegates addParticipante using route id and authenticated user id', async () => {

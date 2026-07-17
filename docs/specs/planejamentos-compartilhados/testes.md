@@ -101,6 +101,11 @@ Cobertura minima:
 - permitir pagamento e correcao de acertos existentes depois do fechamento;
 - arquivar somente planejamento `FECHADO` e financeiramente `QUITADO`;
 - manter planejamento `ARQUIVADO` em somente leitura;
+- reconciliar e recalcular o resumo oficial antes de arquivar, com rollback se
+  a validacao financeira ou a persistencia falhar;
+- serializar arquivamentos concorrentes no lock do planejamento;
+- permitir operacoes de acerto somente em `ABERTO` e `FECHADO`, bloqueando-as
+  em `ARQUIVADO` e `CANCELADO`;
 - replicar planejamento mensal;
 - marcar gastos variaveis replicados como `PENDENTE_REVISAO`;
 - nao criar transacoes pessoais automaticamente.
@@ -126,7 +131,7 @@ Casos por endpoint:
 | `GET /planejamentos/:id` | consulta detalhes. |
 | `PATCH /planejamentos/:id` | edita dados basicos. |
 | `PATCH /planejamentos/:id/fechar` | fecha planejamento sem pendencias impeditivas. |
-| `PATCH /planejamentos/:id/arquivar` | arquiva logicamente. |
+| `PATCH /planejamentos/:id/arquivar` | delega o ID validado e o usuario autenticado para arquivar `FECHADO + QUITADO`. |
 | `PATCH /planejamentos/:id/cancelar` | cancela logicamente. |
 | `DELETE /planejamentos/:id` | se existir, cancela logicamente e nunca exclui fisicamente. |
 | `POST /planejamentos/:id/participantes` | adiciona participante. |
@@ -159,6 +164,13 @@ controller e suite E2E PostgreSQL dedicada. A cobertura valida totais e saldos
 por participante, obrigacao residual contada somente pelo lado credor,
 `ABERTO/FECHADO + PENDENTE/QUITADO`, gastos excluidos, isolamento de acesso e
 repeticao do `GET` sem alterar acertos, status ou timestamps do agregado.
+
+O arquivamento possui suite E2E PostgreSQL dedicada. A cobertura valida
+`FECHADO + QUITADO`, rejeicoes de status e pendencia financeira, isolamento de
+acesso, propriedade, consultas depois do arquivamento, bloqueio das cinco
+mutacoes estruturais e das quatro operacoes de acerto, concorrencia com uma
+unica transicao vencedora e rollback real da reconciliacao quando a persistencia
+do status falha.
 
 Fluxo minimo recomendado:
 
@@ -283,6 +295,13 @@ Fluxo minimo recomendado:
   ativas, acertos pagos, cancelados ou obsoletos e reconciliacao atual.
 - Ausencia fisica de linha `PENDENTE` nao basta para concluir `QUITADO`.
 - Arquivar exige `FECHADO + QUITADO` e torna o agregado somente leitura.
+- Arquivar valida acesso e propriedade antes do lock, recarrega o agregado
+  depois do lock, reconcilia, recarrega novamente, calcula o resumo oficial e
+  persiste somente `id` e status `ARQUIVADO` na mesma transacao.
+- Duas solicitacoes concorrentes de arquivamento resultam em uma aprovacao e
+  uma rejeicao por status `ARQUIVADO`, sem reconciliacao duplicada inconsistente.
+- Planejamento `ARQUIVADO` ou `CANCELADO` bloqueia sincronizacao, pagamento,
+  cancelamento e reabertura de acertos; consultas permanecem disponiveis.
 - `PlanejamentoStatus` nao recebe o valor `QUITADO`.
 - Cancelamento com obrigacoes existentes permanece sem comportamento definido e
   deve bloquear implementacao do endpoint ate decisao de dominio.

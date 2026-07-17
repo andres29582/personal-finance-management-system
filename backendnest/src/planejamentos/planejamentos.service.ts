@@ -135,6 +135,7 @@ export class PlanejamentosService {
           planejamentoId,
           usuarioId,
         );
+        this.assertOperacaoAcertoPermitida(planejamentoAtualizado);
         const plano = this.criarPlanoReconciliacaoAcertos(
           planejamentoAtualizado,
         );
@@ -315,6 +316,77 @@ export class PlanejamentosService {
         return this.buscarPlanejamentoAcessivelComRepository(
           repository,
           id,
+          usuarioId,
+        );
+      },
+    );
+  }
+
+  async arquivar(
+    planejamentoId: string,
+    usuarioId: string,
+  ): Promise<Planejamento> {
+    return this.planejamentosRepository.executarEmTransacao(
+      async (repository) => {
+        const planejamentoInicial =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        this.assertUsuarioProprietarioDoPlanejamento(
+          planejamentoInicial,
+          usuarioId,
+        );
+
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento = await this.buscarPlanejamentoParaAcertos(
+          repository,
+          planejamentoId,
+          usuarioId,
+        );
+        this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertPlanejamentoFechadoParaArquivamento(planejamento);
+
+        await this.reconciliarAcertos(repository, planejamento);
+
+        const planejamentoReconciliado =
+          await this.buscarPlanejamentoParaAcertos(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
+        const participantesFinanceiramenteRelevantes =
+          this.listarParticipantesFinanceiramenteRelevantes(
+            planejamentoReconciliado,
+          );
+        const resumo = calcularResumoFinanceiroPlanejamento(
+          participantesFinanceiramenteRelevantes.map(
+            (participante) => participante.id,
+          ),
+          this.mapearGastosParaCalculo(planejamentoReconciliado),
+          this.mapearAcertosParaCalculo(planejamentoReconciliado),
+        );
+
+        this.assertPlanejamentoQuitadoParaArquivamento(resumo);
+
+        await repository.salvarPlanejamento({
+          id: planejamentoId,
+          status: PlanejamentoStatus.ARQUIVADO,
+        });
+
+        return this.buscarPlanejamentoAcessivelComRepository(
+          repository,
+          planejamentoId,
           usuarioId,
         );
       },
@@ -1371,6 +1443,7 @@ export class PlanejamentosService {
       planejamentoId,
       usuarioId,
     );
+    this.assertOperacaoAcertoPermitida(planejamento);
 
     const acerto = await repository.buscarAcertoPorIdEPlanejamento(
       acertoId,
@@ -1437,6 +1510,57 @@ export class PlanejamentosService {
     throw new ValidationAppException(
       'PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO',
       'Somente planejamentos abertos podem sofrer alteracoes estruturais.',
+      { details: { statusAtual: planejamento.status } },
+    );
+  }
+
+  private assertPlanejamentoFechadoParaArquivamento(
+    planejamento: Planejamento,
+  ): void {
+    if (planejamento.status === PlanejamentoStatus.FECHADO) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_ARQUIVAR_STATUS_INVALIDO',
+      'Somente planejamento fechado pode ser arquivado.',
+      { details: { statusAtual: planejamento.status } },
+    );
+  }
+
+  private assertPlanejamentoQuitadoParaArquivamento(
+    resumo: Pick<
+      ResumoFinanceiroPlanejamento,
+      'situacaoFinanceira' | 'obrigacaoResidualCentavos'
+    >,
+  ): void {
+    if (resumo.situacaoFinanceira === 'QUITADO') {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA',
+      'Somente planejamento financeiramente quitado pode ser arquivado.',
+      {
+        details: {
+          situacaoFinanceira: resumo.situacaoFinanceira,
+          obrigacaoResidualCentavos: resumo.obrigacaoResidualCentavos,
+        },
+      },
+    );
+  }
+
+  private assertOperacaoAcertoPermitida(planejamento: Planejamento): void {
+    if (
+      planejamento.status === PlanejamentoStatus.ABERTO ||
+      planejamento.status === PlanejamentoStatus.FECHADO
+    ) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO',
+      'Operacoes de acerto sao permitidas apenas em planejamentos abertos ou fechados.',
       { details: { statusAtual: planejamento.status } },
     );
   }
