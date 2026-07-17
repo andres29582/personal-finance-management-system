@@ -80,6 +80,14 @@ export class PlanejamentosController {
     return this.planejamentosService.arquivar(params.id, req.user.id);
   }
 
+  @Patch(':id/cancelar')
+  cancelar(
+    @Param() params: FindPlanejamentoParamsDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.planejamentosService.cancelar(params.id, req.user.id);
+  }
+
   @Post(':id/participantes')
   addParticipante(
     @Param() params: FindPlanejamentoParamsDto,
