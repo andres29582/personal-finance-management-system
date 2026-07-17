@@ -32,6 +32,7 @@ Endpoints atualmente implementados no backend e documentados no Swagger oficial:
 | `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
 | `GET` | `/planejamentos/:id/resumo` | Retorna o resumo financeiro derivado, sem persistencia, reconciliacao ou alteracao do agregado. |
 | `PATCH` | `/planejamentos/:id/fechar` | Fecha operacionalmente um planejamento `ABERTO`, com lock, reconciliacao final e preservacao dos acertos pendentes. |
+| `PATCH` | `/planejamentos/:id/arquivar` | Arquiva transacionalmente um planejamento `FECHADO + QUITADO` e o torna somente leitura sem excluir seu historico. |
 | `POST` | `/planejamentos/:id/participantes` | Adiciona participante atomicamente; duplicidades ativas por nome manual, email ou usuario vinculado retornam conflito `409`. |
 | `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remove participante ativo logicamente, sem recalcular obrigacoes existentes; operacao exclusiva do proprietario. |
 | `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
@@ -53,7 +54,6 @@ contrato disponivel no backend atual.
 | Metodo | Rota | Descricao |
 | --- | --- | --- |
 | `PATCH` | `/planejamentos/:id` | Edita dados basicos do planejamento. |
-| `PATCH` | `/planejamentos/:id/arquivar` | Arquiva planejamento sem exclusao fisica. |
 | `PATCH` | `/planejamentos/:id/cancelar` | Cancela planejamento logicamente. |
 | `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
 | `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
@@ -111,17 +111,18 @@ Campos editaveis no MVP:
 
 ### Alterar status do planejamento
 
-Endpoint implementado:
+Endpoints implementados:
 
 ```text
 PATCH /planejamentos/:id/fechar
+PATCH /planejamentos/:id/arquivar
 ```
 
 Endpoints de roadmap:
 
 ```text
-PATCH /planejamentos/:id/arquivar
 PATCH /planejamentos/:id/cancelar
+POST /planejamentos/:id/replicar
 ```
 
 Regras conceituais:
@@ -131,7 +132,14 @@ Regras conceituais:
   serializada no agregado e reconciliacao final dos acertos;
 - `fechar` preserva acertos pendentes e nao exige quitacao total;
 - `arquivar` exige planejamento `FECHADO` sem obrigacao financeira residual
-  valida, preserva historico e torna o planejamento somente leitura;
+  valida, calculada pelo resumo financeiro oficial depois da reconciliacao;
+- `arquivar` exige proprietario autenticado e executa acesso, propriedade,
+  lock pessimista, recarga do agregado, reconciliacao, nova recarga, calculo do
+  resumo e persistencia do status em uma unica transacao;
+- se a reconciliacao ou a validacao financeira falhar, toda alteracao da
+  transacao sofre rollback;
+- `ARQUIVADO` preserva detalhe, gastos, acertos, resumo e historico para
+  consulta, mas bloqueia mutacoes estruturais, financeiras e de acertos;
 - `cancelar` e cancelamento logico, mas seu efeito sobre obrigacoes existentes
   permanece a definir antes da implementacao;
 - se `DELETE /planejamentos/:id` for mantido, ele deve ser tratado como
@@ -163,6 +171,19 @@ ou remover participante e criar, editar ou cancelar gasto. Quando o planejamento
 esta `FECHADO`, `ARQUIVADO` ou `CANCELADO`, elas retornam
 `422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`, com `statusAtual` nos
 detalhes. Consultas e operacoes de acerto nao usam esse bloqueio estrutural.
+Operacoes de acerto usam politica propria e sao permitidas somente em `ABERTO`
+ou `FECHADO`; em `ARQUIVADO` ou `CANCELADO`, retornam
+`422 PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO`, com `statusAtual`.
+
+O arquivamento nao recebe body e retorna o planejamento com status
+`ARQUIVADO`. Erros de dominio:
+
+- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
+- `404 PLANEJAMENTO_NOT_FOUND`: planejamento inexistente ou inacessivel;
+- `422 PLANEJAMENTO_ARQUIVAR_STATUS_INVALIDO`: planejamento nao esta
+  `FECHADO`, com `statusAtual` nos detalhes;
+- `422 PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA`: resumo oficial retorna
+  `PENDENTE`, com `situacaoFinanceira` e `obrigacaoResidualCentavos`.
 
 ### Adicionar participante
 
@@ -468,7 +489,8 @@ confirmados.
 
 `POST /planejamentos/:planejamentoId/acertos/sincronizar` permanece disponivel
 como sincronizacao explicita e idempotente para reparacao ou recuperacao
-operacional dos acertos pendentes.
+operacional dos acertos pendentes em planejamentos `ABERTO` ou `FECHADO`.
+Planejamentos `ARQUIVADO` ou `CANCELADO` bloqueiam a operacao.
 
 Resposta conceitual:
 
@@ -495,7 +517,8 @@ Resposta conceitual:
 
 O pagamento de acerto existente e permitido em planejamento `ABERTO` ou
 `FECHADO`. Pagamento tardio nao reabre o planejamento, nao altera o periodo
-original, nao cria gasto e nao modifica divisoes.
+original, nao cria gasto e nao modifica divisoes. A operacao e bloqueada em
+`ARQUIVADO` ou `CANCELADO`.
 
 Regra de dominio: a data efetiva do pagamento deve ser registrada quando
 informada.
@@ -527,6 +550,9 @@ Resposta conceitual:
 
 `PATCH /planejamentos/:id/acertos/:acertoId/reabrir`
 
+Permitido somente quando o planejamento esta `ABERTO` ou `FECHADO`; bloqueado
+em `ARQUIVADO` ou `CANCELADO`.
+
 Payload opcional:
 
 ```json
@@ -548,6 +574,9 @@ Resposta conceitual:
 ### Cancelar acerto
 
 `PATCH /planejamentos/:id/acertos/:acertoId/cancelar`
+
+Permitido somente quando o planejamento esta `ABERTO` ou `FECHADO`; bloqueado
+em `ARQUIVADO` ou `CANCELADO`.
 
 Payload opcional:
 

@@ -84,9 +84,9 @@ ARQUIVADO + QUITADO
 | Adicionar/remover participante | Permitido | Bloqueado | Bloqueado | Bloqueado |
 | Criar/editar/cancelar gasto | Permitido | Bloqueado | Bloqueado | Bloqueado |
 | Alterar pagador/divisoes | Permitido | Bloqueado | Bloqueado | Bloqueado |
-| Sincronizar acertos | Permitido | Permitido para consistencia operacional | Bloqueado | A definir |
-| Marcar acerto como pago | Permitido | Permitido | Bloqueado | A definir |
-| Cancelar/reabrir acerto | Permitido | Permitido | Bloqueado | A definir |
+| Sincronizar acertos | Permitido | Permitido para consistencia operacional | Bloqueado | Bloqueado |
+| Marcar acerto como pago | Permitido | Permitido | Bloqueado | Bloqueado |
+| Cancelar/reabrir acerto | Permitido | Permitido | Bloqueado | Bloqueado |
 | Fechar | Permitido conforme validacoes | Nao aplicavel | Bloqueado | Bloqueado |
 | Arquivar | Bloqueado | Permitido somente quando `QUITADO` | Nao aplicavel | Bloqueado |
 

@@ -3747,6 +3747,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
       operationId: closePlanejamento
+  /planejamentos/{id}/arquivar:
+    patch:
+      tags:
+      - Planejamentos
+      summary: Arquivar planejamento quitado
+      description: >-
+        Operacao transacional exclusiva do proprietario. Requer planejamento
+        FECHADO e situacao financeira derivada QUITADO. A reconciliacao dos
+        acertos, a recarga do agregado, o calculo do resumo financeiro e a
+        transicao para ARQUIVADO ocorrem na mesma transacao serializada por
+        planejamento. O planejamento arquivado permanece disponivel para
+        consultas de detalhe, gastos, acertos, resumo e historico, mas se torna
+        somente leitura: mutacoes financeiras, estruturais e de acertos ficam
+        bloqueadas.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Planejamento arquivado com sucesso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanejamentoSuccess'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >-
+            PLANEJAMENTO_ARQUIVAR_STATUS_INVALIDO - planejamento nao esta
+            FECHADO; ou PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA - o resumo
+            financeiro derivado ainda possui obrigacao residual.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      operationId: archivePlanejamento
   /planejamentos/{id}/participantes:
     post:
       tags:
