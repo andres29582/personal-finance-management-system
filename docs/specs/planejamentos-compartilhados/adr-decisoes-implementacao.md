@@ -174,8 +174,10 @@ Consequencias:
 - a quitacao considera gastos validos, divisoes ativas, acertos pagos, acertos
   cancelados ou obsoletos e a reconciliacao atual, nao apenas a inexistencia
   fisica de linhas `PENDENTE`;
-- o comportamento de `CANCELADO` com gastos ou acertos existentes permanece
-  pendente de decisao antes da implementacao do endpoint;
+- `CANCELADO` exige planejamento `ABERTO + QUITADO`, preserva participantes,
+  gastos, divisoes, acertos, pagamentos e historico, permite apenas os ajustes
+  de acertos `PENDENTE` feitos pela reconciliacao oficial e torna o agregado
+  terminal e somente leitura;
 - `QUITADO` nao integra e nao deve ser adicionado a `PlanejamentoStatus`.
 
 Representacao conceitual derivada:

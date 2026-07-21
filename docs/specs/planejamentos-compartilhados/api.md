@@ -665,8 +665,11 @@ Regras conceituais:
 | `401` | Requisicao sem JWT valido. | `UNAUTHORIZED` |
 | `403` ou `404` | Recurso nao pertence ao usuario autenticado. | `PLANEJAMENTO_NOT_FOUND` ou `ACCESS_DENIED` |
 | `404` | Planejamento, participante, gasto ou acerto inexistente. | `RESOURCE_NOT_FOUND` |
-| `409` | Transicao de status invalida ou conflito com estado atual. | `INVALID_STATUS_TRANSITION` |
-| `422` | Regra de negocio violada, como gasto sem participantes de divisao. | `BUSINESS_RULE_VIOLATION` |
+| `409` | Conflito real, como duplicidade de recurso. | Codigo especifico documentado pelo endpoint. |
+| `422` | Regra de negocio violada, incluindo transicao ou estado incompativel com o lifecycle. | `BUSINESS_RULE_VIOLATION`, `PLANEJAMENTO_CANCELAR_STATUS_INVALIDO` ou `PLANEJAMENTO_CANCELAR_PENDENCIA_FINANCEIRA` |
+
+Os codigos especificos documentados na secao de cada endpoint prevalecem sobre
+esta tabela conceitual generica.
 
 Mensagens devem ser claras, em portugues, e sem revelar dados de outro usuario.
 
