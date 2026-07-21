@@ -1,4 +1,4 @@
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
@@ -77,9 +77,15 @@ describe('PlanejamentosRepository', () => {
     managerPlanejamentoRepository.save.mockResolvedValue({
       id: 'planejamento-transacao',
     } as Planejamento);
+    let managerRecebido: EntityManager | undefined;
 
-    const result = await repository.executarEmTransacao((transacional) =>
-      transacional.salvarPlanejamento({ id: 'planejamento-transacao' }),
+    const result = await repository.executarEmTransacao(
+      (transacional, managerAtivo) => {
+        managerRecebido = managerAtivo;
+        return transacional.salvarPlanejamento({
+          id: 'planejamento-transacao',
+        });
+      },
     );
 
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
@@ -87,6 +93,7 @@ describe('PlanejamentosRepository', () => {
     expect(managerPlanejamentoRepository.save).toHaveBeenCalledWith({
       id: 'planejamento-transacao',
     });
+    expect(managerRecebido).toBe(manager);
     expect(result).toEqual({ id: 'planejamento-transacao' });
   });
 

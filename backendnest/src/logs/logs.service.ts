@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { EntityManager } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { RequestContextService } from './request-context.service';
 import { AuditLogRepository } from './repositories/audit-log.repository';
@@ -24,8 +25,33 @@ export class LogsService {
   ) {}
 
   async create(input: CreateAuditLogInput): Promise<void> {
+    const entity = this.auditLogRepository.createAuditLog(
+      this.buildAuditLog(input),
+    );
+
+    await this.persistSafely(entity);
+  }
+
+  async logEntityEventTransactional(
+    input: LogEntityEventInput,
+    manager: EntityManager,
+  ): Promise<AuditLog> {
+    const repository = manager.getRepository(AuditLog);
+    const entity = repository.create(
+      this.buildAuditLog({
+        ...input,
+        level: input.level ?? 'info',
+        success: input.success ?? true,
+      }),
+    );
+
+    return repository.save(entity);
+  }
+
+  private buildAuditLog(input: CreateAuditLogInput): Partial<AuditLog> {
     const context = this.resolveContext(input.context);
-    const entity = this.auditLogRepository.createAuditLog({
+
+    return {
       id: randomUUID(),
       level: input.level,
       event: input.event,
@@ -42,9 +68,7 @@ export class LogsService {
       ip: this.truncate(context.ip ?? null, 45),
       userAgent: this.truncate(context.userAgent ?? null, 255),
       details: this.sanitizeDetails(input.details),
-    });
-
-    await this.persistSafely(entity);
+    };
   }
 
   async logAuthEvent(input: LogAuthEventInput): Promise<void> {

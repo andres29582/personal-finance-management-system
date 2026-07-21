@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
   DeepPartial,
+  EntityManager,
   FindOptionsWhere,
   IsNull,
   Repository,
@@ -41,7 +42,10 @@ export class PlanejamentosRepository {
   ) {}
 
   async executarEmTransacao<T>(
-    operacao: (repository: PlanejamentosRepository) => Promise<T>,
+    operacao: (
+      repository: PlanejamentosRepository,
+      manager: EntityManager,
+    ) => Promise<T>,
   ): Promise<T> {
     return this.dataSource.transaction((manager) =>
       operacao(
@@ -53,6 +57,7 @@ export class PlanejamentosRepository {
           manager.getRepository(AcertoPlanejamento),
           this.dataSource,
         ),
+        manager,
       ),
     );
   }

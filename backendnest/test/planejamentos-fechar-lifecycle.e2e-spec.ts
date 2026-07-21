@@ -1,5 +1,6 @@
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
+import { AuditLog } from '../src/logs/entities/audit-log.entity';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
 import { GastoPlanejamento } from '../src/planejamentos/entities/gasto-planejamento.entity';
@@ -83,6 +84,37 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
   });
 
   const authorization = () => `Bearer ${proprietario.token}`;
+
+  async function buscarLogsFechamento(
+    planejamentoId: string,
+  ): Promise<AuditLog[]> {
+    return dataSource.getRepository(AuditLog).find({
+      where: {
+        entity: 'planejamento',
+        entityId: planejamentoId,
+        event: 'PLANEJAMENTO_FECHADO',
+      },
+    });
+  }
+
+  function expectLogFechamento(logs: AuditLog[]): void {
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({
+        action: 'update',
+        entity: 'planejamento',
+        event: 'PLANEJAMENTO_FECHADO',
+        module: 'planejamentos',
+        statusCode: 200,
+        success: true,
+        userId: proprietario.userId,
+      }),
+    );
+    expect(logs[0].details).toEqual({
+      statusAnterior: PlanejamentoStatus.ABERTO,
+      statusPosterior: PlanejamentoStatus.FECHADO,
+    });
+  }
 
   async function criarCenarioComPendencia(
     sufixo: string,
@@ -215,6 +247,11 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
         valorCentavos: acerto.valorCentavos,
       }),
     );
+    const logs = await buscarLogsFechamento(planejamento.id);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({ entityId: planejamento.id }),
+    );
+    expectLogFechamento(logs);
   });
 
   it('rejects closing by an active participant who is not the owner', async () => {
@@ -256,6 +293,9 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
         id: planejamento.id,
       }),
     ).toEqual(expect.objectContaining({ status: PlanejamentoStatus.ABERTO }));
+    await expect(buscarLogsFechamento(planejamento.id)).resolves.toHaveLength(
+      0,
+    );
   });
 
   it('rejects a second close and keeps the planning closed', async () => {
@@ -505,5 +545,6 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
         status: AcertoStatus.PENDENTE,
       }),
     ]);
+    expectLogFechamento(await buscarLogsFechamento(planejamento.id));
   });
 });

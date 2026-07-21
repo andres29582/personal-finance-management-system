@@ -12,6 +12,7 @@ export type AuditLogModule =
   | 'dividas'
   | 'metas'
   | 'alertas'
+  | 'planejamentos'
   | 'dashboard'
   | 'relatorios'
   | 'system';

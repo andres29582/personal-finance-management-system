@@ -184,6 +184,11 @@ mutacoes estruturais e das quatro operacoes de acerto, concorrencia com uma
 unica transicao vencedora e rollback real da reconciliacao quando a persistencia
 do status falha.
 
+As suites de fechamento, arquivamento e cancelamento validam ainda a criacao de
+um unico `AuditLog` por transicao vencedora, a ausencia de evento de sucesso em
+rejeicoes e concorrencia e o rollback integral quando a auditoria transacional
+falha, incluindo status, reconciliacao de acertos e o proprio log.
+
 Fluxo minimo recomendado:
 
 1. Criar usuario A e usuario B.

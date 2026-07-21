@@ -344,7 +344,7 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 
 | ID | Regra |
 | --- | --- |
-| RN-AUD-01 | Criacao, edicao, arquivamento e cancelamento de planejamento devem ser auditados. |
+| RN-AUD-01 | Criacao, edicao, fechamento, arquivamento e cancelamento de planejamento devem ser auditados. |
 | RN-AUD-02 | Criacao, edicao e remocao de participante devem ser auditadas. |
 | RN-AUD-03 | Criacao, edicao e cancelamento de gasto devem ser auditadas. |
 | RN-AUD-04 | Marcacao, cancelamento e reabertura de acerto devem ser auditadas. |

@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { EntityManager } from 'typeorm';
 import {
   AppConflictException,
   ForbiddenResourceException,
   ResourceNotFoundException,
   ValidationAppException,
 } from '../common/exceptions';
+import { LogsService } from '../logs/logs.service';
 import {
   AddParticipantePlanejamentoDto,
   CreateGastoPlanejamentoDto,
@@ -88,10 +90,19 @@ type PlanoReconciliacaoAcertos = {
   novosAcertos: AcertosParaSalvar;
 };
 
+const EVENTO_TRANSICAO_PLANEJAMENTO: Partial<
+  Record<PlanejamentoStatus, string>
+> = {
+  [PlanejamentoStatus.FECHADO]: 'PLANEJAMENTO_FECHADO',
+  [PlanejamentoStatus.ARQUIVADO]: 'PLANEJAMENTO_ARQUIVADO',
+  [PlanejamentoStatus.CANCELADO]: 'PLANEJAMENTO_CANCELADO',
+};
+
 @Injectable()
 export class PlanejamentosService {
   constructor(
     private readonly planejamentosRepository: PlanejamentosRepository,
+    private readonly logsService: LogsService,
   ) {}
 
   async create(
@@ -276,7 +287,7 @@ export class PlanejamentosService {
 
   async fechar(id: string, usuarioId: string): Promise<Planejamento> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const planejamentoInicial =
           await this.buscarPlanejamentoAcessivelComRepository(
             repository,
@@ -312,6 +323,13 @@ export class PlanejamentosService {
           id,
           status: PlanejamentoStatus.FECHADO,
         });
+        await this.registrarTransicaoLifecycle(
+          manager,
+          id,
+          usuarioId,
+          planejamento.status,
+          PlanejamentoStatus.FECHADO,
+        );
 
         return this.buscarPlanejamentoAcessivelComRepository(
           repository,
@@ -327,7 +345,7 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<Planejamento> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const planejamentoInicial =
           await this.buscarPlanejamentoAcessivelComRepository(
             repository,
@@ -383,6 +401,13 @@ export class PlanejamentosService {
           id: planejamentoId,
           status: PlanejamentoStatus.ARQUIVADO,
         });
+        await this.registrarTransicaoLifecycle(
+          manager,
+          planejamentoId,
+          usuarioId,
+          planejamento.status,
+          PlanejamentoStatus.ARQUIVADO,
+        );
 
         return this.buscarPlanejamentoAcessivelComRepository(
           repository,
@@ -398,7 +423,7 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<Planejamento> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const planejamentoInicial =
           await this.buscarPlanejamentoAcessivelComRepository(
             repository,
@@ -454,6 +479,13 @@ export class PlanejamentosService {
           id: planejamentoId,
           status: PlanejamentoStatus.CANCELADO,
         });
+        await this.registrarTransicaoLifecycle(
+          manager,
+          planejamentoId,
+          usuarioId,
+          planejamento.status,
+          PlanejamentoStatus.CANCELADO,
+        );
 
         return this.buscarPlanejamentoAcessivelComRepository(
           repository,
@@ -461,6 +493,42 @@ export class PlanejamentosService {
           usuarioId,
         );
       },
+    );
+  }
+
+  private async registrarTransicaoLifecycle(
+    manager: EntityManager,
+    planejamentoId: string,
+    usuarioId: string,
+    statusAnterior: PlanejamentoStatus,
+    statusPosterior: PlanejamentoStatus,
+  ): Promise<void> {
+    const event = EVENTO_TRANSICAO_PLANEJAMENTO[statusPosterior];
+
+    if (!event) {
+      throw new Error(
+        `Evento de auditoria nao configurado para o status ${statusPosterior}.`,
+      );
+    }
+
+    await this.logsService.logEntityEventTransactional(
+      {
+        event,
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: usuarioId,
+        entity: 'planejamento',
+        entityId: planejamentoId,
+        details: {
+          statusAnterior,
+          statusPosterior,
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      manager,
     );
   }
 

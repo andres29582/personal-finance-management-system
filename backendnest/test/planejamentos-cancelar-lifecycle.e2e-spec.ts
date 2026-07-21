@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
+import { AuditLog } from '../src/logs/entities/audit-log.entity';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
 import { GastoPlanejamento } from '../src/planejamentos/entities/gasto-planejamento.entity';
@@ -84,6 +85,37 @@ describe('Planejamentos cancellation lifecycle (e2e)', () => {
   });
 
   const authorization = (session = proprietario) => `Bearer ${session.token}`;
+
+  async function buscarLogsCancelamento(
+    planejamentoId: string,
+  ): Promise<AuditLog[]> {
+    return dataSource.getRepository(AuditLog).find({
+      where: {
+        entity: 'planejamento',
+        entityId: planejamentoId,
+        event: 'PLANEJAMENTO_CANCELADO',
+      },
+    });
+  }
+
+  function expectLogCancelamento(logs: AuditLog[]): void {
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({
+        action: 'update',
+        entity: 'planejamento',
+        event: 'PLANEJAMENTO_CANCELADO',
+        module: 'planejamentos',
+        statusCode: 200,
+        success: true,
+        userId: proprietario.userId,
+      }),
+    );
+    expect(logs[0].details).toEqual({
+      statusAnterior: PlanejamentoStatus.ABERTO,
+      statusPosterior: PlanejamentoStatus.CANCELADO,
+    });
+  }
 
   async function criarPlanejamento(
     sufixo: string,
@@ -216,6 +248,11 @@ describe('Planejamentos cancellation lifecycle (e2e)', () => {
         status: PlanejamentoStatus.CANCELADO,
       }),
     );
+    const logs = await buscarLogsCancelamento(planejamento.id);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({ entityId: planejamento.id }),
+    );
+    expectLogCancelamento(logs);
   });
 
   it('allows PENDENTE_REVISAO without a valid obligation and preserves it as history', async () => {
@@ -482,6 +519,9 @@ describe('Planejamentos cancellation lifecycle (e2e)', () => {
       .set('Authorization', authorization(participanteVinculado));
     expect(participanteResponse.status).toBe(403);
     expectDomainError(participanteResponse, 'PLANEJAMENTO_OWNER_REQUIRED');
+    await expect(
+      buscarLogsCancelamento(cenarioParticipante.planejamento.id),
+    ).resolves.toHaveLength(0);
   });
 
   it('serializes concurrent cancellation requests so only the first transition succeeds', async () => {
@@ -506,6 +546,7 @@ describe('Planejamentos cancellation lifecycle (e2e)', () => {
       'PLANEJAMENTO_CANCELAR_STATUS_INVALIDO',
       PlanejamentoStatus.CANCELADO,
     );
+    expectLogCancelamento(await buscarLogsCancelamento(planejamento.id));
   });
 
   it('serializes closing against cancellation without a lost update', async () => {
@@ -590,5 +631,64 @@ describe('Planejamentos cancellation lifecycle (e2e)', () => {
         id: acertoObsoleto.id,
       }),
     ).toEqual(expect.objectContaining({ status: AcertoStatus.PENDENTE }));
+  });
+
+  it('rolls back status, reconciliation and lifecycle log when transactional audit persistence fails', async () => {
+    const cenario = await criarCenarioFinanceiro('rollback auditoria');
+    await quitar(cenario);
+    const acertoObsoleto = await dataSource
+      .getRepository(AcertoPlanejamento)
+      .save({
+        id: randomUUID(),
+        planejamentoId: cenario.planejamento.id,
+        deParticipanteId: cenario.participanteDevedor.id,
+        paraParticipanteId: cenario.participanteProprietario.id,
+        valorCentavos: cenario.acerto.valorCentavos,
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+        observacao: 'Deve sobreviver ao rollback da auditoria',
+      });
+    const triggerSuffix = randomUUID().replace(/-/g, '_');
+    const functionName = `falhar_auditoria_cancelamento_${triggerSuffix}`;
+    const triggerName = `trigger_${functionName}`;
+
+    await dataSource.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.entity_id = '${cenario.planejamento.id}'
+          AND NEW.event = 'PLANEJAMENTO_CANCELADO' THEN
+          RAISE EXCEPTION 'falha de auditoria induzida pelo teste';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_log
+      FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      await request(app.getHttpServer())
+        .patch(`/planejamentos/${cenario.planejamento.id}/cancelar`)
+        .set('Authorization', authorization())
+        .expect(500);
+    } finally {
+      await dataSource.query(`DROP TRIGGER ${triggerName} ON audit_log`);
+      await dataSource.query(`DROP FUNCTION ${functionName}()`);
+    }
+
+    expect(
+      await dataSource.getRepository(Planejamento).findOneByOrFail({
+        id: cenario.planejamento.id,
+      }),
+    ).toEqual(expect.objectContaining({ status: PlanejamentoStatus.ABERTO }));
+    expect(
+      await dataSource.getRepository(AcertoPlanejamento).findOneByOrFail({
+        id: acertoObsoleto.id,
+      }),
+    ).toEqual(expect.objectContaining({ status: AcertoStatus.PENDENTE }));
+    await expect(
+      buscarLogsCancelamento(cenario.planejamento.id),
+    ).resolves.toHaveLength(0);
   });
 });
