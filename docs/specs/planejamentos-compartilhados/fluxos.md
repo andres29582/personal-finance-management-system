@@ -200,10 +200,26 @@ Planejamento `ARQUIVADO` e somente leitura. A inexistencia fisica de linhas
 
 ## Fluxo de cancelamento do planejamento
 
-`CANCELADO` representa abandono ou invalidacao, nao conclusao normal. O efeito do
-cancelamento sobre gastos, divisoes e acertos existentes permanece pendente de
-decisao. Nenhum comportamento destrutivo deve ser implementado antes dessa
-definicao de dominio.
+1. Usuario autenticado solicita `PATCH /planejamentos/:id/cancelar`, sem body.
+2. Backend inicia uma transacao e valida acesso e propriedade antes do lock.
+3. Backend adquire lock pessimista de escrita no planejamento.
+4. Backend recarrega o agregado e revalida acesso, propriedade e estado `ABERTO`.
+5. Backend reconcilia os acertos pendentes.
+6. Backend recarrega o agregado reconciliado e calcula o resumo financeiro oficial.
+7. Backend valida que todos os saldos abertos sao zero, caracterizando `QUITADO`.
+8. Backend altera somente o status do planejamento para `CANCELADO`.
+9. Backend retorna o planejamento cancelado.
+
+Gasto `PENDENTE_REVISAO` nao bloqueia o cancelamento por si so e permanece
+preservado, pois nao integra a obrigacao financeira valida atual. Participantes,
+gastos, divisoes, pagamentos e historico nao sao removidos, revertidos ou
+cancelados em massa. Apenas acertos `PENDENTE` obsoletos podem ser ajustados pela
+reconciliacao oficial. Se a reconciliacao, a validacao financeira ou a
+persistencia falhar, toda a transacao sofre rollback.
+
+`CANCELADO` representa interrupcao ou abandono antes do fechamento normal e
+torna o agregado terminal e somente leitura. As consultas de listagem, detalhe,
+gastos, acertos e resumo permanecem disponiveis.
 
 ## Fluxo de cancelamento de gasto
 
