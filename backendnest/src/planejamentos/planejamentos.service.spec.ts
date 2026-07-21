@@ -3,6 +3,8 @@ import {
   ResourceNotFoundException,
   ValidationAppException,
 } from '../common/exceptions';
+import { LogsService } from '../logs/logs.service';
+import { EntityManager } from 'typeorm';
 import {
   AcertoStatus,
   DivisaoStatus,
@@ -54,6 +56,10 @@ describe('PlanejamentosService', () => {
   let service: PlanejamentosService;
   let repository: PlanejamentosRepositoryMock;
   let repositoryTransacional: PlanejamentosRepositoryMock;
+  let logsService: jest.Mocked<
+    Pick<LogsService, 'logEntityEventTransactional'>
+  >;
+  let entityManager: EntityManager;
 
   beforeEach(() => {
     jest.mocked(crypto.randomUUID).mockClear();
@@ -77,8 +83,15 @@ describe('PlanejamentosService', () => {
       salvarPlanejamento: jest.fn(),
     };
     repositoryTransacional = repository;
+    entityManager = {} as EntityManager;
+    logsService = {
+      logEntityEventTransactional: jest.fn().mockResolvedValue({} as never),
+    };
     repository.executarEmTransacao.mockImplementation((operacao) =>
-      operacao(repositoryTransacional as unknown as PlanejamentosRepository),
+      operacao(
+        repositoryTransacional as unknown as PlanejamentosRepository,
+        entityManager,
+      ),
     );
     repository.buscarAcessivelComParticipantes.mockResolvedValue(
       criarPlanejamentoComParticipantes(),
@@ -89,12 +102,40 @@ describe('PlanejamentosService', () => {
 
     service = new PlanejamentosService(
       repository as unknown as PlanejamentosRepository,
+      logsService as unknown as LogsService,
     );
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
+
+  function expectAuditoriaTransicao(
+    event: string,
+    statusAnterior: PlanejamentoStatus,
+    statusPosterior: PlanejamentoStatus,
+  ): void {
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event,
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'planejamento',
+        entityId: 'planejamento-1',
+        details: {
+          statusAnterior,
+          statusPosterior,
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
+  }
 
   it('creates a planejamento using the authenticated user as owner', async () => {
     repository.salvarPlanejamento.mockResolvedValue({
@@ -3464,6 +3505,11 @@ describe('PlanejamentosService', () => {
       id: 'planejamento-1',
       status: PlanejamentoStatus.FECHADO,
     });
+    expectAuditoriaTransicao(
+      'PLANEJAMENTO_FECHADO',
+      PlanejamentoStatus.ABERTO,
+      PlanejamentoStatus.FECHADO,
+    );
     expect(
       repository.bloquearPlanejamentoParaAtualizacao.mock
         .invocationCallOrder[0],
@@ -3472,6 +3518,11 @@ describe('PlanejamentosService', () => {
     );
     expect(repository.salvarAcertos.mock.invocationCallOrder[0]).toBeLessThan(
       repository.salvarPlanejamento.mock.invocationCallOrder[0],
+    );
+    expect(
+      repository.salvarPlanejamento.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
     );
     expect(result).toBe(planejamentoFechado);
   });
@@ -3538,6 +3589,7 @@ describe('PlanejamentosService', () => {
     );
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -3559,6 +3611,7 @@ describe('PlanejamentosService', () => {
 
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects closing when an active pending-review expense exists', async () => {
@@ -3580,6 +3633,7 @@ describe('PlanejamentosService', () => {
 
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('archives a closed and financially settled planejamento in the required transactional order', async () => {
@@ -3611,6 +3665,11 @@ describe('PlanejamentosService', () => {
       id: 'planejamento-1',
       status: PlanejamentoStatus.ARQUIVADO,
     });
+    expectAuditoriaTransicao(
+      'PLANEJAMENTO_ARQUIVADO',
+      PlanejamentoStatus.FECHADO,
+      PlanejamentoStatus.ARQUIVADO,
+    );
     expect(
       repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
     ).toBeLessThan(
@@ -3631,6 +3690,11 @@ describe('PlanejamentosService', () => {
     expect(
       repository.buscarComGastosDivisoesAcertos.mock.invocationCallOrder[1],
     ).toBeLessThan(repository.salvarPlanejamento.mock.invocationCallOrder[0]);
+    expect(
+      repository.salvarPlanejamento.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
     expect(repository.salvarPlanejamento).toHaveBeenCalledTimes(1);
     expect(result).toBe(planejamentoArquivado);
   });
@@ -3657,6 +3721,7 @@ describe('PlanejamentosService', () => {
 
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects a closed planejamento with residual financial obligation after reconciliation', async () => {
@@ -3688,6 +3753,7 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
     expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledTimes(2);
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('validates access and ownership before acquiring the archiving lock', async () => {
@@ -3702,7 +3768,7 @@ describe('PlanejamentosService', () => {
 
     jest.clearAllMocks();
     repository.executarEmTransacao.mockImplementation((operacao) =>
-      operacao(repository as unknown as PlanejamentosRepository),
+      operacao(repository as unknown as PlanejamentosRepository, entityManager),
     );
     repository.buscarAcessivelComParticipantes.mockResolvedValueOnce(
       criarPlanejamentoComParticipantes({ usuarioCriadorId: 'user-2' }),
@@ -3714,6 +3780,7 @@ describe('PlanejamentosService', () => {
     expect(
       repository.bloquearPlanejamentoParaAtualizacao,
     ).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('revalidates ownership on the complete aggregate reloaded after the archiving lock', async () => {
@@ -3740,6 +3807,7 @@ describe('PlanejamentosService', () => {
     );
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('propagates reconciliation failures so the archiving transaction can roll back', async () => {
@@ -3839,6 +3907,11 @@ describe('PlanejamentosService', () => {
       id: 'planejamento-1',
       status: PlanejamentoStatus.CANCELADO,
     });
+    expectAuditoriaTransicao(
+      'PLANEJAMENTO_CANCELADO',
+      PlanejamentoStatus.ABERTO,
+      PlanejamentoStatus.CANCELADO,
+    );
     expect(
       repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
     ).toBeLessThan(
@@ -3857,6 +3930,11 @@ describe('PlanejamentosService', () => {
     expect(
       repository.buscarComGastosDivisoesAcertos.mock.invocationCallOrder[1],
     ).toBeLessThan(repository.salvarPlanejamento.mock.invocationCallOrder[0]);
+    expect(
+      repository.salvarPlanejamento.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
     expect(repository.salvarGasto).not.toHaveBeenCalled();
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
@@ -3937,6 +4015,7 @@ describe('PlanejamentosService', () => {
 
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects an open planejamento with residual financial obligation after reconciliation', async () => {
@@ -3968,6 +4047,7 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
     expect(repository.buscarComGastosDivisoesAcertos).toHaveBeenCalledTimes(2);
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('validates access and ownership before acquiring the cancellation lock', async () => {
@@ -3982,7 +4062,7 @@ describe('PlanejamentosService', () => {
 
     jest.clearAllMocks();
     repository.executarEmTransacao.mockImplementation((operacao) =>
-      operacao(repository as unknown as PlanejamentosRepository),
+      operacao(repository as unknown as PlanejamentosRepository, entityManager),
     );
     repository.buscarAcessivelComParticipantes.mockResolvedValueOnce(
       criarPlanejamentoComParticipantes({ usuarioCriadorId: 'user-2' }),
@@ -3994,6 +4074,7 @@ describe('PlanejamentosService', () => {
     expect(
       repository.bloquearPlanejamentoParaAtualizacao,
     ).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('revalidates ownership on the aggregate reloaded after the cancellation lock', async () => {
@@ -4020,6 +4101,7 @@ describe('PlanejamentosService', () => {
     );
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
     expect(repository.salvarPlanejamento).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('propagates reconciliation failures so the cancellation transaction can roll back', async () => {
@@ -4066,6 +4148,40 @@ describe('PlanejamentosService', () => {
       id: 'planejamento-1',
       status: PlanejamentoStatus.CANCELADO,
     });
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
+  });
+
+  it('propagates transactional audit failures after persisting the cancellation status', async () => {
+    const erroAuditoria = new Error('falha na auditoria transacional');
+    const planejamentoAberto = criarPlanejamentoComParticipantes({
+      status: PlanejamentoStatus.ABERTO,
+    });
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamentoAberto,
+    );
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      planejamentoAberto,
+    );
+    repository.salvarPlanejamento.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        status: PlanejamentoStatus.CANCELADO,
+      }),
+    );
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(service.cancelar('planejamento-1', 'user-1')).rejects.toBe(
+      erroAuditoria,
+    );
+
+    expect(repository.salvarPlanejamento).toHaveBeenCalledWith({
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.CANCELADO,
+    });
+    expectAuditoriaTransicao(
+      'PLANEJAMENTO_CANCELADO',
+      PlanejamentoStatus.ABERTO,
+      PlanejamentoStatus.CANCELADO,
+    );
   });
 
   it.each([
@@ -4082,7 +4198,10 @@ describe('PlanejamentosService', () => {
       ]) {
         jest.clearAllMocks();
         repository.executarEmTransacao.mockImplementation((callback) =>
-          callback(repository as unknown as PlanejamentosRepository),
+          callback(
+            repository as unknown as PlanejamentosRepository,
+            entityManager,
+          ),
         );
         repository.buscarAcessivelComParticipantes.mockResolvedValue(
           criarPlanejamentoComParticipantes({ status }),
@@ -5595,7 +5714,10 @@ describe('PlanejamentosService', () => {
     });
     repository.executarEmTransacao.mockImplementation((operacao) => {
       const execucao = fila.then(() =>
-        operacao(repository as unknown as PlanejamentosRepository),
+        operacao(
+          repository as unknown as PlanejamentosRepository,
+          entityManager,
+        ),
       );
       fila = execucao.then(
         () => undefined,

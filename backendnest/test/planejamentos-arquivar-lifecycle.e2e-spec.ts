@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
+import { AuditLog } from '../src/logs/entities/audit-log.entity';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { Planejamento } from '../src/planejamentos/entities/planejamento.entity';
 import {
@@ -78,6 +79,37 @@ describe('Planejamentos archive lifecycle (e2e)', () => {
   });
 
   const authorization = (session = proprietario) => `Bearer ${session.token}`;
+
+  async function buscarLogsArquivamento(
+    planejamentoId: string,
+  ): Promise<AuditLog[]> {
+    return dataSource.getRepository(AuditLog).find({
+      where: {
+        entity: 'planejamento',
+        entityId: planejamentoId,
+        event: 'PLANEJAMENTO_ARQUIVADO',
+      },
+    });
+  }
+
+  function expectLogArquivamento(logs: AuditLog[]): void {
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({
+        action: 'update',
+        entity: 'planejamento',
+        event: 'PLANEJAMENTO_ARQUIVADO',
+        module: 'planejamentos',
+        statusCode: 200,
+        success: true,
+        userId: proprietario.userId,
+      }),
+    );
+    expect(logs[0].details).toEqual({
+      statusAnterior: PlanejamentoStatus.FECHADO,
+      statusPosterior: PlanejamentoStatus.ARQUIVADO,
+    });
+  }
 
   async function criarPlanejamento(
     sufixo: string,
@@ -197,6 +229,11 @@ describe('Planejamentos archive lifecycle (e2e)', () => {
         status: PlanejamentoStatus.ARQUIVADO,
       }),
     );
+    const logs = await buscarLogsArquivamento(cenario.planejamento.id);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({ entityId: cenario.planejamento.id }),
+    );
+    expectLogArquivamento(logs);
 
     await request(app.getHttpServer())
       .get(`/planejamentos/${cenario.planejamento.id}`)
@@ -351,6 +388,9 @@ describe('Planejamentos archive lifecycle (e2e)', () => {
       .set('Authorization', authorization(participanteVinculado));
     expect(participanteResponse.status).toBe(403);
     expectDomainError(participanteResponse, 'PLANEJAMENTO_OWNER_REQUIRED');
+    await expect(
+      buscarLogsArquivamento(cenarioParticipante.planejamento.id),
+    ).resolves.toHaveLength(0);
   });
 
   it('serializes concurrent archive requests so only the first transition succeeds', async () => {
@@ -383,6 +423,9 @@ describe('Planejamentos archive lifecycle (e2e)', () => {
       }),
     ).toEqual(
       expect.objectContaining({ status: PlanejamentoStatus.ARQUIVADO }),
+    );
+    expectLogArquivamento(
+      await buscarLogsArquivamento(cenario.planejamento.id),
     );
   });
 
