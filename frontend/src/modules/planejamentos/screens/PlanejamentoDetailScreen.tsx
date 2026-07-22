@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
@@ -11,10 +11,15 @@ import {
   GlassStatusCard,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { confirmAction } from '../../../../utils/confirm-action';
 import { formatCurrency, formatDate } from '../../../../utils/formatters';
 import {
+  arquivarPlanejamento,
   cancelAcertoPlanejamento,
+  cancelarPlanejamento,
+  fecharPlanejamento,
   getPlanejamentoById,
+  getResumoPlanejamento,
   listAcertosPlanejamento,
   listGastosPlanejamento,
   payAcertoPlanejamento,
@@ -30,8 +35,11 @@ import {
   ParticipantePlanejamentoStatus,
   ParticipantePlanejamentoTipo,
   Planejamento,
+  PlanejamentoSituacaoFinanceira,
   PlanejamentoStatus,
   PlanejamentoTipo,
+  ResumoFinanceiroPlanejamento,
+  SaldoParticipanteResumoFinanceiroPlanejamento,
 } from '../types/planejamento';
 
 const statusLabel: Record<PlanejamentoStatus, string> = {
@@ -75,7 +83,56 @@ const acertoStatusLabel: Record<AcertoPlanejamentoStatus, string> = {
   PENDENTE: 'Pendente',
 };
 
+const situacaoFinanceiraLabel: Record<
+  PlanejamentoSituacaoFinanceira,
+  string
+> = {
+  PENDENTE: 'Pendente',
+  QUITADO: 'Quitado',
+};
+
 type AcertoAction = 'cancel' | 'pay' | 'reopen';
+type PlanejamentoTransition = 'archive' | 'cancel' | 'close';
+
+const transitionConfig: Record<
+  PlanejamentoTransition,
+  {
+    confirmationMessage: string;
+    confirmationTitle: string;
+    errorMessage: string;
+    loadingLabel: string;
+    request: (planejamentoId: string) => Promise<Planejamento>;
+    successMessage: string;
+  }
+> = {
+  archive: {
+    confirmationMessage:
+      'Deseja arquivar este planejamento quitado? Ele ficara somente leitura.',
+    confirmationTitle: 'Arquivar planejamento',
+    errorMessage: 'Nao foi possivel arquivar o planejamento.',
+    loadingLabel: 'Arquivando...',
+    request: arquivarPlanejamento,
+    successMessage: 'Planejamento arquivado com sucesso.',
+  },
+  cancel: {
+    confirmationMessage:
+      'Deseja cancelar este planejamento quitado? Ele ficara somente leitura.',
+    confirmationTitle: 'Cancelar planejamento',
+    errorMessage: 'Nao foi possivel cancelar o planejamento.',
+    loadingLabel: 'Cancelando...',
+    request: cancelarPlanejamento,
+    successMessage: 'Planejamento cancelado com sucesso.',
+  },
+  close: {
+    confirmationMessage:
+      'Deseja fechar este planejamento? Participantes e gastos ficarao bloqueados para alteracoes.',
+    confirmationTitle: 'Fechar planejamento',
+    errorMessage: 'Nao foi possivel fechar o planejamento.',
+    loadingLabel: 'Fechando...',
+    request: fecharPlanejamento,
+    successMessage: 'Planejamento fechado com sucesso.',
+  },
+};
 
 function formatOptionalDate(date: string | null | undefined) {
   return date ? formatDate(date.slice(0, 10)) : '-';
@@ -94,6 +151,9 @@ export function PlanejamentoDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const planejamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [planejamento, setPlanejamento] = useState<Planejamento | null>(null);
+  const [resumo, setResumo] = useState<ResumoFinanceiroPlanejamento | null>(
+    null,
+  );
   const [gastos, setGastos] = useState<GastoPlanejamento[]>([]);
   const [acertos, setAcertos] = useState<AcertoPlanejamento[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +163,28 @@ export function PlanejamentoDetailScreen() {
   const [acertosActionLoading, setAcertosActionLoading] = useState<
     string | null
   >(null);
+  const [transitionError, setTransitionError] = useState('');
+  const [transitionInfo, setTransitionInfo] = useState('');
+  const [transitionLoading, setTransitionLoading] =
+    useState<PlanejamentoTransition | null>(null);
+  const transitionLockRef = useRef<PlanejamentoTransition | null>(null);
+
+  const loadPlanejamentoData = useCallback(async () => {
+    if (!planejamentoId) {
+      return;
+    }
+
+    const [data, resumoData, gastosData, acertosData] = await Promise.all([
+      getPlanejamentoById(planejamentoId),
+      getResumoPlanejamento(planejamentoId),
+      listGastosPlanejamento(planejamentoId),
+      listAcertosPlanejamento(planejamentoId),
+    ]);
+    setPlanejamento(data);
+    setResumo(resumoData);
+    setGastos(gastosData);
+    setAcertos(acertosData);
+  }, [planejamentoId]);
 
   useEffect(() => {
     async function loadPlanejamento() {
@@ -115,14 +197,7 @@ export function PlanejamentoDetailScreen() {
       try {
         setLoading(true);
         setMessage('');
-        const [data, gastosData, acertosData] = await Promise.all([
-          getPlanejamentoById(planejamentoId),
-          listGastosPlanejamento(planejamentoId),
-          listAcertosPlanejamento(planejamentoId),
-        ]);
-        setPlanejamento(data);
-        setGastos(gastosData);
-        setAcertos(acertosData);
+        await loadPlanejamentoData();
       } catch (error) {
         const resolvedError = await resolveApiError(
           error,
@@ -139,15 +214,27 @@ export function PlanejamentoDetailScreen() {
     }
 
     void loadPlanejamento();
-  }, [planejamentoId, router]);
+  }, [loadPlanejamentoData, planejamentoId, router]);
 
   const participantes = getParticipantes(planejamento);
-  async function refreshAcertos() {
+  const settlementMutationsAllowed =
+    planejamento?.status === 'ABERTO' || planejamento?.status === 'FECHADO';
+  const structuralMutationsAllowed = planejamento?.status === 'ABERTO';
+  const isFinanciallySettled = resumo?.situacaoFinanceira === 'QUITADO';
+  const isReadOnly =
+    planejamento?.status === 'ARQUIVADO' ||
+    planejamento?.status === 'CANCELADO';
+
+  async function refreshFinancialData() {
     if (!planejamentoId) {
       return;
     }
 
-    const acertosData = await listAcertosPlanejamento(planejamentoId);
+    const [resumoData, acertosData] = await Promise.all([
+      getResumoPlanejamento(planejamentoId),
+      listAcertosPlanejamento(planejamentoId),
+    ]);
+    setResumo(resumoData);
     setAcertos(acertosData);
   }
 
@@ -163,7 +250,7 @@ export function PlanejamentoDetailScreen() {
 
       const acertosSincronizados =
         await syncAcertosPlanejamento(planejamentoId);
-      await refreshAcertos();
+      await refreshFinancialData();
 
       setAcertosInfo(
         acertosSincronizados.length
@@ -206,7 +293,7 @@ export function PlanejamentoDetailScreen() {
         reopen: reopenAcertoPlanejamento,
       };
       await actionByType[action](planejamentoId, acerto.id);
-      await refreshAcertos();
+      await refreshFinancialData();
       setAcertosInfo('Acerto atualizado com sucesso.');
     } catch (error) {
       const resolvedError = await resolveApiError(
@@ -220,6 +307,54 @@ export function PlanejamentoDetailScreen() {
       }
     } finally {
       setAcertosActionLoading(null);
+    }
+  }
+
+  async function handleTransition(transition: PlanejamentoTransition) {
+    if (
+      !planejamentoId ||
+      acertosActionLoading ||
+      transitionLockRef.current
+    ) {
+      return;
+    }
+
+    transitionLockRef.current = transition;
+    const config = transitionConfig[transition];
+    let transitionCompleted = false;
+
+    try {
+      const confirmed = await confirmAction(
+        config.confirmationTitle,
+        config.confirmationMessage,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setTransitionLoading(transition);
+      setTransitionError('');
+      setTransitionInfo('');
+      await config.request(planejamentoId);
+      transitionCompleted = true;
+      await loadPlanejamentoData();
+      setTransitionInfo(config.successMessage);
+    } catch (error) {
+      const resolvedError = await resolveApiError(
+        error,
+        transitionCompleted
+          ? 'O status foi atualizado, mas nao foi possivel recarregar o planejamento.'
+          : config.errorMessage,
+      );
+      setTransitionError(resolvedError.message);
+
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
+    } finally {
+      setTransitionLoading(null);
+      transitionLockRef.current = null;
     }
   }
 
@@ -307,20 +442,155 @@ export function PlanejamentoDetailScreen() {
             </View>
           </GlassPanel>
 
+          {resumo ? (
+            <GlassPanel
+              title="Resumo financeiro"
+              subtitle="Valores oficiais calculados pelo backend."
+              accent="magenta"
+            >
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryCell}>
+                  <Text style={styles.infoLabel}>Situacao financeira</Text>
+                  <Text
+                    style={[
+                      styles.summaryValue,
+                      resumo.situacaoFinanceira === 'QUITADO'
+                        ? styles.summaryValueSettled
+                        : styles.summaryValuePending,
+                    ]}
+                  >
+                    {situacaoFinanceiraLabel[resumo.situacaoFinanceira]}
+                  </Text>
+                </View>
+                <View style={styles.summaryCell}>
+                  <Text style={styles.infoLabel}>Total de gastos ativos</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatCents(resumo.totalGastosAtivosCentavos)}
+                  </Text>
+                </View>
+                <View style={styles.summaryCell}>
+                  <Text style={styles.infoLabel}>Obrigacao residual</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatCents(resumo.obrigacaoResidualCentavos)}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.summarySectionTitle}>
+                Saldos por participante
+              </Text>
+              {resumo.participantes.length ? (
+                resumo.participantes.map((saldoParticipante) => (
+                  <SaldoParticipanteRow
+                    key={saldoParticipante.participante.id}
+                    saldoParticipante={saldoParticipante}
+                  />
+                ))
+              ) : (
+                <Text style={styles.emptyText}>
+                  Nenhum participante com dados financeiros.
+                </Text>
+              )}
+            </GlassPanel>
+          ) : null}
+
+          <GlassPanel
+            title="Ciclo de vida"
+            subtitle="Acoes disponiveis para o estado atual do planejamento."
+          >
+            {transitionError ? (
+              <Text style={styles.actionError}>{transitionError}</Text>
+            ) : null}
+            {transitionInfo ? (
+              <Text style={styles.actionInfo}>{transitionInfo}</Text>
+            ) : null}
+
+            {planejamento.status === 'ABERTO' ? (
+              <>
+                <View style={styles.lifecycleActions}>
+                  <GlassButton
+                    disabled={!!transitionLoading || !!acertosActionLoading}
+                    label={
+                      transitionLoading === 'close'
+                        ? transitionConfig.close.loadingLabel
+                        : 'Fechar planejamento'
+                    }
+                    onPress={() => void handleTransition('close')}
+                    variant="primary"
+                  />
+                  <GlassButton
+                    disabled={
+                      !!transitionLoading ||
+                      !!acertosActionLoading ||
+                      !isFinanciallySettled
+                    }
+                    label={
+                      transitionLoading === 'cancel'
+                        ? transitionConfig.cancel.loadingLabel
+                        : 'Cancelar planejamento'
+                    }
+                    onPress={() => void handleTransition('cancel')}
+                    variant="danger"
+                  />
+                </View>
+                {!isFinanciallySettled ? (
+                  <Text style={styles.lifecycleHint}>
+                    O cancelamento fica disponivel quando a situacao financeira
+                    estiver quitada.
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+
+            {planejamento.status === 'FECHADO' ? (
+              <>
+                <View style={styles.lifecycleActions}>
+                  <GlassButton
+                    disabled={
+                      !!transitionLoading ||
+                      !!acertosActionLoading ||
+                      !isFinanciallySettled
+                    }
+                    label={
+                      transitionLoading === 'archive'
+                        ? transitionConfig.archive.loadingLabel
+                        : 'Arquivar planejamento'
+                    }
+                    onPress={() => void handleTransition('archive')}
+                    variant="primary"
+                  />
+                </View>
+                {!isFinanciallySettled ? (
+                  <Text style={styles.lifecycleHint}>
+                    Quite a obrigacao residual para arquivar o planejamento.
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+
+            {isReadOnly ? (
+              <Text style={styles.readOnlyText}>
+                Este planejamento esta em modo somente leitura.
+              </Text>
+            ) : null}
+          </GlassPanel>
+
           <GlassPanel
             title="Participantes"
             subtitle="Pessoas vinculadas a este planejamento."
             action={
-              <GlassButton
-                label="Adicionar participante"
-                onPress={() =>
-                  router.push({
-                    pathname: '/planejamentos-participante-form',
-                    params: { id: planejamento.id },
-                  } as never)
-                }
-                variant="ghost"
-              />
+              structuralMutationsAllowed ? (
+                <GlassButton
+                  label="Adicionar participante"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/planejamentos-participante-form',
+                      params: { id: planejamento.id },
+                    } as never)
+                  }
+                  variant="ghost"
+                />
+              ) : undefined
             }
           >
             {participantes.length ? (
@@ -341,16 +611,18 @@ export function PlanejamentoDetailScreen() {
             title="Gastos"
             subtitle="Despesas compartilhadas deste planejamento."
             action={
-              <GlassButton
-                label="Adicionar gasto"
-                onPress={() =>
-                  router.push({
-                    pathname: '/planejamentos-gasto-form',
-                    params: { id: planejamento.id },
-                  } as never)
-                }
-                variant="ghost"
-              />
+              structuralMutationsAllowed ? (
+                <GlassButton
+                  label="Adicionar gasto"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/planejamentos-gasto-form',
+                      params: { id: planejamento.id },
+                    } as never)
+                  }
+                  variant="ghost"
+                />
+              ) : undefined
             }
           >
             {gastos.length ? (
@@ -370,16 +642,18 @@ export function PlanejamentoDetailScreen() {
             title="Acertos"
             subtitle="Pagamentos calculados entre participantes."
             action={
-              <GlassButton
-                disabled={!!acertosActionLoading}
-                label={
-                  acertosActionLoading === 'sync'
-                    ? 'Sincronizando...'
-                    : 'Sincronizar acertos'
-                }
-                onPress={handleSyncAcertos}
-                variant="ghost"
-              />
+              settlementMutationsAllowed ? (
+                <GlassButton
+                  disabled={!!acertosActionLoading || !!transitionLoading}
+                  label={
+                    acertosActionLoading === 'sync'
+                      ? 'Sincronizando...'
+                      : 'Sincronizar acertos'
+                  }
+                  onPress={handleSyncAcertos}
+                  variant="ghost"
+                />
+              ) : undefined
             }
           >
             {acertosError ? (
@@ -395,15 +669,17 @@ export function PlanejamentoDetailScreen() {
                   key={acerto.id}
                   acerto={acerto}
                   actionLoading={acertosActionLoading}
-                  disabled={!!acertosActionLoading}
+                  canOperate={settlementMutationsAllowed}
+                  disabled={!!acertosActionLoading || !!transitionLoading}
                   onAction={handleAcertoAction}
                   participantes={participantes}
                 />
               ))
             ) : (
               <Text style={styles.emptyText}>
-                Nenhum acerto encontrado. Cadastre gastos e participantes ativos
-                para calcular os acertos.
+                {isReadOnly
+                  ? 'Nenhum acerto registrado.'
+                  : 'Nenhum acerto encontrado. Cadastre gastos e participantes ativos para calcular os acertos.'}
               </Text>
             )}
           </GlassPanel>
@@ -454,6 +730,45 @@ function ParticipanteRow({
   );
 }
 
+function SaldoParticipanteRow({
+  saldoParticipante,
+}: {
+  saldoParticipante: SaldoParticipanteResumoFinanceiroPlanejamento;
+}) {
+  return (
+    <View style={styles.balanceRow}>
+      <View style={styles.balanceMain}>
+        <Text style={styles.balanceParticipantName}>
+          {saldoParticipante.participante.nome}
+        </Text>
+        <Text style={styles.balanceLabel}>Saldo aberto</Text>
+      </View>
+      <View style={styles.balanceSide}>
+        <Text
+          style={[
+            styles.balanceValue,
+            saldoParticipante.statusFinanceiro === 'DEVEDOR'
+              ? styles.balanceValueDebtor
+              : null,
+          ]}
+        >
+          {formatCents(saldoParticipante.saldoAbertoCentavos)}
+        </Text>
+        <View
+          style={[
+            styles.financialStatusBadge,
+            getFinancialStatusBadgeStyle(saldoParticipante.statusFinanceiro),
+          ]}
+        >
+          <Text style={styles.financialStatusText}>
+            {saldoParticipante.statusFinanceiro}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function GastoRow({
   gasto,
   participantes,
@@ -490,12 +805,14 @@ function GastoRow({
 function AcertoRow({
   acerto,
   actionLoading,
+  canOperate,
   disabled,
   onAction,
   participantes,
 }: {
   acerto: AcertoPlanejamento;
   actionLoading: string | null;
+  canOperate: boolean;
   disabled: boolean;
   onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
   participantes: ParticipantePlanejamento[];
@@ -553,6 +870,7 @@ function AcertoRow({
         <AcertoActions
           acerto={acerto}
           actionLoading={actionLoading}
+          canOperate={canOperate}
           disabled={disabled}
           onAction={onAction}
         />
@@ -564,17 +882,23 @@ function AcertoRow({
 function AcertoActions({
   acerto,
   actionLoading,
+  canOperate,
   disabled,
   onAction,
 }: {
   acerto: AcertoPlanejamento;
   actionLoading: string | null;
+  canOperate: boolean;
   disabled: boolean;
   onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
 }) {
   const payLoading = actionLoading === `pay:${acerto.id}`;
   const cancelLoading = actionLoading === `cancel:${acerto.id}`;
   const reopenLoading = actionLoading === `reopen:${acerto.id}`;
+
+  if (!canOperate) {
+    return null;
+  }
 
   if (acerto.status === 'PENDENTE') {
     return (
@@ -623,9 +947,35 @@ function getAcertoBadgeStyle(status: AcertoPlanejamentoStatus) {
   return styles.settlementBadgeCanceled;
 }
 
+function getFinancialStatusBadgeStyle(
+  status: SaldoParticipanteResumoFinanceiroPlanejamento['statusFinanceiro'],
+) {
+  if (status === 'DEVEDOR') {
+    return styles.financialStatusDebtor;
+  }
+
+  if (status === 'RECEBEDOR') {
+    return styles.financialStatusReceiver;
+  }
+
+  return styles.financialStatusSettled;
+}
+
 export default PlanejamentoDetailScreen;
 
 const styles = StyleSheet.create({
+  actionError: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+    marginBottom: FinanceTheme.spacing.sm,
+  },
+  actionInfo: {
+    color: FinanceTheme.colors.success,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+    marginBottom: FinanceTheme.spacing.sm,
+  },
   acertosError: {
     color: FinanceTheme.colors.danger,
     fontSize: FinanceTheme.typography.caption,
@@ -656,6 +1006,45 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.text,
     fontSize: 12,
     fontWeight: '800',
+  },
+  balanceLabel: {
+    color: FinanceTheme.colors.textSubtle,
+    fontSize: FinanceTheme.typography.micro,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.xxs,
+  },
+  balanceMain: {
+    flex: 1,
+    minWidth: 140,
+  },
+  balanceParticipantName: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '900',
+  },
+  balanceRow: {
+    alignItems: 'center',
+    backgroundColor: FinanceTheme.colors.glassSubtle,
+    borderColor: FinanceTheme.colors.border,
+    borderRadius: FinanceTheme.radius.md,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.sm,
+    marginBottom: FinanceTheme.spacing.sm,
+    padding: FinanceTheme.spacing.sm,
+  },
+  balanceSide: {
+    alignItems: 'flex-end',
+    gap: FinanceTheme.spacing.xs,
+  },
+  balanceValue: {
+    color: FinanceTheme.colors.success,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '900',
+  },
+  balanceValueDebtor: {
+    color: FinanceTheme.colors.danger,
   },
   description: {
     color: FinanceTheme.colors.textMuted,
@@ -697,6 +1086,29 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.success,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '900',
+  },
+  financialStatusBadge: {
+    borderRadius: 999,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xxs,
+  },
+  financialStatusDebtor: {
+    backgroundColor: 'rgba(255, 122, 144, 0.10)',
+    borderColor: 'rgba(255, 122, 144, 0.34)',
+  },
+  financialStatusReceiver: {
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
+  },
+  financialStatusSettled: {
+    backgroundColor: 'rgba(119, 242, 178, 0.14)',
+    borderColor: 'rgba(119, 242, 178, 0.42)',
+  },
+  financialStatusText: {
+    color: FinanceTheme.colors.text,
+    fontSize: 11,
+    fontWeight: '800',
   },
   headerRow: {
     alignItems: 'center',
@@ -740,6 +1152,17 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
+  },
+  lifecycleActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.sm,
+  },
+  lifecycleHint: {
+    color: FinanceTheme.colors.warning,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
+    marginTop: FinanceTheme.spacing.sm,
   },
   participantAvatar: {
     alignItems: 'center',
@@ -798,6 +1221,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: FinanceTheme.spacing.sm,
     marginBottom: FinanceTheme.spacing.sm,
+  },
+  readOnlyText: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
   },
   settlementActions: {
     gap: FinanceTheme.spacing.xs,
@@ -872,6 +1300,39 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.success,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '900',
+  },
+  summaryCell: {
+    backgroundColor: FinanceTheme.colors.glassSubtle,
+    borderColor: FinanceTheme.colors.border,
+    borderRadius: FinanceTheme.radius.md,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    flex: 1,
+    minWidth: 180,
+    padding: FinanceTheme.spacing.sm,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.sm,
+  },
+  summarySectionTitle: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '900',
+    marginBottom: FinanceTheme.spacing.sm,
+    marginTop: FinanceTheme.spacing.md,
+  },
+  summaryValue: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
+    fontWeight: '900',
+    marginTop: FinanceTheme.spacing.xs,
+  },
+  summaryValuePending: {
+    color: FinanceTheme.colors.warning,
+  },
+  summaryValueSettled: {
+    color: FinanceTheme.colors.success,
   },
   title: {
     color: FinanceTheme.colors.text,

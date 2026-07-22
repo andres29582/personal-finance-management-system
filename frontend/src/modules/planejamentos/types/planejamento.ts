@@ -22,6 +22,11 @@ export type AcertoPlanejamentoStatus =
   | 'PAGO'
   | 'CANCELADO'
   | 'CONFIRMADO';
+export type PlanejamentoSituacaoFinanceira = 'PENDENTE' | 'QUITADO';
+export type ParticipantePlanejamentoStatusFinanceiro =
+  | 'DEVEDOR'
+  | 'RECEBEDOR'
+  | 'QUITADO';
 
 export type ParticipantePlanejamento = {
   createdAt: string;
@@ -86,6 +91,31 @@ export type ParticipanteAcertoPlanejamento = {
   nome: string;
 };
 
+export type ParticipanteResumoFinanceiroPlanejamento = Pick<
+  ParticipantePlanejamento,
+  'id' | 'nome' | 'status' | 'tipo'
+>;
+
+export type SaldoParticipanteResumoFinanceiroPlanejamento = {
+  participante: ParticipanteResumoFinanceiroPlanejamento;
+  saldoAbertoCentavos: number;
+  saldoBrutoCentavos: number;
+  statusFinanceiro: ParticipantePlanejamentoStatusFinanceiro;
+  totalDevidoCentavos: number;
+  totalPagoCentavos: number;
+  totalPagoEmAcertosCentavos: number;
+  totalRecebidoEmAcertosCentavos: number;
+};
+
+export type ResumoFinanceiroPlanejamento = {
+  obrigacaoResidualCentavos: number;
+  participantes: SaldoParticipanteResumoFinanceiroPlanejamento[];
+  planejamentoId: string;
+  situacaoFinanceira: PlanejamentoSituacaoFinanceira;
+  statusOperacional: PlanejamentoStatus;
+  totalGastosAtivosCentavos: number;
+};
+
 export type Planejamento = {
   createdAt: string;
   dataFim: string | null;
@@ -145,3 +175,5 @@ export type GastoPlanejamentoListSuccess =
 export type AcertoPlanejamentoSuccess = SuccessEnvelope<AcertoPlanejamento>;
 export type AcertoPlanejamentoListSuccess =
   SuccessEnvelope<AcertoPlanejamento[]>;
+export type ResumoFinanceiroPlanejamentoSuccess =
+  SuccessEnvelope<ResumoFinanceiroPlanejamento>;
