@@ -365,8 +365,20 @@ describe('PlanejamentosController', () => {
   it('delegates findAcertos using planejamento route id and authenticated user id', async () => {
     planejamentosService.findAcertos.mockResolvedValue([
       {
-        devedorParticipanteId: 'participante-2',
-        recebedorParticipanteId: 'participante-1',
+        dataPagamento: null,
+        deParticipante: {
+          id: 'participante-2',
+          nome: 'Bruno',
+        },
+        id: 'acerto-1',
+        deParticipanteId: 'participante-2',
+        observacao: null,
+        paraParticipante: {
+          id: 'participante-1',
+          nome: 'Ana',
+        },
+        paraParticipanteId: 'participante-1',
+        status: 'PENDENTE',
         valorCentavos: 5000,
       },
     ] as never);
@@ -382,8 +394,20 @@ describe('PlanejamentosController', () => {
     );
     expect(result).toEqual([
       {
-        devedorParticipanteId: 'participante-2',
-        recebedorParticipanteId: 'participante-1',
+        dataPagamento: null,
+        deParticipante: {
+          id: 'participante-2',
+          nome: 'Bruno',
+        },
+        id: 'acerto-1',
+        deParticipanteId: 'participante-2',
+        observacao: null,
+        paraParticipante: {
+          id: 'participante-1',
+          nome: 'Ana',
+        },
+        paraParticipanteId: 'participante-1',
+        status: 'PENDENTE',
         valorCentavos: 5000,
       },
     ]);

@@ -249,10 +249,15 @@ describe('Planejamentos archive lifecycle (e2e)', () => {
       )
       .set('Authorization', authorization())
       .expect(200);
-    await request(app.getHttpServer())
+    const acertosArquivadosResponse = await request(app.getHttpServer())
       .get(`/planejamentos/${cenario.planejamento.id}/acertos`)
       .set('Authorization', authorization())
       .expect(200);
+    expect(unwrapSuccess<Identifiable[]>(acertosArquivadosResponse)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: cenario.acerto.id }),
+      ]),
+    );
     const resumoResponse = await request(app.getHttpServer())
       .get(`/planejamentos/${cenario.planejamento.id}/resumo`)
       .set('Authorization', authorization())

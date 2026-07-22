@@ -182,6 +182,41 @@ export class PlanejamentosRepository {
     });
   }
 
+  async listarAcertosPorPlanejamento(
+    planejamentoId: string,
+  ): Promise<AcertoPlanejamento[]> {
+    return this.acertoRepository.find({
+      select: {
+        id: true,
+        deParticipanteId: true,
+        paraParticipanteId: true,
+        valorCentavos: true,
+        status: true,
+        dataPagamento: true,
+        observacao: true,
+        deParticipante: {
+          id: true,
+          nome: true,
+        },
+        paraParticipante: {
+          id: true,
+          nome: true,
+        },
+      },
+      where: {
+        planejamentoId,
+      },
+      relations: {
+        deParticipante: true,
+        paraParticipante: true,
+      },
+      order: {
+        createdAt: 'ASC',
+        id: 'ASC',
+      },
+    });
+  }
+
   async listarGastosPorPlanejamento(
     planejamentoId: string,
   ): Promise<GastoPlanejamento[]> {

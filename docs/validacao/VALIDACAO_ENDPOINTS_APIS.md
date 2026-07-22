@@ -142,7 +142,7 @@ Validacao mecanica executada:
 | Refresh token | `POST /auth/refresh` rotaciona refresh token | Interceptor salva novo access/refresh token | Coerente |
 | Endpoints consumidos | Todos existem no backend | Services apontam para rotas reais | Coerente |
 | ML | Frontend chama `GET /previsoes/deficit`; nao chama FastAPI direto | Coerente com docs |
-| Planejamentos | Backend implementa modulo com 19 endpoints | Frontend consome o subconjunto de listagem, criacao, detalhe, participantes, gastos e acertos | Coerente; resumo, arquivamento e cancelamento ainda sem consumo frontend por estarem fora do escopo desta entrega |
+| Planejamentos | Backend implementa modulo com 19 endpoints; `GET /planejamentos/:id/acertos` lista entidades persistidas e a reabertura aceita apenas `PAGO -> PENDENTE` | Frontend consome acertos persistidos com IDs e recarrega a listagem depois das transicoes | Coerente; resumo, arquivamento e cancelamento ainda sem consumo frontend por estarem fora do escopo desta entrega |
 
 Observacao atualizada em 2026-07-08: o frontend passou a consumir o modulo de
 Planejamentos Compartilhados nas telas e fluxos de listagem, criacao, detalhe,

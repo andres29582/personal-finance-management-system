@@ -24,7 +24,6 @@ import {
 import {
   AcertoPlanejamento,
   AcertoPlanejamentoStatus,
-  AcertoPlanejamentoSugerido,
   GastoPlanejamento,
   GastoPlanejamentoComportamento,
   ParticipantePlanejamento,
@@ -76,10 +75,6 @@ const acertoStatusLabel: Record<AcertoPlanejamentoStatus, string> = {
   PENDENTE: 'Pendente',
 };
 
-type AcertoPlanejamentoItem =
-  | AcertoPlanejamento
-  | AcertoPlanejamentoSugerido;
-
 type AcertoAction = 'cancel' | 'pay' | 'reopen';
 
 function formatOptionalDate(date: string | null | undefined) {
@@ -94,41 +89,13 @@ function getParticipantes(planejamento: Planejamento | null) {
   return planejamento?.participantes ?? [];
 }
 
-function isAcertoPersistido(
-  acerto: AcertoPlanejamentoItem,
-): acerto is AcertoPlanejamento {
-  return 'id' in acerto;
-}
-
-function upsertAcerto(
-  acertos: AcertoPlanejamento[],
-  acertoAtualizado: AcertoPlanejamento,
-) {
-  const acertoIndex = acertos.findIndex(
-    (acerto) => acerto.id === acertoAtualizado.id,
-  );
-
-  if (acertoIndex === -1) {
-    return [acertoAtualizado, ...acertos];
-  }
-
-  return acertos.map((acerto) =>
-    acerto.id === acertoAtualizado.id ? acertoAtualizado : acerto,
-  );
-}
-
 export function PlanejamentoDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const planejamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [planejamento, setPlanejamento] = useState<Planejamento | null>(null);
   const [gastos, setGastos] = useState<GastoPlanejamento[]>([]);
-  const [acertosOficiais, setAcertosOficiais] = useState<
-    AcertoPlanejamento[]
-  >([]);
-  const [acertosSugeridos, setAcertosSugeridos] = useState<
-    AcertoPlanejamentoSugerido[]
-  >([]);
+  const [acertos, setAcertos] = useState<AcertoPlanejamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [acertosError, setAcertosError] = useState('');
@@ -155,8 +122,7 @@ export function PlanejamentoDetailScreen() {
         ]);
         setPlanejamento(data);
         setGastos(gastosData);
-        setAcertosOficiais(data.acertos ?? []);
-        setAcertosSugeridos(acertosData);
+        setAcertos(acertosData);
       } catch (error) {
         const resolvedError = await resolveApiError(
           error,
@@ -176,16 +142,13 @@ export function PlanejamentoDetailScreen() {
   }, [planejamentoId, router]);
 
   const participantes = getParticipantes(planejamento);
-  const acertos = acertosOficiais.length ? acertosOficiais : acertosSugeridos;
-  const exibindoSugestoes = !acertosOficiais.length;
-
   async function refreshAcertos() {
     if (!planejamentoId) {
       return;
     }
 
     const acertosData = await listAcertosPlanejamento(planejamentoId);
-    setAcertosSugeridos(acertosData);
+    setAcertos(acertosData);
   }
 
   async function handleSyncAcertos() {
@@ -200,8 +163,6 @@ export function PlanejamentoDetailScreen() {
 
       const acertosSincronizados =
         await syncAcertosPlanejamento(planejamentoId);
-
-      setAcertosOficiais(acertosSincronizados);
       await refreshAcertos();
 
       setAcertosInfo(
@@ -244,14 +205,7 @@ export function PlanejamentoDetailScreen() {
         pay: payAcertoPlanejamento,
         reopen: reopenAcertoPlanejamento,
       };
-      const acertoAtualizado = await actionByType[action](
-        planejamentoId,
-        acerto.id,
-      );
-
-      setAcertosOficiais((currentAcertos) =>
-        upsertAcerto(currentAcertos, acertoAtualizado),
-      );
+      await actionByType[action](planejamentoId, acerto.id);
       await refreshAcertos();
       setAcertosInfo('Acerto atualizado com sucesso.');
     } catch (error) {
@@ -436,17 +390,12 @@ export function PlanejamentoDetailScreen() {
             ) : null}
 
             {acertos.length ? (
-              acertos.map((acerto, index) => (
+              acertos.map((acerto) => (
                 <AcertoRow
-                  key={
-                    isAcertoPersistido(acerto)
-                      ? acerto.id
-                      : `${acerto.devedorParticipanteId}-${acerto.recebedorParticipanteId}-${index}`
-                  }
+                  key={acerto.id}
                   acerto={acerto}
                   actionLoading={acertosActionLoading}
                   disabled={!!acertosActionLoading}
-                  exibindoSugestao={exibindoSugestoes}
                   onAction={handleAcertoAction}
                   participantes={participantes}
                 />
@@ -542,36 +491,25 @@ function AcertoRow({
   acerto,
   actionLoading,
   disabled,
-  exibindoSugestao,
   onAction,
   participantes,
 }: {
-  acerto: AcertoPlanejamentoItem;
+  acerto: AcertoPlanejamento;
   actionLoading: string | null;
   disabled: boolean;
-  exibindoSugestao: boolean;
   onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
   participantes: ParticipantePlanejamento[];
 }) {
-  const persistido = isAcertoPersistido(acerto);
-  const devedor = persistido
-    ? acerto.deParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.deParticipanteId,
-      )
-    : acerto.devedorParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.devedorParticipanteId,
-      );
-  const recebedor = persistido
-    ? acerto.paraParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.paraParticipanteId,
-      )
-    : acerto.recebedorParticipante ??
-      participantes.find(
-        (participante) => participante.id === acerto.recebedorParticipanteId,
-      );
+  const devedor =
+    acerto.deParticipante ??
+    participantes.find(
+      (participante) => participante.id === acerto.deParticipanteId,
+    );
+  const recebedor =
+    acerto.paraParticipante ??
+    participantes.find(
+      (participante) => participante.id === acerto.paraParticipanteId,
+    );
   const devedorNome = devedor?.nome ?? 'Participante devedor';
   const recebedorNome = recebedor?.nome ?? 'Participante recebedor';
 
@@ -596,19 +534,14 @@ function AcertoRow({
 
         <Text style={styles.settlementMeta}>Devedor: {devedorNome}</Text>
         <Text style={styles.settlementMeta}>Recebedor: {recebedorNome}</Text>
-        {persistido && acerto.dataPagamento ? (
+        {acerto.dataPagamento ? (
           <Text style={styles.settlementMeta}>
             Pago em {formatOptionalDate(acerto.dataPagamento)}
           </Text>
         ) : null}
-        {persistido && acerto.observacao ? (
+        {acerto.observacao ? (
           <Text style={styles.settlementMeta}>
             Observacao: {acerto.observacao}
-          </Text>
-        ) : null}
-        {!persistido && exibindoSugestao ? (
-          <Text style={styles.settlementHint}>
-            Sincronize para criar o acerto oficial e gerenciar o status.
           </Text>
         ) : null}
       </View>
@@ -617,14 +550,12 @@ function AcertoRow({
         <Text style={styles.settlementValue}>
           {formatCents(acerto.valorCentavos)}
         </Text>
-        {persistido ? (
-          <AcertoActions
-            acerto={acerto}
-            actionLoading={actionLoading}
-            disabled={disabled}
-            onAction={onAction}
-          />
-        ) : null}
+        <AcertoActions
+          acerto={acerto}
+          actionLoading={actionLoading}
+          disabled={disabled}
+          onAction={onAction}
+        />
       </View>
     </View>
   );
@@ -664,7 +595,7 @@ function AcertoActions({
     );
   }
 
-  if (acerto.status === 'PAGO' || acerto.status === 'CANCELADO') {
+  if (acerto.status === 'PAGO') {
     return (
       <View style={styles.settlementActions}>
         <GlassButton
@@ -902,12 +833,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: FinanceTheme.spacing.xs,
     justifyContent: 'space-between',
-  },
-  settlementHint: {
-    color: FinanceTheme.colors.cyanMuted,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.xs,
   },
   settlementMain: {
     flex: 1,

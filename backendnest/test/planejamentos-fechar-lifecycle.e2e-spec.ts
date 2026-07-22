@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
 import { AuditLog } from '../src/logs/entities/audit-log.entity';
@@ -38,10 +39,17 @@ type GastoResponse = Identifiable & {
   valorCentavos: number;
 };
 
+type ParticipanteAcertoResponse = Identifiable & {
+  nome: string;
+};
+
 type AcertoResponse = Identifiable & {
   dataPagamento: string | null;
-  devedorParticipanteId: string;
-  recebedorParticipanteId: string;
+  deParticipante: ParticipanteAcertoResponse;
+  deParticipanteId: string;
+  observacao: string | null;
+  paraParticipante: ParticipanteAcertoResponse;
+  paraParticipanteId: string;
   status: AcertoStatus;
   valorCentavos: number;
 };
@@ -162,30 +170,17 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
       .get(`/planejamentos/${planejamento.id}/acertos`)
       .set('Authorization', authorization())
       .expect(200);
-    const [acertoSugerido] = unwrapSuccess<AcertoResponse[]>(acertosResponse);
+    const [acerto] = unwrapSuccess<AcertoResponse[]>(acertosResponse);
 
-    expect(acertoSugerido).toEqual(
+    expect(acerto).toEqual(
       expect.objectContaining({
-        devedorParticipanteId: participanteDevedor.id,
-        recebedorParticipanteId: participanteProprietario?.id,
+        deParticipanteId: participanteDevedor.id,
+        id: expect.any(String) as string,
+        paraParticipanteId: participanteProprietario?.id,
         status: AcertoStatus.PENDENTE,
         valorCentavos: 15000,
       }),
     );
-    const acertoPersistido = await dataSource
-      .getRepository(AcertoPlanejamento)
-      .findOneByOrFail({
-        planejamentoId: planejamento.id,
-        status: AcertoStatus.PENDENTE,
-      });
-    const acerto: AcertoResponse = {
-      dataPagamento: null,
-      devedorParticipanteId: acertoPersistido.deParticipanteId,
-      id: acertoPersistido.id,
-      recebedorParticipanteId: acertoPersistido.paraParticipanteId,
-      status: acertoPersistido.status,
-      valorCentavos: acertoPersistido.valorCentavos,
-    };
 
     return {
       acerto,
@@ -214,6 +209,32 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
       }),
     );
   }
+
+  it('returns only the public participant projection when listing settlements', async () => {
+    const { acerto, participanteDevedor, participanteProprietario } =
+      await criarCenarioComPendencia('projecao publica');
+
+    expect(acerto.deParticipante).toEqual({
+      id: participanteDevedor.id,
+      nome: participanteDevedor.nome,
+    });
+    expect(acerto.paraParticipante).toEqual({
+      id: participanteProprietario.id,
+      nome: participanteProprietario.nome,
+    });
+
+    for (const participante of [
+      acerto.deParticipante,
+      acerto.paraParticipante,
+    ]) {
+      expect(Object.keys(participante).sort()).toEqual(['id', 'nome']);
+      expect(participante).not.toHaveProperty('usuarioId');
+      expect(participante).not.toHaveProperty('email');
+      expect(participante).not.toHaveProperty('planejamentoId');
+      expect(participante).not.toHaveProperty('createdAt');
+      expect(participante).not.toHaveProperty('updatedAt');
+    }
+  });
 
   it('closes with pending settlements, persists FECHADO and preserves the obligation without duplication', async () => {
     const { acerto, planejamento } = await criarCenarioComPendencia(
@@ -449,8 +470,8 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
     ).toEqual(snapshot.acertos);
   });
 
-  it('keeps synchronization, payment, cancellation and reopening available after closing', async () => {
-    const { acerto, planejamento } = await criarCenarioComPendencia(
+  it('reloads persisted settlements by HTTP and reopens the same paid id after closing', async () => {
+    const { planejamento } = await criarCenarioComPendencia(
       'Junho 2026 - acertos',
     );
     await request(app.getHttpServer())
@@ -463,8 +484,37 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
       .set('Authorization', authorization())
       .expect(201);
     expect(unwrapSuccess<AcertoResponse[]>(sincronizacaoResponse)).toEqual([
-      expect.objectContaining({ id: acerto.id, status: AcertoStatus.PENDENTE }),
+      expect.objectContaining({ status: AcertoStatus.PENDENTE }),
     ]);
+
+    const primeiraLeituraResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization())
+      .expect(200);
+    const [acerto] = unwrapSuccess<AcertoResponse[]>(primeiraLeituraResponse);
+
+    expect(acerto).toEqual(
+      expect.objectContaining({
+        id: expect.any(String) as string,
+        status: AcertoStatus.PENDENTE,
+      }),
+    );
+    const snapshotAntesDoGet = await dataSource
+      .getRepository(AcertoPlanejamento)
+      .find({
+        where: { planejamentoId: planejamento.id },
+        order: { createdAt: 'ASC', id: 'ASC' },
+      });
+    await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization())
+      .expect(200);
+    await expect(
+      dataSource.getRepository(AcertoPlanejamento).find({
+        where: { planejamentoId: planejamento.id },
+        order: { createdAt: 'ASC', id: 'ASC' },
+      }),
+    ).resolves.toEqual(snapshotAntesDoGet);
 
     const pagamentoResponse = await request(app.getHttpServer())
       .patch(`/planejamentos/${planejamento.id}/acertos/${acerto.id}/pagar`)
@@ -478,17 +528,13 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
       }),
     );
 
-    const cancelamentoResponse = await request(app.getHttpServer())
-      .patch(`/planejamentos/${planejamento.id}/acertos/${acerto.id}/cancelar`)
+    const leituraPagoResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
       .set('Authorization', authorization())
       .expect(200);
-    expect(unwrapSuccess<AcertoResponse>(cancelamentoResponse)).toEqual(
-      expect.objectContaining({
-        dataPagamento: null,
-        id: acerto.id,
-        status: AcertoStatus.CANCELADO,
-      }),
-    );
+    expect(unwrapSuccess<AcertoResponse[]>(leituraPagoResponse)).toEqual([
+      expect.objectContaining({ id: acerto.id, status: AcertoStatus.PAGO }),
+    ]);
 
     const reaberturaResponse = await request(app.getHttpServer())
       .patch(`/planejamentos/${planejamento.id}/acertos/${acerto.id}/reabrir`)
@@ -497,11 +543,153 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
     expect(unwrapSuccess<AcertoResponse>(reaberturaResponse)).toEqual(
       expect.objectContaining({ id: acerto.id, status: AcertoStatus.PENDENTE }),
     );
+
+    const leituraReabertoResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization())
+      .expect(200);
+    expect(unwrapSuccess<AcertoResponse[]>(leituraReabertoResponse)).toEqual([
+      expect.objectContaining({
+        dataPagamento: null,
+        id: acerto.id,
+        status: AcertoStatus.PENDENTE,
+      }),
+    ]);
+
+    await request(app.getHttpServer())
+      .patch(`/planejamentos/${planejamento.id}/acertos/${acerto.id}/cancelar`)
+      .set('Authorization', authorization())
+      .expect(200);
+    const reaberturaCanceladoResponse = await request(app.getHttpServer())
+      .patch(`/planejamentos/${planejamento.id}/acertos/${acerto.id}/reabrir`)
+      .set('Authorization', authorization());
+    expectDomainError(
+      reaberturaCanceladoResponse,
+      'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
+    );
     expect(
       await dataSource.getRepository(Planejamento).findOneByOrFail({
         id: planejamento.id,
       }),
     ).toEqual(expect.objectContaining({ status: PlanejamentoStatus.FECHADO }));
+  });
+
+  it('rolls back reopening and reconciliation when transactional audit persistence fails', async () => {
+    const { acerto, planejamento } = await criarCenarioComPendencia(
+      'Junho 2026 - rollback auditoria reabertura',
+    );
+    await request(app.getHttpServer())
+      .patch(`/planejamentos/${planejamento.id}/acertos/${acerto.id}/pagar`)
+      .set('Authorization', authorization())
+      .expect(200);
+    const acertoPagoResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization())
+      .expect(200);
+    const [acertoPago] = unwrapSuccess<AcertoResponse[]>(acertoPagoResponse);
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    const acertoAdicional = await acertoRepository.save(
+      acertoRepository.create({
+        id: randomUUID(),
+        planejamentoId: planejamento.id,
+        deParticipanteId: acerto.deParticipanteId,
+        paraParticipanteId: acerto.paraParticipanteId,
+        valorCentavos: acerto.valorCentavos,
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+        observacao: 'Pendencia adicional anterior a reabertura',
+      }),
+    );
+    const idsAntesDaReabertura = [acerto.id, acertoAdicional.id].sort();
+    const triggerSuffix = randomUUID().replace(/-/g, '_');
+    const functionName = `falhar_auditoria_reabertura_${triggerSuffix}`;
+    const triggerName = `trigger_${functionName}`;
+
+    await dataSource.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.entity = 'acerto_planejamento'
+          AND NEW.entity_id = '${acerto.id}'
+          AND NEW.event = 'ACERTO_PLANEJAMENTO_REABERTO' THEN
+          RAISE EXCEPTION 'falha de auditoria induzida pelo teste';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_log
+      FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+    `);
+
+    try {
+      await request(app.getHttpServer())
+        .patch(`/planejamentos/${planejamento.id}/acertos/${acerto.id}/reabrir`)
+        .set('Authorization', authorization())
+        .expect(500);
+    } finally {
+      await dataSource.query(
+        `DROP TRIGGER IF EXISTS ${triggerName} ON audit_log`,
+      );
+      await dataSource.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+
+    const leituraAposRollbackResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization())
+      .expect(200);
+    const acertosAposRollback = unwrapSuccess<AcertoResponse[]>(
+      leituraAposRollbackResponse,
+    );
+    expect(acertosAposRollback).toHaveLength(2);
+    expect(acertosAposRollback).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dataPagamento: acertoPago.dataPagamento,
+          id: acerto.id,
+          status: AcertoStatus.PAGO,
+        }),
+        expect.objectContaining({
+          dataPagamento: null,
+          id: acertoAdicional.id,
+          status: AcertoStatus.PENDENTE,
+        }),
+      ]),
+    );
+
+    const entidadesAposRollback = await acertoRepository.find({
+      where: { planejamentoId: planejamento.id },
+      order: { id: 'ASC' },
+    });
+    expect(entidadesAposRollback.map((item) => item.id).sort()).toEqual(
+      idsAntesDaReabertura,
+    );
+    expect(entidadesAposRollback).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dataPagamento: new Date(acertoPago.dataPagamento!),
+          id: acerto.id,
+          status: AcertoStatus.PAGO,
+        }),
+        expect.objectContaining({
+          dataPagamento: null,
+          id: acertoAdicional.id,
+          status: AcertoStatus.PENDENTE,
+        }),
+      ]),
+    );
+    expect(
+      entidadesAposRollback.filter(
+        (item) => item.status === AcertoStatus.CANCELADO,
+      ),
+    ).toHaveLength(0);
+    await expect(
+      dataSource.getRepository(AuditLog).find({
+        where: {
+          entityId: acerto.id,
+          event: 'ACERTO_PLANEJAMENTO_REABERTO',
+        },
+      }),
+    ).resolves.toHaveLength(0);
   });
 
   it('serializes two concurrent close requests without duplicating pending settlements', async () => {

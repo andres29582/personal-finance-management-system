@@ -9,6 +9,7 @@ import {
 } from '../common/exceptions';
 import { LogsService } from '../logs/logs.service';
 import {
+  AcertoPlanejamentoResponse,
   AddParticipantePlanejamentoDto,
   CreateGastoPlanejamentoDto,
   CreatePlanejamentoDto,
@@ -46,15 +47,6 @@ export type PlanejamentoUsuarioAutenticado = {
   id: string;
   email?: string | null;
   nome?: string | null;
-};
-
-export type AcertoPlanejamentoSugerido = {
-  devedorParticipanteId: string;
-  recebedorParticipanteId: string;
-  valorCentavos: number;
-  status: AcertoStatus.PENDENTE;
-  devedorParticipante: ParticipantePlanejamento;
-  recebedorParticipante: ParticipantePlanejamento;
 };
 
 export type ResumoFinanceiroPlanejamento = {
@@ -1121,36 +1113,19 @@ export class PlanejamentosService {
   async findAcertos(
     planejamentoId: string,
     usuarioId: string,
-  ): Promise<AcertoPlanejamentoSugerido[]> {
-    const planejamento = await this.buscarPlanejamentoParaAcertos(
+  ): Promise<AcertoPlanejamentoResponse[]> {
+    await this.buscarPlanejamentoAcessivelComRepository(
       this.planejamentosRepository,
       planejamentoId,
       usuarioId,
     );
-    const participantesFinanceiramenteRelevantes =
-      this.listarParticipantesFinanceiramenteRelevantes(planejamento);
-    const participantesPorId = this.mapearParticipantesPorId(
-      participantesFinanceiramenteRelevantes,
-    );
-    const acertos = this.calcularAcertosPersistidos(
-      planejamento,
-      participantesFinanceiramenteRelevantes.map(
-        (participante) => participante.id,
-      ),
-    );
 
-    return acertos.map((acerto) => ({
-      devedorParticipanteId: acerto.devedorParticipanteId,
-      recebedorParticipanteId: acerto.recebedorParticipanteId,
-      valorCentavos: acerto.valorCentavos,
-      status: AcertoStatus.PENDENTE,
-      devedorParticipante: participantesPorId.get(
-        acerto.devedorParticipanteId,
-      )!,
-      recebedorParticipante: participantesPorId.get(
-        acerto.recebedorParticipanteId,
-      )!,
-    }));
+    const acertos =
+      await this.planejamentosRepository.listarAcertosPorPlanejamento(
+        planejamentoId,
+      );
+
+    return acertos.map((acerto) => this.mapearAcertoResponse(acerto));
   }
 
   async findResumo(
@@ -1287,21 +1262,55 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<AcertoPlanejamento> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
-        const { planejamento, acerto } =
-          await this.buscarContextoAcertoBloqueadoComRepository(
+      async (repository, manager) => {
+        const planejamentoInicial =
+          await this.buscarPlanejamentoAcessivelComRepository(
             repository,
             planejamentoId,
-            acertoId,
             usuarioId,
           );
+        this.assertUsuarioProprietarioDoPlanejamento(
+          planejamentoInicial,
+          usuarioId,
+        );
+        this.assertOperacaoAcertoPermitida(planejamentoInicial);
 
+        const planejamentoBloqueado =
+          await repository.bloquearPlanejamentoParaAtualizacao(planejamentoId);
+
+        if (!planejamentoBloqueado) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_NOT_FOUND',
+            'Planejamento nao encontrado.',
+          );
+        }
+
+        const planejamento =
+          await this.buscarPlanejamentoAcessivelComRepository(
+            repository,
+            planejamentoId,
+            usuarioId,
+          );
         this.assertUsuarioProprietarioDoPlanejamento(planejamento, usuarioId);
+        this.assertOperacaoAcertoPermitida(planejamento);
+
+        const acerto = await repository.buscarAcertoPorIdEPlanejamento(
+          acertoId,
+          planejamentoId,
+        );
+
+        if (!acerto) {
+          throw new ResourceNotFoundException(
+            'PLANEJAMENTO_ACERTO_NOT_FOUND',
+            'Acerto do planejamento nao encontrado.',
+          );
+        }
+
         this.assertTransicaoAcertoPermitida(
           acerto.status,
-          [AcertoStatus.CANCELADO],
+          [AcertoStatus.PAGO],
           'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
-          'Apenas acertos cancelados podem ser reabertos.',
+          'Apenas acertos pagos podem ser reabertos.',
         );
 
         const planejamentoCompleto = await this.buscarPlanejamentoParaAcertos(
@@ -1309,64 +1318,108 @@ export class PlanejamentosService {
           planejamentoId,
           usuarioId,
         );
-        const chaveAcerto = this.criarChaveAcerto(
-          acerto.deParticipanteId,
-          acerto.paraParticipanteId,
-          acerto.valorCentavos,
-        );
-        const sugestaoEquivalente = this.calcularSugestoesAtuais(
-          planejamentoCompleto,
-        ).some(
-          (sugestao) =>
-            this.criarChaveAcerto(
-              sugestao.devedorParticipanteId,
-              sugestao.recebedorParticipanteId,
-              sugestao.valorCentavos,
-            ) === chaveAcerto,
+        const planejamentoSemEfeitoDoPagamento =
+          this.projetarAcertoPagoComoPendente(planejamentoCompleto, acerto);
+        const plano = this.criarPlanoReconciliacaoAcertos(
+          planejamentoSemEfeitoDoPagamento,
         );
 
-        if (!sugestaoEquivalente) {
-          throw new ValidationAppException(
-            'PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO',
-            'O acerto cancelado nao corresponde a uma pendencia atual do planejamento.',
+        this.assertPlanoPreservaAcertoReaberto(plano, acerto);
+        await this.reconciliarAcertos(
+          repository,
+          planejamentoSemEfeitoDoPagamento,
+          plano,
+        );
+
+        const planejamentoReconciliado =
+          await this.buscarPlanejamentoParaAcertos(
+            repository,
+            planejamentoId,
+            usuarioId,
           );
-        }
-
-        const pendenteEquivalente = this.filtrarAcertosPendentes(
-          planejamentoCompleto,
-        ).find(
-          (acertoPendente) =>
-            acertoPendente.id !== acerto.id &&
-            this.criarChaveAcerto(
-              acertoPendente.deParticipanteId,
-              acertoPendente.paraParticipanteId,
-              acertoPendente.valorCentavos,
-            ) === chaveAcerto,
+        const planejamentoConfirmado = this.projetarAcertoPagoComoPendente(
+          planejamentoReconciliado,
+          acerto,
         );
-
-        if (pendenteEquivalente) {
-          await repository.salvarAcerto({
-            ...pendenteEquivalente,
-            status: AcertoStatus.CANCELADO,
-            dataPagamento: null,
-          });
-        }
+        this.assertPlanoPreservaAcertoReaberto(
+          this.criarPlanoReconciliacaoAcertos(planejamentoConfirmado),
+          acerto,
+        );
 
         const acertoReaberto = await repository.salvarAcerto({
           ...acerto,
           status: AcertoStatus.PENDENTE,
           dataPagamento: null,
         });
-        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
-          repository,
-          planejamentoId,
-          usuarioId,
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'ACERTO_PLANEJAMENTO_REABERTO',
+            module: 'planejamentos',
+            action: 'update',
+            success: true,
+            userId: usuarioId,
+            entity: 'acerto_planejamento',
+            entityId: acerto.id,
+            details: {
+              statusAnterior: AcertoStatus.PAGO,
+              statusPosterior: AcertoStatus.PENDENTE,
+              dataPagamentoAnterior: acerto.dataPagamento,
+            },
+            context: {
+              statusCode: 200,
+            },
+          },
+          manager,
         );
-
-        await this.reconciliarAcertos(repository, planejamentoAtualizado);
 
         return acertoReaberto;
       },
+    );
+  }
+
+  private projetarAcertoPagoComoPendente(
+    planejamento: Planejamento,
+    acerto: AcertoPlanejamento,
+  ): Planejamento {
+    const acertoProjetado = {
+      ...acerto,
+      status: AcertoStatus.PENDENTE,
+      dataPagamento: null,
+    };
+
+    return {
+      ...planejamento,
+      acertos: [
+        acertoProjetado,
+        ...(planejamento.acertos ?? []).filter(
+          (acertoAtual) => acertoAtual.id !== acerto.id,
+        ),
+      ],
+    };
+  }
+
+  private assertPlanoPreservaAcertoReaberto(
+    plano: PlanoReconciliacaoAcertos,
+    acerto: AcertoPlanejamento,
+  ): void {
+    const preservaMesmoAcerto = plano.pendentesPreservados.some(
+      (acertoPendente) => acertoPendente.id === acerto.id,
+    );
+    const criaEquivalenteComOutroId = plano.novosAcertos.some(
+      (novoAcerto) =>
+        novoAcerto.id !== acerto.id &&
+        novoAcerto.deParticipanteId === acerto.deParticipanteId &&
+        novoAcerto.paraParticipanteId === acerto.paraParticipanteId &&
+        novoAcerto.valorCentavos === acerto.valorCentavos,
+    );
+
+    if (preservaMesmoAcerto && !criaEquivalenteComOutroId) {
+      return;
+    }
+
+    throw new ValidationAppException(
+      'PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO',
+      'O acerto pago nao corresponde a uma pendencia atual do planejamento.',
     );
   }
 
@@ -1599,16 +1652,26 @@ export class PlanejamentosService {
     return { planejamento, acerto };
   }
 
-  private calcularSugestoesAtuais(planejamento: Planejamento) {
-    const participantesFinanceiramenteRelevantes =
-      this.listarParticipantesFinanceiramenteRelevantes(planejamento);
-
-    return this.calcularAcertosPersistidos(
-      planejamento,
-      participantesFinanceiramenteRelevantes.map(
-        (participante) => participante.id,
-      ),
-    );
+  private mapearAcertoResponse(
+    acerto: AcertoPlanejamento,
+  ): AcertoPlanejamentoResponse {
+    return {
+      id: acerto.id,
+      deParticipanteId: acerto.deParticipanteId,
+      paraParticipanteId: acerto.paraParticipanteId,
+      valorCentavos: acerto.valorCentavos,
+      status: acerto.status,
+      dataPagamento: acerto.dataPagamento,
+      observacao: acerto.observacao,
+      deParticipante: {
+        id: acerto.deParticipante.id,
+        nome: acerto.deParticipante.nome,
+      },
+      paraParticipante: {
+        id: acerto.paraParticipante.id,
+        nome: acerto.paraParticipante.nome,
+      },
+    };
   }
 
   private assertUsuarioProprietarioDoPlanejamento(

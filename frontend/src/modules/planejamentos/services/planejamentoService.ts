@@ -1,7 +1,6 @@
 import {
   AddParticipantePlanejamentoRequest,
   AcertoPlanejamento,
-  AcertoPlanejamentoSugerido,
   CreateGastoPlanejamentoRequest,
   CreatePlanejamentoRequest,
   GastoPlanejamento,
@@ -75,8 +74,8 @@ export async function getGastoPlanejamentoById(
 
 export async function listAcertosPlanejamento(
   planejamentoId: string,
-): Promise<AcertoPlanejamentoSugerido[]> {
-  const response = await api.get<AcertoPlanejamentoSugerido[]>(
+): Promise<AcertoPlanejamento[]> {
+  const response = await api.get<AcertoPlanejamento[]>(
     `/planejamentos/${planejamentoId}/acertos`,
   );
   return response.data;

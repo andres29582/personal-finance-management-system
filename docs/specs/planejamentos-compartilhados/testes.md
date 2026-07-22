@@ -267,6 +267,14 @@ Fluxo minimo recomendado:
 - Acertos `PENDENTE` sao substituidos apos novo recalculo.
 - Acertos `PAGO` nao sao apagados automaticamente apos novo recalculo.
 - Consulta `GET /planejamentos/:id/acertos` nao cria nem altera acertos.
+- Consulta `GET /planejamentos/:id/acertos` retorna entidades persistidas com
+  IDs, todos os status e participantes envolvidos, inclusive em planejamento
+  `ARQUIVADO` ou `CANCELADO`.
+- O ID obtido pelo `GET` permanece operavel depois de reload, pagamento e
+  reabertura.
+- Reabertura aceita somente `PAGO -> PENDENTE`, preserva o mesmo ID e rejeita
+  `PENDENTE`, `CANCELADO`, `CONFIRMADO`, obrigacao obsoleta e duplicidade.
+- Falha da auditoria transacional reverte reabertura e reconciliacao.
 
 ## Casos de replicacao mensal
 

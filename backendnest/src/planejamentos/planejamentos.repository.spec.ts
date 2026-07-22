@@ -4,7 +4,7 @@ import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
-import { ParticipanteStatus, PlanejamentoStatus } from './enums';
+import { AcertoStatus, ParticipanteStatus, PlanejamentoStatus } from './enums';
 import { PlanejamentosRepository } from './planejamentos.repository';
 
 type RepositoryMock<T> = {
@@ -448,6 +448,53 @@ describe('PlanejamentosRepository', () => {
       deParticipante: true,
       paraParticipante: true,
     });
+  });
+
+  it('lista todos os acertos persistidos do planejamento com participantes e ordem deterministica', async () => {
+    const acertos = [
+      AcertoStatus.PENDENTE,
+      AcertoStatus.PAGO,
+      AcertoStatus.CANCELADO,
+      AcertoStatus.CONFIRMADO,
+    ].map((status, index) => ({
+      id: `acerto-${index}`,
+      planejamentoId: 'planejamento-id',
+      status,
+    })) as AcertoPlanejamento[];
+    acertoRepository.find.mockResolvedValue(acertos);
+
+    await expect(
+      repository.listarAcertosPorPlanejamento('planejamento-id'),
+    ).resolves.toBe(acertos);
+
+    const argumento = obterObjetoDaPrimeiraChamada(acertoRepository.find);
+    expect(argumento.select).toEqual({
+      id: true,
+      deParticipanteId: true,
+      paraParticipanteId: true,
+      valorCentavos: true,
+      status: true,
+      dataPagamento: true,
+      observacao: true,
+      deParticipante: {
+        id: true,
+        nome: true,
+      },
+      paraParticipante: {
+        id: true,
+        nome: true,
+      },
+    });
+    expect(argumento.where).toEqual({ planejamentoId: 'planejamento-id' });
+    expect(argumento.relations).toEqual({
+      deParticipante: true,
+      paraParticipante: true,
+    });
+    expect(argumento.order).toEqual({
+      createdAt: 'ASC',
+      id: 'ASC',
+    });
+    expect(acertoRepository.save).not.toHaveBeenCalled();
   });
 
   it('delegar salvamentos aos repositories TypeORM sem aplicar calculo financeiro', async () => {

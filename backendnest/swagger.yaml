@@ -1541,6 +1541,18 @@ components:
         updatedAt:
           type: string
           format: date-time
+    ParticipanteAcertoResponse:
+      type: object
+      description: Identificacao visual sanitizada de um participante relacionado a um acerto.
+      required:
+      - id
+      - nome
+      properties:
+        id:
+          type: string
+          format: uuid
+        nome:
+          type: string
     DivisaoGastoPlanejamento:
       type: object
       properties:
@@ -1639,11 +1651,63 @@ components:
             $ref: '#/components/schemas/DivisaoGastoPlanejamento'
     AcertoPlanejamento:
       type: object
+      description: Entidade de acerto persistida e identificada, incluindo seu status historico atual.
       properties:
         id:
           type: string
           format: uuid
+          description: Identificador persistido usado nas transicoes do acerto.
         planejamentoId:
+          type: string
+          format: uuid
+        deParticipanteId:
+          type: string
+          format: uuid
+        paraParticipanteId:
+          type: string
+          format: uuid
+        valorCentavos:
+          type: integer
+        status:
+          type: string
+          description: Status persistido atual do acerto.
+          enum:
+          - PENDENTE
+          - PAGO
+          - CANCELADO
+          - CONFIRMADO
+        dataPagamento:
+          type: string
+          format: date-time
+          nullable: true
+        observacao:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deParticipante:
+          $ref: '#/components/schemas/ParticipantePlanejamento'
+        paraParticipante:
+          $ref: '#/components/schemas/ParticipantePlanejamento'
+    AcertoPlanejamentoResponse:
+      type: object
+      description: Acerto persistido com participantes projetados para o contrato publico.
+      required:
+      - id
+      - deParticipanteId
+      - paraParticipanteId
+      - valorCentavos
+      - status
+      - dataPagamento
+      - observacao
+      - deParticipante
+      - paraParticipante
+      properties:
+        id:
           type: string
           format: uuid
         deParticipanteId:
@@ -1668,35 +1732,10 @@ components:
         observacao:
           type: string
           nullable: true
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
         deParticipante:
-          $ref: '#/components/schemas/ParticipantePlanejamento'
+          $ref: '#/components/schemas/ParticipanteAcertoResponse'
         paraParticipante:
-          $ref: '#/components/schemas/ParticipantePlanejamento'
-    AcertoPlanejamentoSugerido:
-      type: object
-      properties:
-        devedorParticipanteId:
-          type: string
-          format: uuid
-        recebedorParticipanteId:
-          type: string
-          format: uuid
-        valorCentavos:
-          type: integer
-        status:
-          type: string
-          enum:
-          - PENDENTE
-        devedorParticipante:
-          $ref: '#/components/schemas/ParticipantePlanejamento'
-        recebedorParticipante:
-          $ref: '#/components/schemas/ParticipantePlanejamento'
+          $ref: '#/components/schemas/ParticipanteAcertoResponse'
     Planejamento:
       type: object
       properties:
@@ -2109,8 +2148,8 @@ components:
           data:
             type: array
             items:
-              $ref: '#/components/schemas/AcertoPlanejamento'
-    AcertoPlanejamentoSugeridoListSuccess:
+              $ref: '#/components/schemas/AcertoPlanejamentoResponse'
+    AcertoPlanejamentoMutationListSuccess:
       allOf:
       - $ref: '#/components/schemas/SuccessAny'
       - type: object
@@ -2118,7 +2157,7 @@ components:
           data:
             type: array
             items:
-              $ref: '#/components/schemas/AcertoPlanejamentoSugerido'
+              $ref: '#/components/schemas/AcertoPlanejamento'
   responses:
     OkObject:
       description: Operacao bem-sucedida.
@@ -4157,6 +4196,11 @@ paths:
       tags:
       - Planejamentos
       summary: Listar acertos do planejamento
+      description: >-
+        Consulta somente leitura dos acertos persistidos do planejamento, com
+        identificadores, todos os status historicos e participantes envolvidos.
+        As relacoes de participante expoem somente id e nome. A operacao nao
+        calcula sugestoes, reconcilia ou altera dados.
       security:
       - BearerAuth: []
       parameters:
@@ -4167,7 +4211,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AcertoPlanejamentoSugeridoListSuccess'
+                $ref: '#/components/schemas/AcertoPlanejamentoListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4190,13 +4234,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AcertoPlanejamentoListSuccess'
+                $ref: '#/components/schemas/AcertoPlanejamentoMutationListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          description: >-
+            PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO - sincronizacao
+            permitida somente em planejamento ABERTO ou FECHADO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: syncAcertosPlanejamento
   /planejamentos/{planejamentoId}/acertos/{acertoId}/pagar:
     patch:
@@ -4221,6 +4273,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          description: >-
+            PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO ou
+            PLANEJAMENTO_ACERTO_PAGAR_STATUS_INVALIDO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: payAcertoPlanejamento
   /planejamentos/{planejamentoId}/acertos/{acertoId}/cancelar:
     patch:
@@ -4245,12 +4305,24 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          description: >-
+            PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO ou
+            PLANEJAMENTO_ACERTO_CANCELAR_STATUS_INVALIDO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: cancelAcertoPlanejamento
   /planejamentos/{planejamentoId}/acertos/{acertoId}/reabrir:
     patch:
       tags:
       - Planejamentos
-      summary: Reabrir acerto cancelado ou pago
+      summary: Reabrir acerto pago
+      description: >-
+        Transicao exclusiva do proprietario que reverte um acerto PAGO para
+        PENDENTE, preserva o mesmo identificador, reconcilia as obrigacoes e
+        rejeita acertos pendentes, cancelados, confirmados ou obsoletos.
       security:
       - BearerAuth: []
       parameters:
@@ -4269,4 +4341,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          description: >-
+            PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO,
+            PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO ou
+            PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: reopenAcertoPlanejamento
