@@ -16,6 +16,7 @@ import { formatCurrency, formatDate } from '../../../../utils/formatters';
 import {
   arquivarPlanejamento,
   cancelAcertoPlanejamento,
+  cancelGastoPlanejamento,
   cancelarPlanejamento,
   fecharPlanejamento,
   getPlanejamentoById,
@@ -31,6 +32,7 @@ import {
   AcertoPlanejamentoStatus,
   GastoPlanejamento,
   GastoPlanejamentoComportamento,
+  GastoPlanejamentoStatus,
   ParticipantePlanejamento,
   ParticipantePlanejamentoStatus,
   ParticipantePlanejamentoTipo,
@@ -74,6 +76,12 @@ const gastoComportamentoLabel: Record<GastoPlanejamentoComportamento, string> = 
   EVENTUAL: 'Eventual',
   FIXO: 'Fixo',
   VARIAVEL: 'Variavel',
+};
+
+const gastoStatusLabel: Record<GastoPlanejamentoStatus, string> = {
+  ATIVO: 'ATIVO',
+  CANCELADO: 'CANCELADO',
+  PENDENTE_REVISAO: 'PENDENTE_REVISAO',
 };
 
 const acertoStatusLabel: Record<AcertoPlanejamentoStatus, string> = {
@@ -163,10 +171,16 @@ export function PlanejamentoDetailScreen() {
   const [acertosActionLoading, setAcertosActionLoading] = useState<
     string | null
   >(null);
+  const [gastosError, setGastosError] = useState('');
+  const [gastosInfo, setGastosInfo] = useState('');
+  const [gastoActionLoading, setGastoActionLoading] = useState<string | null>(
+    null,
+  );
   const [transitionError, setTransitionError] = useState('');
   const [transitionInfo, setTransitionInfo] = useState('');
   const [transitionLoading, setTransitionLoading] =
     useState<PlanejamentoTransition | null>(null);
+  const aggregateMutationLockRef = useRef<string | null>(null);
   const transitionLockRef = useRef<PlanejamentoTransition | null>(null);
 
   const loadPlanejamentoData = useCallback(async () => {
@@ -224,6 +238,8 @@ export function PlanejamentoDetailScreen() {
   const isReadOnly =
     planejamento?.status === 'ARQUIVADO' ||
     planejamento?.status === 'CANCELADO';
+  const aggregateMutationInProgress =
+    !!acertosActionLoading || !!gastoActionLoading || !!transitionLoading;
 
   async function refreshFinancialData() {
     if (!planejamentoId) {
@@ -238,10 +254,28 @@ export function PlanejamentoDetailScreen() {
     setAcertos(acertosData);
   }
 
-  async function handleSyncAcertos() {
+  async function refreshGastoFinancialData() {
     if (!planejamentoId) {
       return;
     }
+
+    const [resumoData, gastosData, acertosData] = await Promise.all([
+      getResumoPlanejamento(planejamentoId),
+      listGastosPlanejamento(planejamentoId),
+      listAcertosPlanejamento(planejamentoId),
+    ]);
+    setResumo(resumoData);
+    setGastos(gastosData);
+    setAcertos(acertosData);
+  }
+
+  async function handleSyncAcertos() {
+    if (!planejamentoId || aggregateMutationLockRef.current) {
+      return;
+    }
+
+    const lockKey = 'acerto:sync';
+    aggregateMutationLockRef.current = lockKey;
 
     try {
       setAcertosActionLoading('sync');
@@ -269,6 +303,9 @@ export function PlanejamentoDetailScreen() {
       }
     } finally {
       setAcertosActionLoading(null);
+      if (aggregateMutationLockRef.current === lockKey) {
+        aggregateMutationLockRef.current = null;
+      }
     }
   }
 
@@ -276,11 +313,13 @@ export function PlanejamentoDetailScreen() {
     acerto: AcertoPlanejamento,
     action: AcertoAction,
   ) {
-    if (!planejamentoId) {
+    if (!planejamentoId || aggregateMutationLockRef.current) {
       return;
     }
 
     const actionKey = `${action}:${acerto.id}`;
+    const lockKey = `acerto:${actionKey}`;
+    aggregateMutationLockRef.current = lockKey;
 
     try {
       setAcertosActionLoading(actionKey);
@@ -307,6 +346,61 @@ export function PlanejamentoDetailScreen() {
       }
     } finally {
       setAcertosActionLoading(null);
+      if (aggregateMutationLockRef.current === lockKey) {
+        aggregateMutationLockRef.current = null;
+      }
+    }
+  }
+
+  async function handleCancelGasto(gasto: GastoPlanejamento) {
+    if (
+      !planejamentoId ||
+      planejamento?.status !== 'ABERTO' ||
+      gasto.status !== 'ATIVO' ||
+      aggregateMutationLockRef.current
+    ) {
+      return;
+    }
+
+    const lockKey = `gasto:cancel:${gasto.id}`;
+    aggregateMutationLockRef.current = lockKey;
+    let cancelamentoConcluido = false;
+
+    try {
+      setGastoActionLoading(gasto.id);
+      setGastosError('');
+      setGastosInfo('');
+
+      const confirmed = await confirmAction(
+        'Cancelar gasto',
+        `Deseja cancelar o gasto "${gasto.descricao}"? Ele permanecera visivel no historico.`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      await cancelGastoPlanejamento(planejamentoId, gasto.id);
+      cancelamentoConcluido = true;
+      await refreshGastoFinancialData();
+      setGastosInfo('Gasto cancelado com sucesso.');
+    } catch (error) {
+      const resolvedError = await resolveApiError(
+        error,
+        cancelamentoConcluido
+          ? 'O gasto foi cancelado, mas nao foi possivel recarregar os dados financeiros.'
+          : 'Nao foi possivel cancelar o gasto.',
+      );
+      setGastosError(resolvedError.message);
+
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
+    } finally {
+      setGastoActionLoading(null);
+      if (aggregateMutationLockRef.current === lockKey) {
+        aggregateMutationLockRef.current = null;
+      }
     }
   }
 
@@ -314,12 +408,16 @@ export function PlanejamentoDetailScreen() {
     if (
       !planejamentoId ||
       acertosActionLoading ||
+      gastoActionLoading ||
+      aggregateMutationLockRef.current ||
       transitionLockRef.current
     ) {
       return;
     }
 
     transitionLockRef.current = transition;
+    const lockKey = `transition:${transition}`;
+    aggregateMutationLockRef.current = lockKey;
     const config = transitionConfig[transition];
     let transitionCompleted = false;
 
@@ -355,6 +453,9 @@ export function PlanejamentoDetailScreen() {
     } finally {
       setTransitionLoading(null);
       transitionLockRef.current = null;
+      if (aggregateMutationLockRef.current === lockKey) {
+        aggregateMutationLockRef.current = null;
+      }
     }
   }
 
@@ -509,7 +610,7 @@ export function PlanejamentoDetailScreen() {
               <>
                 <View style={styles.lifecycleActions}>
                   <GlassButton
-                    disabled={!!transitionLoading || !!acertosActionLoading}
+                    disabled={aggregateMutationInProgress}
                     label={
                       transitionLoading === 'close'
                         ? transitionConfig.close.loadingLabel
@@ -520,8 +621,7 @@ export function PlanejamentoDetailScreen() {
                   />
                   <GlassButton
                     disabled={
-                      !!transitionLoading ||
-                      !!acertosActionLoading ||
+                      aggregateMutationInProgress ||
                       !isFinanciallySettled
                     }
                     label={
@@ -547,8 +647,7 @@ export function PlanejamentoDetailScreen() {
                 <View style={styles.lifecycleActions}>
                   <GlassButton
                     disabled={
-                      !!transitionLoading ||
-                      !!acertosActionLoading ||
+                      aggregateMutationInProgress ||
                       !isFinanciallySettled
                     }
                     label={
@@ -625,11 +724,33 @@ export function PlanejamentoDetailScreen() {
               ) : undefined
             }
           >
+            {gastosError ? (
+              <Text style={styles.gastosError}>{gastosError}</Text>
+            ) : null}
+            {gastosInfo ? (
+              <Text style={styles.gastosInfo}>{gastosInfo}</Text>
+            ) : null}
+
             {gastos.length ? (
               gastos.map((gasto) => (
                 <GastoRow
                   key={gasto.id}
+                  actionLoading={gastoActionLoading === gasto.id}
+                  canMutate={
+                    structuralMutationsAllowed && gasto.status === 'ATIVO'
+                  }
+                  disabled={aggregateMutationInProgress}
                   gasto={gasto}
+                  onCancel={handleCancelGasto}
+                  onEdit={(gastoSelecionado) =>
+                    router.push({
+                      pathname: '/planejamentos-gasto-form',
+                      params: {
+                        gastoId: gastoSelecionado.id,
+                        id: planejamento.id,
+                      },
+                    } as never)
+                  }
                   participantes={participantes}
                 />
               ))
@@ -644,7 +765,7 @@ export function PlanejamentoDetailScreen() {
             action={
               settlementMutationsAllowed ? (
                 <GlassButton
-                  disabled={!!acertosActionLoading || !!transitionLoading}
+                  disabled={aggregateMutationInProgress}
                   label={
                     acertosActionLoading === 'sync'
                       ? 'Sincronizando...'
@@ -670,7 +791,7 @@ export function PlanejamentoDetailScreen() {
                   acerto={acerto}
                   actionLoading={acertosActionLoading}
                   canOperate={settlementMutationsAllowed}
-                  disabled={!!acertosActionLoading || !!transitionLoading}
+                  disabled={aggregateMutationInProgress}
                   onAction={handleAcertoAction}
                   participantes={participantes}
                 />
@@ -770,10 +891,20 @@ function SaldoParticipanteRow({
 }
 
 function GastoRow({
+  actionLoading,
+  canMutate,
+  disabled,
   gasto,
+  onCancel,
+  onEdit,
   participantes,
 }: {
+  actionLoading: boolean;
+  canMutate: boolean;
+  disabled: boolean;
   gasto: GastoPlanejamento;
+  onCancel: (gasto: GastoPlanejamento) => void;
+  onEdit: (gasto: GastoPlanejamento) => void;
   participantes: ParticipantePlanejamento[];
 }) {
   const pagador =
@@ -785,7 +916,19 @@ function GastoRow({
   return (
     <View style={styles.expenseRow}>
       <View style={styles.expenseMain}>
-        <Text style={styles.expenseDescription}>{gasto.descricao}</Text>
+        <View style={styles.expenseHeader}>
+          <Text style={styles.expenseDescription}>{gasto.descricao}</Text>
+          <View
+            style={[
+              styles.expenseStatusBadge,
+              getGastoBadgeStyle(gasto.status),
+            ]}
+          >
+            <Text style={styles.expenseStatusText}>
+              {gastoStatusLabel[gasto.status]}
+            </Text>
+          </View>
+        </View>
         <Text style={styles.expenseMeta}>
           {formatOptionalDate(gasto.dataGasto)} -{' '}
           {gastoComportamentoLabel[gasto.comportamento]}
@@ -795,9 +938,27 @@ function GastoRow({
           <Text style={styles.expenseMeta}>Pago por {pagador.nome}</Text>
         ) : null}
       </View>
-      <Text style={styles.expenseValue}>
-        {formatCents(gasto.valorCentavos)}
-      </Text>
+      <View style={styles.expenseSide}>
+        <Text style={styles.expenseValue}>
+          {formatCents(gasto.valorCentavos)}
+        </Text>
+        {canMutate ? (
+          <View style={styles.expenseActions}>
+            <GlassButton
+              disabled={disabled}
+              label="Editar"
+              onPress={() => onEdit(gasto)}
+              variant="ghost"
+            />
+            <GlassButton
+              disabled={disabled}
+              label={actionLoading ? 'Cancelando gasto...' : 'Cancelar gasto'}
+              onPress={() => onCancel(gasto)}
+              variant="danger"
+            />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -947,6 +1108,18 @@ function getAcertoBadgeStyle(status: AcertoPlanejamentoStatus) {
   return styles.settlementBadgeCanceled;
 }
 
+function getGastoBadgeStyle(status: GastoPlanejamentoStatus) {
+  if (status === 'ATIVO') {
+    return styles.expenseStatusActive;
+  }
+
+  if (status === 'PENDENTE_REVISAO') {
+    return styles.expenseStatusPending;
+  }
+
+  return styles.expenseStatusCanceled;
+}
+
 function getFinancialStatusBadgeStyle(
   status: SaldoParticipanteResumoFinanceiroPlanejamento['statusFinanceiro'],
 ) {
@@ -1061,9 +1234,21 @@ const styles = StyleSheet.create({
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '900',
   },
+  expenseActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.xs,
+    justifyContent: 'flex-end',
+  },
+  expenseHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: FinanceTheme.spacing.xs,
+  },
   expenseMain: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 180,
   },
   expenseMeta: {
     color: FinanceTheme.colors.textMuted,
@@ -1078,9 +1263,37 @@ const styles = StyleSheet.create({
     borderRadius: FinanceTheme.radius.md,
     borderWidth: FinanceTheme.borderWidth.hairline,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: FinanceTheme.spacing.sm,
     marginBottom: FinanceTheme.spacing.sm,
     padding: FinanceTheme.spacing.sm,
+  },
+  expenseSide: {
+    alignItems: 'flex-end',
+    gap: FinanceTheme.spacing.xs,
+  },
+  expenseStatusActive: {
+    backgroundColor: FinanceTheme.colors.cyanSoft,
+    borderColor: FinanceTheme.neon.cyan.borderColor,
+  },
+  expenseStatusBadge: {
+    borderRadius: 999,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    paddingHorizontal: FinanceTheme.spacing.sm,
+    paddingVertical: FinanceTheme.spacing.xxs,
+  },
+  expenseStatusCanceled: {
+    backgroundColor: 'rgba(255, 122, 144, 0.10)',
+    borderColor: 'rgba(255, 122, 144, 0.34)',
+  },
+  expenseStatusPending: {
+    backgroundColor: 'rgba(255, 208, 106, 0.12)',
+    borderColor: 'rgba(255, 208, 106, 0.38)',
+  },
+  expenseStatusText: {
+    color: FinanceTheme.colors.text,
+    fontSize: 11,
+    fontWeight: '800',
   },
   expenseValue: {
     color: FinanceTheme.colors.success,
@@ -1115,6 +1328,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: FinanceTheme.spacing.sm,
     justifyContent: 'space-between',
+  },
+  gastosError: {
+    color: FinanceTheme.colors.danger,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+    marginBottom: FinanceTheme.spacing.sm,
+  },
+  gastosInfo: {
+    color: FinanceTheme.colors.success,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+    marginBottom: FinanceTheme.spacing.sm,
   },
   infoCell: {
     backgroundColor: FinanceTheme.colors.glassSubtle,

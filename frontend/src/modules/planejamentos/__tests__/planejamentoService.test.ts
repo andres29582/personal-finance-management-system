@@ -2,6 +2,7 @@ import {
   addParticipantePlanejamento,
   arquivarPlanejamento,
   cancelAcertoPlanejamento,
+  cancelGastoPlanejamento,
   cancelarPlanejamento,
   createGastoPlanejamento,
   createPlanejamento,
@@ -15,6 +16,7 @@ import {
   payAcertoPlanejamento,
   reopenAcertoPlanejamento,
   syncAcertosPlanejamento,
+  updateGastoPlanejamento,
 } from '../services/planejamentoService';
 import { api } from '../../../shared/services/api';
 import {
@@ -26,6 +28,7 @@ import {
   ParticipantePlanejamento,
   Planejamento,
   ResumoFinanceiroPlanejamento,
+  UpdateGastoPlanejamentoRequest,
 } from '../types/planejamento';
 
 jest.mock('../../../shared/services/api', () => ({
@@ -303,6 +306,74 @@ describe('planejamentoService', () => {
 
     expect(mockedApi.get).toHaveBeenCalledWith(
       '/planejamentos/planejamento-1/gastos/gasto-2',
+    );
+    expect(result).toEqual(gasto);
+  });
+
+  it('atualiza gasto do planejamento com PATCH e envia o payload corretamente', async () => {
+    const payload: UpdateGastoPlanejamentoRequest = {
+      categoria: 'Transporte',
+      comportamento: 'VARIAVEL',
+      dataGasto: '2026-01-13',
+      descricao: 'Passagens revisadas',
+      mesReferencia: '2026-01',
+      observacao: 'Valor conferido',
+      pagoPorParticipanteId: 'participante-2',
+      participantesIds: ['participante-1', 'participante-2'],
+      valorCentavos: 15000,
+    };
+    const gasto = makeGasto(payload);
+    mockedApi.patch.mockResolvedValueOnce({ data: gasto });
+
+    const result = await updateGastoPlanejamento(
+      'planejamento-1',
+      'gasto-1',
+      payload,
+    );
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/gastos/gasto-1',
+      payload,
+    );
+    expect(result).toEqual(gasto);
+  });
+
+  it('aceita null nos campos opcionais da atualizacao de gasto', async () => {
+    const payload: UpdateGastoPlanejamentoRequest = {
+      categoria: null,
+      mesReferencia: null,
+      observacao: null,
+    };
+    const gasto = makeGasto({
+      categoria: null,
+      mesReferencia: null,
+      observacao: null,
+    });
+    mockedApi.patch.mockResolvedValueOnce({ data: gasto });
+
+    await updateGastoPlanejamento(
+      'planejamento-1',
+      'gasto-1',
+      payload,
+    );
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/gastos/gasto-1',
+      payload,
+    );
+  });
+
+  it('cancela gasto do planejamento com PATCH sem body', async () => {
+    const gasto = makeGasto({ status: 'CANCELADO' });
+    mockedApi.patch.mockResolvedValueOnce({ data: gasto });
+
+    const result = await cancelGastoPlanejamento(
+      'planejamento-1',
+      'gasto-1',
+    );
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/gastos/gasto-1/cancelar',
     );
     expect(result).toEqual(gasto);
   });
