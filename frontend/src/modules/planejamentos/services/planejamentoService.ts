@@ -6,6 +6,7 @@ import {
   GastoPlanejamento,
   ParticipantePlanejamento,
   Planejamento,
+  ResumoFinanceiroPlanejamento,
   PlanejamentoStatus,
 } from '../types/planejamento';
 import { api } from '../../../shared/services/api';
@@ -28,6 +29,40 @@ export async function createPlanejamento(
 
 export async function getPlanejamentoById(id: string): Promise<Planejamento> {
   const response = await api.get<Planejamento>(`/planejamentos/${id}`);
+  return response.data;
+}
+
+export async function getResumoPlanejamento(
+  id: string,
+): Promise<ResumoFinanceiroPlanejamento> {
+  const response = await api.get<ResumoFinanceiroPlanejamento>(
+    `/planejamentos/${id}/resumo`,
+  );
+  return response.data;
+}
+
+export async function fecharPlanejamento(id: string): Promise<Planejamento> {
+  const response = await api.patch<Planejamento>(
+    `/planejamentos/${id}/fechar`,
+  );
+  return response.data;
+}
+
+export async function arquivarPlanejamento(
+  id: string,
+): Promise<Planejamento> {
+  const response = await api.patch<Planejamento>(
+    `/planejamentos/${id}/arquivar`,
+  );
+  return response.data;
+}
+
+export async function cancelarPlanejamento(
+  id: string,
+): Promise<Planejamento> {
+  const response = await api.patch<Planejamento>(
+    `/planejamentos/${id}/cancelar`,
+  );
   return response.data;
 }
 

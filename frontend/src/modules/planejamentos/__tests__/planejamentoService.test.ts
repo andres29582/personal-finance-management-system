@@ -1,10 +1,14 @@
 import {
   addParticipantePlanejamento,
+  arquivarPlanejamento,
   cancelAcertoPlanejamento,
+  cancelarPlanejamento,
   createGastoPlanejamento,
   createPlanejamento,
+  fecharPlanejamento,
   getGastoPlanejamentoById,
   getPlanejamentoById,
+  getResumoPlanejamento,
   listAcertosPlanejamento,
   listGastosPlanejamento,
   listPlanejamentos,
@@ -21,6 +25,7 @@ import {
   GastoPlanejamento,
   ParticipantePlanejamento,
   Planejamento,
+  ResumoFinanceiroPlanejamento,
 } from '../types/planejamento';
 
 jest.mock('../../../shared/services/api', () => ({
@@ -120,6 +125,36 @@ function makeAcerto(
   };
 }
 
+function makeResumo(
+  overrides: Partial<ResumoFinanceiroPlanejamento> = {},
+): ResumoFinanceiroPlanejamento {
+  return {
+    obrigacaoResidualCentavos: 5000,
+    participantes: [
+      {
+        participante: {
+          id: 'participante-1',
+          nome: 'Ana',
+          status: 'ATIVO',
+          tipo: 'MANUAL',
+        },
+        saldoAbertoCentavos: 5000,
+        saldoBrutoCentavos: 5000,
+        statusFinanceiro: 'RECEBEDOR',
+        totalDevidoCentavos: 5000,
+        totalPagoCentavos: 10000,
+        totalPagoEmAcertosCentavos: 0,
+        totalRecebidoEmAcertosCentavos: 0,
+      },
+    ],
+    planejamentoId: 'planejamento-1',
+    situacaoFinanceira: 'PENDENTE',
+    statusOperacional: 'ABERTO',
+    totalGastosAtivosCentavos: 10000,
+    ...overrides,
+  };
+}
+
 describe('planejamentoService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -175,6 +210,37 @@ describe('planejamentoService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/planejamentos/planejamento-2');
     expect(result).toEqual(planejamento);
   });
+
+  it('busca o resumo financeiro do planejamento', async () => {
+    const resumo = makeResumo();
+    mockedApi.get.mockResolvedValueOnce({ data: resumo });
+
+    const result = await getResumoPlanejamento('planejamento-1');
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/resumo',
+    );
+    expect(result).toEqual(resumo);
+  });
+
+  it.each([
+    ['fecha', fecharPlanejamento, 'fechar', 'FECHADO'],
+    ['arquiva', arquivarPlanejamento, 'arquivar', 'ARQUIVADO'],
+    ['cancela', cancelarPlanejamento, 'cancelar', 'CANCELADO'],
+  ] as const)(
+    '%s o planejamento com PATCH sem body',
+    async (_label, transition, route, status) => {
+      const planejamento = makePlanejamento({ status });
+      mockedApi.patch.mockResolvedValueOnce({ data: planejamento });
+
+      const result = await transition('planejamento-1');
+
+      expect(mockedApi.patch).toHaveBeenCalledWith(
+        `/planejamentos/planejamento-1/${route}`,
+      );
+      expect(result).toEqual(planejamento);
+    },
+  );
 
   it('adiciona participante ao planejamento', async () => {
     const payload: AddParticipantePlanejamentoRequest = {
