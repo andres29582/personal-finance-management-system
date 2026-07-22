@@ -164,6 +164,14 @@ informada. Aceitar essa data em DTO e evolucao futura fora desta branch.
 10. Backend registra auditoria.
 11. Backend retorna acerto atualizado.
 
+No contrato atual, a reabertura nao aceita acerto `CANCELADO`. O backend projeta
+o acerto pago como pendente para retirar seu efeito financeiro, calcula a
+reconciliacao e exige que a obrigacao resultante preserve exatamente o mesmo
+devedor, recebedor, valor e `acertoId`. Pendencias equivalentes duplicadas sao
+canceladas dentro da mesma transacao antes da persistencia do acerto reaberto.
+A auditoria `ACERTO_PLANEJAMENTO_REABERTO` usa o mesmo `EntityManager`; sua falha
+reverte todas as alteracoes.
+
 Resultado esperado:
 
 - acao e reversivel ou rastreavel;

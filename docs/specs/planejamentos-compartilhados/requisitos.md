@@ -126,9 +126,10 @@ com status `PENDENTE_REVISAO`.
 ### UC-11 - Fechar sem exigir quitacao e liquidar posteriormente
 
 O proprietario fecha um planejamento `ABERTO` depois de consolidar os gastos e
-reconciliar os acertos. Acertos pendentes sao preservados e podem ser pagos,
-cancelados ou reabertos posteriormente sem reabrir o planejamento nem alterar o
-periodo original.
+reconciliar os acertos. Acertos `PENDENTE` sao preservados e podem ser pagos ou
+cancelados posteriormente. Um acerto `PAGO` pode ser reaberto para `PENDENTE`,
+sem reabrir o planejamento nem alterar o periodo original; um acerto
+`CANCELADO` nao pode ser reaberto.
 
 ### UC-12 - Arquivar historico quitado
 

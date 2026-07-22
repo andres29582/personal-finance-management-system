@@ -282,6 +282,9 @@ Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
 | RN-REABRIR-08 | Cancelar ou reabrir acerto pago deve remover o efeito financeiro daquele pagamento. |
 | RN-REABRIR-09 | Apos cancelar ou reabrir acerto pago, o sistema deve recalcular os acertos pendentes. |
 | RN-REABRIR-10 | Cancelar uma marcacao incorreta ou reabrir um acerto permanece permitido em planejamento `FECHADO`, quando a transicao do acerto for valida. |
+| RN-REABRIR-11 | Acerto `CANCELADO` nao pode ser reaberto; no contrato atual a unica reabertura valida e `PAGO -> PENDENTE`. |
+| RN-REABRIR-12 | A reabertura deve preservar o mesmo identificador e rejeitar a operacao quando devedor, recebedor ou valor nao corresponderem mais a uma obrigacao atual. |
+| RN-REABRIR-13 | A reabertura e sua reconciliacao devem compartilhar a mesma transacao e a falha da auditoria deve causar rollback integral. |
 
 ## Regras de edicao e cancelamento de gastos
 

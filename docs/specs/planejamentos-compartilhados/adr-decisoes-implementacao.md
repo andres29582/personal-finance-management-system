@@ -73,6 +73,16 @@ Consequencia:
 - pagamento registrado por engano pode ser revertido sem apagar historico;
 - o recebedor nao precisa confirmar recebimento nesta fase.
 
+### Clarificacao do contrato atual
+
+A implementacao contratual consolidada aceita exclusivamente a reabertura
+`PAGO -> PENDENTE`. O estado `CANCELADO` nao e origem de reabertura. A operacao
+preserva o mesmo identificador, somente e concluida quando a obrigacao permanece
+valida apos retirar o efeito do pagamento e registra auditoria na mesma
+transacao da reconciliacao. Esta clarificacao substitui a interpretacao anterior
+do Swagger que permitia "cancelado ou pago", sem alterar o historico desta
+decisao.
+
 ## Decisao 4 - Gastos `PENDENTE_REVISAO`
 
 Gastos com status `PENDENTE_REVISAO` nao devem entrar nos acertos oficiais ate

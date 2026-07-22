@@ -314,10 +314,15 @@ describe('Planejamentos cancellation lifecycle (e2e)', () => {
       )
       .set('Authorization', authorization())
       .expect(200);
-    await request(app.getHttpServer())
+    const acertosCanceladosResponse = await request(app.getHttpServer())
       .get(`/planejamentos/${cenario.planejamento.id}/acertos`)
       .set('Authorization', authorization())
       .expect(200);
+    expect(unwrapSuccess<Identifiable[]>(acertosCanceladosResponse)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: cenario.acerto.id }),
+      ]),
+    );
     const resumoResponse = await request(app.getHttpServer())
       .get(`/planejamentos/${cenario.planejamento.id}/resumo`)
       .set('Authorization', authorization())

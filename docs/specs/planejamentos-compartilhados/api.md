@@ -502,33 +502,41 @@ Nao sao expostos `usuarioId`, email ou entidades completas.
 
 `GET /planejamentos/:id/acertos`
 
-Consulta de acertos nao deve alterar o banco de dados. Os acertos oficiais devem
-ter sido materializados por operacoes de escrita anteriores. Gastos
-`PENDENTE_REVISAO` nao devem gerar acertos oficiais ate serem revisados e
-confirmados.
+Lista somente os acertos oficiais persistidos do planejamento, incluindo seus
+identificadores, status historicos e os participantes devedor e recebedor
+necessarios para exibicao. A consulta valida acesso, mas permanece disponivel em
+`ABERTO`, `FECHADO`, `ARQUIVADO` e `CANCELADO`.
+
+As relacoes `deParticipante` e `paraParticipante` expoem somente `id` e `nome`.
+Dados como `usuarioId`, `email`, `planejamentoId` e timestamps do participante
+nao fazem parte deste contrato publico.
+
+A operacao nao abre transacao, nao adquire lock, nao calcula sugestoes e nao
+cria, cancela, reconcilia ou salva acertos. Os acertos oficiais devem ter sido
+materializados por operacoes de escrita anteriores. Gastos `PENDENTE_REVISAO`
+nao devem gerar acertos oficiais ate serem revisados e confirmados.
 
 `POST /planejamentos/:planejamentoId/acertos/sincronizar` permanece disponivel
 como sincronizacao explicita e idempotente para reparacao ou recuperacao
 operacional dos acertos pendentes em planejamentos `ABERTO` ou `FECHADO`.
 Planejamentos `ARQUIVADO` ou `CANCELADO` bloqueiam a operacao.
 
-Resposta conceitual:
+Resposta (`data` do envelope global de sucesso):
 
 ```json
-{
-  "planejamentoId": "uuid",
-  "acertos": [
-    {
-      "id": "uuid",
-      "devedorParticipanteId": "uuid-diego",
-      "devedorNome": "Diego",
-      "recebedorParticipanteId": "uuid-ana",
-      "recebedorNome": "Ana",
-      "valorCentavos": 5000,
-      "status": "PENDENTE"
-    }
-  ]
-}
+[
+  {
+    "id": "uuid",
+    "deParticipanteId": "uuid-diego",
+    "paraParticipanteId": "uuid-ana",
+    "valorCentavos": 5000,
+    "status": "PAGO",
+    "dataPagamento": "2026-07-03T10:30:00.000Z",
+    "observacao": null,
+    "deParticipante": { "id": "uuid-diego", "nome": "Diego" },
+    "paraParticipante": { "id": "uuid-ana", "nome": "Ana" }
+  }
+]
 ```
 
 ### Marcar acerto como pago
@@ -570,16 +578,16 @@ Resposta conceitual:
 
 `PATCH /planejamentos/:id/acertos/:acertoId/reabrir`
 
-Permitido somente quando o planejamento esta `ABERTO` ou `FECHADO`; bloqueado
-em `ARQUIVADO` ou `CANCELADO`.
+Transicao exclusiva do proprietario e permitida somente para acerto `PAGO` em
+planejamento `ABERTO` ou `FECHADO`; `PENDENTE`, `CANCELADO` e `CONFIRMADO` sao
+rejeitados. A operacao e bloqueada em planejamento `ARQUIVADO` ou `CANCELADO` e
+nao recebe body no contrato atual.
 
-Payload opcional:
-
-```json
-{
-  "motivo": "Pagamento informado por engano"
-}
-```
+Na mesma transacao, o backend retira o efeito financeiro do pagamento, comprova
+que devedor, recebedor e valor ainda representam uma obrigacao atual, reconcilia
+as demais pendencias, preserva o mesmo `acertoId`, limpa `dataPagamento` e
+registra `ACERTO_PLANEJAMENTO_REABERTO` por auditoria transacional. Obrigacao
+obsoleta retorna `422 PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO`.
 
 Resposta conceitual:
 
@@ -587,7 +595,7 @@ Resposta conceitual:
 {
   "id": "uuid",
   "status": "PENDENTE",
-  "reabertoEm": "2026-07-03T10:40:00.000Z"
+  "dataPagamento": null
 }
 ```
 

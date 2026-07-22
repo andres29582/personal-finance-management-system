@@ -193,12 +193,13 @@ describe('Planejamentos participant logical removal (e2e)', () => {
       .expect(200);
     const obrigacoes =
       unwrapSuccess<
-        Array<{ devedorParticipanteId: string; valorCentavos: number }>
+        Array<{ deParticipanteId: string; id: string; valorCentavos: number }>
       >(acertosResponse);
     expect(obrigacoes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          devedorParticipanteId: participante.id,
+          deParticipanteId: participante.id,
+          id: expect.any(String) as string,
           valorCentavos: 5000,
         }),
       ]),

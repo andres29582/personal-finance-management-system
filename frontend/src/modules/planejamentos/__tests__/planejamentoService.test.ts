@@ -15,7 +15,6 @@ import {
 import { api } from '../../../shared/services/api';
 import {
   AcertoPlanejamento,
-  AcertoPlanejamentoSugerido,
   AddParticipantePlanejamentoRequest,
   CreateGastoPlanejamentoRequest,
   CreatePlanejamentoRequest,
@@ -38,7 +37,6 @@ function makePlanejamento(
   overrides: Partial<Planejamento> = {},
 ): Planejamento {
   return {
-    acertos: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     dataFim: null,
     dataInicio: '2026-01-10',
@@ -103,42 +101,19 @@ function makeAcerto(
   overrides: Partial<AcertoPlanejamento> = {},
 ): AcertoPlanejamento {
   return {
-    createdAt: '2026-01-01T00:00:00.000Z',
     dataPagamento: null,
-    deParticipante: makeParticipante({
+    deParticipante: {
       id: 'participante-2',
       nome: 'Bruno',
-    }),
+    },
     deParticipanteId: 'participante-2',
     id: 'acerto-1',
     observacao: null,
-    paraParticipante: makeParticipante({
+    paraParticipante: {
       id: 'participante-1',
       nome: 'Ana',
-    }),
+    },
     paraParticipanteId: 'participante-1',
-    planejamentoId: 'planejamento-1',
-    status: 'PENDENTE',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    valorCentavos: 5000,
-    ...overrides,
-  };
-}
-
-function makeAcertoSugerido(
-  overrides: Partial<AcertoPlanejamentoSugerido> = {},
-): AcertoPlanejamentoSugerido {
-  return {
-    devedorParticipante: makeParticipante({
-      id: 'participante-2',
-      nome: 'Bruno',
-    }),
-    devedorParticipanteId: 'participante-2',
-    recebedorParticipante: makeParticipante({
-      id: 'participante-1',
-      nome: 'Ana',
-    }),
-    recebedorParticipanteId: 'participante-1',
     status: 'PENDENTE',
     valorCentavos: 5000,
     ...overrides,
@@ -266,8 +241,8 @@ describe('planejamentoService', () => {
     expect(result).toEqual(gasto);
   });
 
-  it('lista acertos sugeridos do planejamento', async () => {
-    const acertos = [makeAcertoSugerido()];
+  it('lista acertos persistidos do planejamento', async () => {
+    const acertos = [makeAcerto()];
     mockedApi.get.mockResolvedValueOnce({ data: acertos });
 
     const result = await listAcertosPlanejamento('planejamento-1');
@@ -276,6 +251,19 @@ describe('planejamentoService', () => {
       '/planejamentos/planejamento-1/acertos',
     );
     expect(result).toEqual(acertos);
+    expect(result[0].deParticipante).toEqual({
+      id: 'participante-2',
+      nome: 'Bruno',
+    });
+    expect(result[0].paraParticipante).toEqual({
+      id: 'participante-1',
+      nome: 'Ana',
+    });
+    expect(result[0].deParticipante).not.toHaveProperty('usuarioId');
+    expect(result[0].deParticipante).not.toHaveProperty('email');
+    expect(result[0].paraParticipante).not.toHaveProperty('planejamentoId');
+    expect(result[0].paraParticipante).not.toHaveProperty('createdAt');
+    expect(result[0].paraParticipante).not.toHaveProperty('updatedAt');
   });
 
   it('sincroniza acertos oficiais do planejamento', async () => {

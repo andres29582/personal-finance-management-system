@@ -10,9 +10,7 @@ import { PlanejamentoDetailScreen } from '../screens/PlanejamentoDetailScreen';
 import * as planejamentoService from '../services/planejamentoService';
 import {
   AcertoPlanejamento,
-  AcertoPlanejamentoSugerido,
   GastoPlanejamento,
-  ParticipantePlanejamento,
   Planejamento,
 } from '../types/planejamento';
 
@@ -57,23 +55,6 @@ const mockReopenAcertoPlanejamento =
     typeof planejamentoService.reopenAcertoPlanejamento
   >;
 
-function makeParticipante(
-  overrides: Partial<ParticipantePlanejamento> = {},
-): ParticipantePlanejamento {
-  return {
-    createdAt: '2026-01-01T00:00:00.000Z',
-    email: 'ana@example.com',
-    id: 'participante-1',
-    nome: 'Ana',
-    planejamentoId: 'planejamento-1',
-    status: 'ATIVO',
-    tipo: 'VINCULADO',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    usuarioId: 'usuario-1',
-    ...overrides,
-  };
-}
-
 function makePlanejamento(
   overrides: Partial<Planejamento> = {},
 ): Planejamento {
@@ -83,7 +64,6 @@ function makePlanejamento(
     dataInicio: '2026-01-10',
     deletedAt: null,
     descricao: 'Custos compartilhados',
-    gastos: [],
     id: 'planejamento-1',
     nome: 'Viagem de ferias',
     participantes: [
@@ -158,42 +138,19 @@ function makeAcerto(
   overrides: Partial<AcertoPlanejamento> = {},
 ): AcertoPlanejamento {
   return {
-    createdAt: '2026-01-01T00:00:00.000Z',
     dataPagamento: null,
-    deParticipante: makeParticipante({
-      email: 'bruno@example.com',
+    deParticipante: {
       id: 'participante-2',
       nome: 'Bruno',
-      tipo: 'MANUAL',
-      usuarioId: null,
-    }),
+    },
     deParticipanteId: 'participante-2',
     id: 'acerto-1',
     observacao: null,
-    paraParticipante: makeParticipante(),
+    paraParticipante: {
+      id: 'participante-1',
+      nome: 'Ana',
+    },
     paraParticipanteId: 'participante-1',
-    planejamentoId: 'planejamento-1',
-    status: 'PENDENTE',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    valorCentavos: 5000,
-    ...overrides,
-  };
-}
-
-function makeAcertoSugerido(
-  overrides: Partial<AcertoPlanejamentoSugerido> = {},
-): AcertoPlanejamentoSugerido {
-  return {
-    devedorParticipante: makeParticipante({
-      email: 'bruno@example.com',
-      id: 'participante-2',
-      nome: 'Bruno',
-      tipo: 'MANUAL',
-      usuarioId: null,
-    }),
-    devedorParticipanteId: 'participante-2',
-    recebedorParticipante: makeParticipante(),
-    recebedorParticipanteId: 'participante-1',
     status: 'PENDENTE',
     valorCentavos: 5000,
     ...overrides,
@@ -212,7 +169,7 @@ describe('PlanejamentoDetailScreen', () => {
   it('carrega e renderiza detalhe basico do planejamento', async () => {
     mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
     mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
-    mockListAcertosPlanejamento.mockResolvedValue([makeAcertoSugerido()]);
+    mockListAcertosPlanejamento.mockResolvedValue([makeAcerto()]);
 
     render(<PlanejamentoDetailScreen />);
 
@@ -243,11 +200,8 @@ describe('PlanejamentoDetailScreen', () => {
       expect(screen.getByText('Recebedor: Ana')).toBeTruthy();
       expect(screen.getByText('Pendente')).toBeTruthy();
       expect(screen.getByText(/50,00/)).toBeTruthy();
-      expect(
-        screen.getByText(
-          'Sincronize para criar o acerto oficial e gerenciar o status.',
-        ),
-      ).toBeTruthy();
+      expect(screen.getByText('Marcar como pago')).toBeTruthy();
+      expect(screen.getByText('Cancelar')).toBeTruthy();
     });
   });
 
@@ -311,17 +265,14 @@ describe('PlanejamentoDetailScreen', () => {
   });
 
   it('mostra acertos oficiais com data de pagamento e observacao', async () => {
-    mockGetPlanejamentoById.mockResolvedValue(
-      makePlanejamento({
-        acertos: [
-          makeAcerto({
-            dataPagamento: '2026-01-15T00:00:00.000Z',
-            observacao: 'Pix confirmado',
-            status: 'PAGO',
-          }),
-        ],
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento.mockResolvedValue([
+      makeAcerto({
+        dataPagamento: '2026-01-15T00:00:00.000Z',
+        observacao: 'Pix confirmado',
+        status: 'PAGO',
       }),
-    );
+    ]);
 
     render(<PlanejamentoDetailScreen />);
 
@@ -353,7 +304,9 @@ describe('PlanejamentoDetailScreen', () => {
   it('sincroniza acertos e atualiza a lista', async () => {
     const acerto = makeAcerto();
     mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
-    mockListAcertosPlanejamento.mockResolvedValue([]);
+    mockListAcertosPlanejamento
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([acerto]);
     mockSyncAcertosPlanejamento.mockResolvedValue([acerto]);
 
     render(<PlanejamentoDetailScreen />);
@@ -368,6 +321,7 @@ describe('PlanejamentoDetailScreen', () => {
       expect(mockSyncAcertosPlanejamento).toHaveBeenCalledWith(
         'planejamento-1',
       );
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
       expect(screen.getByText('Acertos sincronizados com sucesso.')).toBeTruthy();
       expect(screen.getByText('Bruno deve pagar Ana')).toBeTruthy();
       expect(screen.getByText('Marcar como pago')).toBeTruthy();
@@ -429,15 +383,15 @@ describe('PlanejamentoDetailScreen', () => {
 
   it('marca acerto pendente como pago', async () => {
     const acerto = makeAcerto();
-    mockGetPlanejamentoById.mockResolvedValue(
-      makePlanejamento({ acertos: [acerto] }),
-    );
-    mockPayAcertoPlanejamento.mockResolvedValue(
-      makeAcerto({
-        dataPagamento: '2026-01-15T00:00:00.000Z',
-        status: 'PAGO',
-      }),
-    );
+    const acertoPago = makeAcerto({
+      dataPagamento: '2026-01-15T00:00:00.000Z',
+      status: 'PAGO',
+    });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento
+      .mockResolvedValueOnce([acerto])
+      .mockResolvedValueOnce([acertoPago]);
+    mockPayAcertoPlanejamento.mockResolvedValue(acertoPago);
 
     render(<PlanejamentoDetailScreen />);
 
@@ -452,6 +406,7 @@ describe('PlanejamentoDetailScreen', () => {
         'planejamento-1',
         'acerto-1',
       );
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
       expect(screen.getByText('Acerto atualizado com sucesso.')).toBeTruthy();
       expect(screen.getByText('Pago')).toBeTruthy();
       expect(screen.getByText('Reabrir')).toBeTruthy();
@@ -460,12 +415,12 @@ describe('PlanejamentoDetailScreen', () => {
 
   it('cancela acerto pendente', async () => {
     const acerto = makeAcerto();
-    mockGetPlanejamentoById.mockResolvedValue(
-      makePlanejamento({ acertos: [acerto] }),
-    );
-    mockCancelAcertoPlanejamento.mockResolvedValue(
-      makeAcerto({ status: 'CANCELADO' }),
-    );
+    const acertoCancelado = makeAcerto({ status: 'CANCELADO' });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento
+      .mockResolvedValueOnce([acerto])
+      .mockResolvedValueOnce([acertoCancelado]);
+    mockCancelAcertoPlanejamento.mockResolvedValue(acertoCancelado);
 
     render(<PlanejamentoDetailScreen />);
 
@@ -480,19 +435,20 @@ describe('PlanejamentoDetailScreen', () => {
         'planejamento-1',
         'acerto-1',
       );
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
       expect(screen.getByText('Cancelado')).toBeTruthy();
-      expect(screen.getByText('Reabrir')).toBeTruthy();
+      expect(screen.queryByText('Reabrir')).toBeNull();
     });
   });
 
-  it('reabre acerto cancelado', async () => {
-    const acerto = makeAcerto({ status: 'CANCELADO' });
-    mockGetPlanejamentoById.mockResolvedValue(
-      makePlanejamento({ acertos: [acerto] }),
-    );
-    mockReopenAcertoPlanejamento.mockResolvedValue(
-      makeAcerto({ status: 'PENDENTE' }),
-    );
+  it('reabre acerto pago e recarrega a lista oficial', async () => {
+    const acerto = makeAcerto({ status: 'PAGO' });
+    const acertoReaberto = makeAcerto({ status: 'PENDENTE' });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento
+      .mockResolvedValueOnce([acerto])
+      .mockResolvedValueOnce([acertoReaberto]);
+    mockReopenAcertoPlanejamento.mockResolvedValue(acertoReaberto);
 
     render(<PlanejamentoDetailScreen />);
 
@@ -507,22 +463,20 @@ describe('PlanejamentoDetailScreen', () => {
         'planejamento-1',
         'acerto-1',
       );
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
       expect(screen.getByText('Pendente')).toBeTruthy();
       expect(screen.getByText('Marcar como pago')).toBeTruthy();
     });
   });
 
   it('mostra acoes conforme status do acerto', async () => {
-    mockGetPlanejamentoById.mockResolvedValue(
-      makePlanejamento({
-        acertos: [
-          makeAcerto({ id: 'acerto-pendente', status: 'PENDENTE' }),
-          makeAcerto({ id: 'acerto-pago', status: 'PAGO' }),
-          makeAcerto({ id: 'acerto-cancelado', status: 'CANCELADO' }),
-          makeAcerto({ id: 'acerto-confirmado', status: 'CONFIRMADO' }),
-        ],
-      }),
-    );
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento.mockResolvedValue([
+      makeAcerto({ id: 'acerto-pendente', status: 'PENDENTE' }),
+      makeAcerto({ id: 'acerto-pago', status: 'PAGO' }),
+      makeAcerto({ id: 'acerto-cancelado', status: 'CANCELADO' }),
+      makeAcerto({ id: 'acerto-confirmado', status: 'CONFIRMADO' }),
+    ]);
 
     render(<PlanejamentoDetailScreen />);
 
@@ -530,15 +484,53 @@ describe('PlanejamentoDetailScreen', () => {
       expect(screen.getByText('Confirmado')).toBeTruthy();
       expect(screen.getAllByText('Marcar como pago')).toHaveLength(1);
       expect(screen.getAllByText('Cancelar')).toHaveLength(1);
-      expect(screen.getAllByText('Reabrir')).toHaveLength(2);
+      expect(screen.getAllByText('Reabrir')).toHaveLength(1);
+    });
+  });
+
+  it('mantem as acoes apos reload porque o GET retorna ids persistidos', async () => {
+    const acertoPago = makeAcerto({ status: 'PAGO' });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento.mockResolvedValue([acertoPago]);
+
+    const primeiraRenderizacao = render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Reabrir')).toBeTruthy();
+    });
+
+    primeiraRenderizacao.unmount();
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Reabrir')).toBeTruthy();
+    });
+  });
+
+  it('nao cria sugestoes operaveis quando a listagem oficial falha', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento.mockRejectedValue({
+      response: {
+        data: { message: 'Falha ao listar acertos oficiais' },
+        status: 500,
+      },
+    });
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Falha ao listar acertos oficiais')).toBeTruthy();
+      expect(screen.queryByText('Marcar como pago')).toBeNull();
+      expect(screen.queryByText('Cancelar')).toBeNull();
+      expect(screen.queryByText('Reabrir')).toBeNull();
     });
   });
 
   it('mostra loading e erro ao executar acao de acerto', async () => {
     let rejectPay: (reason?: unknown) => void = () => undefined;
-    mockGetPlanejamentoById.mockResolvedValue(
-      makePlanejamento({ acertos: [makeAcerto()] }),
-    );
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListAcertosPlanejamento.mockResolvedValue([makeAcerto()]);
     mockPayAcertoPlanejamento.mockImplementation(
       () =>
         new Promise((_, reject) => {

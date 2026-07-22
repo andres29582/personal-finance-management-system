@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { DataSource, In } from 'typeorm';
+import { AuditLog } from '../src/logs/entities/audit-log.entity';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
 import { GastoPlanejamento } from '../src/planejamentos/entities/gasto-planejamento.entity';
@@ -28,13 +29,6 @@ type PlanejamentoResponse = Identifiable & {
 type AcertoResponse = Identifiable & {
   deParticipanteId: string;
   paraParticipanteId: string;
-  status: AcertoStatus;
-  valorCentavos: number;
-};
-
-type AcertoSugeridoResponse = {
-  devedorParticipanteId: string;
-  recebedorParticipanteId: string;
   status: AcertoStatus;
   valorCentavos: number;
 };
@@ -121,6 +115,16 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
     );
 
     return { acertoPendente, planejamento, session };
+  }
+
+  async function buscarLogsReabertura(acertoId: string): Promise<AuditLog[]> {
+    return dataSource.getRepository(AuditLog).find({
+      where: {
+        entity: 'acerto_planejamento',
+        entityId: acertoId,
+        event: 'ACERTO_PLANEJAMENTO_REABERTO',
+      },
+    });
   }
 
   it('serializes concurrent synchronizations for the same planejamento', async () => {
@@ -284,6 +288,211 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
     expect(pagos).toHaveLength(1);
     expect(pagos[0]?.id).toBe(acertoPendente.id);
     expect(acertosPersistidos).toHaveLength(1);
+  });
+
+  it('serializes reopening a paid settlement with synchronization without changing its id', async () => {
+    const { acertoPendente, planejamento, session } =
+      await criarCenarioComAcertoPendente({
+        cpf: '93541134780',
+        email: 'planejamento.reabrir-sincronizar.e2e@example.com',
+        nome: 'Reabrir Sincronizar E2E',
+      });
+    const authorization = `Bearer ${session.token}`;
+
+    await request(app.getHttpServer())
+      .patch(
+        `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}/pagar`,
+      )
+      .set('Authorization', authorization)
+      .expect(200);
+
+    const [reaberturaResponse, sincronizacaoResponse] = await Promise.all([
+      request(app.getHttpServer())
+        .patch(
+          `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}/reabrir`,
+        )
+        .set('Authorization', authorization),
+      request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/acertos/sincronizar`)
+        .set('Authorization', authorization),
+    ]);
+
+    expect(reaberturaResponse.status).toBe(200);
+    expect(sincronizacaoResponse.status).toBe(201);
+    expect(unwrapSuccess<AcertoResponse>(reaberturaResponse)).toEqual(
+      expect.objectContaining({
+        id: acertoPendente.id,
+        status: AcertoStatus.PENDENTE,
+      }),
+    );
+    const leituraResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization)
+      .expect(200);
+    expect(unwrapSuccess<AcertoResponse[]>(leituraResponse)).toEqual([
+      expect.objectContaining({
+        id: acertoPendente.id,
+        status: AcertoStatus.PENDENTE,
+      }),
+    ]);
+    await expect(buscarLogsReabertura(acertoPendente.id)).resolves.toHaveLength(
+      1,
+    );
+  });
+
+  it('serializes concurrent payment and reopening without duplicating the obligation', async () => {
+    const { acertoPendente, planejamento, session } =
+      await criarCenarioComAcertoPendente({
+        cpf: '24681357928',
+        email: 'planejamento.pagar-reabrir.e2e@example.com',
+        nome: 'Pagar Reabrir E2E',
+      });
+    const authorization = `Bearer ${session.token}`;
+    const endpointBase = `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}`;
+
+    const [pagamentoResponse, reaberturaResponse] = await Promise.all([
+      request(app.getHttpServer())
+        .patch(`${endpointBase}/pagar`)
+        .set('Authorization', authorization),
+      request(app.getHttpServer())
+        .patch(`${endpointBase}/reabrir`)
+        .set('Authorization', authorization),
+    ]);
+
+    expect(pagamentoResponse.status).toBe(200);
+    expect([200, 422]).toContain(reaberturaResponse.status);
+    if (reaberturaResponse.status === 422) {
+      expect(reaberturaResponse.body).toEqual(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
+          }) as object,
+          success: false,
+        }),
+      );
+    }
+
+    const leituraResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization)
+      .expect(200);
+    const acertos = unwrapSuccess<AcertoResponse[]>(leituraResponse);
+
+    expect(acertos).toHaveLength(1);
+    expect(acertos[0]).toEqual(
+      expect.objectContaining({
+        id: acertoPendente.id,
+        status:
+          reaberturaResponse.status === 200
+            ? AcertoStatus.PENDENTE
+            : AcertoStatus.PAGO,
+      }),
+    );
+    await expect(buscarLogsReabertura(acertoPendente.id)).resolves.toHaveLength(
+      reaberturaResponse.status === 200 ? 1 : 0,
+    );
+  });
+
+  it('allows exactly one of two concurrent reopenings and records one audit event', async () => {
+    const { acertoPendente, planejamento, session } =
+      await criarCenarioComAcertoPendente({
+        cpf: '16899535009',
+        email: 'planejamento.reabrir-duplo.e2e@example.com',
+        nome: 'Reabrir Duplo E2E',
+      });
+    const authorization = `Bearer ${session.token}`;
+    const endpoint = `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}/reabrir`;
+
+    await request(app.getHttpServer())
+      .patch(
+        `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}/pagar`,
+      )
+      .set('Authorization', authorization)
+      .expect(200);
+
+    const responses = await Promise.all([
+      request(app.getHttpServer())
+        .patch(endpoint)
+        .set('Authorization', authorization),
+      request(app.getHttpServer())
+        .patch(endpoint)
+        .set('Authorization', authorization),
+    ]);
+    const statuses = responses.map((response) => response.status).sort();
+
+    expect(statuses).toEqual([200, 422]);
+    const failure = responses.find((response) => response.status === 422);
+    expect(failure?.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
+        }) as object,
+        success: false,
+      }),
+    );
+
+    const leituraResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization)
+      .expect(200);
+    expect(unwrapSuccess<AcertoResponse[]>(leituraResponse)).toEqual([
+      expect.objectContaining({
+        id: acertoPendente.id,
+        status: AcertoStatus.PENDENTE,
+      }),
+    ]);
+    await expect(buscarLogsReabertura(acertoPendente.id)).resolves.toHaveLength(
+      1,
+    );
+  });
+
+  it('rejects a reopening retry without changing state or duplicating audit', async () => {
+    const { acertoPendente, planejamento, session } =
+      await criarCenarioComAcertoPendente({
+        cpf: '98765432100',
+        email: 'planejamento.reabrir-retry.e2e@example.com',
+        nome: 'Reabrir Retry E2E',
+      });
+    const authorization = `Bearer ${session.token}`;
+    const endpoint = `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}/reabrir`;
+
+    await request(app.getHttpServer())
+      .patch(
+        `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}/pagar`,
+      )
+      .set('Authorization', authorization)
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(endpoint)
+      .set('Authorization', authorization)
+      .expect(200);
+
+    const retryResponse = await request(app.getHttpServer())
+      .patch(endpoint)
+      .set('Authorization', authorization)
+      .expect(422);
+    expect(retryResponse.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO',
+        }) as object,
+        success: false,
+      }),
+    );
+
+    const leituraResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', authorization)
+      .expect(200);
+    expect(unwrapSuccess<AcertoResponse[]>(leituraResponse)).toEqual([
+      expect.objectContaining({
+        id: acertoPendente.id,
+        status: AcertoStatus.PENDENTE,
+      }),
+    ]);
+    await expect(buscarLogsReabertura(acertoPendente.id)).resolves.toHaveLength(
+      1,
+    );
   });
 
   it('allows only one of two concurrent payments to transition the settlement', async () => {
@@ -542,12 +751,13 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
         .get(`/planejamentos/${planejamento.id}/acertos`)
         .set('Authorization', authorization)
         .expect(200);
-      const acertos = unwrapSuccess<AcertoSugeridoResponse[]>(acertosResponse);
+      const acertos = unwrapSuccess<AcertoResponse[]>(acertosResponse);
 
       expect(acertos).toEqual([
         expect.objectContaining({
-          devedorParticipanteId: participanteRemovido.id,
-          recebedorParticipanteId: participanteProprietario?.id,
+          deParticipanteId: participanteRemovido.id,
+          id: expect.any(String) as string,
+          paraParticipanteId: participanteProprietario?.id,
           status: AcertoStatus.PENDENTE,
           valorCentavos: 5000,
         }),
