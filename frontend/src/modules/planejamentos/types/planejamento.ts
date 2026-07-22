@@ -158,6 +158,18 @@ export type CreateGastoPlanejamentoRequest = {
   valorCentavos: number;
 };
 
+export type UpdateGastoPlanejamentoRequest = {
+  categoria?: string | null;
+  comportamento?: GastoPlanejamentoComportamento;
+  dataGasto?: string;
+  descricao?: string;
+  mesReferencia?: string | null;
+  observacao?: string | null;
+  pagoPorParticipanteId?: string;
+  participantesIds?: string[];
+  valorCentavos?: number;
+};
+
 export type SuccessEnvelope<T> = {
   data: T;
   requestId: string;

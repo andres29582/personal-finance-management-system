@@ -61,6 +61,10 @@ const mockCancelAcertoPlanejamento =
   planejamentoService.cancelAcertoPlanejamento as jest.MockedFunction<
     typeof planejamentoService.cancelAcertoPlanejamento
   >;
+const mockCancelGastoPlanejamento =
+  planejamentoService.cancelGastoPlanejamento as jest.MockedFunction<
+    typeof planejamentoService.cancelGastoPlanejamento
+  >;
 const mockReopenAcertoPlanejamento =
   planejamentoService.reopenAcertoPlanejamento as jest.MockedFunction<
     typeof planejamentoService.reopenAcertoPlanejamento
@@ -203,6 +207,9 @@ describe('PlanejamentoDetailScreen', () => {
     mockListGastosPlanejamento.mockResolvedValue([]);
     mockListAcertosPlanejamento.mockResolvedValue([]);
     mockSyncAcertosPlanejamento.mockResolvedValue([]);
+    mockCancelGastoPlanejamento.mockResolvedValue(
+      makeGasto({ status: 'CANCELADO' }),
+    );
   });
 
   it('carrega e renderiza detalhe basico do planejamento', async () => {
@@ -483,6 +490,279 @@ describe('PlanejamentoDetailScreen', () => {
     });
   });
 
+  it('mostra o status de cada gasto e acoes somente para o ativo em planejamento aberto', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([
+      makeGasto({ id: 'gasto-ativo', status: 'ATIVO' }),
+      makeGasto({
+        descricao: 'Hotel cancelado',
+        id: 'gasto-cancelado',
+        status: 'CANCELADO',
+      }),
+      makeGasto({
+        descricao: 'Hotel em revisao',
+        id: 'gasto-revisao',
+        status: 'PENDENTE_REVISAO',
+      }),
+    ]);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('ATIVO')).toBeTruthy();
+      expect(screen.getByText('CANCELADO')).toBeTruthy();
+      expect(screen.getByText('PENDENTE_REVISAO')).toBeTruthy();
+      expect(screen.getAllByText('Editar')).toHaveLength(1);
+      expect(screen.getAllByText('Cancelar gasto')).toHaveLength(1);
+    });
+  });
+
+  it.each(['FECHADO', 'ARQUIVADO', 'CANCELADO'] as const)(
+    'nao mostra acoes de gasto em planejamento %s',
+    async (status) => {
+      mockGetPlanejamentoById.mockResolvedValue(makePlanejamento({ status }));
+      mockGetResumoPlanejamento.mockResolvedValue(
+        makeResumo({ statusOperacional: status }),
+      );
+      mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+
+      render(<PlanejamentoDetailScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('ATIVO')).toBeTruthy();
+        expect(screen.queryByText('Editar')).toBeNull();
+        expect(screen.queryByText('Cancelar gasto')).toBeNull();
+      });
+    },
+  );
+
+  it('abre a edicao com planejamentoId e gastoId', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Editar')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Editar'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/planejamentos-gasto-form',
+      params: { gastoId: 'gasto-1', id: 'planejamento-1' },
+    });
+  });
+
+  it('confirma o cancelamento e recarrega gastos, resumo e acertos oficiais', async () => {
+    const gastoAtivo = makeGasto();
+    const gastoCancelado = makeGasto({ status: 'CANCELADO' });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento
+      .mockResolvedValueOnce([gastoAtivo])
+      .mockResolvedValueOnce([gastoCancelado]);
+    mockCancelGastoPlanejamento.mockResolvedValue(gastoCancelado);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cancelar gasto')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenCalledWith(
+        'Cancelar gasto',
+        'Deseja cancelar o gasto "Hotel"? Ele permanecera visivel no historico.',
+      );
+      expect(mockCancelGastoPlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+        'gasto-1',
+      );
+      expect(mockListGastosPlanejamento).toHaveBeenCalledTimes(2);
+      expect(mockGetResumoPlanejamento).toHaveBeenCalledTimes(2);
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Gasto cancelado com sucesso.')).toBeTruthy();
+      expect(screen.getByText('CANCELADO')).toBeTruthy();
+      expect(screen.queryByText('Cancelar gasto')).toBeNull();
+    });
+  });
+
+  it('nao cancela o gasto quando a confirmacao e recusada', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+    mockConfirmAction.mockResolvedValueOnce(false);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cancelar gasto')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenCalledTimes(1);
+      expect(mockCancelGastoPlanejamento).not.toHaveBeenCalled();
+      expect(screen.getByText('Cancelar gasto')).toBeTruthy();
+    });
+  });
+
+  it('bloqueia concorrencia do cancelamento com lifecycle, acertos e outro gasto', async () => {
+    let resolveCancel: (value: GastoPlanejamento) => void = () => undefined;
+    const gastoPrincipal = makeGasto();
+    const outroGasto = makeGasto({
+      descricao: 'Passagens',
+      id: 'gasto-2',
+    });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([
+      gastoPrincipal,
+      outroGasto,
+    ]);
+    mockListAcertosPlanejamento.mockResolvedValue([makeAcerto()]);
+    mockCancelGastoPlanejamento.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCancel = resolve;
+        }),
+    );
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Cancelar gasto')).toHaveLength(2);
+    });
+
+    const cancelButtons = screen.getAllByRole('button', {
+      name: 'Cancelar gasto',
+    });
+    fireEvent.press(cancelButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cancelando gasto...')).toBeTruthy();
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Fechar planejamento' }).props
+        .accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+    expect(
+      screen.getByRole('button', { name: 'Sincronizar acertos' }).props
+        .accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+    expect(
+      screen.getByRole('button', { name: 'Marcar como pago' }).props
+        .accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+    expect(
+      screen.getByRole('button', { name: 'Cancelar gasto' }).props
+        .accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+
+    fireEvent.press(cancelButtons[0]);
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+    fireEvent.press(screen.getByText('Fechar planejamento'));
+    fireEvent.press(screen.getByText('Sincronizar acertos'));
+    fireEvent.press(screen.getByText('Marcar como pago'));
+
+    expect(mockConfirmAction).toHaveBeenCalledTimes(1);
+    expect(mockCancelGastoPlanejamento).toHaveBeenCalledTimes(1);
+    expect(mockFecharPlanejamento).not.toHaveBeenCalled();
+    expect(mockSyncAcertosPlanejamento).not.toHaveBeenCalled();
+    expect(mockPayAcertoPlanejamento).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveCancel(makeGasto({ status: 'CANCELADO' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Gasto cancelado com sucesso.')).toBeTruthy();
+    });
+  });
+
+  it('libera o lock de gasto quando a confirmacao falha', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+    mockConfirmAction
+      .mockRejectedValueOnce(new Error('Falha ao abrir confirmacao'))
+      .mockResolvedValueOnce(true);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cancelar gasto')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Nao foi possivel cancelar o gasto.')).toBeTruthy();
+      expect(mockCancelGastoPlanejamento).not.toHaveBeenCalled();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenCalledTimes(2);
+      expect(mockCancelGastoPlanejamento).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Gasto cancelado com sucesso.')).toBeTruthy();
+    });
+  });
+
+  it('libera o lock de gasto quando a requisicao falha', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+    mockCancelGastoPlanejamento
+      .mockRejectedValueOnce({
+        response: { data: { message: 'Falha ao cancelar gasto.' }, status: 422 },
+      })
+      .mockResolvedValueOnce(makeGasto({ status: 'CANCELADO' }));
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cancelar gasto')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Falha ao cancelar gasto.')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(mockCancelGastoPlanejamento).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('Gasto cancelado com sucesso.')).toBeTruthy();
+    });
+  });
+
+  it('redireciona para login quando o cancelamento de gasto retorna 401', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+    mockCancelGastoPlanejamento.mockRejectedValueOnce({
+      response: { data: { message: 'Unauthorized' }, status: 401 },
+    });
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Cancelar gasto')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/login');
+      expect(
+        screen.getByText('Sessao expirada. Faca login novamente.'),
+      ).toBeTruthy();
+    });
+  });
+
   it('confirma o fechamento e recarrega planejamento, resumo, gastos e acertos', async () => {
     const planejamentoAberto = makePlanejamento();
     const planejamentoFechado = makePlanejamento({ status: 'FECHADO' });
@@ -648,6 +928,7 @@ describe('PlanejamentoDetailScreen', () => {
     mockGetPlanejamentoById
       .mockResolvedValueOnce(planejamentoAberto)
       .mockResolvedValueOnce(planejamentoFechado);
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
     mockFecharPlanejamento.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -667,10 +948,17 @@ describe('PlanejamentoDetailScreen', () => {
       expect(screen.getByText('Fechando...')).toBeTruthy();
     });
 
+    expect(
+      screen.getByRole('button', { name: 'Cancelar gasto' }).props
+        .accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
     fireEvent.press(screen.getByText('Fechando...'));
 
     expect(mockConfirmAction).toHaveBeenCalledTimes(1);
     expect(mockFecharPlanejamento).toHaveBeenCalledTimes(1);
+    expect(mockCancelGastoPlanejamento).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveClose(planejamentoFechado);
@@ -812,6 +1100,7 @@ describe('PlanejamentoDetailScreen', () => {
       mockGetResumoPlanejamento.mockResolvedValue(
         makeResumo({ statusOperacional: status }),
       );
+      mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
       mockSyncAcertosPlanejamento.mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -838,10 +1127,19 @@ describe('PlanejamentoDetailScreen', () => {
         fireEvent.press(screen.getByText(label));
       });
 
+      if (status === 'ABERTO') {
+        expect(
+          screen.getByRole('button', { name: 'Cancelar gasto' }).props
+            .accessibilityState,
+        ).toEqual(expect.objectContaining({ disabled: true }));
+        fireEvent.press(screen.getByText('Cancelar gasto'));
+      }
+
       expect(mockConfirmAction).not.toHaveBeenCalled();
       expect(mockFecharPlanejamento).not.toHaveBeenCalled();
       expect(mockCancelarPlanejamento).not.toHaveBeenCalled();
       expect(mockArquivarPlanejamento).not.toHaveBeenCalled();
+      expect(mockCancelGastoPlanejamento).not.toHaveBeenCalled();
 
       await act(async () => {
         resolveSync([]);
@@ -1037,6 +1335,7 @@ describe('PlanejamentoDetailScreen', () => {
         makeResumo({ statusOperacional: planejamentoStatus }),
       );
       mockListAcertosPlanejamento.mockResolvedValue([acerto]);
+      mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
       request().mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -1063,11 +1362,20 @@ describe('PlanejamentoDetailScreen', () => {
         fireEvent.press(screen.getByText(label));
       });
 
+      if (planejamentoStatus === 'ABERTO') {
+        expect(
+          screen.getByRole('button', { name: 'Cancelar gasto' }).props
+            .accessibilityState,
+        ).toEqual(expect.objectContaining({ disabled: true }));
+        fireEvent.press(screen.getByText('Cancelar gasto'));
+      }
+
       expect(request()).toHaveBeenCalledWith('planejamento-1', 'acerto-1');
       expect(mockConfirmAction).not.toHaveBeenCalled();
       expect(mockFecharPlanejamento).not.toHaveBeenCalled();
       expect(mockCancelarPlanejamento).not.toHaveBeenCalled();
       expect(mockArquivarPlanejamento).not.toHaveBeenCalled();
+      expect(mockCancelGastoPlanejamento).not.toHaveBeenCalled();
 
       await act(async () => {
         resolveAction(acerto);

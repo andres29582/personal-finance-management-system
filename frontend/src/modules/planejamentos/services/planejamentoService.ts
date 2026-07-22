@@ -8,6 +8,7 @@ import {
   Planejamento,
   ResumoFinanceiroPlanejamento,
   PlanejamentoStatus,
+  UpdateGastoPlanejamentoRequest,
 } from '../types/planejamento';
 import { api } from '../../../shared/services/api';
 
@@ -103,6 +104,28 @@ export async function getGastoPlanejamentoById(
 ): Promise<GastoPlanejamento> {
   const response = await api.get<GastoPlanejamento>(
     `/planejamentos/${planejamentoId}/gastos/${gastoId}`,
+  );
+  return response.data;
+}
+
+export async function updateGastoPlanejamento(
+  planejamentoId: string,
+  gastoId: string,
+  data: UpdateGastoPlanejamentoRequest,
+): Promise<GastoPlanejamento> {
+  const response = await api.patch<GastoPlanejamento>(
+    `/planejamentos/${planejamentoId}/gastos/${gastoId}`,
+    data,
+  );
+  return response.data;
+}
+
+export async function cancelGastoPlanejamento(
+  planejamentoId: string,
+  gastoId: string,
+): Promise<GastoPlanejamento> {
+  const response = await api.patch<GastoPlanejamento>(
+    `/planejamentos/${planejamentoId}/gastos/${gastoId}/cancelar`,
   );
   return response.data;
 }

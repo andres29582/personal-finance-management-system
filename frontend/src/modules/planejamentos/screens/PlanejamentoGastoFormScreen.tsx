@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -23,7 +23,9 @@ import { resolveApiError } from '../../../../utils/api-error';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import {
   createGastoPlanejamento,
+  getGastoPlanejamentoById,
   getPlanejamentoById,
+  updateGastoPlanejamento,
 } from '../services/planejamentoService';
 import {
   GastoPlanejamentoComportamento,
@@ -59,6 +61,10 @@ function toCentavos(value: number) {
   return Math.round(value * 100);
 }
 
+function formatCentavosInput(value: number) {
+  return (value / 100).toFixed(2).replace('.', ',');
+}
+
 function toggleId(ids: string[], id: string) {
   return ids.includes(id)
     ? ids.filter((selectedId) => selectedId !== id)
@@ -67,8 +73,15 @@ function toggleId(ids: string[], id: string) {
 
 export function PlanejamentoGastoFormScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    gastoId?: string | string[];
+    id?: string | string[];
+  }>();
   const planejamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const gastoId = Array.isArray(params.gastoId)
+    ? params.gastoId[0]
+    : params.gastoId;
+  const isEditing = !!gastoId;
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
   const [dataGasto, setDataGasto] = useState(
@@ -81,14 +94,20 @@ export function PlanejamentoGastoFormScreen() {
   const [categoria, setCategoria] = useState('');
   const [observacao, setObservacao] = useState('');
   const [mesReferencia, setMesReferencia] = useState('');
-  const [participantes, setParticipantes] = useState<
+  const [pagadoresDisponiveis, setPagadoresDisponiveis] = useState<
     ParticipantePlanejamento[]
   >([]);
+  const [
+    participantesDivisaoDisponiveis,
+    setParticipantesDivisaoDisponiveis,
+  ] = useState<ParticipantePlanejamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [canMutate, setCanMutate] = useState(false);
   const [message, setMessage] = useState(
     planejamentoId ? '' : 'Planejamento nao informado.',
   );
+  const savingLockRef = useRef(false);
 
   useEffect(() => {
     async function loadPlanejamento() {
@@ -99,15 +118,60 @@ export function PlanejamentoGastoFormScreen() {
 
       try {
         setLoading(true);
+        setCanMutate(false);
         setMessage('');
-        const planejamento = await getPlanejamentoById(planejamentoId);
-        const participantesAtivos = (planejamento.participantes ?? []).filter(
-          (participante) => participante.status !== 'REMOVIDO',
+        const [planejamento, gasto] = await Promise.all([
+          getPlanejamentoById(planejamentoId),
+          gastoId
+            ? getGastoPlanejamentoById(planejamentoId, gastoId)
+            : Promise.resolve(null),
+        ]);
+        const participantesDivisaoIds =
+          gasto?.divisoes
+            ?.filter((divisao) => divisao.status === 'ATIVA')
+            .map((divisao) => divisao.participanteId) ?? [];
+        const participantesPlanejamento = planejamento.participantes ?? [];
+        const pagadores = participantesPlanejamento.filter(
+          (participante) =>
+            participante.status === 'ATIVO' ||
+            participante.id === gasto?.pagoPorParticipanteId,
         );
-        setParticipantes(participantesAtivos);
+        const participantesDivisao = participantesPlanejamento.filter(
+          (participante) =>
+            participante.status === 'ATIVO' ||
+            participantesDivisaoIds.includes(participante.id),
+        );
+        setPagadoresDisponiveis(pagadores);
+        setParticipantesDivisaoDisponiveis(participantesDivisao);
 
-        if (!participantesAtivos.length) {
-          setMessage('Adicione ao menos um participante antes de criar um gasto.');
+        if (gasto) {
+          setDescricao(gasto.descricao);
+          setValor(formatCentavosInput(gasto.valorCentavos));
+          setDataGasto(gasto.dataGasto.slice(0, 10));
+          setComportamento(gasto.comportamento);
+          setPagoPorParticipanteId(gasto.pagoPorParticipanteId);
+          setParticipantesIds(participantesDivisaoIds);
+          setCategoria(gasto.categoria ?? '');
+          setObservacao(gasto.observacao ?? '');
+          setMesReferencia(gasto.mesReferencia ?? '');
+        }
+
+        const planejamentoAberto = planejamento.status === 'ABERTO';
+        const gastoAtivo = !gasto || gasto.status === 'ATIVO';
+        setCanMutate(planejamentoAberto && gastoAtivo);
+
+        if (!planejamentoAberto) {
+          setMessage(
+            'Apenas planejamentos abertos permitem criar ou editar gastos.',
+          );
+        } else if (!gastoAtivo) {
+          setMessage('Apenas gastos ativos podem ser editados.');
+        } else if (!pagadores.length || !participantesDivisao.length) {
+          setMessage(
+            `Adicione ao menos um participante antes de ${
+              isEditing ? 'editar' : 'criar'
+            } um gasto.`,
+          );
         }
       } catch (error) {
         const resolvedError = await resolveApiError(
@@ -125,7 +189,7 @@ export function PlanejamentoGastoFormScreen() {
     }
 
     void loadPlanejamento();
-  }, [planejamentoId, router]);
+  }, [gastoId, isEditing, planejamentoId, router]);
 
   function goBackToDetail() {
     if (planejamentoId) {
@@ -152,6 +216,10 @@ export function PlanejamentoGastoFormScreen() {
   }
 
   async function handleSave() {
+    if (savingLockRef.current) {
+      return;
+    }
+
     const trimmedDescricao = descricao.trim();
     const parsedValor = parseDecimalInput(valor);
     const valorCentavos = toCentavos(parsedValor);
@@ -165,8 +233,24 @@ export function PlanejamentoGastoFormScreen() {
       return;
     }
 
-    if (!participantes.length) {
-      setMessage('Adicione ao menos um participante antes de criar um gasto.');
+    if (!canMutate) {
+      setMessage(
+        isEditing
+          ? 'Este gasto nao pode ser editado no estado atual.'
+          : 'Este planejamento nao permite criar gastos no estado atual.',
+      );
+      return;
+    }
+
+    if (
+      !pagadoresDisponiveis.length ||
+      !participantesDivisaoDisponiveis.length
+    ) {
+      setMessage(
+        `Adicione ao menos um participante antes de ${
+          isEditing ? 'editar' : 'criar'
+        } um gasto.`,
+      );
       return;
     }
 
@@ -214,28 +298,44 @@ export function PlanejamentoGastoFormScreen() {
     }
 
     try {
+      savingLockRef.current = true;
       setSaving(true);
       setMessage('');
 
-      await createGastoPlanejamento(planejamentoId, {
+      const commonData = {
         comportamento,
         dataGasto: normalizedDataGasto,
         descricao: trimmedDescricao,
         pagoPorParticipanteId,
         participantesIds,
         valorCentavos,
-        ...(trimmedCategoria ? { categoria: trimmedCategoria } : {}),
-        ...(trimmedObservacao ? { observacao: trimmedObservacao } : {}),
-        ...(trimmedMesReferencia
-          ? { mesReferencia: trimmedMesReferencia }
-          : {}),
-      });
+      };
+
+      if (isEditing && gastoId) {
+        await updateGastoPlanejamento(planejamentoId, gastoId, {
+          ...commonData,
+          categoria: trimmedCategoria || null,
+          mesReferencia: trimmedMesReferencia || null,
+          observacao: trimmedObservacao || null,
+        });
+      } else {
+        await createGastoPlanejamento(planejamentoId, {
+          ...commonData,
+          ...(trimmedCategoria ? { categoria: trimmedCategoria } : {}),
+          ...(trimmedObservacao ? { observacao: trimmedObservacao } : {}),
+          ...(trimmedMesReferencia
+            ? { mesReferencia: trimmedMesReferencia }
+            : {}),
+        });
+      }
 
       goBackToDetail();
     } catch (error) {
       const resolvedError = await resolveApiError(
         error,
-        'Nao foi possivel criar o gasto.',
+        isEditing
+          ? 'Nao foi possivel atualizar o gasto.'
+          : 'Nao foi possivel criar o gasto.',
       );
       setMessage(resolvedError.message);
 
@@ -243,9 +343,15 @@ export function PlanejamentoGastoFormScreen() {
         router.replace('/login');
       }
     } finally {
+      savingLockRef.current = false;
       setSaving(false);
     }
   }
+
+  const formDisabled = saving || !canMutate;
+  const hasParticipantOptions =
+    pagadoresDisponiveis.length > 0 &&
+    participantesDivisaoDisponiveis.length > 0;
 
   return (
     <FinanceAppShell
@@ -260,8 +366,12 @@ export function PlanejamentoGastoFormScreen() {
             />
           }
           eyebrow="Planejamento compartilhado"
-          subtitle="Registre uma despesa para dividir entre participantes."
-          title="Adicionar gasto"
+          subtitle={
+            isEditing
+              ? 'Atualize os dados e a divisao desta despesa.'
+              : 'Registre uma despesa para dividir entre participantes.'
+          }
+          title={isEditing ? 'Editar gasto' : 'Adicionar gasto'}
         />
       }
       onNavigate={(route) => router.push(route as never)}
@@ -271,28 +381,33 @@ export function PlanejamentoGastoFormScreen() {
         <GlassPanel>
           <View style={styles.loadingRow}>
             <ActivityIndicator color={FinanceTheme.colors.cyan} />
-            <Text style={styles.loadingText}>Carregando participantes...</Text>
+            <Text style={styles.loadingText}>
+              {isEditing ? 'Carregando gasto...' : 'Carregando participantes...'}
+            </Text>
           </View>
         </GlassPanel>
       ) : null}
 
-      {!loading && !participantes.length ? (
+      {!loading && !hasParticipantOptions ? (
         <GlassStatusCard
-          actionLabel="Adicionar participante"
+          actionLabel={canMutate ? 'Adicionar participante' : undefined}
           description={
-            message || 'Adicione ao menos um participante antes de criar um gasto.'
+            message ||
+            `Adicione ao menos um participante antes de ${
+              isEditing ? 'editar' : 'criar'
+            } um gasto.`
           }
-          onActionPress={goToParticipantForm}
+          onActionPress={canMutate ? goToParticipantForm : undefined}
           title="Nenhum participante disponivel"
           tone="muted"
         />
       ) : null}
 
-      {!loading && participantes.length ? (
+      {!loading && hasParticipantOptions ? (
         <GlassPanel>
           <GlassField label="Descricao">
             <GlassTextInput
-              editable={!saving}
+              editable={!formDisabled}
               maxLength={255}
               onChangeText={setDescricao}
               placeholder="Ex.: Hospedagem"
@@ -302,7 +417,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Valor">
             <GlassTextInput
-              editable={!saving}
+              editable={!formDisabled}
               keyboardType="decimal-pad"
               onChangeText={setValor}
               placeholder="0,00"
@@ -312,7 +427,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Data do gasto (YYYY-MM-DD)">
             <GlassTextInput
-              editable={!saving}
+              editable={!formDisabled}
               onChangeText={setDataGasto}
               placeholder="2026-04-07"
               value={dataGasto}
@@ -321,9 +436,11 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Comportamento">
             <GlassOptionGroup
-              onChange={(value) =>
-                setComportamento(value as GastoPlanejamentoComportamento)
-              }
+              onChange={(value) => {
+                if (!formDisabled) {
+                  setComportamento(value as GastoPlanejamentoComportamento);
+                }
+              }}
               options={comportamentoOptions}
               value={comportamento}
             />
@@ -331,8 +448,13 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Quem pagou">
             <ParticipantSelector
+              disabled={formDisabled}
+              isOptionDisabled={(participante) =>
+                participante.status !== 'ATIVO' &&
+                participante.id !== pagoPorParticipanteId
+              }
               onPress={setPagoPorParticipanteId}
-              participantes={participantes}
+              participantes={pagadoresDisponiveis}
               selectedIds={pagoPorParticipanteId ? [pagoPorParticipanteId] : []}
               testIdPrefix="payer"
             />
@@ -340,8 +462,13 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Dividir entre">
             <ParticipantSelector
+              disabled={formDisabled}
+              isOptionDisabled={(participante) =>
+                participante.status !== 'ATIVO' &&
+                !participantesIds.includes(participante.id)
+              }
               onPress={(id) => setParticipantesIds((current) => toggleId(current, id))}
-              participantes={participantes}
+              participantes={participantesDivisaoDisponiveis}
               selectedIds={participantesIds}
               testIdPrefix="split"
             />
@@ -349,7 +476,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Categoria">
             <GlassTextInput
-              editable={!saving}
+              editable={!formDisabled}
               maxLength={100}
               onChangeText={setCategoria}
               placeholder="Categoria opcional"
@@ -359,7 +486,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Observacao">
             <GlassTextInput
-              editable={!saving}
+              editable={!formDisabled}
               maxLength={500}
               multiline
               onChangeText={setObservacao}
@@ -371,7 +498,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Mes de referencia (YYYY-MM)">
             <GlassTextInput
-              editable={!saving}
+              editable={!formDisabled}
               onChangeText={setMesReferencia}
               placeholder="2026-04"
               value={mesReferencia}
@@ -381,8 +508,14 @@ export function PlanejamentoGastoFormScreen() {
           {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
           <GlassButton
-            disabled={saving}
-            label={saving ? 'Salvando...' : 'Salvar gasto'}
+            disabled={formDisabled}
+            label={
+              saving
+                ? 'Salvando...'
+                : isEditing
+                  ? 'Salvar alteracoes'
+                  : 'Salvar gasto'
+            }
             onPress={handleSave}
           />
         </GlassPanel>
@@ -392,11 +525,15 @@ export function PlanejamentoGastoFormScreen() {
 }
 
 function ParticipantSelector({
+  disabled,
+  isOptionDisabled,
   onPress,
   participantes,
   selectedIds,
   testIdPrefix,
 }: {
+  disabled: boolean;
+  isOptionDisabled?: (participante: ParticipantePlanejamento) => boolean;
   onPress: (id: string) => void;
   participantes: ParticipantePlanejamento[];
   selectedIds: string[];
@@ -406,16 +543,23 @@ function ParticipantSelector({
     <View style={styles.participantOptions}>
       {participantes.map((participante) => {
         const selected = selectedIds.includes(participante.id);
+        const optionDisabled =
+          disabled || (isOptionDisabled?.(participante) ?? false);
 
         return (
           <Pressable
             key={participante.id}
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: selected }}
+            accessibilityState={{
+              checked: selected,
+              disabled: optionDisabled,
+            }}
+            disabled={optionDisabled}
             onPress={() => onPress(participante.id)}
             style={({ pressed }) => [
               styles.participantOption,
               selected ? styles.participantOptionSelected : null,
+              optionDisabled ? styles.participantOptionDisabled : null,
               pressed ? styles.pressed : null,
             ]}
             testID={`${testIdPrefix}-${participante.id}`}
@@ -478,6 +622,9 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.micro,
     marginTop: FinanceTheme.spacing.xxs,
+  },
+  participantOptionDisabled: {
+    opacity: FinanceTheme.opacity.disabled,
   },
   participantOptionName: {
     color: FinanceTheme.colors.textMuted,
