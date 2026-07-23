@@ -5,13 +5,16 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react-native';
 import { PlanejamentoDetailScreen } from '../screens/PlanejamentoDetailScreen';
 import * as planejamentoService from '../services/planejamentoService';
+import { getUser } from '../../../../storage/authStorage';
 import { confirmAction } from '../../../../utils/confirm-action';
 import {
   AcertoPlanejamento,
   GastoPlanejamento,
+  ParticipantePlanejamento,
   Planejamento,
   ResumoFinanceiroPlanejamento,
 } from '../types/planejamento';
@@ -27,8 +30,10 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('../services/planejamentoService');
+jest.mock('../../../../storage/authStorage');
 jest.mock('../../../../utils/confirm-action');
 
+const mockGetUser = getUser as jest.MockedFunction<typeof getUser>;
 const mockConfirmAction = confirmAction as jest.MockedFunction<
   typeof confirmAction
 >;
@@ -80,6 +85,10 @@ const mockArquivarPlanejamento =
 const mockCancelarPlanejamento =
   planejamentoService.cancelarPlanejamento as jest.MockedFunction<
     typeof planejamentoService.cancelarPlanejamento
+  >;
+const mockRemoveParticipantePlanejamento =
+  planejamentoService.removeParticipantePlanejamento as jest.MockedFunction<
+    typeof planejamentoService.removeParticipantePlanejamento
   >;
 
 function makePlanejamento(
@@ -161,6 +170,33 @@ function makeGasto(overrides: Partial<GastoPlanejamento> = {}): GastoPlanejament
   };
 }
 
+function makeParticipante(
+  overrides: Partial<ParticipantePlanejamento> = {},
+): ParticipantePlanejamento {
+  return {
+    createdAt: '2026-01-01T00:00:00.000Z',
+    email: 'bruno@example.com',
+    id: 'participante-2',
+    nome: 'Bruno',
+    planejamentoId: 'planejamento-1',
+    status: 'ATIVO',
+    tipo: 'MANUAL',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    usuarioId: null,
+    ...overrides,
+  };
+}
+
+function makeOwnerParticipante(): ParticipantePlanejamento {
+  return makeParticipante({
+    email: 'ana@example.com',
+    id: 'participante-1',
+    nome: 'Ana',
+    tipo: 'VINCULADO',
+    usuarioId: 'usuario-1',
+  });
+}
+
 function makeAcerto(
   overrides: Partial<AcertoPlanejamento> = {},
 ): AcertoPlanejamento {
@@ -202,6 +238,11 @@ describe('PlanejamentoDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLocalSearchParams = { id: 'planejamento-1' };
+    mockGetUser.mockResolvedValue({
+      email: 'ana@example.com',
+      id: 'usuario-1',
+      nome: 'Ana',
+    });
     mockConfirmAction.mockResolvedValue(true);
     mockGetResumoPlanejamento.mockResolvedValue(makeResumo());
     mockListGastosPlanejamento.mockResolvedValue([]);
@@ -209,6 +250,9 @@ describe('PlanejamentoDetailScreen', () => {
     mockSyncAcertosPlanejamento.mockResolvedValue([]);
     mockCancelGastoPlanejamento.mockResolvedValue(
       makeGasto({ status: 'CANCELADO' }),
+    );
+    mockRemoveParticipantePlanejamento.mockResolvedValue(
+      makeParticipante({ status: 'REMOVIDO' }),
     );
   });
 
@@ -459,6 +503,1003 @@ describe('PlanejamentoDetailScreen', () => {
       pathname: '/planejamentos-participante-form',
       params: { id: 'planejamento-1' },
     });
+  });
+
+  it('exibe remocao apenas para participante ativo que nao e o proprietario', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      const ownerRow = screen.getByTestId('participante-row-participante-1');
+      const removableRow = screen.getByTestId(
+        'participante-row-participante-2',
+      );
+
+      expect(within(ownerRow).getByText('Proprietário')).toBeTruthy();
+      expect(
+        within(ownerRow).queryByRole('button', {
+          name: 'Remover participante',
+        }),
+      ).toBeNull();
+      expect(
+        within(removableRow).getByRole('button', {
+          name: 'Remover participante',
+        }),
+      ).toBeTruthy();
+    });
+  });
+
+  it.each([
+    { status: 'REMOVIDO', statusText: 'Removido' },
+    { status: 'PENDENTE', statusText: 'Pendente' },
+  ] as const)(
+    'mantem participante $status visivel sem acao de remocao',
+    async ({ status, statusText }) => {
+      const planejamento = makePlanejamento({
+        participantes: [
+          makeOwnerParticipante(),
+          makeParticipante({ status }),
+        ],
+      });
+      mockGetPlanejamentoById.mockResolvedValue(planejamento);
+
+      render(<PlanejamentoDetailScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bruno')).toBeTruthy();
+        expect(screen.getByText(statusText)).toBeTruthy();
+        expect(screen.queryByText('Remover participante')).toBeNull();
+      });
+    },
+  );
+
+  it.each(['FECHADO', 'ARQUIVADO', 'CANCELADO'] as const)(
+    'nao exibe remocao de participante em planejamento %s',
+    async (status) => {
+      mockGetPlanejamentoById.mockResolvedValue(
+        makePlanejamento({ status }),
+      );
+      mockGetResumoPlanejamento.mockResolvedValue(
+        makeResumo({ statusOperacional: status }),
+      );
+
+      render(<PlanejamentoDetailScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bruno')).toBeTruthy();
+        expect(screen.queryByText('Remover participante')).toBeNull();
+      });
+    },
+  );
+
+  it('nao exibe remocao quando o usuario autenticado nao e o proprietario', async () => {
+    mockGetUser.mockResolvedValue({
+      email: 'convidado@example.com',
+      id: 'usuario-2',
+      nome: 'Convidado',
+    });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Bruno')).toBeTruthy();
+      expect(screen.queryByText('Remover participante')).toBeNull();
+    });
+  });
+
+  it('nao exibe remocao quando nao existe usuario armazenado', async () => {
+    mockGetUser.mockResolvedValue(null);
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Bruno')).toBeTruthy();
+      expect(screen.queryByText('Remover participante')).toBeNull();
+      expect(
+        screen.queryByText(
+          'Não foi possível verificar sua permissão para gerenciar participantes.',
+        ),
+      ).toBeNull();
+    });
+  });
+
+  it('mantem a tela carregada quando a leitura do usuario falha', async () => {
+    mockGetUser.mockRejectedValueOnce(new Error('SecureStore indisponivel'));
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Bruno')).toBeTruthy();
+      expect(
+        screen.getByText(
+          'Não foi possível verificar sua permissão para gerenciar participantes.',
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.queryByText('Nao foi possivel carregar o planejamento'),
+      ).toBeNull();
+      expect(screen.queryByText('Remover participante')).toBeNull();
+    });
+  });
+
+  it('nao exibe remocao antes de a identidade ser carregada', async () => {
+    let resolveUser: (
+      user: Awaited<ReturnType<typeof getUser>>,
+    ) => void = () => undefined;
+    mockGetUser.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveUser = resolve;
+        }),
+    );
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Bruno')).toBeTruthy();
+      expect(screen.queryByText('Remover participante')).toBeNull();
+    });
+
+    await act(async () => {
+      resolveUser({
+        email: 'ana@example.com',
+        id: 'usuario-1',
+        nome: 'Ana',
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+  });
+
+  it('descarta resposta obsoleta quando o planejamento muda', async () => {
+    let resolvePlanejamentoA: (planejamento: Planejamento) => void =
+      () => undefined;
+    const planejamentoA = makePlanejamento({
+      id: 'planejamento-a',
+      nome: 'Planejamento A',
+    });
+    const planejamentoB = makePlanejamento({
+      id: 'planejamento-b',
+      nome: 'Planejamento B',
+    });
+    mockGetPlanejamentoById.mockImplementation((id) => {
+      if (id === 'planejamento-a') {
+        return new Promise((resolve) => {
+          resolvePlanejamentoA = resolve;
+        });
+      }
+
+      return Promise.resolve(planejamentoB);
+    });
+    mockLocalSearchParams = { id: 'planejamento-a' };
+
+    const view = render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(mockGetPlanejamentoById).toHaveBeenCalledWith('planejamento-a');
+    });
+
+    mockLocalSearchParams = { id: 'planejamento-b' };
+    view.rerender(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Planejamento B')).toBeTruthy();
+    });
+
+    await act(async () => {
+      resolvePlanejamentoA(planejamentoA);
+    });
+
+    expect(screen.getAllByText('Planejamento B')).toBeTruthy();
+    expect(screen.queryByText('Planejamento A')).toBeNull();
+  });
+
+  it('nao remove participante quando a confirmacao e recusada', async () => {
+    const planejamentoAtualizado = makePlanejamento({
+      participantes: [
+        makeOwnerParticipante(),
+        makeParticipante({ status: 'REMOVIDO' }),
+      ],
+    });
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(makePlanejamento())
+      .mockResolvedValueOnce(planejamentoAtualizado);
+    mockConfirmAction
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenCalledWith(
+        'Remover participante',
+        'Deseja remover "Bruno" deste planejamento? O participante não poderá ser utilizado em novos gastos ou divisões, mas continuará visível no histórico financeiro.',
+      );
+      expect(mockRemoveParticipantePlanejamento).not.toHaveBeenCalled();
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenCalledTimes(2);
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+        'participante-2',
+      );
+    });
+  });
+
+  it('confirma a remocao com os ids corretos', async () => {
+    const planejamentoAtualizado = makePlanejamento({
+      participantes: [
+        makeOwnerParticipante(),
+        makeParticipante({ status: 'REMOVIDO' }),
+      ],
+    });
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(makePlanejamento())
+      .mockResolvedValueOnce(planejamentoAtualizado);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+        'participante-2',
+      );
+      expect(
+        screen.getByText('Participante removido com sucesso.'),
+      ).toBeTruthy();
+    });
+  });
+
+  it('impede duplo envio da remocao de participante', async () => {
+    let resolveRemoval: (
+      participante: ParticipantePlanejamento,
+    ) => void = () => undefined;
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockRemoveParticipantePlanejamento.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRemoval = resolve;
+        }),
+    );
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    const removeButton = screen.getByText('Remover participante');
+    fireEvent.press(removeButton);
+    fireEvent.press(removeButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Removendo participante...')).toBeTruthy();
+      expect(mockConfirmAction).toHaveBeenCalledTimes(1);
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      resolveRemoval(makeParticipante({ status: 'REMOVIDO' }));
+    });
+  });
+
+  it('nao recarrega nem atualiza estado depois de desmontar durante a remocao', async () => {
+    let resolveRemoval: (
+      participante: ParticipantePlanejamento,
+    ) => void = () => undefined;
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockRemoveParticipantePlanejamento.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRemoval = resolve;
+        }),
+    );
+
+    const view = render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+        'participante-2',
+      );
+    });
+
+    view.unmount();
+
+    await act(async () => {
+      resolveRemoval(makeParticipante({ status: 'REMOVIDO' }));
+    });
+
+    expect(mockGetPlanejamentoById).toHaveBeenCalledTimes(1);
+  });
+
+  it('bloqueia lifecycle, gastos e acertos durante a remocao', async () => {
+    let resolveRemoval: (
+      participante: ParticipantePlanejamento,
+    ) => void = () => undefined;
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+    mockListAcertosPlanejamento.mockResolvedValue([makeAcerto()]);
+    mockRemoveParticipantePlanejamento.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRemoval = resolve;
+        }),
+    );
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Removendo participante...')).toBeTruthy();
+    });
+
+    for (const buttonName of [
+      'Fechar planejamento',
+      'Adicionar gasto',
+      'Cancelar gasto',
+      'Sincronizar acertos',
+      'Marcar como pago',
+    ]) {
+      expect(
+        screen.getByRole('button', { name: buttonName }).props
+          .accessibilityState,
+      ).toEqual(expect.objectContaining({ disabled: true }));
+    }
+
+    fireEvent.press(screen.getByText('Fechar planejamento'));
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+    fireEvent.press(screen.getByText('Sincronizar acertos'));
+    fireEvent.press(screen.getByText('Marcar como pago'));
+
+    expect(mockFecharPlanejamento).not.toHaveBeenCalled();
+    expect(mockCancelGastoPlanejamento).not.toHaveBeenCalled();
+    expect(mockSyncAcertosPlanejamento).not.toHaveBeenCalled();
+    expect(mockPayAcertoPlanejamento).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRemoval(makeParticipante({ status: 'REMOVIDO' }));
+    });
+  });
+
+  it('bloqueia todas as acoes durante confirmacao de lifecycle e libera ao cancelar', async () => {
+    let resolveConfirmation: (confirmed: boolean) => void = () => undefined;
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+    mockListAcertosPlanejamento.mockResolvedValue([makeAcerto()]);
+    mockConfirmAction.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveConfirmation = resolve;
+        }),
+    );
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Fechar planejamento')).toBeTruthy();
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    const addParticipanteButton = screen.getByRole('button', {
+      name: 'Adicionar participante',
+    });
+    const addGastoButton = screen.getByRole('button', {
+      name: 'Adicionar gasto',
+    });
+    fireEvent.press(screen.getByText('Fechar planejamento'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenCalledWith(
+        'Fechar planejamento',
+        expect.any(String),
+      );
+      for (const buttonName of [
+        'Remover participante',
+        'Adicionar participante',
+        'Adicionar gasto',
+        'Cancelar gasto',
+        'Sincronizar acertos',
+        'Marcar como pago',
+        'Cancelar planejamento',
+      ]) {
+        expect(
+          screen.getByRole('button', { name: buttonName }).props
+            .accessibilityState,
+        ).toEqual(expect.objectContaining({ disabled: true }));
+      }
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+    fireEvent.press(addParticipanteButton);
+    fireEvent.press(addGastoButton);
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+    fireEvent.press(screen.getByText('Sincronizar acertos'));
+    fireEvent.press(screen.getByText('Marcar como pago'));
+    fireEvent.press(screen.getByText('Cancelar planejamento'));
+
+    expect(mockConfirmAction).toHaveBeenCalledTimes(1);
+    expect(mockRemoveParticipantePlanejamento).not.toHaveBeenCalled();
+    expect(mockCancelGastoPlanejamento).not.toHaveBeenCalled();
+    expect(mockSyncAcertosPlanejamento).not.toHaveBeenCalled();
+    expect(mockPayAcertoPlanejamento).not.toHaveBeenCalled();
+    expect(mockCancelarPlanejamento).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveConfirmation(false);
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Remover participante' }).props
+          .accessibilityState,
+      ).toEqual(expect.objectContaining({ disabled: false }));
+      expect(
+        screen.getByRole('button', { name: 'Adicionar participante' }).props
+          .accessibilityState,
+      ).toEqual(expect.objectContaining({ disabled: false }));
+      expect(
+        screen.getByRole('button', { name: 'Adicionar gasto' }).props
+          .accessibilityState,
+      ).toEqual(expect.objectContaining({ disabled: false }));
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenCalledTimes(2);
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+        'participante-2',
+      );
+    });
+  });
+
+  it('recarrega todo o agregado e mantem o participante removido visivel', async () => {
+    const participanteRemovido = makeParticipante({ status: 'REMOVIDO' });
+    const planejamentoAtualizado = makePlanejamento({
+      participantes: [
+        makeOwnerParticipante(),
+        participanteRemovido,
+      ],
+    });
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(makePlanejamento())
+      .mockResolvedValueOnce(planejamentoAtualizado);
+    mockRemoveParticipantePlanejamento.mockResolvedValue(
+      participanteRemovido,
+    );
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockGetPlanejamentoById).toHaveBeenCalledTimes(2);
+      expect(mockGetPlanejamentoById).toHaveBeenNthCalledWith(
+        2,
+        'planejamento-1',
+      );
+      expect(mockGetResumoPlanejamento).toHaveBeenCalledTimes(2);
+      expect(mockGetResumoPlanejamento).toHaveBeenNthCalledWith(
+        2,
+        'planejamento-1',
+      );
+      expect(mockListGastosPlanejamento).toHaveBeenCalledTimes(2);
+      expect(mockListGastosPlanejamento).toHaveBeenNthCalledWith(
+        2,
+        'planejamento-1',
+      );
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
+      expect(mockListAcertosPlanejamento).toHaveBeenNthCalledWith(
+        2,
+        'planejamento-1',
+      );
+      expect(screen.getByText('Bruno')).toBeTruthy();
+      expect(screen.getByText('Removido')).toBeTruthy();
+      expect(screen.queryByText('Remover participante')).toBeNull();
+    });
+  });
+
+  it('mostra a mensagem resolvida da API quando o DELETE falha', async () => {
+    const planejamentoAtualizado = makePlanejamento({
+      participantes: [
+        makeOwnerParticipante(),
+        makeParticipante({ status: 'REMOVIDO' }),
+      ],
+    });
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(makePlanejamento())
+      .mockResolvedValueOnce(planejamentoAtualizado);
+    mockRemoveParticipantePlanejamento
+      .mockRejectedValueOnce({
+        response: {
+          data: { message: 'Participante possui pendencias.' },
+          status: 422,
+        },
+      })
+      .mockResolvedValueOnce(makeParticipante({ status: 'REMOVIDO' }));
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Participante possui pendencias.')).toBeTruthy();
+      expect(mockGetPlanejamentoById).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledTimes(2);
+      expect(
+        screen.getByText('Participante removido com sucesso.'),
+      ).toBeTruthy();
+    });
+  });
+
+  it('mostra sucesso parcial quando a recarga falha depois do DELETE', async () => {
+    const participanteRemovido = makeParticipante({ status: 'REMOVIDO' });
+    const planejamentoFechado = makePlanejamento({ status: 'FECHADO' });
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(makePlanejamento())
+      .mockRejectedValueOnce(new Error('Falha na recarga'))
+      .mockResolvedValueOnce(planejamentoFechado);
+    mockRemoveParticipantePlanejamento.mockResolvedValue(
+      participanteRemovido,
+    );
+    mockFecharPlanejamento.mockResolvedValue(planejamentoFechado);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+        'participante-2',
+      );
+      expect(
+        screen.getByText(
+          'O participante foi removido, mas não foi possível recarregar os dados do planejamento.',
+        ),
+      ).toBeTruthy();
+      const participanteRow = screen.getByTestId(
+        'participante-row-participante-2',
+      );
+      expect(within(participanteRow).getByText('Removido')).toBeTruthy();
+      expect(
+        within(participanteRow).queryByRole('button', {
+          name: 'Remover participante',
+        }),
+      ).toBeNull();
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.press(screen.getByText('Fechar planejamento'));
+
+    await waitFor(() => {
+      expect(mockConfirmAction).toHaveBeenLastCalledWith(
+        'Fechar planejamento',
+        expect.any(String),
+      );
+      expect(mockFecharPlanejamento).toHaveBeenCalledWith('planejamento-1');
+      expect(mockRemoveParticipantePlanejamento).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('redireciona para login quando a remocao retorna 401', async () => {
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockRemoveParticipantePlanejamento.mockRejectedValueOnce({
+      response: { data: { message: 'Unauthorized' }, status: 401 },
+    });
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remover participante')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Remover participante'));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/login');
+      expect(
+        screen.getByText('Sessao expirada. Faca login novamente.'),
+      ).toBeTruthy();
+    });
+  });
+
+  it('descarta refresh de acerto de A apos carregar B e libera o lock para B', async () => {
+    let resolveResumoA: (
+      resumo: ResumoFinanceiroPlanejamento,
+    ) => void = () => undefined;
+    let resolveAcertosA: (
+      acertos: AcertoPlanejamento[],
+    ) => void = () => undefined;
+    const planejamentoA = makePlanejamento({
+      id: 'planejamento-a',
+      nome: 'Planejamento A',
+    });
+    const planejamentoB = makePlanejamento({
+      id: 'planejamento-b',
+      nome: 'Planejamento B',
+    });
+    const acertoA = makeAcerto({
+      deParticipante: { id: 'participante-2', nome: 'Devedor A' },
+      id: 'acerto-a',
+      paraParticipante: { id: 'participante-1', nome: 'Recebedor A' },
+    });
+    const acertoB = makeAcerto({
+      deParticipante: { id: 'participante-2', nome: 'Devedor B' },
+      id: 'acerto-b',
+      paraParticipante: { id: 'participante-1', nome: 'Recebedor B' },
+    });
+    mockLocalSearchParams = { id: 'planejamento-a' };
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(planejamentoA)
+      .mockResolvedValueOnce(planejamentoB);
+    mockGetResumoPlanejamento
+      .mockResolvedValueOnce(
+        makeResumo({ planejamentoId: 'planejamento-a' }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveResumoA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        makeResumo({
+          planejamentoId: 'planejamento-b',
+          totalGastosAtivosCentavos: 200,
+        }),
+      );
+    mockListGastosPlanejamento
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mockListAcertosPlanejamento
+      .mockResolvedValueOnce([acertoA])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveAcertosA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([acertoB])
+      .mockResolvedValue([acertoB]);
+    mockPayAcertoPlanejamento.mockResolvedValue(
+      makeAcerto({ status: 'PAGO' }),
+    );
+
+    const view = render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Devedor A deve pagar Recebedor A')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Marcar como pago'));
+
+    await waitFor(() => {
+      expect(mockGetResumoPlanejamento).toHaveBeenCalledTimes(2);
+      expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(2);
+    });
+
+    mockLocalSearchParams = { id: 'planejamento-b' };
+    view.rerender(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Planejamento B')).toBeTruthy();
+      expect(screen.getByText('Devedor B deve pagar Recebedor B')).toBeTruthy();
+    });
+
+    await act(async () => {
+      resolveResumoA(
+        makeResumo({
+          planejamentoId: 'planejamento-a',
+          totalGastosAtivosCentavos: 999,
+        }),
+      );
+      resolveAcertosA([acertoA]);
+    });
+
+    expect(screen.queryByText('Devedor A deve pagar Recebedor A')).toBeNull();
+    expect(screen.queryByText('Acerto atualizado com sucesso.')).toBeNull();
+
+    fireEvent.press(screen.getByText('Marcar como pago'));
+
+    await waitFor(() => {
+      expect(mockPayAcertoPlanejamento).toHaveBeenLastCalledWith(
+        'planejamento-b',
+        'acerto-b',
+      );
+      expect(screen.getByText('Acerto atualizado com sucesso.')).toBeTruthy();
+    });
+  });
+
+  it('descarta refresh de gasto de A apos carregar B', async () => {
+    let resolveResumoA: (
+      resumo: ResumoFinanceiroPlanejamento,
+    ) => void = () => undefined;
+    let resolveGastosA: (
+      gastos: GastoPlanejamento[],
+    ) => void = () => undefined;
+    let resolveAcertosA: (
+      acertos: AcertoPlanejamento[],
+    ) => void = () => undefined;
+    const planejamentoA = makePlanejamento({
+      id: 'planejamento-a',
+      nome: 'Planejamento A',
+    });
+    const planejamentoB = makePlanejamento({
+      id: 'planejamento-b',
+      nome: 'Planejamento B',
+    });
+    const gastoA = makeGasto({
+      descricao: 'Gasto A',
+      id: 'gasto-a',
+      planejamentoId: 'planejamento-a',
+    });
+    const gastoB = makeGasto({
+      descricao: 'Gasto B',
+      id: 'gasto-b',
+      planejamentoId: 'planejamento-b',
+    });
+    mockLocalSearchParams = { id: 'planejamento-a' };
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(planejamentoA)
+      .mockResolvedValueOnce(planejamentoB);
+    mockGetResumoPlanejamento
+      .mockResolvedValueOnce(
+        makeResumo({ planejamentoId: 'planejamento-a' }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveResumoA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        makeResumo({ planejamentoId: 'planejamento-b' }),
+      );
+    mockListGastosPlanejamento
+      .mockResolvedValueOnce([gastoA])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveGastosA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([gastoB]);
+    mockListAcertosPlanejamento
+      .mockResolvedValueOnce([])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveAcertosA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([]);
+
+    const view = render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Gasto A')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Cancelar gasto'));
+
+    await waitFor(() => {
+      expect(mockListGastosPlanejamento).toHaveBeenCalledTimes(2);
+    });
+
+    mockLocalSearchParams = { id: 'planejamento-b' };
+    view.rerender(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Planejamento B')).toBeTruthy();
+      expect(screen.getByText('Gasto B')).toBeTruthy();
+    });
+
+    await act(async () => {
+      resolveResumoA(
+        makeResumo({ planejamentoId: 'planejamento-a' }),
+      );
+      resolveGastosA([makeGasto({ ...gastoA, status: 'CANCELADO' })]);
+      resolveAcertosA([]);
+    });
+
+    expect(screen.getByText('Gasto B')).toBeTruthy();
+    expect(screen.queryByText('Gasto A')).toBeNull();
+    expect(screen.queryByText('Gasto cancelado com sucesso.')).toBeNull();
+  });
+
+  it('descarta operacao de acerto resolvida depois da desmontagem', async () => {
+    let resolveSync: (acertos: AcertoPlanejamento[]) => void =
+      () => undefined;
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
+    mockSyncAcertosPlanejamento.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSync = resolve;
+        }),
+    );
+
+    const view = render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Sincronizar acertos')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Sincronizar acertos'));
+
+    await waitFor(() => {
+      expect(mockSyncAcertosPlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+      );
+    });
+
+    view.unmount();
+
+    await act(async () => {
+      resolveSync([]);
+    });
+
+    expect(mockGetResumoPlanejamento).toHaveBeenCalledTimes(1);
+    expect(mockListAcertosPlanejamento).toHaveBeenCalledTimes(1);
+  });
+
+  it('mantem a carga mais recente do mesmo planejamento sobre refresh antigo', async () => {
+    let resolveResumoAntigo: (
+      resumo: ResumoFinanceiroPlanejamento,
+    ) => void = () => undefined;
+    let resolveAcertosAntigos: (
+      acertos: AcertoPlanejamento[],
+    ) => void = () => undefined;
+    const planejamentoA = makePlanejamento({
+      id: 'planejamento-a',
+      nome: 'Planejamento A',
+    });
+    const planejamentoB = makePlanejamento({
+      id: 'planejamento-b',
+      nome: 'Planejamento B',
+    });
+    const acertoAntigo = makeAcerto({
+      deParticipante: { id: 'participante-2', nome: 'Acerto Antigo' },
+      id: 'acerto-antigo',
+    });
+    const acertoNovo = makeAcerto({
+      deParticipante: { id: 'participante-2', nome: 'Acerto Novo' },
+      id: 'acerto-novo',
+    });
+    mockLocalSearchParams = { id: 'planejamento-a' };
+    mockGetPlanejamentoById
+      .mockResolvedValueOnce(planejamentoA)
+      .mockResolvedValueOnce(planejamentoB)
+      .mockResolvedValueOnce(planejamentoA);
+    mockGetResumoPlanejamento
+      .mockResolvedValueOnce(
+        makeResumo({ planejamentoId: 'planejamento-a' }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveResumoAntigo = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        makeResumo({ planejamentoId: 'planejamento-b' }),
+      )
+      .mockResolvedValueOnce(
+        makeResumo({
+          obrigacaoResidualCentavos: 777,
+          planejamentoId: 'planejamento-a',
+        }),
+      );
+    mockListGastosPlanejamento
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mockListAcertosPlanejamento
+      .mockResolvedValueOnce([acertoAntigo])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveAcertosAntigos = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([acertoNovo]);
+
+    const view = render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Acerto Antigo deve pagar Ana')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Sincronizar acertos'));
+
+    await waitFor(() => {
+      expect(mockGetResumoPlanejamento).toHaveBeenCalledTimes(2);
+    });
+
+    mockLocalSearchParams = { id: 'planejamento-b' };
+    view.rerender(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Planejamento B')).toBeTruthy();
+    });
+
+    mockLocalSearchParams = { id: 'planejamento-a' };
+    view.rerender(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Acerto Novo deve pagar Ana')).toBeTruthy();
+      expect(screen.getByText(/7,77/)).toBeTruthy();
+    });
+
+    await act(async () => {
+      resolveResumoAntigo(
+        makeResumo({
+          obrigacaoResidualCentavos: 111,
+          planejamentoId: 'planejamento-a',
+        }),
+      );
+      resolveAcertosAntigos([acertoAntigo]);
+    });
+
+    expect(screen.getByText('Acerto Novo deve pagar Ana')).toBeTruthy();
+    expect(screen.queryByText('Acerto Antigo deve pagar Ana')).toBeNull();
+    expect(screen.getByText(/7,77/)).toBeTruthy();
+    expect(screen.queryByText(/1,11/)).toBeNull();
   });
 
   it('mostra empty state quando nao existem gastos', async () => {

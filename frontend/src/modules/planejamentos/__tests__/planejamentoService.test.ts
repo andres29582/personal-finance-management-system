@@ -14,6 +14,7 @@ import {
   listGastosPlanejamento,
   listPlanejamentos,
   payAcertoPlanejamento,
+  removeParticipantePlanejamento,
   reopenAcertoPlanejamento,
   syncAcertosPlanejamento,
   updateGastoPlanejamento,
@@ -33,6 +34,7 @@ import {
 
 jest.mock('../../../shared/services/api', () => ({
   api: {
+    delete: jest.fn(),
     get: jest.fn(),
     patch: jest.fn(),
     post: jest.fn(),
@@ -260,6 +262,27 @@ describe('planejamentoService', () => {
       payload,
     );
     expect(result).toEqual(participante);
+  });
+
+  it('remove participante do planejamento com DELETE sem body', async () => {
+    const participanteRemovido = makeParticipante({
+      id: 'participante-2',
+      status: 'REMOVIDO',
+    });
+
+    mockedApi.delete.mockResolvedValueOnce({
+      data: participanteRemovido,
+    });
+
+    const result = await removeParticipantePlanejamento(
+      'planejamento-1',
+      'participante-2',
+    );
+
+    expect(mockedApi.delete).toHaveBeenCalledWith(
+      '/planejamentos/planejamento-1/participantes/participante-2',
+    );
+    expect(result).toEqual(participanteRemovido);
   });
 
   it('lista gastos do planejamento', async () => {

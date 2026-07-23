@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { getUser } from '../../../../storage/authStorage';
 import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
@@ -24,6 +25,7 @@ import {
   listAcertosPlanejamento,
   listGastosPlanejamento,
   payAcertoPlanejamento,
+  removeParticipantePlanejamento,
   reopenAcertoPlanejamento,
   syncAcertosPlanejamento,
 } from '../services/planejamentoService';
@@ -176,35 +178,74 @@ export function PlanejamentoDetailScreen() {
   const [gastoActionLoading, setGastoActionLoading] = useState<string | null>(
     null,
   );
+  const [participanteActionLoading, setParticipanteActionLoading] = useState<
+    string | null
+  >(null);
+  const [participantesError, setParticipantesError] = useState('');
+  const [participantesInfo, setParticipantesInfo] = useState('');
   const [transitionError, setTransitionError] = useState('');
   const [transitionInfo, setTransitionInfo] = useState('');
   const [transitionLoading, setTransitionLoading] =
     useState<PlanejamentoTransition | null>(null);
+  const [usuarioAutenticadoId, setUsuarioAutenticadoId] = useState<
+    string | null
+  >(null);
   const aggregateMutationLockRef = useRef<string | null>(null);
+  const loadGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const planejamentoIdRef = useRef(planejamentoId);
   const transitionLockRef = useRef<PlanejamentoTransition | null>(null);
+  planejamentoIdRef.current = planejamentoId;
 
-  const loadPlanejamentoData = useCallback(async () => {
-    if (!planejamentoId) {
-      return;
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      loadGenerationRef.current += 1;
+    };
+  }, []);
+
+  const loadPlanejamentoData = useCallback(async (): Promise<boolean> => {
+    if (
+      !planejamentoId ||
+      planejamentoIdRef.current !== planejamentoId
+    ) {
+      return false;
     }
 
+    const loadGeneration = ++loadGenerationRef.current;
     const [data, resumoData, gastosData, acertosData] = await Promise.all([
       getPlanejamentoById(planejamentoId),
       getResumoPlanejamento(planejamentoId),
       listGastosPlanejamento(planejamentoId),
       listAcertosPlanejamento(planejamentoId),
     ]);
+
+    if (
+      !mountedRef.current ||
+      planejamentoIdRef.current !== planejamentoId ||
+      loadGeneration !== loadGenerationRef.current
+    ) {
+      return false;
+    }
+
     setPlanejamento(data);
     setResumo(resumoData);
     setGastos(gastosData);
     setAcertos(acertosData);
+    return true;
   }, [planejamentoId]);
 
   useEffect(() => {
+    let active = true;
+
     async function loadPlanejamento() {
       if (!planejamentoId) {
-        setMessage('Planejamento nao informado.');
-        setLoading(false);
+        if (active && mountedRef.current) {
+          setMessage('Planejamento nao informado.');
+          setLoading(false);
+        }
         return;
       }
 
@@ -213,22 +254,73 @@ export function PlanejamentoDetailScreen() {
         setMessage('');
         await loadPlanejamentoData();
       } catch (error) {
+        if (!active || !mountedRef.current) {
+          return;
+        }
+
         const resolvedError = await resolveApiError(
           error,
           'Nao foi possivel carregar o planejamento.',
         );
+
+        if (!active || !mountedRef.current) {
+          return;
+        }
+
         setMessage(resolvedError.message);
 
         if (resolvedError.unauthorized) {
           router.replace('/login');
         }
       } finally {
-        setLoading(false);
+        if (active && mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    }
+
+    async function loadUsuarioAutenticado() {
+      if (active && mountedRef.current) {
+        setUsuarioAutenticadoId(null);
+      }
+
+      try {
+        const usuarioAutenticado = await getUser();
+
+        if (active && mountedRef.current) {
+          setUsuarioAutenticadoId(usuarioAutenticado?.id ?? null);
+          setParticipantesError('');
+        }
+      } catch {
+        if (active && mountedRef.current) {
+          setUsuarioAutenticadoId(null);
+          setParticipantesError(
+            'Não foi possível verificar sua permissão para gerenciar participantes.',
+          );
+        }
       }
     }
 
     void loadPlanejamento();
+    void loadUsuarioAutenticado();
+
+    return () => {
+      active = false;
+    };
   }, [loadPlanejamentoData, planejamentoId, router]);
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      return;
+    }
+
+    setAcertosActionLoading(null);
+    setAcertosError('');
+    setAcertosInfo('');
+    setGastoActionLoading(null);
+    setGastosError('');
+    setGastosInfo('');
+  }, [planejamentoId]);
 
   const participantes = getParticipantes(planejamento);
   const settlementMutationsAllowed =
@@ -238,35 +330,88 @@ export function PlanejamentoDetailScreen() {
   const isReadOnly =
     planejamento?.status === 'ARQUIVADO' ||
     planejamento?.status === 'CANCELADO';
+  const isAuthenticatedUserOwner =
+    !!planejamento &&
+    usuarioAutenticadoId === planejamento.usuarioCriadorId;
   const aggregateMutationInProgress =
-    !!acertosActionLoading || !!gastoActionLoading || !!transitionLoading;
+    !!acertosActionLoading ||
+    !!gastoActionLoading ||
+    !!participanteActionLoading ||
+    !!transitionLoading;
 
-  async function refreshFinancialData() {
-    if (!planejamentoId) {
-      return;
-    }
-
-    const [resumoData, acertosData] = await Promise.all([
-      getResumoPlanejamento(planejamentoId),
-      listAcertosPlanejamento(planejamentoId),
-    ]);
-    setResumo(resumoData);
-    setAcertos(acertosData);
+  function isCurrentScreenContext(expectedPlanejamentoId: string) {
+    return (
+      mountedRef.current &&
+      planejamentoIdRef.current === expectedPlanejamentoId
+    );
   }
 
-  async function refreshGastoFinancialData() {
-    if (!planejamentoId) {
-      return;
-    }
+  async function refreshFinancialData(
+    expectedPlanejamentoId: string,
+  ): Promise<boolean> {
+    const refreshGeneration = ++loadGenerationRef.current;
 
-    const [resumoData, gastosData, acertosData] = await Promise.all([
-      getResumoPlanejamento(planejamentoId),
-      listGastosPlanejamento(planejamentoId),
-      listAcertosPlanejamento(planejamentoId),
-    ]);
-    setResumo(resumoData);
-    setGastos(gastosData);
-    setAcertos(acertosData);
+    try {
+      const [resumoData, acertosData] = await Promise.all([
+        getResumoPlanejamento(expectedPlanejamentoId),
+        listAcertosPlanejamento(expectedPlanejamentoId),
+      ]);
+
+      if (
+        !isCurrentScreenContext(expectedPlanejamentoId) ||
+        refreshGeneration !== loadGenerationRef.current
+      ) {
+        return false;
+      }
+
+      setResumo(resumoData);
+      setAcertos(acertosData);
+      return true;
+    } catch (error) {
+      if (
+        !isCurrentScreenContext(expectedPlanejamentoId) ||
+        refreshGeneration !== loadGenerationRef.current
+      ) {
+        return false;
+      }
+
+      throw error;
+    }
+  }
+
+  async function refreshGastoFinancialData(
+    expectedPlanejamentoId: string,
+  ): Promise<boolean> {
+    const refreshGeneration = ++loadGenerationRef.current;
+
+    try {
+      const [resumoData, gastosData, acertosData] = await Promise.all([
+        getResumoPlanejamento(expectedPlanejamentoId),
+        listGastosPlanejamento(expectedPlanejamentoId),
+        listAcertosPlanejamento(expectedPlanejamentoId),
+      ]);
+
+      if (
+        !isCurrentScreenContext(expectedPlanejamentoId) ||
+        refreshGeneration !== loadGenerationRef.current
+      ) {
+        return false;
+      }
+
+      setResumo(resumoData);
+      setGastos(gastosData);
+      setAcertos(acertosData);
+      return true;
+    } catch (error) {
+      if (
+        !isCurrentScreenContext(expectedPlanejamentoId) ||
+        refreshGeneration !== loadGenerationRef.current
+      ) {
+        return false;
+      }
+
+      throw error;
+    }
   }
 
   async function handleSyncAcertos() {
@@ -274,6 +419,7 @@ export function PlanejamentoDetailScreen() {
       return;
     }
 
+    const currentPlanejamentoId = planejamentoId;
     const lockKey = 'acerto:sync';
     aggregateMutationLockRef.current = lockKey;
 
@@ -283,26 +429,46 @@ export function PlanejamentoDetailScreen() {
       setAcertosInfo('');
 
       const acertosSincronizados =
-        await syncAcertosPlanejamento(planejamentoId);
-      await refreshFinancialData();
+        await syncAcertosPlanejamento(currentPlanejamentoId);
 
-      setAcertosInfo(
-        acertosSincronizados.length
-          ? 'Acertos sincronizados com sucesso.'
-          : 'Ainda nao ha dados suficientes para gerar acertos. Cadastre gastos e participantes ativos e tente novamente.',
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
+      const dataApplied = await refreshFinancialData(
+        currentPlanejamentoId,
       );
+
+      if (isCurrentScreenContext(currentPlanejamentoId) && dataApplied) {
+        setAcertosInfo(
+          acertosSincronizados.length
+            ? 'Acertos sincronizados com sucesso.'
+            : 'Ainda nao ha dados suficientes para gerar acertos. Cadastre gastos e participantes ativos e tente novamente.',
+        );
+      }
     } catch (error) {
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel sincronizar os acertos.',
       );
+
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
       setAcertosError(resolvedError.message);
 
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setAcertosActionLoading(null);
+      if (isCurrentScreenContext(currentPlanejamentoId)) {
+        setAcertosActionLoading(null);
+      }
       if (aggregateMutationLockRef.current === lockKey) {
         aggregateMutationLockRef.current = null;
       }
@@ -317,6 +483,7 @@ export function PlanejamentoDetailScreen() {
       return;
     }
 
+    const currentPlanejamentoId = planejamentoId;
     const actionKey = `${action}:${acerto.id}`;
     const lockKey = `acerto:${actionKey}`;
     aggregateMutationLockRef.current = lockKey;
@@ -331,21 +498,42 @@ export function PlanejamentoDetailScreen() {
         pay: payAcertoPlanejamento,
         reopen: reopenAcertoPlanejamento,
       };
-      await actionByType[action](planejamentoId, acerto.id);
-      await refreshFinancialData();
-      setAcertosInfo('Acerto atualizado com sucesso.');
+      await actionByType[action](currentPlanejamentoId, acerto.id);
+
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
+      const dataApplied = await refreshFinancialData(
+        currentPlanejamentoId,
+      );
+
+      if (isCurrentScreenContext(currentPlanejamentoId) && dataApplied) {
+        setAcertosInfo('Acerto atualizado com sucesso.');
+      }
     } catch (error) {
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel atualizar o acerto.',
       );
+
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
       setAcertosError(resolvedError.message);
 
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setAcertosActionLoading(null);
+      if (isCurrentScreenContext(currentPlanejamentoId)) {
+        setAcertosActionLoading(null);
+      }
       if (aggregateMutationLockRef.current === lockKey) {
         aggregateMutationLockRef.current = null;
       }
@@ -362,6 +550,7 @@ export function PlanejamentoDetailScreen() {
       return;
     }
 
+    const currentPlanejamentoId = planejamentoId;
     const lockKey = `gasto:cancel:${gasto.id}`;
     aggregateMutationLockRef.current = lockKey;
     let cancelamentoConcluido = false;
@@ -380,24 +569,152 @@ export function PlanejamentoDetailScreen() {
         return;
       }
 
-      await cancelGastoPlanejamento(planejamentoId, gasto.id);
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
+      await cancelGastoPlanejamento(currentPlanejamentoId, gasto.id);
       cancelamentoConcluido = true;
-      await refreshGastoFinancialData();
-      setGastosInfo('Gasto cancelado com sucesso.');
+
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
+      const dataApplied = await refreshGastoFinancialData(
+        currentPlanejamentoId,
+      );
+
+      if (isCurrentScreenContext(currentPlanejamentoId) && dataApplied) {
+        setGastosInfo('Gasto cancelado com sucesso.');
+      }
     } catch (error) {
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
       const resolvedError = await resolveApiError(
         error,
         cancelamentoConcluido
           ? 'O gasto foi cancelado, mas nao foi possivel recarregar os dados financeiros.'
           : 'Nao foi possivel cancelar o gasto.',
       );
+
+      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+        return;
+      }
+
       setGastosError(resolvedError.message);
 
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setGastoActionLoading(null);
+      if (isCurrentScreenContext(currentPlanejamentoId)) {
+        setGastoActionLoading(null);
+      }
+      if (aggregateMutationLockRef.current === lockKey) {
+        aggregateMutationLockRef.current = null;
+      }
+    }
+  }
+
+  async function handleRemoveParticipante(
+    participante: ParticipantePlanejamento,
+  ) {
+    if (
+      !planejamentoId ||
+      !planejamento ||
+      usuarioAutenticadoId !== planejamento.usuarioCriadorId ||
+      planejamento.status !== 'ABERTO' ||
+      participante.status !== 'ATIVO' ||
+      participante.usuarioId === planejamento.usuarioCriadorId ||
+      aggregateMutationLockRef.current
+    ) {
+      return;
+    }
+
+    const lockKey = `participante:remove:${participante.id}`;
+    aggregateMutationLockRef.current = lockKey;
+    let remocaoConcluida = false;
+
+    try {
+      setParticipanteActionLoading(participante.id);
+      setParticipantesError('');
+      setParticipantesInfo('');
+
+      const confirmed = await confirmAction(
+        'Remover participante',
+        `Deseja remover "${participante.nome}" deste planejamento? O participante não poderá ser utilizado em novos gastos ou divisões, mas continuará visível no histórico financeiro.`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      if (
+        !mountedRef.current ||
+        planejamentoIdRef.current !== planejamentoId
+      ) {
+        return;
+      }
+
+      const participanteRemovido = await removeParticipantePlanejamento(
+        planejamentoId,
+        participante.id,
+      );
+      remocaoConcluida = true;
+
+      if (
+        !mountedRef.current ||
+        planejamentoIdRef.current !== planejamentoId
+      ) {
+        return;
+      }
+
+      setPlanejamento((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          participantes: current.participantes?.map((item) =>
+            item.id === participanteRemovido.id
+              ? participanteRemovido
+              : item,
+          ),
+        };
+      });
+
+      const dataApplied = await loadPlanejamentoData();
+
+      if (mountedRef.current && dataApplied) {
+        setParticipantesInfo('Participante removido com sucesso.');
+      }
+    } catch (error) {
+      const resolvedError = await resolveApiError(
+        error,
+        remocaoConcluida
+          ? 'O participante foi removido, mas não foi possível recarregar os dados do planejamento.'
+          : 'Não foi possível remover o participante.',
+      );
+
+      if (
+        !mountedRef.current ||
+        planejamentoIdRef.current !== planejamentoId
+      ) {
+        return;
+      }
+
+      setParticipantesError(resolvedError.message);
+
+      if (resolvedError.unauthorized) {
+        router.replace('/login');
+      }
+    } finally {
+      if (mountedRef.current) {
+        setParticipanteActionLoading(null);
+      }
       if (aggregateMutationLockRef.current === lockKey) {
         aggregateMutationLockRef.current = null;
       }
@@ -422,6 +739,10 @@ export function PlanejamentoDetailScreen() {
     let transitionCompleted = false;
 
     try {
+      setTransitionLoading(transition);
+      setTransitionError('');
+      setTransitionInfo('');
+
       const confirmed = await confirmAction(
         config.confirmationTitle,
         config.confirmationMessage,
@@ -431,13 +752,28 @@ export function PlanejamentoDetailScreen() {
         return;
       }
 
-      setTransitionLoading(transition);
-      setTransitionError('');
-      setTransitionInfo('');
+      if (
+        !mountedRef.current ||
+        planejamentoIdRef.current !== planejamentoId
+      ) {
+        return;
+      }
+
       await config.request(planejamentoId);
       transitionCompleted = true;
-      await loadPlanejamentoData();
-      setTransitionInfo(config.successMessage);
+
+      if (
+        !mountedRef.current ||
+        planejamentoIdRef.current !== planejamentoId
+      ) {
+        return;
+      }
+
+      const dataApplied = await loadPlanejamentoData();
+
+      if (mountedRef.current && dataApplied) {
+        setTransitionInfo(config.successMessage);
+      }
     } catch (error) {
       const resolvedError = await resolveApiError(
         error,
@@ -445,13 +781,23 @@ export function PlanejamentoDetailScreen() {
           ? 'O status foi atualizado, mas nao foi possivel recarregar o planejamento.'
           : config.errorMessage,
       );
+
+      if (
+        !mountedRef.current ||
+        planejamentoIdRef.current !== planejamentoId
+      ) {
+        return;
+      }
+
       setTransitionError(resolvedError.message);
 
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setTransitionLoading(null);
+      if (mountedRef.current) {
+        setTransitionLoading(null);
+      }
       transitionLockRef.current = null;
       if (aggregateMutationLockRef.current === lockKey) {
         aggregateMutationLockRef.current = null;
@@ -680,25 +1026,54 @@ export function PlanejamentoDetailScreen() {
             action={
               structuralMutationsAllowed ? (
                 <GlassButton
+                  disabled={aggregateMutationInProgress}
                   label="Adicionar participante"
-                  onPress={() =>
+                  onPress={() => {
+                    if (aggregateMutationLockRef.current) {
+                      return;
+                    }
+
                     router.push({
                       pathname: '/planejamentos-participante-form',
                       params: { id: planejamento.id },
-                    } as never)
-                  }
+                    } as never);
+                  }}
                   variant="ghost"
                 />
               ) : undefined
             }
           >
+            {participantesError ? (
+              <Text style={styles.actionError}>{participantesError}</Text>
+            ) : null}
+            {participantesInfo ? (
+              <Text style={styles.actionInfo}>{participantesInfo}</Text>
+            ) : null}
+
             {participantes.length ? (
-              participantes.map((participante) => (
-                <ParticipanteRow
-                  key={participante.id}
-                  participante={participante}
-                />
-              ))
+              participantes.map((participante) => {
+                const isOwnerParticipant =
+                  participante.usuarioId === planejamento.usuarioCriadorId;
+
+                return (
+                  <ParticipanteRow
+                    key={participante.id}
+                    actionLoading={
+                      participanteActionLoading === participante.id
+                    }
+                    canRemove={
+                      isAuthenticatedUserOwner &&
+                      structuralMutationsAllowed &&
+                      participante.status === 'ATIVO' &&
+                      !isOwnerParticipant
+                    }
+                    disabled={aggregateMutationInProgress}
+                    isOwnerParticipant={isOwnerParticipant}
+                    onRemove={handleRemoveParticipante}
+                    participante={participante}
+                  />
+                );
+              })
             ) : (
               <Text style={styles.emptyText}>
                 Nenhum participante cadastrado.
@@ -712,13 +1087,18 @@ export function PlanejamentoDetailScreen() {
             action={
               structuralMutationsAllowed ? (
                 <GlassButton
+                  disabled={aggregateMutationInProgress}
                   label="Adicionar gasto"
-                  onPress={() =>
+                  onPress={() => {
+                    if (aggregateMutationLockRef.current) {
+                      return;
+                    }
+
                     router.push({
                       pathname: '/planejamentos-gasto-form',
                       params: { id: planejamento.id },
-                    } as never)
-                  }
+                    } as never);
+                  }}
                   variant="ghost"
                 />
               ) : undefined
@@ -811,12 +1191,25 @@ export function PlanejamentoDetailScreen() {
 }
 
 function ParticipanteRow({
+  actionLoading,
+  canRemove,
+  disabled,
+  isOwnerParticipant,
+  onRemove,
   participante,
 }: {
+  actionLoading: boolean;
+  canRemove: boolean;
+  disabled: boolean;
+  isOwnerParticipant: boolean;
+  onRemove: (participante: ParticipantePlanejamento) => void;
   participante: ParticipantePlanejamento;
 }) {
   return (
-    <View style={styles.participantRow}>
+    <View
+      style={styles.participantRow}
+      testID={`participante-row-${participante.id}`}
+    >
       <View style={styles.participantAvatar}>
         <Text style={styles.participantInitial}>
           {participante.nome.slice(0, 1).toUpperCase()}
@@ -845,8 +1238,25 @@ function ParticipanteRow({
               {participanteStatusLabel[participante.status]}
             </Text>
           </View>
+          {isOwnerParticipant ? (
+            <View style={styles.participantBadge}>
+              <Text style={styles.participantBadgeText}>Proprietário</Text>
+            </View>
+          ) : null}
         </View>
       </View>
+      {canRemove ? (
+        <GlassButton
+          disabled={disabled}
+          label={
+            actionLoading
+              ? 'Removendo participante...'
+              : 'Remover participante'
+          }
+          onPress={() => onRemove(participante)}
+          variant="danger"
+        />
+      ) : null}
     </View>
   );
 }

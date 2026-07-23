@@ -78,6 +78,17 @@ export async function addParticipantePlanejamento(
   return response.data;
 }
 
+export async function removeParticipantePlanejamento(
+  planejamentoId: string,
+  participanteId: string,
+): Promise<ParticipantePlanejamento> {
+  const response = await api.delete<ParticipantePlanejamento>(
+    `/planejamentos/${planejamentoId}/participantes/${participanteId}`,
+  );
+
+  return response.data;
+}
+
 export async function listGastosPlanejamento(
   planejamentoId: string,
 ): Promise<GastoPlanejamento[]> {
