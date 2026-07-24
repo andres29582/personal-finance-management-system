@@ -15,6 +15,13 @@ import { resolveApiError } from '../../../../utils/api-error';
 import { confirmAction } from '../../../../utils/confirm-action';
 import { formatCurrency, formatDate } from '../../../../utils/formatters';
 import {
+  AcertoAction,
+  AcertoRow,
+} from '../components/detail/AcertoRow';
+import { GastoRow } from '../components/detail/GastoRow';
+import { ParticipanteRow } from '../components/detail/ParticipanteRow';
+import { SaldoParticipanteRow } from '../components/detail/SaldoParticipanteRow';
+import {
   arquivarPlanejamento,
   cancelAcertoPlanejamento,
   cancelGastoPlanejamento,
@@ -31,19 +38,13 @@ import {
 } from '../services/planejamentoService';
 import {
   AcertoPlanejamento,
-  AcertoPlanejamentoStatus,
   GastoPlanejamento,
-  GastoPlanejamentoComportamento,
-  GastoPlanejamentoStatus,
   ParticipantePlanejamento,
-  ParticipantePlanejamentoStatus,
-  ParticipantePlanejamentoTipo,
   Planejamento,
   PlanejamentoSituacaoFinanceira,
   PlanejamentoStatus,
   PlanejamentoTipo,
   ResumoFinanceiroPlanejamento,
-  SaldoParticipanteResumoFinanceiroPlanejamento,
 } from '../types/planejamento';
 
 const statusLabel: Record<PlanejamentoStatus, string> = {
@@ -62,37 +63,6 @@ const tipoLabel: Record<PlanejamentoTipo, string> = {
   VIAGEM: 'Viagem',
 };
 
-const participanteTipoLabel: Record<ParticipantePlanejamentoTipo, string> = {
-  CONVIDADO: 'Convidado',
-  MANUAL: 'Manual',
-  VINCULADO: 'Vinculado',
-};
-
-const participanteStatusLabel: Record<ParticipantePlanejamentoStatus, string> = {
-  ATIVO: 'Ativo',
-  PENDENTE: 'Pendente',
-  REMOVIDO: 'Removido',
-};
-
-const gastoComportamentoLabel: Record<GastoPlanejamentoComportamento, string> = {
-  EVENTUAL: 'Eventual',
-  FIXO: 'Fixo',
-  VARIAVEL: 'Variavel',
-};
-
-const gastoStatusLabel: Record<GastoPlanejamentoStatus, string> = {
-  ATIVO: 'ATIVO',
-  CANCELADO: 'CANCELADO',
-  PENDENTE_REVISAO: 'PENDENTE_REVISAO',
-};
-
-const acertoStatusLabel: Record<AcertoPlanejamentoStatus, string> = {
-  CANCELADO: 'Cancelado',
-  CONFIRMADO: 'Confirmado',
-  PAGO: 'Pago',
-  PENDENTE: 'Pendente',
-};
-
 const situacaoFinanceiraLabel: Record<
   PlanejamentoSituacaoFinanceira,
   string
@@ -101,7 +71,6 @@ const situacaoFinanceiraLabel: Record<
   QUITADO: 'Quitado',
 };
 
-type AcertoAction = 'cancel' | 'pay' | 'reopen';
 type PlanejamentoTransition = 'archive' | 'cancel' | 'close';
 
 const transitionConfig: Record<
@@ -1190,360 +1159,6 @@ export function PlanejamentoDetailScreen() {
   );
 }
 
-function ParticipanteRow({
-  actionLoading,
-  canRemove,
-  disabled,
-  isOwnerParticipant,
-  onRemove,
-  participante,
-}: {
-  actionLoading: boolean;
-  canRemove: boolean;
-  disabled: boolean;
-  isOwnerParticipant: boolean;
-  onRemove: (participante: ParticipantePlanejamento) => void;
-  participante: ParticipantePlanejamento;
-}) {
-  return (
-    <View
-      style={styles.participantRow}
-      testID={`participante-row-${participante.id}`}
-    >
-      <View style={styles.participantAvatar}>
-        <Text style={styles.participantInitial}>
-          {participante.nome.slice(0, 1).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.participantInfo}>
-        <Text style={styles.participantName}>{participante.nome}</Text>
-        {participante.email ? (
-          <Text style={styles.participantEmail}>{participante.email}</Text>
-        ) : null}
-        <View style={styles.participantBadges}>
-          <View style={styles.participantBadge}>
-            <Text style={styles.participantBadgeText}>
-              {participanteTipoLabel[participante.tipo]}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.participantBadge,
-              participante.status === 'ATIVO'
-                ? styles.participantBadgeActive
-                : null,
-            ]}
-          >
-            <Text style={styles.participantBadgeText}>
-              {participanteStatusLabel[participante.status]}
-            </Text>
-          </View>
-          {isOwnerParticipant ? (
-            <View style={styles.participantBadge}>
-              <Text style={styles.participantBadgeText}>Proprietário</Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-      {canRemove ? (
-        <GlassButton
-          disabled={disabled}
-          label={
-            actionLoading
-              ? 'Removendo participante...'
-              : 'Remover participante'
-          }
-          onPress={() => onRemove(participante)}
-          variant="danger"
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function SaldoParticipanteRow({
-  saldoParticipante,
-}: {
-  saldoParticipante: SaldoParticipanteResumoFinanceiroPlanejamento;
-}) {
-  return (
-    <View style={styles.balanceRow}>
-      <View style={styles.balanceMain}>
-        <Text style={styles.balanceParticipantName}>
-          {saldoParticipante.participante.nome}
-        </Text>
-        <Text style={styles.balanceLabel}>Saldo aberto</Text>
-      </View>
-      <View style={styles.balanceSide}>
-        <Text
-          style={[
-            styles.balanceValue,
-            saldoParticipante.statusFinanceiro === 'DEVEDOR'
-              ? styles.balanceValueDebtor
-              : null,
-          ]}
-        >
-          {formatCents(saldoParticipante.saldoAbertoCentavos)}
-        </Text>
-        <View
-          style={[
-            styles.financialStatusBadge,
-            getFinancialStatusBadgeStyle(saldoParticipante.statusFinanceiro),
-          ]}
-        >
-          <Text style={styles.financialStatusText}>
-            {saldoParticipante.statusFinanceiro}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function GastoRow({
-  actionLoading,
-  canMutate,
-  disabled,
-  gasto,
-  onCancel,
-  onEdit,
-  participantes,
-}: {
-  actionLoading: boolean;
-  canMutate: boolean;
-  disabled: boolean;
-  gasto: GastoPlanejamento;
-  onCancel: (gasto: GastoPlanejamento) => void;
-  onEdit: (gasto: GastoPlanejamento) => void;
-  participantes: ParticipantePlanejamento[];
-}) {
-  const pagador =
-    gasto.pagoPorParticipante ??
-    participantes.find(
-      (participante) => participante.id === gasto.pagoPorParticipanteId,
-    );
-
-  return (
-    <View style={styles.expenseRow}>
-      <View style={styles.expenseMain}>
-        <View style={styles.expenseHeader}>
-          <Text style={styles.expenseDescription}>{gasto.descricao}</Text>
-          <View
-            style={[
-              styles.expenseStatusBadge,
-              getGastoBadgeStyle(gasto.status),
-            ]}
-          >
-            <Text style={styles.expenseStatusText}>
-              {gastoStatusLabel[gasto.status]}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.expenseMeta}>
-          {formatOptionalDate(gasto.dataGasto)} -{' '}
-          {gastoComportamentoLabel[gasto.comportamento]}
-          {gasto.categoria ? ` - ${gasto.categoria}` : ''}
-        </Text>
-        {pagador ? (
-          <Text style={styles.expenseMeta}>Pago por {pagador.nome}</Text>
-        ) : null}
-      </View>
-      <View style={styles.expenseSide}>
-        <Text style={styles.expenseValue}>
-          {formatCents(gasto.valorCentavos)}
-        </Text>
-        {canMutate ? (
-          <View style={styles.expenseActions}>
-            <GlassButton
-              disabled={disabled}
-              label="Editar"
-              onPress={() => onEdit(gasto)}
-              variant="ghost"
-            />
-            <GlassButton
-              disabled={disabled}
-              label={actionLoading ? 'Cancelando gasto...' : 'Cancelar gasto'}
-              onPress={() => onCancel(gasto)}
-              variant="danger"
-            />
-          </View>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function AcertoRow({
-  acerto,
-  actionLoading,
-  canOperate,
-  disabled,
-  onAction,
-  participantes,
-}: {
-  acerto: AcertoPlanejamento;
-  actionLoading: string | null;
-  canOperate: boolean;
-  disabled: boolean;
-  onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
-  participantes: ParticipantePlanejamento[];
-}) {
-  const devedor =
-    acerto.deParticipante ??
-    participantes.find(
-      (participante) => participante.id === acerto.deParticipanteId,
-    );
-  const recebedor =
-    acerto.paraParticipante ??
-    participantes.find(
-      (participante) => participante.id === acerto.paraParticipanteId,
-    );
-  const devedorNome = devedor?.nome ?? 'Participante devedor';
-  const recebedorNome = recebedor?.nome ?? 'Participante recebedor';
-
-  return (
-    <View style={styles.settlementRow}>
-      <View style={styles.settlementMain}>
-        <View style={styles.settlementHeader}>
-          <Text style={styles.settlementTitle}>
-            {devedorNome} deve pagar {recebedorNome}
-          </Text>
-          <View
-            style={[
-              styles.settlementBadge,
-              getAcertoBadgeStyle(acerto.status),
-            ]}
-          >
-            <Text style={styles.settlementBadgeText}>
-              {acertoStatusLabel[acerto.status]}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.settlementMeta}>Devedor: {devedorNome}</Text>
-        <Text style={styles.settlementMeta}>Recebedor: {recebedorNome}</Text>
-        {acerto.dataPagamento ? (
-          <Text style={styles.settlementMeta}>
-            Pago em {formatOptionalDate(acerto.dataPagamento)}
-          </Text>
-        ) : null}
-        {acerto.observacao ? (
-          <Text style={styles.settlementMeta}>
-            Observacao: {acerto.observacao}
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.settlementSide}>
-        <Text style={styles.settlementValue}>
-          {formatCents(acerto.valorCentavos)}
-        </Text>
-        <AcertoActions
-          acerto={acerto}
-          actionLoading={actionLoading}
-          canOperate={canOperate}
-          disabled={disabled}
-          onAction={onAction}
-        />
-      </View>
-    </View>
-  );
-}
-
-function AcertoActions({
-  acerto,
-  actionLoading,
-  canOperate,
-  disabled,
-  onAction,
-}: {
-  acerto: AcertoPlanejamento;
-  actionLoading: string | null;
-  canOperate: boolean;
-  disabled: boolean;
-  onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
-}) {
-  const payLoading = actionLoading === `pay:${acerto.id}`;
-  const cancelLoading = actionLoading === `cancel:${acerto.id}`;
-  const reopenLoading = actionLoading === `reopen:${acerto.id}`;
-
-  if (!canOperate) {
-    return null;
-  }
-
-  if (acerto.status === 'PENDENTE') {
-    return (
-      <View style={styles.settlementActions}>
-        <GlassButton
-          disabled={disabled}
-          label={payLoading ? 'Marcando...' : 'Marcar como pago'}
-          onPress={() => onAction(acerto, 'pay')}
-          variant="primary"
-        />
-        <GlassButton
-          disabled={disabled}
-          label={cancelLoading ? 'Cancelando...' : 'Cancelar'}
-          onPress={() => onAction(acerto, 'cancel')}
-          variant="danger"
-        />
-      </View>
-    );
-  }
-
-  if (acerto.status === 'PAGO') {
-    return (
-      <View style={styles.settlementActions}>
-        <GlassButton
-          disabled={disabled}
-          label={reopenLoading ? 'Reabrindo...' : 'Reabrir'}
-          onPress={() => onAction(acerto, 'reopen')}
-          variant="ghost"
-        />
-      </View>
-    );
-  }
-
-  return null;
-}
-
-function getAcertoBadgeStyle(status: AcertoPlanejamentoStatus) {
-  if (status === 'PENDENTE') {
-    return styles.settlementBadgePending;
-  }
-
-  if (status === 'PAGO' || status === 'CONFIRMADO') {
-    return styles.settlementBadgePaid;
-  }
-
-  return styles.settlementBadgeCanceled;
-}
-
-function getGastoBadgeStyle(status: GastoPlanejamentoStatus) {
-  if (status === 'ATIVO') {
-    return styles.expenseStatusActive;
-  }
-
-  if (status === 'PENDENTE_REVISAO') {
-    return styles.expenseStatusPending;
-  }
-
-  return styles.expenseStatusCanceled;
-}
-
-function getFinancialStatusBadgeStyle(
-  status: SaldoParticipanteResumoFinanceiroPlanejamento['statusFinanceiro'],
-) {
-  if (status === 'DEVEDOR') {
-    return styles.financialStatusDebtor;
-  }
-
-  if (status === 'RECEBEDOR') {
-    return styles.financialStatusReceiver;
-  }
-
-  return styles.financialStatusSettled;
-}
-
 export default PlanejamentoDetailScreen;
 
 const styles = StyleSheet.create({
@@ -1590,45 +1205,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  balanceLabel: {
-    color: FinanceTheme.colors.textSubtle,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.xxs,
-  },
-  balanceMain: {
-    flex: 1,
-    minWidth: 140,
-  },
-  balanceParticipantName: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-  },
-  balanceRow: {
-    alignItems: 'center',
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.sm,
-    marginBottom: FinanceTheme.spacing.sm,
-    padding: FinanceTheme.spacing.sm,
-  },
-  balanceSide: {
-    alignItems: 'flex-end',
-    gap: FinanceTheme.spacing.xs,
-  },
-  balanceValue: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-  },
-  balanceValueDebtor: {
-    color: FinanceTheme.colors.danger,
-  },
   description: {
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
@@ -1638,100 +1214,6 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
-  },
-  expenseDescription: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-  },
-  expenseActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.xs,
-    justifyContent: 'flex-end',
-  },
-  expenseHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.xs,
-  },
-  expenseMain: {
-    flex: 1,
-    minWidth: 180,
-  },
-  expenseMeta: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.xxs,
-  },
-  expenseRow: {
-    alignItems: 'center',
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.sm,
-    marginBottom: FinanceTheme.spacing.sm,
-    padding: FinanceTheme.spacing.sm,
-  },
-  expenseSide: {
-    alignItems: 'flex-end',
-    gap: FinanceTheme.spacing.xs,
-  },
-  expenseStatusActive: {
-    backgroundColor: FinanceTheme.colors.cyanSoft,
-    borderColor: FinanceTheme.neon.cyan.borderColor,
-  },
-  expenseStatusBadge: {
-    borderRadius: 999,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    paddingHorizontal: FinanceTheme.spacing.sm,
-    paddingVertical: FinanceTheme.spacing.xxs,
-  },
-  expenseStatusCanceled: {
-    backgroundColor: 'rgba(255, 122, 144, 0.10)',
-    borderColor: 'rgba(255, 122, 144, 0.34)',
-  },
-  expenseStatusPending: {
-    backgroundColor: 'rgba(255, 208, 106, 0.12)',
-    borderColor: 'rgba(255, 208, 106, 0.38)',
-  },
-  expenseStatusText: {
-    color: FinanceTheme.colors.text,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  expenseValue: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-  },
-  financialStatusBadge: {
-    borderRadius: 999,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    paddingHorizontal: FinanceTheme.spacing.sm,
-    paddingVertical: FinanceTheme.spacing.xxs,
-  },
-  financialStatusDebtor: {
-    backgroundColor: 'rgba(255, 122, 144, 0.10)',
-    borderColor: 'rgba(255, 122, 144, 0.34)',
-  },
-  financialStatusReceiver: {
-    backgroundColor: FinanceTheme.colors.cyanSoft,
-    borderColor: FinanceTheme.neon.cyan.borderColor,
-  },
-  financialStatusSettled: {
-    backgroundColor: 'rgba(119, 242, 178, 0.14)',
-    borderColor: 'rgba(119, 242, 178, 0.42)',
-  },
-  financialStatusText: {
-    color: FinanceTheme.colors.text,
-    fontSize: 11,
-    fontWeight: '800',
   },
   headerRow: {
     alignItems: 'center',
@@ -1799,142 +1281,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: FinanceTheme.spacing.sm,
   },
-  participantAvatar: {
-    alignItems: 'center',
-    backgroundColor: FinanceTheme.colors.cyanSoft,
-    borderColor: FinanceTheme.neon.cyan.borderColor,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    height: 38,
-    justifyContent: 'center',
-    width: 38,
-  },
-  participantBadge: {
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: 999,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    paddingHorizontal: FinanceTheme.spacing.sm,
-    paddingVertical: FinanceTheme.spacing.xxs,
-  },
-  participantBadgeActive: {
-    backgroundColor: FinanceTheme.colors.cyanSoft,
-    borderColor: FinanceTheme.neon.cyan.borderColor,
-  },
-  participantBadgeText: {
-    color: FinanceTheme.colors.text,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  participantBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.xs,
-    marginTop: FinanceTheme.spacing.xs,
-  },
-  participantEmail: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.caption,
-    marginTop: FinanceTheme.spacing.xxs,
-  },
-  participantInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  participantInitial: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-  },
-  participantName: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-  },
-  participantRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: FinanceTheme.spacing.sm,
-    marginBottom: FinanceTheme.spacing.sm,
-  },
   readOnlyText: {
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '800',
-  },
-  settlementActions: {
-    gap: FinanceTheme.spacing.xs,
-    minWidth: 170,
-    width: '100%',
-  },
-  settlementBadge: {
-    borderRadius: 999,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    paddingHorizontal: FinanceTheme.spacing.sm,
-    paddingVertical: FinanceTheme.spacing.xxs,
-  },
-  settlementBadgeCanceled: {
-    backgroundColor: 'rgba(255, 122, 144, 0.10)',
-    borderColor: 'rgba(255, 122, 144, 0.34)',
-  },
-  settlementBadgePaid: {
-    backgroundColor: 'rgba(119, 242, 178, 0.14)',
-    borderColor: 'rgba(119, 242, 178, 0.42)',
-  },
-  settlementBadgePending: {
-    backgroundColor: 'rgba(255, 209, 102, 0.12)',
-    borderColor: 'rgba(255, 209, 102, 0.40)',
-  },
-  settlementBadgeText: {
-    color: FinanceTheme.colors.text,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  settlementHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.xs,
-    justifyContent: 'space-between',
-  },
-  settlementMain: {
-    flex: 1,
-    minWidth: 0,
-  },
-  settlementMeta: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.xxs,
-  },
-  settlementRow: {
-    alignItems: 'flex-start',
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.sm,
-    marginBottom: FinanceTheme.spacing.sm,
-    padding: FinanceTheme.spacing.sm,
-  },
-  settlementSide: {
-    alignItems: 'flex-end',
-    gap: FinanceTheme.spacing.sm,
-    minWidth: 170,
-  },
-  settlementTitle: {
-    color: FinanceTheme.colors.text,
-    flex: 1,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-    minWidth: 180,
-  },
-  settlementValue: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
   },
   summaryCell: {
     backgroundColor: FinanceTheme.colors.glassSubtle,
