@@ -13,14 +13,14 @@ import {
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
 import { confirmAction } from '../../../../utils/confirm-action';
-import { formatCurrency, formatDate } from '../../../../utils/formatters';
 import {
   AcertoAction,
   AcertoRow,
 } from '../components/detail/AcertoRow';
 import { GastoRow } from '../components/detail/GastoRow';
 import { ParticipanteRow } from '../components/detail/ParticipanteRow';
-import { SaldoParticipanteRow } from '../components/detail/SaldoParticipanteRow';
+import { PlanejamentoFinancialSummarySection } from '../components/detail/PlanejamentoFinancialSummarySection';
+import { PlanejamentoOverviewSection } from '../components/detail/PlanejamentoOverviewSection';
 import {
   arquivarPlanejamento,
   cancelAcertoPlanejamento,
@@ -41,35 +41,8 @@ import {
   GastoPlanejamento,
   ParticipantePlanejamento,
   Planejamento,
-  PlanejamentoSituacaoFinanceira,
-  PlanejamentoStatus,
-  PlanejamentoTipo,
   ResumoFinanceiroPlanejamento,
 } from '../types/planejamento';
-
-const statusLabel: Record<PlanejamentoStatus, string> = {
-  ABERTO: 'Aberto',
-  ARQUIVADO: 'Arquivado',
-  CANCELADO: 'Cancelado',
-  FECHADO: 'Fechado',
-};
-
-const tipoLabel: Record<PlanejamentoTipo, string> = {
-  CASA: 'Casa',
-  EVENTO: 'Evento',
-  FESTA: 'Festa',
-  GRUPO: 'Grupo',
-  OUTRO: 'Outro',
-  VIAGEM: 'Viagem',
-};
-
-const situacaoFinanceiraLabel: Record<
-  PlanejamentoSituacaoFinanceira,
-  string
-> = {
-  PENDENTE: 'Pendente',
-  QUITADO: 'Quitado',
-};
 
 type PlanejamentoTransition = 'archive' | 'cancel' | 'close';
 
@@ -112,14 +85,6 @@ const transitionConfig: Record<
     successMessage: 'Planejamento fechado com sucesso.',
   },
 };
-
-function formatOptionalDate(date: string | null | undefined) {
-  return date ? formatDate(date.slice(0, 10)) : '-';
-}
-
-function formatCents(value: number) {
-  return formatCurrency(value / 100);
-}
 
 function getParticipantes(planejamento: Planejamento | null) {
   return planejamento?.participantes ?? [];
@@ -815,99 +780,10 @@ export function PlanejamentoDetailScreen() {
 
       {!loading && planejamento ? (
         <>
-          <GlassPanel title="Dados gerais" accent="cyan">
-            <View style={styles.headerRow}>
-              <Text style={styles.title}>{planejamento.nome}</Text>
-              <View
-                style={[
-                  styles.badge,
-                  planejamento.status === 'ABERTO'
-                    ? styles.badgeOpen
-                    : styles.badgeClosed,
-                ]}
-              >
-                <Text style={styles.badgeText}>
-                  {statusLabel[planejamento.status]}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.typeText}>{tipoLabel[planejamento.tipo]}</Text>
-            {planejamento.descricao ? (
-              <Text style={styles.description}>{planejamento.descricao}</Text>
-            ) : null}
-
-            <View style={styles.infoGrid}>
-              <View style={styles.infoCell}>
-                <Text style={styles.infoLabel}>Inicio</Text>
-                <Text style={styles.infoValue}>
-                  {formatOptionalDate(planejamento.dataInicio)}
-                </Text>
-              </View>
-              <View style={styles.infoCell}>
-                <Text style={styles.infoLabel}>Fim</Text>
-                <Text style={styles.infoValue}>
-                  {formatOptionalDate(planejamento.dataFim)}
-                </Text>
-              </View>
-              <View style={styles.infoCell}>
-                <Text style={styles.infoLabel}>Criado em</Text>
-                <Text style={styles.infoValue}>
-                  {formatOptionalDate(planejamento.createdAt)}
-                </Text>
-              </View>
-            </View>
-          </GlassPanel>
+          <PlanejamentoOverviewSection planejamento={planejamento} />
 
           {resumo ? (
-            <GlassPanel
-              title="Resumo financeiro"
-              subtitle="Valores oficiais calculados pelo backend."
-              accent="magenta"
-            >
-              <View style={styles.summaryGrid}>
-                <View style={styles.summaryCell}>
-                  <Text style={styles.infoLabel}>Situacao financeira</Text>
-                  <Text
-                    style={[
-                      styles.summaryValue,
-                      resumo.situacaoFinanceira === 'QUITADO'
-                        ? styles.summaryValueSettled
-                        : styles.summaryValuePending,
-                    ]}
-                  >
-                    {situacaoFinanceiraLabel[resumo.situacaoFinanceira]}
-                  </Text>
-                </View>
-                <View style={styles.summaryCell}>
-                  <Text style={styles.infoLabel}>Total de gastos ativos</Text>
-                  <Text style={styles.summaryValue}>
-                    {formatCents(resumo.totalGastosAtivosCentavos)}
-                  </Text>
-                </View>
-                <View style={styles.summaryCell}>
-                  <Text style={styles.infoLabel}>Obrigacao residual</Text>
-                  <Text style={styles.summaryValue}>
-                    {formatCents(resumo.obrigacaoResidualCentavos)}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.summarySectionTitle}>
-                Saldos por participante
-              </Text>
-              {resumo.participantes.length ? (
-                resumo.participantes.map((saldoParticipante) => (
-                  <SaldoParticipanteRow
-                    key={saldoParticipante.participante.id}
-                    saldoParticipante={saldoParticipante}
-                  />
-                ))
-              ) : (
-                <Text style={styles.emptyText}>
-                  Nenhum participante com dados financeiros.
-                </Text>
-              )}
-            </GlassPanel>
+            <PlanejamentoFinancialSummarySection resumo={resumo} />
           ) : null}
 
           <GlassPanel
@@ -1186,40 +1062,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: FinanceTheme.spacing.sm,
   },
-  badge: {
-    borderRadius: 999,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    paddingHorizontal: FinanceTheme.spacing.sm,
-    paddingVertical: FinanceTheme.spacing.xxs,
-  },
-  badgeClosed: {
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-  },
-  badgeOpen: {
-    backgroundColor: FinanceTheme.colors.cyanSoft,
-    borderColor: FinanceTheme.neon.cyan.borderColor,
-  },
-  badgeText: {
-    color: FinanceTheme.colors.text,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  description: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.caption,
-    marginTop: FinanceTheme.spacing.sm,
-  },
   emptyText: {
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
-  },
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: FinanceTheme.spacing.sm,
-    justifyContent: 'space-between',
   },
   gastosError: {
     color: FinanceTheme.colors.danger,
@@ -1232,33 +1078,6 @@ const styles = StyleSheet.create({
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '800',
     marginBottom: FinanceTheme.spacing.sm,
-  },
-  infoCell: {
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    flex: 1,
-    minWidth: 150,
-    padding: FinanceTheme.spacing.sm,
-  },
-  infoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.sm,
-    marginTop: FinanceTheme.spacing.md,
-  },
-  infoLabel: {
-    color: FinanceTheme.colors.textSubtle,
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  infoValue: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginTop: FinanceTheme.spacing.xxs,
   },
   loadingRow: {
     alignItems: 'center',
@@ -1285,50 +1104,5 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '800',
-  },
-  summaryCell: {
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-    borderColor: FinanceTheme.colors.border,
-    borderRadius: FinanceTheme.radius.md,
-    borderWidth: FinanceTheme.borderWidth.hairline,
-    flex: 1,
-    minWidth: 180,
-    padding: FinanceTheme.spacing.sm,
-  },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.sm,
-  },
-  summarySectionTitle: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '900',
-    marginBottom: FinanceTheme.spacing.sm,
-    marginTop: FinanceTheme.spacing.md,
-  },
-  summaryValue: {
-    color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.body,
-    fontWeight: '900',
-    marginTop: FinanceTheme.spacing.xs,
-  },
-  summaryValuePending: {
-    color: FinanceTheme.colors.warning,
-  },
-  summaryValueSettled: {
-    color: FinanceTheme.colors.success,
-  },
-  title: {
-    color: FinanceTheme.colors.text,
-    flex: 1,
-    fontSize: FinanceTheme.typography.heading,
-    fontWeight: '900',
-  },
-  typeText: {
-    color: FinanceTheme.colors.cyanMuted,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginTop: FinanceTheme.spacing.xs,
   },
 });
