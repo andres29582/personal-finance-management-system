@@ -20,6 +20,10 @@ import {
 import { GastoRow } from '../components/detail/GastoRow';
 import { ParticipanteRow } from '../components/detail/ParticipanteRow';
 import { PlanejamentoFinancialSummarySection } from '../components/detail/PlanejamentoFinancialSummarySection';
+import {
+  PlanejamentoLifecycleSection,
+  PlanejamentoTransition,
+} from '../components/detail/PlanejamentoLifecycleSection';
 import { PlanejamentoOverviewSection } from '../components/detail/PlanejamentoOverviewSection';
 import {
   arquivarPlanejamento,
@@ -43,8 +47,6 @@ import {
   Planejamento,
   ResumoFinanceiroPlanejamento,
 } from '../types/planejamento';
-
-type PlanejamentoTransition = 'archive' | 'cancel' | 'close';
 
 const transitionConfig: Record<
   PlanejamentoTransition,
@@ -786,84 +788,20 @@ export function PlanejamentoDetailScreen() {
             <PlanejamentoFinancialSummarySection resumo={resumo} />
           ) : null}
 
-          <GlassPanel
-            title="Ciclo de vida"
-            subtitle="Acoes disponiveis para o estado atual do planejamento."
-          >
-            {transitionError ? (
-              <Text style={styles.actionError}>{transitionError}</Text>
-            ) : null}
-            {transitionInfo ? (
-              <Text style={styles.actionInfo}>{transitionInfo}</Text>
-            ) : null}
-
-            {planejamento.status === 'ABERTO' ? (
-              <>
-                <View style={styles.lifecycleActions}>
-                  <GlassButton
-                    disabled={aggregateMutationInProgress}
-                    label={
-                      transitionLoading === 'close'
-                        ? transitionConfig.close.loadingLabel
-                        : 'Fechar planejamento'
-                    }
-                    onPress={() => void handleTransition('close')}
-                    variant="primary"
-                  />
-                  <GlassButton
-                    disabled={
-                      aggregateMutationInProgress ||
-                      !isFinanciallySettled
-                    }
-                    label={
-                      transitionLoading === 'cancel'
-                        ? transitionConfig.cancel.loadingLabel
-                        : 'Cancelar planejamento'
-                    }
-                    onPress={() => void handleTransition('cancel')}
-                    variant="danger"
-                  />
-                </View>
-                {!isFinanciallySettled ? (
-                  <Text style={styles.lifecycleHint}>
-                    O cancelamento fica disponivel quando a situacao financeira
-                    estiver quitada.
-                  </Text>
-                ) : null}
-              </>
-            ) : null}
-
-            {planejamento.status === 'FECHADO' ? (
-              <>
-                <View style={styles.lifecycleActions}>
-                  <GlassButton
-                    disabled={
-                      aggregateMutationInProgress ||
-                      !isFinanciallySettled
-                    }
-                    label={
-                      transitionLoading === 'archive'
-                        ? transitionConfig.archive.loadingLabel
-                        : 'Arquivar planejamento'
-                    }
-                    onPress={() => void handleTransition('archive')}
-                    variant="primary"
-                  />
-                </View>
-                {!isFinanciallySettled ? (
-                  <Text style={styles.lifecycleHint}>
-                    Quite a obrigacao residual para arquivar o planejamento.
-                  </Text>
-                ) : null}
-              </>
-            ) : null}
-
-            {isReadOnly ? (
-              <Text style={styles.readOnlyText}>
-                Este planejamento esta em modo somente leitura.
-              </Text>
-            ) : null}
-          </GlassPanel>
+          <PlanejamentoLifecycleSection
+            errorMessage={transitionError}
+            infoMessage={transitionInfo}
+            isFinanciallySettled={isFinanciallySettled}
+            loadingLabel={
+              transitionLoading
+                ? transitionConfig[transitionLoading].loadingLabel
+                : ''
+            }
+            mutationInProgress={aggregateMutationInProgress}
+            onTransition={handleTransition}
+            status={planejamento.status}
+            transitionLoading={transitionLoading}
+          />
 
           <GlassPanel
             title="Participantes"
@@ -1088,21 +1026,5 @@ const styles = StyleSheet.create({
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
-  },
-  lifecycleActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: FinanceTheme.spacing.sm,
-  },
-  lifecycleHint: {
-    color: FinanceTheme.colors.warning,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '700',
-    marginTop: FinanceTheme.spacing.sm,
-  },
-  readOnlyText: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
   },
 });
