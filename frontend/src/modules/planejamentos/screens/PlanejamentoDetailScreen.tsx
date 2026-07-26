@@ -13,18 +13,16 @@ import {
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
 import { confirmAction } from '../../../../utils/confirm-action';
-import {
-  AcertoAction,
-  AcertoRow,
-} from '../components/detail/AcertoRow';
-import { GastoRow } from '../components/detail/GastoRow';
-import { ParticipanteRow } from '../components/detail/ParticipanteRow';
+import { AcertoAction } from '../components/detail/AcertoRow';
+import { PlanejamentoExpensesSection } from '../components/detail/PlanejamentoExpensesSection';
 import { PlanejamentoFinancialSummarySection } from '../components/detail/PlanejamentoFinancialSummarySection';
 import {
   PlanejamentoLifecycleSection,
   PlanejamentoTransition,
 } from '../components/detail/PlanejamentoLifecycleSection';
 import { PlanejamentoOverviewSection } from '../components/detail/PlanejamentoOverviewSection';
+import { PlanejamentoParticipantsSection } from '../components/detail/PlanejamentoParticipantsSection';
+import { PlanejamentoSettlementsSection } from '../components/detail/PlanejamentoSettlementsSection';
 import {
   arquivarPlanejamento,
   cancelAcertoPlanejamento,
@@ -803,170 +801,73 @@ export function PlanejamentoDetailScreen() {
             transitionLoading={transitionLoading}
           />
 
-          <GlassPanel
-            title="Participantes"
-            subtitle="Pessoas vinculadas a este planejamento."
-            action={
-              structuralMutationsAllowed ? (
-                <GlassButton
-                  disabled={aggregateMutationInProgress}
-                  label="Adicionar participante"
-                  onPress={() => {
-                    if (aggregateMutationLockRef.current) {
-                      return;
-                    }
-
-                    router.push({
-                      pathname: '/planejamentos-participante-form',
-                      params: { id: planejamento.id },
-                    } as never);
-                  }}
-                  variant="ghost"
-                />
-              ) : undefined
+          <PlanejamentoParticipantsSection
+            actionLoadingId={participanteActionLoading}
+            canAdd={structuralMutationsAllowed}
+            canManageParticipants={
+              isAuthenticatedUserOwner && structuralMutationsAllowed
             }
-          >
-            {participantesError ? (
-              <Text style={styles.actionError}>{participantesError}</Text>
-            ) : null}
-            {participantesInfo ? (
-              <Text style={styles.actionInfo}>{participantesInfo}</Text>
-            ) : null}
+            errorMessage={participantesError}
+            infoMessage={participantesInfo}
+            mutationInProgress={aggregateMutationInProgress}
+            onAdd={() => {
+              if (aggregateMutationLockRef.current) {
+                return;
+              }
 
-            {participantes.length ? (
-              participantes.map((participante) => {
-                const isOwnerParticipant =
-                  participante.usuarioId === planejamento.usuarioCriadorId;
+              router.push({
+                pathname: '/planejamentos-participante-form',
+                params: { id: planejamento.id },
+              } as never);
+            }}
+            onRemove={handleRemoveParticipante}
+            participantes={participantes}
+            usuarioCriadorId={planejamento.usuarioCriadorId}
+          />
 
-                return (
-                  <ParticipanteRow
-                    key={participante.id}
-                    actionLoading={
-                      participanteActionLoading === participante.id
-                    }
-                    canRemove={
-                      isAuthenticatedUserOwner &&
-                      structuralMutationsAllowed &&
-                      participante.status === 'ATIVO' &&
-                      !isOwnerParticipant
-                    }
-                    disabled={aggregateMutationInProgress}
-                    isOwnerParticipant={isOwnerParticipant}
-                    onRemove={handleRemoveParticipante}
-                    participante={participante}
-                  />
-                );
-              })
-            ) : (
-              <Text style={styles.emptyText}>
-                Nenhum participante cadastrado.
-              </Text>
-            )}
-          </GlassPanel>
+          <PlanejamentoExpensesSection
+            actionLoadingId={gastoActionLoading}
+            canAdd={structuralMutationsAllowed}
+            canManageExpenses={structuralMutationsAllowed}
+            errorMessage={gastosError}
+            gastos={gastos}
+            infoMessage={gastosInfo}
+            mutationInProgress={aggregateMutationInProgress}
+            onAdd={() => {
+              if (aggregateMutationLockRef.current) {
+                return;
+              }
 
-          <GlassPanel
-            title="Gastos"
-            subtitle="Despesas compartilhadas deste planejamento."
-            action={
-              structuralMutationsAllowed ? (
-                <GlassButton
-                  disabled={aggregateMutationInProgress}
-                  label="Adicionar gasto"
-                  onPress={() => {
-                    if (aggregateMutationLockRef.current) {
-                      return;
-                    }
-
-                    router.push({
-                      pathname: '/planejamentos-gasto-form',
-                      params: { id: planejamento.id },
-                    } as never);
-                  }}
-                  variant="ghost"
-                />
-              ) : undefined
+              router.push({
+                pathname: '/planejamentos-gasto-form',
+                params: { id: planejamento.id },
+              } as never);
+            }}
+            onCancel={handleCancelGasto}
+            onEdit={(gastoSelecionado) =>
+              router.push({
+                pathname: '/planejamentos-gasto-form',
+                params: {
+                  gastoId: gastoSelecionado.id,
+                  id: planejamento.id,
+                },
+              } as never)
             }
-          >
-            {gastosError ? (
-              <Text style={styles.gastosError}>{gastosError}</Text>
-            ) : null}
-            {gastosInfo ? (
-              <Text style={styles.gastosInfo}>{gastosInfo}</Text>
-            ) : null}
+            participantes={participantes}
+          />
 
-            {gastos.length ? (
-              gastos.map((gasto) => (
-                <GastoRow
-                  key={gasto.id}
-                  actionLoading={gastoActionLoading === gasto.id}
-                  canMutate={
-                    structuralMutationsAllowed && gasto.status === 'ATIVO'
-                  }
-                  disabled={aggregateMutationInProgress}
-                  gasto={gasto}
-                  onCancel={handleCancelGasto}
-                  onEdit={(gastoSelecionado) =>
-                    router.push({
-                      pathname: '/planejamentos-gasto-form',
-                      params: {
-                        gastoId: gastoSelecionado.id,
-                        id: planejamento.id,
-                      },
-                    } as never)
-                  }
-                  participantes={participantes}
-                />
-              ))
-            ) : (
-              <Text style={styles.emptyText}>Nenhum gasto cadastrado.</Text>
-            )}
-          </GlassPanel>
-
-          <GlassPanel
-            title="Acertos"
-            subtitle="Pagamentos calculados entre participantes."
-            action={
-              settlementMutationsAllowed ? (
-                <GlassButton
-                  disabled={aggregateMutationInProgress}
-                  label={
-                    acertosActionLoading === 'sync'
-                      ? 'Sincronizando...'
-                      : 'Sincronizar acertos'
-                  }
-                  onPress={handleSyncAcertos}
-                  variant="ghost"
-                />
-              ) : undefined
-            }
-          >
-            {acertosError ? (
-              <Text style={styles.acertosError}>{acertosError}</Text>
-            ) : null}
-            {acertosInfo ? (
-              <Text style={styles.acertosInfo}>{acertosInfo}</Text>
-            ) : null}
-
-            {acertos.length ? (
-              acertos.map((acerto) => (
-                <AcertoRow
-                  key={acerto.id}
-                  acerto={acerto}
-                  actionLoading={acertosActionLoading}
-                  canOperate={settlementMutationsAllowed}
-                  disabled={aggregateMutationInProgress}
-                  onAction={handleAcertoAction}
-                  participantes={participantes}
-                />
-              ))
-            ) : (
-              <Text style={styles.emptyText}>
-                {isReadOnly
-                  ? 'Nenhum acerto registrado.'
-                  : 'Nenhum acerto encontrado. Cadastre gastos e participantes ativos para calcular os acertos.'}
-              </Text>
-            )}
-          </GlassPanel>
+          <PlanejamentoSettlementsSection
+            acertos={acertos}
+            actionLoadingId={acertosActionLoading}
+            canOperate={settlementMutationsAllowed}
+            errorMessage={acertosError}
+            infoMessage={acertosInfo}
+            isReadOnly={isReadOnly}
+            mutationInProgress={aggregateMutationInProgress}
+            onAction={handleAcertoAction}
+            onSync={handleSyncAcertos}
+            participantes={participantes}
+          />
         </>
       ) : null}
     </FinanceAppShell>
@@ -976,47 +877,6 @@ export function PlanejamentoDetailScreen() {
 export default PlanejamentoDetailScreen;
 
 const styles = StyleSheet.create({
-  actionError: {
-    color: FinanceTheme.colors.danger,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
-  actionInfo: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
-  acertosError: {
-    color: FinanceTheme.colors.danger,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
-  acertosInfo: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
-  emptyText: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '700',
-  },
-  gastosError: {
-    color: FinanceTheme.colors.danger,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
-  gastosInfo: {
-    color: FinanceTheme.colors.success,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '800',
-    marginBottom: FinanceTheme.spacing.sm,
-  },
   loadingRow: {
     alignItems: 'center',
     flexDirection: 'row',
