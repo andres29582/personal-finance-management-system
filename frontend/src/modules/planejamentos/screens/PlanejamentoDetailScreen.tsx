@@ -1,7 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { getUser } from '../../../../storage/authStorage';
 import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
@@ -29,21 +28,17 @@ import {
   cancelGastoPlanejamento,
   cancelarPlanejamento,
   fecharPlanejamento,
-  getPlanejamentoById,
-  getResumoPlanejamento,
-  listAcertosPlanejamento,
-  listGastosPlanejamento,
   payAcertoPlanejamento,
   removeParticipantePlanejamento,
   reopenAcertoPlanejamento,
   syncAcertosPlanejamento,
 } from '../services/planejamentoService';
+import { usePlanejamentoDetailData } from '../hooks/usePlanejamentoDetailData';
 import {
   AcertoPlanejamento,
   GastoPlanejamento,
   ParticipantePlanejamento,
   Planejamento,
-  ResumoFinanceiroPlanejamento,
 } from '../types/planejamento';
 
 const transitionConfig: Record<
@@ -94,14 +89,27 @@ export function PlanejamentoDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const planejamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [planejamento, setPlanejamento] = useState<Planejamento | null>(null);
-  const [resumo, setResumo] = useState<ResumoFinanceiroPlanejamento | null>(
-    null,
-  );
-  const [gastos, setGastos] = useState<GastoPlanejamento[]>([]);
-  const [acertos, setAcertos] = useState<AcertoPlanejamento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+  const handleUnauthorized = useCallback(() => {
+    router.replace('/login');
+  }, [router]);
+  const {
+    acertos,
+    applyParticipantUpdate,
+    gastos,
+    isCurrentContext,
+    loading,
+    message,
+    participantPermissionError,
+    planejamento,
+    refreshExpenseFinancialData,
+    refreshFinancialData,
+    reloadAllData,
+    resumo,
+    usuarioAutenticadoId,
+  } = usePlanejamentoDetailData({
+    onUnauthorized: handleUnauthorized,
+    planejamentoId,
+  });
   const [acertosError, setAcertosError] = useState('');
   const [acertosInfo, setAcertosInfo] = useState('');
   const [acertosActionLoading, setAcertosActionLoading] = useState<
@@ -121,133 +129,10 @@ export function PlanejamentoDetailScreen() {
   const [transitionInfo, setTransitionInfo] = useState('');
   const [transitionLoading, setTransitionLoading] =
     useState<PlanejamentoTransition | null>(null);
-  const [usuarioAutenticadoId, setUsuarioAutenticadoId] = useState<
-    string | null
-  >(null);
   const aggregateMutationLockRef = useRef<string | null>(null);
-  const loadGenerationRef = useRef(0);
-  const mountedRef = useRef(true);
-  const planejamentoIdRef = useRef(planejamentoId);
   const transitionLockRef = useRef<PlanejamentoTransition | null>(null);
-  planejamentoIdRef.current = planejamentoId;
 
   useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-      loadGenerationRef.current += 1;
-    };
-  }, []);
-
-  const loadPlanejamentoData = useCallback(async (): Promise<boolean> => {
-    if (
-      !planejamentoId ||
-      planejamentoIdRef.current !== planejamentoId
-    ) {
-      return false;
-    }
-
-    const loadGeneration = ++loadGenerationRef.current;
-    const [data, resumoData, gastosData, acertosData] = await Promise.all([
-      getPlanejamentoById(planejamentoId),
-      getResumoPlanejamento(planejamentoId),
-      listGastosPlanejamento(planejamentoId),
-      listAcertosPlanejamento(planejamentoId),
-    ]);
-
-    if (
-      !mountedRef.current ||
-      planejamentoIdRef.current !== planejamentoId ||
-      loadGeneration !== loadGenerationRef.current
-    ) {
-      return false;
-    }
-
-    setPlanejamento(data);
-    setResumo(resumoData);
-    setGastos(gastosData);
-    setAcertos(acertosData);
-    return true;
-  }, [planejamentoId]);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadPlanejamento() {
-      if (!planejamentoId) {
-        if (active && mountedRef.current) {
-          setMessage('Planejamento nao informado.');
-          setLoading(false);
-        }
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setMessage('');
-        await loadPlanejamentoData();
-      } catch (error) {
-        if (!active || !mountedRef.current) {
-          return;
-        }
-
-        const resolvedError = await resolveApiError(
-          error,
-          'Nao foi possivel carregar o planejamento.',
-        );
-
-        if (!active || !mountedRef.current) {
-          return;
-        }
-
-        setMessage(resolvedError.message);
-
-        if (resolvedError.unauthorized) {
-          router.replace('/login');
-        }
-      } finally {
-        if (active && mountedRef.current) {
-          setLoading(false);
-        }
-      }
-    }
-
-    async function loadUsuarioAutenticado() {
-      if (active && mountedRef.current) {
-        setUsuarioAutenticadoId(null);
-      }
-
-      try {
-        const usuarioAutenticado = await getUser();
-
-        if (active && mountedRef.current) {
-          setUsuarioAutenticadoId(usuarioAutenticado?.id ?? null);
-          setParticipantesError('');
-        }
-      } catch {
-        if (active && mountedRef.current) {
-          setUsuarioAutenticadoId(null);
-          setParticipantesError(
-            'Não foi possível verificar sua permissão para gerenciar participantes.',
-          );
-        }
-      }
-    }
-
-    void loadPlanejamento();
-    void loadUsuarioAutenticado();
-
-    return () => {
-      active = false;
-    };
-  }, [loadPlanejamentoData, planejamentoId, router]);
-
-  useEffect(() => {
-    if (!mountedRef.current) {
-      return;
-    }
-
     setAcertosActionLoading(null);
     setAcertosError('');
     setAcertosInfo('');
@@ -273,81 +158,6 @@ export function PlanejamentoDetailScreen() {
     !!participanteActionLoading ||
     !!transitionLoading;
 
-  function isCurrentScreenContext(expectedPlanejamentoId: string) {
-    return (
-      mountedRef.current &&
-      planejamentoIdRef.current === expectedPlanejamentoId
-    );
-  }
-
-  async function refreshFinancialData(
-    expectedPlanejamentoId: string,
-  ): Promise<boolean> {
-    const refreshGeneration = ++loadGenerationRef.current;
-
-    try {
-      const [resumoData, acertosData] = await Promise.all([
-        getResumoPlanejamento(expectedPlanejamentoId),
-        listAcertosPlanejamento(expectedPlanejamentoId),
-      ]);
-
-      if (
-        !isCurrentScreenContext(expectedPlanejamentoId) ||
-        refreshGeneration !== loadGenerationRef.current
-      ) {
-        return false;
-      }
-
-      setResumo(resumoData);
-      setAcertos(acertosData);
-      return true;
-    } catch (error) {
-      if (
-        !isCurrentScreenContext(expectedPlanejamentoId) ||
-        refreshGeneration !== loadGenerationRef.current
-      ) {
-        return false;
-      }
-
-      throw error;
-    }
-  }
-
-  async function refreshGastoFinancialData(
-    expectedPlanejamentoId: string,
-  ): Promise<boolean> {
-    const refreshGeneration = ++loadGenerationRef.current;
-
-    try {
-      const [resumoData, gastosData, acertosData] = await Promise.all([
-        getResumoPlanejamento(expectedPlanejamentoId),
-        listGastosPlanejamento(expectedPlanejamentoId),
-        listAcertosPlanejamento(expectedPlanejamentoId),
-      ]);
-
-      if (
-        !isCurrentScreenContext(expectedPlanejamentoId) ||
-        refreshGeneration !== loadGenerationRef.current
-      ) {
-        return false;
-      }
-
-      setResumo(resumoData);
-      setGastos(gastosData);
-      setAcertos(acertosData);
-      return true;
-    } catch (error) {
-      if (
-        !isCurrentScreenContext(expectedPlanejamentoId) ||
-        refreshGeneration !== loadGenerationRef.current
-      ) {
-        return false;
-      }
-
-      throw error;
-    }
-  }
-
   async function handleSyncAcertos() {
     if (!planejamentoId || aggregateMutationLockRef.current) {
       return;
@@ -365,7 +175,7 @@ export function PlanejamentoDetailScreen() {
       const acertosSincronizados =
         await syncAcertosPlanejamento(currentPlanejamentoId);
 
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -373,7 +183,7 @@ export function PlanejamentoDetailScreen() {
         currentPlanejamentoId,
       );
 
-      if (isCurrentScreenContext(currentPlanejamentoId) && dataApplied) {
+      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
         setAcertosInfo(
           acertosSincronizados.length
             ? 'Acertos sincronizados com sucesso.'
@@ -381,7 +191,7 @@ export function PlanejamentoDetailScreen() {
         );
       }
     } catch (error) {
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -390,7 +200,7 @@ export function PlanejamentoDetailScreen() {
         'Nao foi possivel sincronizar os acertos.',
       );
 
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -400,7 +210,7 @@ export function PlanejamentoDetailScreen() {
         router.replace('/login');
       }
     } finally {
-      if (isCurrentScreenContext(currentPlanejamentoId)) {
+      if (isCurrentContext(currentPlanejamentoId)) {
         setAcertosActionLoading(null);
       }
       if (aggregateMutationLockRef.current === lockKey) {
@@ -434,7 +244,7 @@ export function PlanejamentoDetailScreen() {
       };
       await actionByType[action](currentPlanejamentoId, acerto.id);
 
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -442,11 +252,11 @@ export function PlanejamentoDetailScreen() {
         currentPlanejamentoId,
       );
 
-      if (isCurrentScreenContext(currentPlanejamentoId) && dataApplied) {
+      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
         setAcertosInfo('Acerto atualizado com sucesso.');
       }
     } catch (error) {
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -455,7 +265,7 @@ export function PlanejamentoDetailScreen() {
         'Nao foi possivel atualizar o acerto.',
       );
 
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -465,7 +275,7 @@ export function PlanejamentoDetailScreen() {
         router.replace('/login');
       }
     } finally {
-      if (isCurrentScreenContext(currentPlanejamentoId)) {
+      if (isCurrentContext(currentPlanejamentoId)) {
         setAcertosActionLoading(null);
       }
       if (aggregateMutationLockRef.current === lockKey) {
@@ -503,26 +313,26 @@ export function PlanejamentoDetailScreen() {
         return;
       }
 
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
       await cancelGastoPlanejamento(currentPlanejamentoId, gasto.id);
       cancelamentoConcluido = true;
 
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
-      const dataApplied = await refreshGastoFinancialData(
+      const dataApplied = await refreshExpenseFinancialData(
         currentPlanejamentoId,
       );
 
-      if (isCurrentScreenContext(currentPlanejamentoId) && dataApplied) {
+      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
         setGastosInfo('Gasto cancelado com sucesso.');
       }
     } catch (error) {
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -533,7 +343,7 @@ export function PlanejamentoDetailScreen() {
           : 'Nao foi possivel cancelar o gasto.',
       );
 
-      if (!isCurrentScreenContext(currentPlanejamentoId)) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -543,7 +353,7 @@ export function PlanejamentoDetailScreen() {
         router.replace('/login');
       }
     } finally {
-      if (isCurrentScreenContext(currentPlanejamentoId)) {
+      if (isCurrentContext(currentPlanejamentoId)) {
         setGastoActionLoading(null);
       }
       if (aggregateMutationLockRef.current === lockKey) {
@@ -567,6 +377,7 @@ export function PlanejamentoDetailScreen() {
       return;
     }
 
+    const currentPlanejamentoId = planejamentoId;
     const lockKey = `participante:remove:${participante.id}`;
     aggregateMutationLockRef.current = lockKey;
     let remocaoConcluida = false;
@@ -585,44 +396,24 @@ export function PlanejamentoDetailScreen() {
         return;
       }
 
-      if (
-        !mountedRef.current ||
-        planejamentoIdRef.current !== planejamentoId
-      ) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
       const participanteRemovido = await removeParticipantePlanejamento(
-        planejamentoId,
+        currentPlanejamentoId,
         participante.id,
       );
       remocaoConcluida = true;
 
-      if (
-        !mountedRef.current ||
-        planejamentoIdRef.current !== planejamentoId
-      ) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
-      setPlanejamento((current) => {
-        if (!current) {
-          return current;
-        }
+      applyParticipantUpdate(participanteRemovido);
+      const dataApplied = await reloadAllData(currentPlanejamentoId);
 
-        return {
-          ...current,
-          participantes: current.participantes?.map((item) =>
-            item.id === participanteRemovido.id
-              ? participanteRemovido
-              : item,
-          ),
-        };
-      });
-
-      const dataApplied = await loadPlanejamentoData();
-
-      if (mountedRef.current && dataApplied) {
+      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
         setParticipantesInfo('Participante removido com sucesso.');
       }
     } catch (error) {
@@ -633,10 +424,7 @@ export function PlanejamentoDetailScreen() {
           : 'Não foi possível remover o participante.',
       );
 
-      if (
-        !mountedRef.current ||
-        planejamentoIdRef.current !== planejamentoId
-      ) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -646,9 +434,7 @@ export function PlanejamentoDetailScreen() {
         router.replace('/login');
       }
     } finally {
-      if (mountedRef.current) {
-        setParticipanteActionLoading(null);
-      }
+      setParticipanteActionLoading(null);
       if (aggregateMutationLockRef.current === lockKey) {
         aggregateMutationLockRef.current = null;
       }
@@ -666,6 +452,7 @@ export function PlanejamentoDetailScreen() {
       return;
     }
 
+    const currentPlanejamentoId = planejamentoId;
     transitionLockRef.current = transition;
     const lockKey = `transition:${transition}`;
     aggregateMutationLockRef.current = lockKey;
@@ -686,26 +473,20 @@ export function PlanejamentoDetailScreen() {
         return;
       }
 
-      if (
-        !mountedRef.current ||
-        planejamentoIdRef.current !== planejamentoId
-      ) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
-      await config.request(planejamentoId);
+      await config.request(currentPlanejamentoId);
       transitionCompleted = true;
 
-      if (
-        !mountedRef.current ||
-        planejamentoIdRef.current !== planejamentoId
-      ) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
-      const dataApplied = await loadPlanejamentoData();
+      const dataApplied = await reloadAllData(currentPlanejamentoId);
 
-      if (mountedRef.current && dataApplied) {
+      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
         setTransitionInfo(config.successMessage);
       }
     } catch (error) {
@@ -716,10 +497,7 @@ export function PlanejamentoDetailScreen() {
           : config.errorMessage,
       );
 
-      if (
-        !mountedRef.current ||
-        planejamentoIdRef.current !== planejamentoId
-      ) {
+      if (!isCurrentContext(currentPlanejamentoId)) {
         return;
       }
 
@@ -729,9 +507,7 @@ export function PlanejamentoDetailScreen() {
         router.replace('/login');
       }
     } finally {
-      if (mountedRef.current) {
-        setTransitionLoading(null);
-      }
+      setTransitionLoading(null);
       transitionLockRef.current = null;
       if (aggregateMutationLockRef.current === lockKey) {
         aggregateMutationLockRef.current = null;
@@ -807,7 +583,9 @@ export function PlanejamentoDetailScreen() {
             canManageParticipants={
               isAuthenticatedUserOwner && structuralMutationsAllowed
             }
-            errorMessage={participantesError}
+            errorMessage={
+              participantesError || participantPermissionError
+            }
             infoMessage={participantesInfo}
             mutationInProgress={aggregateMutationInProgress}
             onAdd={() => {
