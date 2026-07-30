@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
@@ -10,80 +10,14 @@ import {
   GlassPanel,
   GlassStatusCard,
 } from '../../../shared/ui';
-import { resolveApiError } from '../../../../utils/api-error';
-import { confirmAction } from '../../../../utils/confirm-action';
-import { AcertoAction } from '../components/detail/AcertoRow';
 import { PlanejamentoExpensesSection } from '../components/detail/PlanejamentoExpensesSection';
 import { PlanejamentoFinancialSummarySection } from '../components/detail/PlanejamentoFinancialSummarySection';
-import {
-  PlanejamentoLifecycleSection,
-  PlanejamentoTransition,
-} from '../components/detail/PlanejamentoLifecycleSection';
+import { PlanejamentoLifecycleSection } from '../components/detail/PlanejamentoLifecycleSection';
 import { PlanejamentoOverviewSection } from '../components/detail/PlanejamentoOverviewSection';
 import { PlanejamentoParticipantsSection } from '../components/detail/PlanejamentoParticipantsSection';
 import { PlanejamentoSettlementsSection } from '../components/detail/PlanejamentoSettlementsSection';
-import {
-  arquivarPlanejamento,
-  cancelAcertoPlanejamento,
-  cancelGastoPlanejamento,
-  cancelarPlanejamento,
-  fecharPlanejamento,
-  payAcertoPlanejamento,
-  removeParticipantePlanejamento,
-  reopenAcertoPlanejamento,
-  syncAcertosPlanejamento,
-} from '../services/planejamentoService';
 import { usePlanejamentoDetailData } from '../hooks/usePlanejamentoDetailData';
-import {
-  AcertoPlanejamento,
-  GastoPlanejamento,
-  ParticipantePlanejamento,
-  Planejamento,
-} from '../types/planejamento';
-
-const transitionConfig: Record<
-  PlanejamentoTransition,
-  {
-    confirmationMessage: string;
-    confirmationTitle: string;
-    errorMessage: string;
-    loadingLabel: string;
-    request: (planejamentoId: string) => Promise<Planejamento>;
-    successMessage: string;
-  }
-> = {
-  archive: {
-    confirmationMessage:
-      'Deseja arquivar este planejamento quitado? Ele ficara somente leitura.',
-    confirmationTitle: 'Arquivar planejamento',
-    errorMessage: 'Nao foi possivel arquivar o planejamento.',
-    loadingLabel: 'Arquivando...',
-    request: arquivarPlanejamento,
-    successMessage: 'Planejamento arquivado com sucesso.',
-  },
-  cancel: {
-    confirmationMessage:
-      'Deseja cancelar este planejamento quitado? Ele ficara somente leitura.',
-    confirmationTitle: 'Cancelar planejamento',
-    errorMessage: 'Nao foi possivel cancelar o planejamento.',
-    loadingLabel: 'Cancelando...',
-    request: cancelarPlanejamento,
-    successMessage: 'Planejamento cancelado com sucesso.',
-  },
-  close: {
-    confirmationMessage:
-      'Deseja fechar este planejamento? Participantes e gastos ficarao bloqueados para alteracoes.',
-    confirmationTitle: 'Fechar planejamento',
-    errorMessage: 'Nao foi possivel fechar o planejamento.',
-    loadingLabel: 'Fechando...',
-    request: fecharPlanejamento,
-    successMessage: 'Planejamento fechado com sucesso.',
-  },
-};
-
-function getParticipantes(planejamento: Planejamento | null) {
-  return planejamento?.participantes ?? [];
-}
+import { usePlanejamentoDetailMutations } from '../hooks/usePlanejamentoDetailMutations';
 
 export function PlanejamentoDetailScreen() {
   const router = useRouter();
@@ -110,410 +44,45 @@ export function PlanejamentoDetailScreen() {
     onUnauthorized: handleUnauthorized,
     planejamentoId,
   });
-  const [acertosError, setAcertosError] = useState('');
-  const [acertosInfo, setAcertosInfo] = useState('');
-  const [acertosActionLoading, setAcertosActionLoading] = useState<
-    string | null
-  >(null);
-  const [gastosError, setGastosError] = useState('');
-  const [gastosInfo, setGastosInfo] = useState('');
-  const [gastoActionLoading, setGastoActionLoading] = useState<string | null>(
-    null,
-  );
-  const [participanteActionLoading, setParticipanteActionLoading] = useState<
-    string | null
-  >(null);
-  const [participantesError, setParticipantesError] = useState('');
-  const [participantesInfo, setParticipantesInfo] = useState('');
-  const [transitionError, setTransitionError] = useState('');
-  const [transitionInfo, setTransitionInfo] = useState('');
-  const [transitionLoading, setTransitionLoading] =
-    useState<PlanejamentoTransition | null>(null);
-  const aggregateMutationLockRef = useRef<string | null>(null);
-  const transitionLockRef = useRef<PlanejamentoTransition | null>(null);
-
-  useEffect(() => {
-    setAcertosActionLoading(null);
-    setAcertosError('');
-    setAcertosInfo('');
-    setGastoActionLoading(null);
-    setGastosError('');
-    setGastosInfo('');
-  }, [planejamentoId]);
-
-  const participantes = getParticipantes(planejamento);
-  const settlementMutationsAllowed =
-    planejamento?.status === 'ABERTO' || planejamento?.status === 'FECHADO';
-  const structuralMutationsAllowed = planejamento?.status === 'ABERTO';
-  const isFinanciallySettled = resumo?.situacaoFinanceira === 'QUITADO';
-  const isReadOnly =
-    planejamento?.status === 'ARQUIVADO' ||
-    planejamento?.status === 'CANCELADO';
-  const isAuthenticatedUserOwner =
-    !!planejamento &&
-    usuarioAutenticadoId === planejamento.usuarioCriadorId;
-  const aggregateMutationInProgress =
-    !!acertosActionLoading ||
-    !!gastoActionLoading ||
-    !!participanteActionLoading ||
-    !!transitionLoading;
-
-  async function handleSyncAcertos() {
-    if (!planejamentoId || aggregateMutationLockRef.current) {
-      return;
-    }
-
-    const currentPlanejamentoId = planejamentoId;
-    const lockKey = 'acerto:sync';
-    aggregateMutationLockRef.current = lockKey;
-
-    try {
-      setAcertosActionLoading('sync');
-      setAcertosError('');
-      setAcertosInfo('');
-
-      const acertosSincronizados =
-        await syncAcertosPlanejamento(currentPlanejamentoId);
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const dataApplied = await refreshFinancialData(
-        currentPlanejamentoId,
-      );
-
-      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
-        setAcertosInfo(
-          acertosSincronizados.length
-            ? 'Acertos sincronizados com sucesso.'
-            : 'Ainda nao ha dados suficientes para gerar acertos. Cadastre gastos e participantes ativos e tente novamente.',
-        );
-      }
-    } catch (error) {
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const resolvedError = await resolveApiError(
-        error,
-        'Nao foi possivel sincronizar os acertos.',
-      );
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      setAcertosError(resolvedError.message);
-
-      if (resolvedError.unauthorized) {
-        router.replace('/login');
-      }
-    } finally {
-      if (isCurrentContext(currentPlanejamentoId)) {
-        setAcertosActionLoading(null);
-      }
-      if (aggregateMutationLockRef.current === lockKey) {
-        aggregateMutationLockRef.current = null;
-      }
-    }
-  }
-
-  async function handleAcertoAction(
-    acerto: AcertoPlanejamento,
-    action: AcertoAction,
-  ) {
-    if (!planejamentoId || aggregateMutationLockRef.current) {
-      return;
-    }
-
-    const currentPlanejamentoId = planejamentoId;
-    const actionKey = `${action}:${acerto.id}`;
-    const lockKey = `acerto:${actionKey}`;
-    aggregateMutationLockRef.current = lockKey;
-
-    try {
-      setAcertosActionLoading(actionKey);
-      setAcertosError('');
-      setAcertosInfo('');
-
-      const actionByType = {
-        cancel: cancelAcertoPlanejamento,
-        pay: payAcertoPlanejamento,
-        reopen: reopenAcertoPlanejamento,
-      };
-      await actionByType[action](currentPlanejamentoId, acerto.id);
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const dataApplied = await refreshFinancialData(
-        currentPlanejamentoId,
-      );
-
-      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
-        setAcertosInfo('Acerto atualizado com sucesso.');
-      }
-    } catch (error) {
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const resolvedError = await resolveApiError(
-        error,
-        'Nao foi possivel atualizar o acerto.',
-      );
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      setAcertosError(resolvedError.message);
-
-      if (resolvedError.unauthorized) {
-        router.replace('/login');
-      }
-    } finally {
-      if (isCurrentContext(currentPlanejamentoId)) {
-        setAcertosActionLoading(null);
-      }
-      if (aggregateMutationLockRef.current === lockKey) {
-        aggregateMutationLockRef.current = null;
-      }
-    }
-  }
-
-  async function handleCancelGasto(gasto: GastoPlanejamento) {
-    if (
-      !planejamentoId ||
-      planejamento?.status !== 'ABERTO' ||
-      gasto.status !== 'ATIVO' ||
-      aggregateMutationLockRef.current
-    ) {
-      return;
-    }
-
-    const currentPlanejamentoId = planejamentoId;
-    const lockKey = `gasto:cancel:${gasto.id}`;
-    aggregateMutationLockRef.current = lockKey;
-    let cancelamentoConcluido = false;
-
-    try {
-      setGastoActionLoading(gasto.id);
-      setGastosError('');
-      setGastosInfo('');
-
-      const confirmed = await confirmAction(
-        'Cancelar gasto',
-        `Deseja cancelar o gasto "${gasto.descricao}"? Ele permanecera visivel no historico.`,
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      await cancelGastoPlanejamento(currentPlanejamentoId, gasto.id);
-      cancelamentoConcluido = true;
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const dataApplied = await refreshExpenseFinancialData(
-        currentPlanejamentoId,
-      );
-
-      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
-        setGastosInfo('Gasto cancelado com sucesso.');
-      }
-    } catch (error) {
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const resolvedError = await resolveApiError(
-        error,
-        cancelamentoConcluido
-          ? 'O gasto foi cancelado, mas nao foi possivel recarregar os dados financeiros.'
-          : 'Nao foi possivel cancelar o gasto.',
-      );
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      setGastosError(resolvedError.message);
-
-      if (resolvedError.unauthorized) {
-        router.replace('/login');
-      }
-    } finally {
-      if (isCurrentContext(currentPlanejamentoId)) {
-        setGastoActionLoading(null);
-      }
-      if (aggregateMutationLockRef.current === lockKey) {
-        aggregateMutationLockRef.current = null;
-      }
-    }
-  }
-
-  async function handleRemoveParticipante(
-    participante: ParticipantePlanejamento,
-  ) {
-    if (
-      !planejamentoId ||
-      !planejamento ||
-      usuarioAutenticadoId !== planejamento.usuarioCriadorId ||
-      planejamento.status !== 'ABERTO' ||
-      participante.status !== 'ATIVO' ||
-      participante.usuarioId === planejamento.usuarioCriadorId ||
-      aggregateMutationLockRef.current
-    ) {
-      return;
-    }
-
-    const currentPlanejamentoId = planejamentoId;
-    const lockKey = `participante:remove:${participante.id}`;
-    aggregateMutationLockRef.current = lockKey;
-    let remocaoConcluida = false;
-
-    try {
-      setParticipanteActionLoading(participante.id);
-      setParticipantesError('');
-      setParticipantesInfo('');
-
-      const confirmed = await confirmAction(
-        'Remover participante',
-        `Deseja remover "${participante.nome}" deste planejamento? O participante não poderá ser utilizado em novos gastos ou divisões, mas continuará visível no histórico financeiro.`,
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const participanteRemovido = await removeParticipantePlanejamento(
-        currentPlanejamentoId,
-        participante.id,
-      );
-      remocaoConcluida = true;
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      applyParticipantUpdate(participanteRemovido);
-      const dataApplied = await reloadAllData(currentPlanejamentoId);
-
-      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
-        setParticipantesInfo('Participante removido com sucesso.');
-      }
-    } catch (error) {
-      const resolvedError = await resolveApiError(
-        error,
-        remocaoConcluida
-          ? 'O participante foi removido, mas não foi possível recarregar os dados do planejamento.'
-          : 'Não foi possível remover o participante.',
-      );
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      setParticipantesError(resolvedError.message);
-
-      if (resolvedError.unauthorized) {
-        router.replace('/login');
-      }
-    } finally {
-      setParticipanteActionLoading(null);
-      if (aggregateMutationLockRef.current === lockKey) {
-        aggregateMutationLockRef.current = null;
-      }
-    }
-  }
-
-  async function handleTransition(transition: PlanejamentoTransition) {
-    if (
-      !planejamentoId ||
-      acertosActionLoading ||
-      gastoActionLoading ||
-      aggregateMutationLockRef.current ||
-      transitionLockRef.current
-    ) {
-      return;
-    }
-
-    const currentPlanejamentoId = planejamentoId;
-    transitionLockRef.current = transition;
-    const lockKey = `transition:${transition}`;
-    aggregateMutationLockRef.current = lockKey;
-    const config = transitionConfig[transition];
-    let transitionCompleted = false;
-
-    try {
-      setTransitionLoading(transition);
-      setTransitionError('');
-      setTransitionInfo('');
-
-      const confirmed = await confirmAction(
-        config.confirmationTitle,
-        config.confirmationMessage,
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      await config.request(currentPlanejamentoId);
-      transitionCompleted = true;
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      const dataApplied = await reloadAllData(currentPlanejamentoId);
-
-      if (isCurrentContext(currentPlanejamentoId) && dataApplied) {
-        setTransitionInfo(config.successMessage);
-      }
-    } catch (error) {
-      const resolvedError = await resolveApiError(
-        error,
-        transitionCompleted
-          ? 'O status foi atualizado, mas nao foi possivel recarregar o planejamento.'
-          : config.errorMessage,
-      );
-
-      if (!isCurrentContext(currentPlanejamentoId)) {
-        return;
-      }
-
-      setTransitionError(resolvedError.message);
-
-      if (resolvedError.unauthorized) {
-        router.replace('/login');
-      }
-    } finally {
-      setTransitionLoading(null);
-      transitionLockRef.current = null;
-      if (aggregateMutationLockRef.current === lockKey) {
-        aggregateMutationLockRef.current = null;
-      }
-    }
-  }
+  const {
+    acertosActionLoading,
+    acertosError,
+    acertosInfo,
+    aggregateMutationInProgress,
+    canNavigateToStructuralMutation,
+    gastoActionLoading,
+    gastosError,
+    gastosInfo,
+    handleAcertoAction,
+    handleCancelGasto,
+    handleRemoveParticipante,
+    handleSyncAcertos,
+    handleTransition,
+    isAuthenticatedUserOwner,
+    isFinanciallySettled,
+    isReadOnly,
+    participanteActionLoading,
+    participantesError,
+    participantesInfo,
+    settlementMutationsAllowed,
+    structuralMutationsAllowed,
+    transitionError,
+    transitionInfo,
+    transitionLoading,
+    transitionLoadingLabel,
+  } = usePlanejamentoDetailMutations({
+    applyParticipantUpdate,
+    isCurrentContext,
+    onUnauthorized: handleUnauthorized,
+    planejamento,
+    planejamentoId,
+    refreshExpenseFinancialData,
+    refreshFinancialData,
+    reloadAllData,
+    resumo,
+    usuarioAutenticadoId,
+  });
+  const participantes = planejamento?.participantes ?? [];
 
   return (
     <FinanceAppShell
@@ -566,11 +135,7 @@ export function PlanejamentoDetailScreen() {
             errorMessage={transitionError}
             infoMessage={transitionInfo}
             isFinanciallySettled={isFinanciallySettled}
-            loadingLabel={
-              transitionLoading
-                ? transitionConfig[transitionLoading].loadingLabel
-                : ''
-            }
+            loadingLabel={transitionLoadingLabel}
             mutationInProgress={aggregateMutationInProgress}
             onTransition={handleTransition}
             status={planejamento.status}
@@ -589,7 +154,7 @@ export function PlanejamentoDetailScreen() {
             infoMessage={participantesInfo}
             mutationInProgress={aggregateMutationInProgress}
             onAdd={() => {
-              if (aggregateMutationLockRef.current) {
+              if (!canNavigateToStructuralMutation()) {
                 return;
               }
 
@@ -612,7 +177,7 @@ export function PlanejamentoDetailScreen() {
             infoMessage={gastosInfo}
             mutationInProgress={aggregateMutationInProgress}
             onAdd={() => {
-              if (aggregateMutationLockRef.current) {
+              if (!canNavigateToStructuralMutation()) {
                 return;
               }
 
