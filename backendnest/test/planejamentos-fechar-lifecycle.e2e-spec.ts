@@ -574,6 +574,93 @@ describe('Planejamentos operational closing lifecycle (e2e)', () => {
     ).toEqual(expect.objectContaining({ status: PlanejamentoStatus.FECHADO }));
   });
 
+  it('rolls back closing and reconciliation when transactional audit persistence fails', async () => {
+    const {
+      acerto,
+      participanteDevedor,
+      participanteProprietario,
+      planejamento,
+    } = await criarCenarioComPendencia(
+      'Junho 2026 - rollback auditoria fechamento',
+    );
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    await acertoRepository.save(
+      acertoRepository.create({
+        id: randomUUID(),
+        planejamentoId: planejamento.id,
+        deParticipanteId: participanteDevedor.id,
+        paraParticipanteId: participanteProprietario.id,
+        valorCentavos: acerto.valorCentavos + 1,
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+        observacao: 'Deve sobreviver ao rollback da auditoria de fechamento',
+      }),
+    );
+    const mapearEstadoAcertos = (itens: AcertoPlanejamento[]) =>
+      itens.map((item) => ({
+        dataPagamento: item.dataPagamento,
+        deParticipanteId: item.deParticipanteId,
+        id: item.id,
+        paraParticipanteId: item.paraParticipanteId,
+        status: item.status,
+        valorCentavos: item.valorCentavos,
+      }));
+    const acertosAntes = mapearEstadoAcertos(
+      await acertoRepository.find({
+        where: { planejamentoId: planejamento.id },
+        order: { id: 'ASC' },
+      }),
+    );
+    const triggerSuffix = randomUUID().replace(/-/g, '_');
+    const functionName = `falhar_auditoria_fechamento_${triggerSuffix}`;
+    const triggerName = `trigger_${functionName}`;
+
+    try {
+      await dataSource.query(`
+        CREATE FUNCTION ${functionName}() RETURNS trigger AS $$
+        BEGIN
+          IF NEW.entity = 'planejamento'
+            AND NEW.entity_id = '${planejamento.id}'
+            AND NEW.event = 'PLANEJAMENTO_FECHADO' THEN
+            RAISE EXCEPTION 'falha de auditoria induzida pelo teste';
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        CREATE TRIGGER ${triggerName}
+        BEFORE INSERT ON audit_log
+        FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+      `);
+
+      await request(app.getHttpServer())
+        .patch(`/planejamentos/${planejamento.id}/fechar`)
+        .set('Authorization', authorization())
+        .expect(500);
+    } finally {
+      await dataSource.query(
+        `DROP TRIGGER IF EXISTS ${triggerName} ON audit_log`,
+      );
+      await dataSource.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+
+    expect(
+      await dataSource.getRepository(Planejamento).findOneByOrFail({
+        id: planejamento.id,
+      }),
+    ).toEqual(expect.objectContaining({ status: PlanejamentoStatus.ABERTO }));
+    expect(
+      mapearEstadoAcertos(
+        await acertoRepository.find({
+          where: { planejamentoId: planejamento.id },
+          order: { id: 'ASC' },
+        }),
+      ),
+    ).toEqual(acertosAntes);
+    await expect(buscarLogsFechamento(planejamento.id)).resolves.toHaveLength(
+      0,
+    );
+  });
+
   it('rolls back reopening and reconciliation when transactional audit persistence fails', async () => {
     const { acerto, planejamento } = await criarCenarioComPendencia(
       'Junho 2026 - rollback auditoria reabertura',
