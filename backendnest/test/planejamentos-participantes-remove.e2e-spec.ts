@@ -1,5 +1,7 @@
+import { randomUUID } from 'crypto';
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
+import { AuditLog } from '../src/logs/entities/audit-log.entity';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
 import { GastoPlanejamento } from '../src/planejamentos/entities/gasto-planejamento.entity';
@@ -7,6 +9,7 @@ import { ParticipantePlanejamento } from '../src/planejamentos/entities/particip
 import {
   GastoComportamento,
   ParticipanteStatus,
+  ParticipanteTipo,
   PlanejamentoTipo,
 } from '../src/planejamentos/enums';
 import { createE2eApp, type E2eApplication } from './e2e-app';
@@ -27,11 +30,17 @@ type GastoResponse = Identifiable & {
   divisoes: Identifiable[];
 };
 
+type AuditFailureTrigger = {
+  functionName: string;
+  triggerName: string;
+};
+
 jest.setTimeout(60000);
 
 describe('Planejamentos participant logical removal (e2e)', () => {
   let app: E2eApplication;
   let dataSource: DataSource;
+  let auditFailureTrigger: AuditFailureTrigger | null = null;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();
@@ -43,6 +52,54 @@ describe('Planejamentos participant logical removal (e2e)', () => {
   afterAll(async () => {
     await app?.close();
   });
+
+  async function removerTriggerAuditoria(): Promise<void> {
+    if (!auditFailureTrigger) {
+      return;
+    }
+
+    const { functionName, triggerName } = auditFailureTrigger;
+    await dataSource.query(
+      `DROP TRIGGER IF EXISTS ${triggerName} ON audit_log`,
+    );
+    await dataSource.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    auditFailureTrigger = null;
+  }
+
+  afterEach(async () => {
+    await removerTriggerAuditoria();
+  });
+
+  async function instalarFalhaAuditoria(
+    event: string,
+    userId: string,
+    entityId?: string,
+  ): Promise<void> {
+    const suffix = randomUUID().replace(/-/g, '_');
+    auditFailureTrigger = {
+      functionName: `falhar_auditoria_participante_${suffix}`,
+      triggerName: `trigger_falhar_auditoria_participante_${suffix}`,
+    };
+    const { functionName, triggerName } = auditFailureTrigger;
+    const entityIdFilter = entityId ? `AND NEW.entity_id = '${entityId}'` : '';
+
+    await dataSource.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.entity = 'participante_planejamento'
+          AND NEW.event = '${event}'
+          AND NEW.user_id = '${userId}'
+          ${entityIdFilter} THEN
+          RAISE EXCEPTION 'falha de auditoria de participante induzida pelo teste';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_log
+      FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+    `);
+  }
 
   async function criarPlanejamento(cpf: string, email: string, nome: string) {
     const session = await registerAndLoginTestUser(app, { cpf, email, nome });
@@ -109,8 +166,91 @@ describe('Planejamentos participant logical removal (e2e)', () => {
     );
   }
 
+  it('audits participant addition once without persisting name or email', async () => {
+    const { authorization, planejamento, session } = await criarPlanejamento(
+      '15350946056',
+      'participante.audit.add.owner.e2e@example.com',
+      'Auditoria Adicao E2E',
+    );
+    const nome = 'Nome que nao deve ir ao log';
+    const email = 'participante.sensivel.audit.e2e@example.com';
+    const response = await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/participantes`)
+      .set('Authorization', authorization)
+      .send({ email, nome })
+      .expect(201);
+    const participante = unwrapSuccess<ParticipanteResponse>(response);
+
+    const logs = await dataSource.getRepository(AuditLog).find({
+      where: {
+        entityId: participante.id,
+        event: 'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+        userId: session.userId,
+      },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({
+        action: 'create',
+        entity: 'participante_planejamento',
+        entityId: participante.id,
+        event: 'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+        module: 'planejamentos',
+        statusCode: 201,
+        success: true,
+        userId: session.userId,
+      }),
+    );
+    expect(logs[0].details).toEqual({
+      planejamentoId: planejamento.id,
+      tipo: ParticipanteTipo.MANUAL,
+      statusPosterior: ParticipanteStatus.ATIVO,
+    });
+    const serializado = JSON.stringify(logs[0]);
+    expect(serializado).not.toContain(nome);
+    expect(serializado).not.toContain(email);
+  });
+
+  it('rolls back participant addition when audit persistence fails', async () => {
+    const { authorization, planejamento, session } = await criarPlanejamento(
+      '27551621008',
+      'participante.audit.add.rollback.e2e@example.com',
+      'Rollback Adicao E2E',
+    );
+    const participanteRepository = dataSource.getRepository(
+      ParticipantePlanejamento,
+    );
+    const quantidadeAntes = await participanteRepository.countBy({
+      planejamentoId: planejamento.id,
+    });
+    await instalarFalhaAuditoria(
+      'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+      session.userId,
+    );
+
+    try {
+      await request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/participantes`)
+        .set('Authorization', authorization)
+        .send({ nome: 'Participante que deve ser revertido' })
+        .expect(500);
+    } finally {
+      await removerTriggerAuditoria();
+    }
+
+    await expect(
+      participanteRepository.countBy({ planejamentoId: planejamento.id }),
+    ).resolves.toBe(quantidadeAntes);
+    await expect(
+      dataSource.getRepository(AuditLog).countBy({
+        event: 'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+        userId: session.userId,
+      }),
+    ).resolves.toBe(0);
+  });
+
   it('removes only the participant status and preserves financial history and obligation', async () => {
-    const { authorization, planejamento, proprietario } =
+    const { authorization, planejamento, proprietario, session } =
       await criarPlanejamento(
         '52998224725',
         'participante.remove.principal.e2e@example.com',
@@ -157,6 +297,35 @@ describe('Planejamentos participant logical removal (e2e)', () => {
         id: participante.id,
         status: ParticipanteStatus.REMOVIDO,
       }),
+    );
+    const logsRemocao = await dataSource.getRepository(AuditLog).find({
+      where: {
+        entityId: participante.id,
+        event: 'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+        userId: session.userId,
+      },
+    });
+    expect(logsRemocao).toHaveLength(1);
+    expect(logsRemocao[0]).toEqual(
+      expect.objectContaining({
+        action: 'update',
+        entity: 'participante_planejamento',
+        entityId: participante.id,
+        event: 'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+        module: 'planejamentos',
+        statusCode: 200,
+        success: true,
+        userId: session.userId,
+      }),
+    );
+    expect(logsRemocao[0].details).toEqual({
+      planejamentoId: planejamento.id,
+      tipo: ParticipanteTipo.MANUAL,
+      statusAnterior: ParticipanteStatus.ATIVO,
+      statusPosterior: ParticipanteStatus.REMOVIDO,
+    });
+    expect(JSON.stringify(logsRemocao[0])).not.toContain(
+      'Participante Historico',
     );
     expect(
       await dataSource.getRepository(GastoPlanejamento).count({
@@ -232,6 +401,50 @@ describe('Planejamentos participant logical removal (e2e)', () => {
     expectErro(novaDivisao, 422, 'PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO');
   });
 
+  it('keeps the participant active when removal audit persistence fails', async () => {
+    const { authorization, planejamento, session } = await criarPlanejamento(
+      '03746552070',
+      'participante.audit.remove.rollback.e2e@example.com',
+      'Rollback Remocao E2E',
+    );
+    const participante = await adicionarParticipante(
+      planejamento.id,
+      authorization,
+      'Participante mantido ativo',
+    );
+    await instalarFalhaAuditoria(
+      'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+      session.userId,
+      participante.id,
+    );
+
+    try {
+      await request(app.getHttpServer())
+        .delete(
+          `/planejamentos/${planejamento.id}/participantes/${participante.id}`,
+        )
+        .set('Authorization', authorization)
+        .expect(500);
+    } finally {
+      await removerTriggerAuditoria();
+    }
+
+    await expect(
+      dataSource.getRepository(ParticipantePlanejamento).findOneByOrFail({
+        id: participante.id,
+        planejamentoId: planejamento.id,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ status: ParticipanteStatus.ATIVO }),
+    );
+    await expect(
+      dataSource.getRepository(AuditLog).countBy({
+        entityId: participante.id,
+        event: 'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+      }),
+    ).resolves.toBe(0);
+  });
+
   it('enforces owner authorization and planejamento isolation', async () => {
     const primeiro = await criarPlanejamento(
       '39053344705',
@@ -297,7 +510,7 @@ describe('Planejamentos participant logical removal (e2e)', () => {
   });
 
   it('serializes two concurrent removals of the same participant', async () => {
-    const { authorization, planejamento, proprietario } =
+    const { authorization, planejamento, proprietario, session } =
       await criarPlanejamento(
         '10000001090',
         'participante.remove.concorrente.e2e@example.com',
@@ -359,5 +572,12 @@ describe('Planejamentos participant logical removal (e2e)', () => {
         where: { planejamentoId: planejamento.id },
       }),
     ).toBe(1);
+    await expect(
+      dataSource.getRepository(AuditLog).countBy({
+        entityId: participante.id,
+        event: 'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+        userId: session.userId,
+      }),
+    ).resolves.toBe(1);
   });
 });

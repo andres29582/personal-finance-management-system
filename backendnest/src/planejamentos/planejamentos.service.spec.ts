@@ -437,6 +437,10 @@ describe('PlanejamentosService', () => {
       const planejamentoDepoisDoLock = criarPlanejamentoComParticipantes();
       const gastoSalvo = {
         id: 'gasto-1',
+        status: GastoStatus.ATIVO,
+        valorCentavos: 10001,
+        comportamento: GastoComportamento.EVENTUAL,
+        pagoPorParticipanteId: 'participante-1',
       } as never;
       const acertoCriado = criarEntidadeAcertoPersistido();
       repositoryTransacional = {
@@ -538,6 +542,30 @@ describe('PlanejamentosService', () => {
           valorCentavos: 5000,
         }),
       ]);
+      expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+      expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+        {
+          event: 'PLANEJAMENTO_GASTO_CRIADO',
+          module: 'planejamentos',
+          action: 'create',
+          success: true,
+          userId: usuarioId,
+          entity: 'gasto_planejamento',
+          entityId: 'gasto-1',
+          details: {
+            planejamentoId: 'planejamento-1',
+            statusPosterior: GastoStatus.ATIVO,
+            valorCentavos: 10001,
+            comportamento: GastoComportamento.EVENTUAL,
+            pagoPorParticipanteId: 'participante-1',
+            participantesIds: ['participante-1', 'participante-2'],
+          },
+          context: {
+            statusCode: 201,
+          },
+        },
+        entityManager,
+      );
       expect(
         repositoryTransacional.buscarAcessivelComParticipantes.mock
           .invocationCallOrder[0],
@@ -577,6 +605,11 @@ describe('PlanejamentosService', () => {
       );
       expect(
         repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+      );
+      expect(
+        logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
       ).toBeLessThan(
         repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
       );
@@ -606,6 +639,69 @@ describe('PlanejamentosService', () => {
       expect(result.id).toBe('gasto-1');
     },
   );
+
+  it('propagates expense creation audit failures and skips the post-commit reload', async () => {
+    const erroAuditoria = new Error('falha na auditoria do gasto criado');
+    const planejamento = criarPlanejamentoComParticipantes();
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      salvarAcertos: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamento,
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamento,
+    );
+    repositoryTransacional.salvarGasto.mockResolvedValue({
+      id: 'gasto-1',
+      status: GastoStatus.ATIVO,
+      valorCentavos: 10000,
+      comportamento: GastoComportamento.EVENTUAL,
+      pagoPorParticipanteId: 'participante-1',
+    } as never);
+    repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ gastos: [] }),
+    );
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.createGasto('planejamento-1', 'user-1', {
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-04',
+        descricao: 'Mercado',
+        pagoPorParticipanteId: 'participante-1',
+        participantesIds: ['participante-2', 'participante-1'],
+        valorCentavos: 10000,
+      }),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledTimes(1);
+    const [eventoCriacaoGasto, managerCriacaoGasto] =
+      logsService.logEntityEventTransactional.mock.calls[0];
+    expect(managerCriacaoGasto).toBe(entityManager);
+    expect(eventoCriacaoGasto).toMatchObject({
+      event: 'PLANEJAMENTO_GASTO_CRIADO',
+      details: {
+        participantesIds: ['participante-1', 'participante-2'],
+      },
+    });
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
 
   it.each([
     {
@@ -646,6 +742,7 @@ describe('PlanejamentosService', () => {
       expect(repository.salvarDivisoes).not.toHaveBeenCalled();
       expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
       expect(repository.salvarAcertos).not.toHaveBeenCalled();
+      expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
     },
   );
 
@@ -1027,6 +1124,62 @@ describe('PlanejamentosService', () => {
       repositoryTransacional.buscarComGastosDivisoesAcertos,
     ).not.toHaveBeenCalled();
     expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_GASTO_ATUALIZADO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'gasto_planejamento',
+        entityId: 'gasto-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          camposAlterados: [
+            'categoria',
+            'comportamento',
+            'dataGasto',
+            'descricao',
+            'mesReferencia',
+            'observacao',
+          ],
+          alteracoes: {
+            comportamento: {
+              anterior: GastoComportamento.EVENTUAL,
+              posterior: GastoComportamento.VARIAVEL,
+            },
+            dataGasto: {
+              anterior: '2026-07-04',
+              posterior: '2026-07-05',
+            },
+            mesReferencia: {
+              anterior: '2026-07',
+              posterior: '2026-08',
+            },
+          },
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
+    const eventoAuditoria =
+      logsService.logEntityEventTransactional.mock.calls[0][0];
+    expect(JSON.stringify(eventoAuditoria)).not.toContain('Mercado atualizado');
+    expect(JSON.stringify(eventoAuditoria)).not.toContain('Nova observacao');
+    expect(JSON.stringify(eventoAuditoria)).not.toContain('Casa');
+    expect(
+      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    );
     expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
       'gasto-1',
       'planejamento-1',
@@ -1172,6 +1325,32 @@ describe('PlanejamentosService', () => {
         status: AcertoStatus.CANCELADO,
       }),
     ]);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_GASTO_ATUALIZADO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'gasto_planejamento',
+        entityId: 'gasto-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          camposAlterados: ['valorCentavos'],
+          alteracoes: {
+            valorCentavos: {
+              anterior: 10000,
+              posterior: 10001,
+            },
+          },
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
     expect(
       repositoryTransacional.buscarAcessivelComParticipantes.mock
         .invocationCallOrder[0],
@@ -1218,6 +1397,11 @@ describe('PlanejamentosService', () => {
     );
     expect(
       repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
     ).toBeLessThan(
       repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
     );
@@ -1514,6 +1698,7 @@ describe('PlanejamentosService', () => {
       repositoryTransacional.buscarComGastosDivisoesAcertos,
     ).not.toHaveBeenCalled();
     expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
     expect(result).toBe(gastoCompleto);
   });
 
@@ -1856,6 +2041,33 @@ describe('PlanejamentosService', () => {
     expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
   });
 
+  it('propagates expense update audit failures and skips the post-commit reload', async () => {
+    const erroAuditoria = new Error('falha na auditoria do gasto atualizado');
+    prepararAtualizacaoGasto();
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+        valorCentavos: 12000,
+      }),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'PLANEJAMENTO_GASTO_ATUALIZADO' }),
+      entityManager,
+    );
+    expect(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
+  });
+
   it('cancels an active expense and only its active splits transactionally', async () => {
     const planejamentoDoProprietario = criarPlanejamentoComParticipantes();
     const divisaoAtiva = {
@@ -1944,6 +2156,30 @@ describe('PlanejamentosService', () => {
         status: AcertoStatus.CANCELADO,
       }),
     ]);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_GASTO_CANCELADO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'gasto_planejamento',
+        entityId: 'gasto-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          statusAnterior: GastoStatus.ATIVO,
+          statusPosterior: GastoStatus.CANCELADO,
+          valorCentavos: 10000,
+          pagoPorParticipanteId: 'participante-1',
+          participantesIds: ['participante-1'],
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
     expect(
       repositoryTransacional.buscarAcessivelComParticipantes.mock
         .invocationCallOrder[0],
@@ -1985,6 +2221,11 @@ describe('PlanejamentosService', () => {
     expect(
       repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
     ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    ).toBeLessThan(
       repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
     );
     expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
@@ -2002,6 +2243,68 @@ describe('PlanejamentosService', () => {
     expect(result).toEqual(
       expect.objectContaining({ status: GastoStatus.CANCELADO }),
     );
+  });
+
+  it('propagates expense cancellation audit failures and skips the post-commit reload', async () => {
+    const erroAuditoria = new Error('falha na auditoria do gasto cancelado');
+    const planejamento = criarPlanejamentoComParticipantes();
+    const divisaoAtiva = {
+      ...criarDivisaoPersistida('participante-2', 1000),
+      id: 'divisao-ativa',
+      gastoId: 'gasto-1',
+    };
+    const gastoAtivo = criarGastoPersistido({
+      divisoes: [divisaoAtiva],
+      valorCentavos: 1000,
+    });
+    const gastoCancelado = {
+      ...gastoAtivo,
+      status: GastoStatus.CANCELADO,
+    } as never;
+    repositoryTransacional = {
+      ...repository,
+      buscarAcessivelComParticipantes: jest.fn(),
+      bloquearPlanejamentoParaAtualizacao: jest.fn(),
+      buscarComGastosDivisoesAcertos: jest.fn(),
+      buscarGastoPorIdEPlanejamento: jest.fn(),
+      salvarAcertos: jest.fn(),
+      salvarDivisoes: jest.fn(),
+      salvarGasto: jest.fn(),
+    };
+    repositoryTransacional.buscarAcessivelComParticipantes.mockResolvedValue(
+      planejamento,
+    );
+    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+      planejamento,
+    );
+    repositoryTransacional.buscarGastoPorIdEPlanejamento.mockResolvedValue(
+      gastoAtivo as never,
+    );
+    repositoryTransacional.salvarGasto.mockResolvedValue(gastoCancelado);
+    repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
+    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ gastos: [gastoCancelado] }),
+    );
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledTimes(1);
+    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'PLANEJAMENTO_GASTO_CANCELADO' }),
+      entityManager,
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+    expect(repository.buscarGastoPorIdEPlanejamento).not.toHaveBeenCalled();
   });
 
   it('cancels an active expense with only canceled splits without saving splits', async () => {
@@ -5522,6 +5825,8 @@ describe('PlanejamentosService', () => {
     );
     repositoryTransacional.salvarParticipante.mockResolvedValue({
       id: 'participante-1',
+      tipo: ParticipanteTipo.MANUAL,
+      status: ParticipanteStatus.ATIVO,
     } as never);
 
     const result = await service.addParticipante('planejamento-1', 'user-1', {
@@ -5567,13 +5872,39 @@ describe('PlanejamentosService', () => {
     ).toBeLessThan(
       repositoryTransacional.salvarParticipante.mock.invocationCallOrder[0],
     );
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+        module: 'planejamentos',
+        action: 'create',
+        success: true,
+        userId: 'user-1',
+        entity: 'participante_planejamento',
+        entityId: 'participante-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          tipo: ParticipanteTipo.MANUAL,
+          statusPosterior: ParticipanteStatus.ATIVO,
+        },
+        context: {
+          statusCode: 201,
+        },
+      },
+      entityManager,
+    );
+    expect(
+      repositoryTransacional.salvarParticipante.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
     expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
     expect(
       repository.bloquearPlanejamentoParaAtualizacao,
     ).not.toHaveBeenCalled();
     expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
-    expect(result).toEqual({ id: 'participante-1' });
+    expect(result).toEqual(expect.objectContaining({ id: 'participante-1' }));
   });
 
   it('adds a linked participant when usuarioId is provided', async () => {
@@ -5600,6 +5931,8 @@ describe('PlanejamentosService', () => {
     );
     repositoryTransacional.salvarParticipante.mockResolvedValue({
       id: 'participante-1',
+      tipo: ParticipanteTipo.VINCULADO,
+      status: ParticipanteStatus.ATIVO,
     } as never);
 
     await service.addParticipante('planejamento-1', 'user-1', {
@@ -5621,6 +5954,13 @@ describe('PlanejamentosService', () => {
     ).not.toHaveBeenCalled();
     expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    const [eventoParticipanteVinculado, managerParticipanteVinculado] =
+      logsService.logEntityEventTransactional.mock.calls[0];
+    expect(managerParticipanteVinculado).toBe(entityManager);
+    expect(eventoParticipanteVinculado).toMatchObject({
+      event: 'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+      details: { tipo: ParticipanteTipo.VINCULADO },
+    });
   });
 
   it('rejects participant creation without access before acquiring the lock', async () => {
@@ -5640,6 +5980,7 @@ describe('PlanejamentosService', () => {
     ).not.toHaveBeenCalled();
     expect(repository.buscarParticipanteAtivoDuplicado).not.toHaveBeenCalled();
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects accessible non-owner before acquiring the lock', async () => {
@@ -5815,6 +6156,45 @@ describe('PlanejamentosService', () => {
       1,
     );
     expect(repository.salvarParticipante).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
+  });
+
+  it('propagates participant addition audit failures after persistence', async () => {
+    const erroAuditoria = new Error(
+      'falha na auditoria do participante adicionado',
+    );
+    repository.buscarAcessivelComParticipantes.mockResolvedValue({
+      id: 'planejamento-1',
+      status: PlanejamentoStatus.ABERTO,
+      usuarioCriadorId: 'user-1',
+    } as never);
+    repository.buscarParticipanteAtivoDuplicado.mockResolvedValue(null);
+    repository.salvarParticipante.mockResolvedValue({
+      id: 'participante-1',
+      tipo: ParticipanteTipo.MANUAL,
+      status: ParticipanteStatus.ATIVO,
+    } as never);
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.addParticipante('planejamento-1', 'user-1', {
+        nome: 'Bruno',
+      }),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repository.salvarParticipante).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+      }),
+      entityManager,
+    );
+    expect(
+      repository.salvarParticipante.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(2);
   });
 
   it('removes an active participant transactionally and reloads it after commit', async () => {
@@ -5823,6 +6203,7 @@ describe('PlanejamentosService', () => {
       id: 'participante-2',
       planejamentoId: 'planejamento-1',
       status: ParticipanteStatus.ATIVO,
+      tipo: ParticipanteTipo.VINCULADO,
       usuarioId: 'user-2',
     } as never;
     const participanteRemovido = {
@@ -5857,6 +6238,28 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarParticipante.mock.calls[0][0]).not.toHaveProperty(
       'participantes',
     );
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'participante_planejamento',
+        entityId: 'participante-2',
+        details: {
+          planejamentoId: 'planejamento-1',
+          tipo: ParticipanteTipo.VINCULADO,
+          statusAnterior: ParticipanteStatus.ATIVO,
+          statusPosterior: ParticipanteStatus.REMOVIDO,
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
     expect(
       repository.bloquearPlanejamentoParaAtualizacao.mock
         .invocationCallOrder[0],
@@ -5875,6 +6278,11 @@ describe('PlanejamentosService', () => {
     ).toBeLessThan(repository.salvarParticipante.mock.invocationCallOrder[0]);
     expect(
       repository.salvarParticipante.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
     ).toBeLessThan(
       repository.buscarParticipantePorIdEPlanejamento.mock
         .invocationCallOrder[1],
@@ -6005,6 +6413,7 @@ describe('PlanejamentosService', () => {
         statusCode: 422,
       });
       expect(repository.salvarParticipante).not.toHaveBeenCalled();
+      expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
     },
   );
 
@@ -6064,6 +6473,51 @@ describe('PlanejamentosService', () => {
     },
   );
 
+  it('propagates participant removal audit failures and skips the post-commit reload', async () => {
+    const erroAuditoria = new Error(
+      'falha na auditoria do participante removido',
+    );
+    const participanteAtivo = {
+      id: 'participante-2',
+      planejamentoId: 'planejamento-1',
+      status: ParticipanteStatus.ATIVO,
+      tipo: ParticipanteTipo.VINCULADO,
+      usuarioId: 'user-2',
+    } as never;
+    repository.buscarAcessivelComParticipantes.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.buscarParticipantePorIdEPlanejamento.mockResolvedValue(
+      participanteAtivo,
+    );
+    const participanteRemovido = {
+      ...participanteAtivo,
+      status: ParticipanteStatus.REMOVIDO,
+    } as never;
+    repository.salvarParticipante.mockResolvedValue(participanteRemovido);
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.removerParticipante('planejamento-1', 'participante-2', 'user-1'),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repository.salvarParticipante).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+      }),
+      entityManager,
+    );
+    expect(
+      repository.salvarParticipante.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
+      repository.buscarParticipantePorIdEPlanejamento,
+    ).toHaveBeenCalledTimes(1);
+  });
+
   it('serializes two unit-level removals so only one changes the participant status', async () => {
     let status = ParticipanteStatus.ATIVO;
     let fila = Promise.resolve();
@@ -6075,6 +6529,7 @@ describe('PlanejamentosService', () => {
         id: 'participante-2',
         planejamentoId: 'planejamento-1',
         status,
+        tipo: ParticipanteTipo.VINCULADO,
         usuarioId: 'user-2',
       } as never),
     );
