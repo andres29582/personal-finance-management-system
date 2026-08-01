@@ -4,11 +4,13 @@ import { calcularDivisaoIgualitaria } from '../src/planejamentos/domain';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
 import { GastoPlanejamento } from '../src/planejamentos/entities/gasto-planejamento.entity';
+import { ParticipantePlanejamento } from '../src/planejamentos/entities/participante-planejamento.entity';
 import {
   AcertoStatus,
   DivisaoStatus,
   GastoComportamento,
   GastoStatus,
+  ParticipanteStatus,
   PlanejamentoTipo,
 } from '../src/planejamentos/enums';
 import { createE2eApp, type E2eApplication } from './e2e-app';
@@ -20,6 +22,7 @@ import {
 import { Identifiable, unwrapSuccess } from './helpers/http.helper';
 
 type ParticipanteResponse = Identifiable & {
+  status: ParticipanteStatus;
   usuarioId: string | null;
 };
 
@@ -97,6 +100,7 @@ describe('Planejamentos expense update (e2e)', () => {
   let dataSource: DataSource;
   let proprietario: E2eAuthSession;
   let usuarioParticipante: E2eAuthSession;
+  let usuarioNaoVinculado: E2eAuthSession;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();
@@ -113,6 +117,11 @@ describe('Planejamentos expense update (e2e)', () => {
       cpf: '11144477735',
       email: 'planejamentos.gastos.update.participant.e2e@example.com',
       nome: 'Participante Update Gasto E2E',
+    });
+    usuarioNaoVinculado = await registerAndLoginTestUser(app, {
+      cpf: '39053344705',
+      email: 'planejamentos.gastos.update.outsider.e2e@example.com',
+      nome: 'Usuario Nao Vinculado Update Gasto E2E',
     });
   });
 
@@ -163,10 +172,11 @@ describe('Planejamentos expense update (e2e)', () => {
     participantesIds: string[],
     descricao: string,
     valorCentavos = 10000,
+    session: E2eAuthSession = proprietario,
   ) => {
     const response = await request(app.getHttpServer())
       .post(`/planejamentos/${planejamentoId}/gastos`)
-      .set('Authorization', `Bearer ${proprietario.token}`)
+      .set('Authorization', `Bearer ${session.token}`)
       .send({
         comportamento: GastoComportamento.EVENTUAL,
         dataGasto: '2026-07-14',
@@ -602,29 +612,179 @@ describe('Planejamentos expense update (e2e)', () => {
     ).toBe(true);
   });
 
-  it('distinguishes an authorized participant from the owner on update', async () => {
+  it('hydrates the complete aggregate for a linked participant and creates a shared expense', async () => {
     const { planejamento, participanteProprietario } = await criarPlanejamento(
-      'Acesso sem propriedade',
+      'Agregado completo para participante vinculado',
     );
     const participanteVinculado = await adicionarParticipante(
       planejamento.id,
       'Usuario participante vinculado',
       usuarioParticipante.userId,
     );
+    const participanteHistorico = await adicionarParticipante(
+      planejamento.id,
+      'Participante historico',
+    );
+    await request(app.getHttpServer())
+      .delete(
+        `/planejamentos/${planejamento.id}/participantes/${participanteHistorico.id}`,
+      )
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .expect(200);
+
+    const detalheProprietarioResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}`)
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .expect(200);
+    const detalheVinculadoResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(200);
+    const listagemVinculadoResponse = await request(app.getHttpServer())
+      .get('/planejamentos')
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(200);
+    const detalheProprietario = unwrapSuccess<PlanejamentoResponse>(
+      detalheProprietarioResponse,
+    );
+    const detalheVinculado = unwrapSuccess<PlanejamentoResponse>(
+      detalheVinculadoResponse,
+    );
+    const planejamentoListado = unwrapSuccess<PlanejamentoResponse[]>(
+      listagemVinculadoResponse,
+    ).find((item) => item.id === planejamento.id);
+    const participantesEsperados = [
+      participanteProprietario.id,
+      participanteVinculado.id,
+      participanteHistorico.id,
+    ].sort();
+    const listarParticipantesIds = (item: PlanejamentoResponse) =>
+      item.participantes.map((participante) => participante.id).sort();
+
+    expect(listarParticipantesIds(detalheProprietario)).toEqual(
+      participantesEsperados,
+    );
+    expect(listarParticipantesIds(detalheVinculado)).toEqual(
+      participantesEsperados,
+    );
+    expect(planejamentoListado).toBeDefined();
+    if (!planejamentoListado) {
+      throw new Error(
+        'Planejamento acessivel nao retornado na listagem do participante.',
+      );
+    }
+    expect(listarParticipantesIds(planejamentoListado)).toEqual(
+      participantesEsperados,
+    );
+    expect(
+      detalheVinculado.participantes.find(
+        (participante) => participante.id === participanteHistorico.id,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        status: ParticipanteStatus.REMOVIDO,
+      }),
+    );
+
     const gasto = await criarGasto(
       planejamento.id,
       participanteProprietario.id,
       [participanteProprietario.id, participanteVinculado.id],
-      'Gasto protegido pelo proprietario',
+      'Gasto compartilhado criado pelo vinculado',
+      10001,
+      usuarioParticipante,
     );
     const gastoRepository = dataSource.getRepository(GastoPlanejamento);
     const divisaoRepository = dataSource.getRepository(DivisaoGasto);
     const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
 
-    await request(app.getHttpServer())
-      .get(`/planejamentos/${planejamento.id}`)
+    expect(gasto).toEqual(
+      expect.objectContaining({
+        pagoPorParticipanteId: participanteProprietario.id,
+        status: GastoStatus.ATIVO,
+        valorCentavos: 10001,
+      }),
+    );
+    expect(gasto.divisoes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          participanteId: participanteProprietario.id,
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5001,
+        }),
+        expect.objectContaining({
+          participanteId: participanteVinculado.id,
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+      ]),
+    );
+    expect(
+      await gastoRepository.findOneOrFail({ where: { id: gasto.id } }),
+    ).toEqual(
+      expect.objectContaining({
+        pagoPorParticipanteId: participanteProprietario.id,
+        valorCentavos: 10001,
+      }),
+    );
+    expect(
+      snapshotDivisoes(
+        await divisaoRepository.find({ where: { gastoId: gasto.id } }),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          participanteId: participanteProprietario.id,
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5001,
+        }),
+        expect.objectContaining({
+          participanteId: participanteVinculado.id,
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+      ]),
+    );
+
+    const resumoProprietarioResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/resumo`)
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .expect(200);
+    const resumoVinculadoResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/resumo`)
       .set('Authorization', `Bearer ${usuarioParticipante.token}`)
       .expect(200);
+    const acertosProprietarioResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .expect(200);
+    const acertosVinculadoResponse = await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}/acertos`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(200);
+    const resumoProprietario = unwrapSuccess<Record<string, unknown>>(
+      resumoProprietarioResponse,
+    );
+    const resumoVinculado = unwrapSuccess<Record<string, unknown>>(
+      resumoVinculadoResponse,
+    );
+    const acertosProprietario = unwrapSuccess<Array<Record<string, unknown>>>(
+      acertosProprietarioResponse,
+    );
+    const acertosVinculado = unwrapSuccess<Array<Record<string, unknown>>>(
+      acertosVinculadoResponse,
+    );
+
+    expect(resumoVinculado).toEqual(resumoProprietario);
+    expect(acertosVinculado).toEqual(acertosProprietario);
+    expect(acertosVinculado).toEqual([
+      expect.objectContaining({
+        deParticipanteId: participanteVinculado.id,
+        paraParticipanteId: participanteProprietario.id,
+        status: AcertoStatus.PENDENTE,
+        valorCentavos: 5000,
+      }),
+    ]);
 
     const gastoAntes = snapshotGasto(
       await gastoRepository.findOneOrFail({ where: { id: gasto.id } }),
@@ -637,13 +797,26 @@ describe('Planejamentos expense update (e2e)', () => {
         where: { planejamentoId: planejamento.id },
       }),
     );
-    const response = await request(app.getHttpServer())
+    const updateResponse = await request(app.getHttpServer())
       .patch(`/planejamentos/${planejamento.id}/gastos/${gasto.id}`)
       .set('Authorization', `Bearer ${usuarioParticipante.token}`)
       .send({ descricao: 'Tentativa do participante' })
       .expect(403);
 
-    expect(response.body).toEqual(
+    expect(updateResponse.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'PLANEJAMENTO_OWNER_REQUIRED',
+        }) as object,
+        success: false,
+      }),
+    );
+    const cancelResponse = await request(app.getHttpServer())
+      .patch(`/planejamentos/${planejamento.id}/gastos/${gasto.id}/cancelar`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(403);
+
+    expect(cancelResponse.body).toEqual(
       expect.objectContaining({
         error: expect.objectContaining({
           code: 'PLANEJAMENTO_OWNER_REQUIRED',
@@ -668,5 +841,140 @@ describe('Planejamentos expense update (e2e)', () => {
         }),
       ),
     ).toEqual(acertosAntes);
+  });
+
+  it('hides the aggregate and expense creation from a non-linked user', async () => {
+    const { planejamento, participanteProprietario } = await criarPlanejamento(
+      'Acesso negado para usuario nao vinculado',
+    );
+
+    await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}`)
+      .set('Authorization', `Bearer ${usuarioNaoVinculado.token}`)
+      .expect(404);
+    const listagemResponse = await request(app.getHttpServer())
+      .get('/planejamentos')
+      .set('Authorization', `Bearer ${usuarioNaoVinculado.token}`)
+      .expect(200);
+    expect(
+      unwrapSuccess<PlanejamentoResponse[]>(listagemResponse).some(
+        (item) => item.id === planejamento.id,
+      ),
+    ).toBe(false);
+
+    const response = await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', `Bearer ${usuarioNaoVinculado.token}`)
+      .send({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-14',
+        descricao: 'Tentativa sem vinculo',
+        pagoPorParticipanteId: participanteProprietario.id,
+        participantesIds: [participanteProprietario.id],
+        valorCentavos: 10000,
+      })
+      .expect(404);
+
+    expect(response.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'PLANEJAMENTO_NOT_FOUND',
+        }) as object,
+        success: false,
+      }),
+    );
+    expect(
+      await dataSource
+        .getRepository(GastoPlanejamento)
+        .countBy({ planejamentoId: planejamento.id }),
+    ).toBe(0);
+  });
+
+  it('hides the aggregate and expense creation after removing the linked participant', async () => {
+    const { planejamento, participanteProprietario } = await criarPlanejamento(
+      'Acesso negado apos remocao',
+    );
+    const participanteVinculado = await adicionarParticipante(
+      planejamento.id,
+      'Participante vinculado removido',
+      usuarioParticipante.userId,
+    );
+
+    await request(app.getHttpServer())
+      .delete(
+        `/planejamentos/${planejamento.id}/participantes/${participanteVinculado.id}`,
+      )
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(404);
+    const listagemResponse = await request(app.getHttpServer())
+      .get('/planejamentos')
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(200);
+    expect(
+      unwrapSuccess<PlanejamentoResponse[]>(listagemResponse).some(
+        (item) => item.id === planejamento.id,
+      ),
+    ).toBe(false);
+
+    await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .send({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-14',
+        descricao: 'Tentativa apos remocao',
+        pagoPorParticipanteId: participanteProprietario.id,
+        participantesIds: [participanteProprietario.id],
+        valorCentavos: 10000,
+      })
+      .expect(404);
+    expect(
+      await dataSource
+        .getRepository(GastoPlanejamento)
+        .countBy({ planejamentoId: planejamento.id }),
+    ).toBe(0);
+  });
+
+  it('hides the aggregate and expense creation from a pending linked participant', async () => {
+    const { planejamento, participanteProprietario } = await criarPlanejamento(
+      'Acesso negado para participante pendente',
+    );
+    const participanteVinculado = await adicionarParticipante(
+      planejamento.id,
+      'Participante vinculado pendente',
+      usuarioParticipante.userId,
+    );
+    await dataSource
+      .getRepository(ParticipantePlanejamento)
+      .update(
+        { id: participanteVinculado.id },
+        { status: ParticipanteStatus.PENDENTE },
+      );
+
+    await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(404);
+    await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .send({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-14',
+        descricao: 'Tentativa enquanto pendente',
+        pagoPorParticipanteId: participanteProprietario.id,
+        participantesIds: [participanteProprietario.id],
+        valorCentavos: 10000,
+      })
+      .expect(404);
+    expect(
+      await dataSource
+        .getRepository(GastoPlanejamento)
+        .countBy({ planejamentoId: planejamento.id }),
+    ).toBe(0);
   });
 });

@@ -309,175 +309,235 @@ describe('PlanejamentosService', () => {
     );
   });
 
-  it('creates a shared expense for users with planejamento access using equal split', async () => {
-    const planejamentoAntesDoLock = criarPlanejamentoComParticipantes({
-      participantes: [],
-    });
-    const planejamentoDepoisDoLock = criarPlanejamentoComParticipantes();
-    const gastoSalvo = {
-      id: 'gasto-1',
-    } as never;
-    const acertoCriado = criarEntidadeAcertoPersistido();
-    repositoryTransacional = {
-      ...repository,
-      buscarAcessivelComParticipantes: jest.fn(),
-      bloquearPlanejamentoParaAtualizacao: jest.fn(),
-      buscarComGastosDivisoesAcertos: jest.fn(),
-      salvarAcertos: jest.fn(),
-      salvarDivisoes: jest.fn(),
-      salvarGasto: jest.fn(),
-    };
-    repositoryTransacional.buscarAcessivelComParticipantes
-      .mockResolvedValueOnce(planejamentoAntesDoLock)
-      .mockResolvedValueOnce(planejamentoDepoisDoLock);
-    repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
-      planejamentoDepoisDoLock,
-    );
-    repositoryTransacional.salvarGasto.mockResolvedValue(gastoSalvo);
-    repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
-    repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
-      criarPlanejamentoComParticipantes({
-        gastos: [
-          criarGastoPersistido({
-            divisoes: [
-              criarDivisaoPersistida('participante-1', 5001),
-              criarDivisaoPersistida('participante-2', 5000),
-            ],
-            valorCentavos: 10001,
-          }),
+  it.each([
+    {
+      actorDescription: 'the owner',
+      usuarioId: 'user-1',
+    },
+    {
+      actorDescription: 'an active linked participant',
+      usuarioId: 'user-2',
+    },
+  ])(
+    'creates the same shared expense for $actorDescription',
+    async ({ usuarioId }) => {
+      const planejamentoAntesDoLock = criarPlanejamentoComParticipantes({
+        participantes: [],
+      });
+      const planejamentoDepoisDoLock = criarPlanejamentoComParticipantes();
+      const gastoSalvo = {
+        id: 'gasto-1',
+      } as never;
+      const acertoCriado = criarEntidadeAcertoPersistido();
+      repositoryTransacional = {
+        ...repository,
+        buscarAcessivelComParticipantes: jest.fn(),
+        bloquearPlanejamentoParaAtualizacao: jest.fn(),
+        buscarComGastosDivisoesAcertos: jest.fn(),
+        salvarAcertos: jest.fn(),
+        salvarDivisoes: jest.fn(),
+        salvarGasto: jest.fn(),
+      };
+      repositoryTransacional.buscarAcessivelComParticipantes
+        .mockResolvedValueOnce(planejamentoAntesDoLock)
+        .mockResolvedValueOnce(planejamentoDepoisDoLock);
+      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mockResolvedValue(
+        planejamentoDepoisDoLock,
+      );
+      repositoryTransacional.salvarGasto.mockResolvedValue(gastoSalvo);
+      repositoryTransacional.salvarDivisoes.mockResolvedValue([] as never);
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mockResolvedValue(
+        criarPlanejamentoComParticipantes({
+          gastos: [
+            criarGastoPersistido({
+              divisoes: [
+                criarDivisaoPersistida('participante-1', 5001),
+                criarDivisaoPersistida('participante-2', 5000),
+              ],
+              valorCentavos: 10001,
+            }),
+          ],
+        }),
+      );
+      repositoryTransacional.salvarAcertos.mockResolvedValue([acertoCriado]);
+      repository.buscarGastoPorIdEPlanejamento.mockResolvedValue({
+        id: 'gasto-1',
+        divisoes: [
+          {
+            participanteId: 'participante-1',
+            valorDevidoCentavos: 5001,
+          },
+          {
+            participanteId: 'participante-2',
+            valorDevidoCentavos: 5000,
+          },
         ],
-      }),
-    );
-    repositoryTransacional.salvarAcertos.mockResolvedValue([acertoCriado]);
-    repository.buscarGastoPorIdEPlanejamento.mockResolvedValue({
-      id: 'gasto-1',
-      divisoes: [
-        {
-          participanteId: 'participante-1',
-          valorDevidoCentavos: 5001,
-        },
-        {
-          participanteId: 'participante-2',
-          valorDevidoCentavos: 5000,
-        },
-      ],
-    } as never);
+      } as never);
 
-    const result = await service.createGasto('planejamento-1', 'user-1', {
-      comportamento: GastoComportamento.EVENTUAL,
-      dataGasto: '2026-07-04',
-      descricao: 'Mercado',
-      pagoPorParticipanteId: 'participante-1',
-      participantesIds: ['participante-1', 'participante-2'],
-      valorCentavos: 10001,
-    });
-
-    expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
-      expect.objectContaining({
+      const result = await service.createGasto('planejamento-1', usuarioId, {
         comportamento: GastoComportamento.EVENTUAL,
         dataGasto: '2026-07-04',
-        deletedAt: null,
         descricao: 'Mercado',
         pagoPorParticipanteId: 'participante-1',
-        planejamentoId: 'planejamento-1',
-        status: GastoStatus.ATIVO,
+        participantesIds: ['participante-1', 'participante-2'],
         valorCentavos: 10001,
-      }),
-    );
-    expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledWith([
-      expect.objectContaining({
-        participanteId: 'participante-1',
-        status: DivisaoStatus.ATIVA,
-        valorDevidoCentavos: 5001,
-      }),
-      expect.objectContaining({
-        participanteId: 'participante-2',
-        status: DivisaoStatus.ATIVA,
-        valorDevidoCentavos: 5000,
-      }),
-    ]);
-    expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
-    expect(
-      repositoryTransacional.buscarAcessivelComParticipantes,
-    ).toHaveBeenNthCalledWith(1, 'planejamento-1', 'user-1');
-    expect(
-      repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
-    ).toHaveBeenCalledWith('planejamento-1');
-    expect(
-      repositoryTransacional.buscarAcessivelComParticipantes,
-    ).toHaveBeenNthCalledWith(2, 'planejamento-1', 'user-1');
-    expect(
-      repositoryTransacional.buscarComGastosDivisoesAcertos,
-    ).toHaveBeenCalledWith('planejamento-1', 'user-1');
-    expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledWith([
-      expect.objectContaining({
-        deParticipanteId: 'participante-2',
-        paraParticipanteId: 'participante-1',
-        status: AcertoStatus.PENDENTE,
-        valorCentavos: 5000,
-      }),
-    ]);
-    expect(
-      repositoryTransacional.buscarAcessivelComParticipantes.mock
-        .invocationCallOrder[0],
-    ).toBeLessThan(
-      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
-        .invocationCallOrder[0],
-    );
-    expect(
-      repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
-        .invocationCallOrder[0],
-    ).toBeLessThan(
-      repositoryTransacional.buscarAcessivelComParticipantes.mock
-        .invocationCallOrder[1],
-    );
-    expect(
-      repositoryTransacional.buscarAcessivelComParticipantes.mock
-        .invocationCallOrder[1],
-    ).toBeLessThan(
-      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
-    );
-    expect(
-      repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
-    );
-    expect(
-      repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
-        .invocationCallOrder[0],
-    );
-    expect(
-      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
-        .invocationCallOrder[0],
-    ).toBeLessThan(
-      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
-    );
-    expect(
-      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
-    );
-    expect(
-      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      repository.buscarGastoPorIdEPlanejamento.mock.invocationCallOrder[0],
-    );
-    expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(1);
-    expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
-      'gasto-1',
-      'planejamento-1',
-    );
-    expect(
-      repository.bloquearPlanejamentoParaAtualizacao,
-    ).not.toHaveBeenCalled();
-    expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
-    expect(repository.salvarGasto).not.toHaveBeenCalled();
-    expect(repository.salvarDivisoes).not.toHaveBeenCalled();
-    expect(repository.salvarAcertos).not.toHaveBeenCalled();
-    expect(result.id).toBe('gasto-1');
-  });
+      });
+
+      expect(repositoryTransacional.salvarGasto).toHaveBeenCalledWith(
+        expect.objectContaining({
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-04',
+          deletedAt: null,
+          descricao: 'Mercado',
+          pagoPorParticipanteId: 'participante-1',
+          planejamentoId: 'planejamento-1',
+          status: GastoStatus.ATIVO,
+          valorCentavos: 10001,
+        }),
+      );
+      expect(repositoryTransacional.salvarDivisoes).toHaveBeenCalledWith([
+        expect.objectContaining({
+          participanteId: 'participante-1',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5001,
+        }),
+        expect.objectContaining({
+          participanteId: 'participante-2',
+          status: DivisaoStatus.ATIVA,
+          valorDevidoCentavos: 5000,
+        }),
+      ]);
+      expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+      expect(
+        repositoryTransacional.buscarAcessivelComParticipantes,
+      ).toHaveBeenNthCalledWith(1, 'planejamento-1', usuarioId);
+      expect(
+        repositoryTransacional.bloquearPlanejamentoParaAtualizacao,
+      ).toHaveBeenCalledWith('planejamento-1');
+      expect(
+        repositoryTransacional.buscarAcessivelComParticipantes,
+      ).toHaveBeenNthCalledWith(2, 'planejamento-1', usuarioId);
+      expect(
+        repositoryTransacional.buscarComGastosDivisoesAcertos,
+      ).toHaveBeenCalledWith('planejamento-1', usuarioId);
+      expect(repositoryTransacional.salvarAcertos).toHaveBeenCalledWith([
+        expect.objectContaining({
+          deParticipanteId: 'participante-2',
+          paraParticipanteId: 'participante-1',
+          status: AcertoStatus.PENDENTE,
+          valorCentavos: 5000,
+        }),
+      ]);
+      expect(
+        repositoryTransacional.buscarAcessivelComParticipantes.mock
+          .invocationCallOrder[0],
+      ).toBeLessThan(
+        repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+          .invocationCallOrder[0],
+      );
+      expect(
+        repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
+          .invocationCallOrder[0],
+      ).toBeLessThan(
+        repositoryTransacional.buscarAcessivelComParticipantes.mock
+          .invocationCallOrder[1],
+      );
+      expect(
+        repositoryTransacional.buscarAcessivelComParticipantes.mock
+          .invocationCallOrder[1],
+      ).toBeLessThan(
+        repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+      );
+      expect(
+        repositoryTransacional.salvarGasto.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+      );
+      expect(
+        repositoryTransacional.salvarDivisoes.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+          .invocationCallOrder[0],
+      );
+      expect(
+        repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+          .invocationCallOrder[0],
+      ).toBeLessThan(
+        repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+      );
+      expect(
+        repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+      );
+      expect(
+        repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        repository.buscarGastoPorIdEPlanejamento.mock.invocationCallOrder[0],
+      );
+      expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledWith(
+        'planejamento-1',
+        usuarioId,
+      );
+      expect(repository.buscarGastoPorIdEPlanejamento).toHaveBeenCalledWith(
+        'gasto-1',
+        'planejamento-1',
+      );
+      expect(
+        repository.bloquearPlanejamentoParaAtualizacao,
+      ).not.toHaveBeenCalled();
+      expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+      expect(repository.salvarGasto).not.toHaveBeenCalled();
+      expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+      expect(repository.salvarAcertos).not.toHaveBeenCalled();
+      expect(result.id).toBe('gasto-1');
+    },
+  );
+
+  it.each([
+    {
+      actorDescription: 'a non-linked user',
+      usuarioId: 'user-3',
+    },
+    {
+      actorDescription: 'a removed linked participant',
+      usuarioId: 'user-2',
+    },
+  ])(
+    'does not create an expense for $actorDescription',
+    async ({ usuarioId }) => {
+      repository.buscarAcessivelComParticipantes.mockResolvedValue(null);
+
+      await expect(
+        service.createGasto('planejamento-1', usuarioId, {
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-04',
+          descricao: 'Mercado',
+          pagoPorParticipanteId: 'participante-1',
+          participantesIds: ['participante-1'],
+          valorCentavos: 1000,
+        }),
+      ).rejects.toMatchObject({
+        code: 'PLANEJAMENTO_NOT_FOUND',
+        statusCode: 404,
+      });
+
+      expect(repository.buscarAcessivelComParticipantes).toHaveBeenCalledWith(
+        'planejamento-1',
+        usuarioId,
+      );
+      expect(
+        repository.bloquearPlanejamentoParaAtualizacao,
+      ).not.toHaveBeenCalled();
+      expect(repository.salvarGasto).not.toHaveBeenCalled();
+      expect(repository.salvarDivisoes).not.toHaveBeenCalled();
+      expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
+      expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     {
@@ -1441,13 +1501,11 @@ describe('PlanejamentosService', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('rejects a non-owner before acquiring the update lock', async () => {
-    prepararAtualizacaoGasto({
-      planejamentoOverrides: { usuarioCriadorId: 'owner-1' },
-    });
+  it('rejects an active linked participant before acquiring the update lock', async () => {
+    prepararAtualizacaoGasto();
 
     await expect(
-      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-1', {
+      service.atualizarGasto('planejamento-1', 'gasto-1', 'user-2', {
         descricao: 'Atualizado',
       }),
     ).rejects.toMatchObject({ code: 'PLANEJAMENTO_OWNER_REQUIRED' });
@@ -1990,13 +2048,13 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarDivisoes).not.toHaveBeenCalled();
   });
 
-  it('rejects expense cancellation by a non-owner before acquiring the lock', async () => {
+  it('rejects expense cancellation by an active linked participant before acquiring the lock', async () => {
     repository.buscarAcessivelComParticipantes.mockResolvedValue(
-      criarPlanejamentoComParticipantes({ usuarioCriadorId: 'owner-1' }),
+      criarPlanejamentoComParticipantes(),
     );
 
     await expect(
-      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-1'),
+      service.cancelarGasto('planejamento-1', 'gasto-1', 'user-2'),
     ).rejects.toMatchObject({
       code: 'PLANEJAMENTO_OWNER_REQUIRED',
       statusCode: 403,
