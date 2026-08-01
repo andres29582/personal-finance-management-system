@@ -535,7 +535,7 @@ export class PlanejamentosService {
     dto: AddParticipantePlanejamentoDto,
   ): Promise<ParticipantePlanejamento> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const planejamentoInicial =
           await this.buscarPlanejamentoAcessivelComRepository(
             repository,
@@ -572,7 +572,7 @@ export class PlanejamentosService {
           dto,
         );
 
-        return repository.salvarParticipante({
+        const participante = await repository.salvarParticipante({
           id: randomUUID(),
           planejamentoId,
           usuarioId: dto.usuarioId ?? null,
@@ -583,6 +583,29 @@ export class PlanejamentosService {
             : ParticipanteTipo.MANUAL,
           status: ParticipanteStatus.ATIVO,
         });
+
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'PLANEJAMENTO_PARTICIPANTE_ADICIONADO',
+            module: 'planejamentos',
+            action: 'create',
+            success: true,
+            userId: usuarioId,
+            entity: 'participante_planejamento',
+            entityId: participante.id,
+            details: {
+              planejamentoId,
+              tipo: participante.tipo,
+              statusPosterior: participante.status,
+            },
+            context: {
+              statusCode: 201,
+            },
+          },
+          manager,
+        );
+
+        return participante;
       },
     );
   }
@@ -593,7 +616,7 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<ParticipantePlanejamento> {
     await this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const planejamentoInicial =
           await this.buscarPlanejamentoAcessivelComRepository(
             repository,
@@ -657,6 +680,28 @@ export class PlanejamentosService {
           planejamentoId: participante.planejamentoId,
           status: ParticipanteStatus.REMOVIDO,
         });
+
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'PLANEJAMENTO_PARTICIPANTE_REMOVIDO',
+            module: 'planejamentos',
+            action: 'update',
+            success: true,
+            userId: usuarioId,
+            entity: 'participante_planejamento',
+            entityId: participante.id,
+            details: {
+              planejamentoId,
+              tipo: participante.tipo,
+              statusAnterior: ParticipanteStatus.ATIVO,
+              statusPosterior: ParticipanteStatus.REMOVIDO,
+            },
+            context: {
+              statusCode: 200,
+            },
+          },
+          manager,
+        );
       },
     );
 
@@ -682,7 +727,7 @@ export class PlanejamentosService {
     dto: CreateGastoPlanejamentoDto,
   ): Promise<GastoPlanejamento> {
     const gasto = await this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         await this.buscarPlanejamentoAcessivelComRepository(
           repository,
           planejamentoId,
@@ -766,6 +811,32 @@ export class PlanejamentosService {
 
         await this.reconciliarAcertos(repository, planejamentoAtualizado);
 
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'PLANEJAMENTO_GASTO_CRIADO',
+            module: 'planejamentos',
+            action: 'create',
+            success: true,
+            userId: usuarioId,
+            entity: 'gasto_planejamento',
+            entityId: gastoSalvo.id,
+            details: {
+              planejamentoId,
+              statusPosterior: gastoSalvo.status,
+              valorCentavos: gastoSalvo.valorCentavos,
+              comportamento: gastoSalvo.comportamento,
+              pagoPorParticipanteId: gastoSalvo.pagoPorParticipanteId,
+              participantesIds: divisoesCalculadas
+                .map((divisao) => divisao.participanteId)
+                .sort((a, b) => a.localeCompare(b)),
+            },
+            context: {
+              statusCode: 201,
+            },
+          },
+          manager,
+        );
+
         return gastoSalvo;
       },
     );
@@ -821,7 +892,7 @@ export class PlanejamentosService {
     }
 
     await this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const planejamentoInicial =
           await this.buscarPlanejamentoAcessivelComRepository(
             repository,
@@ -956,17 +1027,86 @@ export class PlanejamentosService {
           dto.mesReferencia !== undefined
             ? dto.mesReferencia
             : gasto.mesReferencia;
+        const descricaoAlterada = descricao !== gasto.descricao;
+        const dataGastoAlterada = dataGasto !== gasto.dataGasto;
+        const comportamentoAlterado = comportamento !== gasto.comportamento;
+        const categoriaAlterada = categoria !== gasto.categoria;
+        const observacaoAlterada = observacao !== gasto.observacao;
+        const mesReferenciaAlterada = mesReferencia !== gasto.mesReferencia;
         const alteracaoDescritiva =
-          descricao !== gasto.descricao ||
-          dataGasto !== gasto.dataGasto ||
-          comportamento !== gasto.comportamento ||
-          categoria !== gasto.categoria ||
-          observacao !== gasto.observacao ||
-          mesReferencia !== gasto.mesReferencia;
+          descricaoAlterada ||
+          dataGastoAlterada ||
+          comportamentoAlterado ||
+          categoriaAlterada ||
+          observacaoAlterada ||
+          mesReferenciaAlterada;
 
         if (!alteracaoFinanceira && !alteracaoDescritiva) {
           return gasto.id;
         }
+
+        const camposAlterados: string[] = [];
+        const alteracoes: Record<
+          string,
+          { anterior: unknown; posterior: unknown }
+        > = {};
+        const registrarAlteracao = (
+          campo: string,
+          anterior: unknown,
+          posterior: unknown,
+        ) => {
+          camposAlterados.push(campo);
+          alteracoes[campo] = { anterior, posterior };
+        };
+
+        if (descricaoAlterada) {
+          camposAlterados.push('descricao');
+        }
+        if (valorAlterado) {
+          registrarAlteracao(
+            'valorCentavos',
+            gasto.valorCentavos,
+            valorCentavos,
+          );
+        }
+        if (dataGastoAlterada) {
+          registrarAlteracao('dataGasto', gasto.dataGasto, dataGasto);
+        }
+        if (comportamentoAlterado) {
+          registrarAlteracao(
+            'comportamento',
+            gasto.comportamento,
+            comportamento,
+          );
+        }
+        if (pagadorAlterado) {
+          registrarAlteracao(
+            'pagoPorParticipanteId',
+            gasto.pagoPorParticipanteId,
+            pagoPorParticipanteId,
+          );
+        }
+        if (participantesAlterados) {
+          registrarAlteracao(
+            'participantesIds',
+            [...participantesAtuaisIds],
+            [...participantesEfetivosIds],
+          );
+        }
+        if (categoriaAlterada) {
+          camposAlterados.push('categoria');
+        }
+        if (observacaoAlterada) {
+          camposAlterados.push('observacao');
+        }
+        if (mesReferenciaAlterada) {
+          registrarAlteracao(
+            'mesReferencia',
+            gasto.mesReferencia,
+            mesReferencia,
+          );
+        }
+        camposAlterados.sort((a, b) => a.localeCompare(b));
 
         const gastoSalvo = await repository.salvarGasto({
           id: gasto.id,
@@ -983,37 +1123,57 @@ export class PlanejamentosService {
             : gasto.ultimaAlteracaoValorEm,
         });
 
-        if (!alteracaoFinanceira) {
-          return gastoSalvo.id;
+        if (alteracaoFinanceira) {
+          if (divisoesAlteradas) {
+            const divisoesCalculadas = this.calcularDivisoes(
+              valorCentavos,
+              participantesEfetivosIds,
+            );
+
+            await repository.salvarDivisoes([
+              ...divisoesAtivas.map((divisao) => ({
+                ...divisao,
+                status: DivisaoStatus.CANCELADA,
+              })),
+              ...divisoesCalculadas.map((divisao) => ({
+                id: randomUUID(),
+                gastoId,
+                participanteId: divisao.participanteId,
+                valorDevidoCentavos: divisao.valorCentavos,
+                status: DivisaoStatus.ATIVA,
+              })),
+            ]);
+          }
+
+          const planejamentoAtualizado =
+            await this.buscarPlanejamentoParaAcertos(
+              repository,
+              planejamentoId,
+              usuarioId,
+            );
+          await this.reconciliarAcertos(repository, planejamentoAtualizado);
         }
 
-        if (divisoesAlteradas) {
-          const divisoesCalculadas = this.calcularDivisoes(
-            valorCentavos,
-            participantesEfetivosIds,
-          );
-
-          await repository.salvarDivisoes([
-            ...divisoesAtivas.map((divisao) => ({
-              ...divisao,
-              status: DivisaoStatus.CANCELADA,
-            })),
-            ...divisoesCalculadas.map((divisao) => ({
-              id: randomUUID(),
-              gastoId,
-              participanteId: divisao.participanteId,
-              valorDevidoCentavos: divisao.valorCentavos,
-              status: DivisaoStatus.ATIVA,
-            })),
-          ]);
-        }
-
-        const planejamentoAtualizado = await this.buscarPlanejamentoParaAcertos(
-          repository,
-          planejamentoId,
-          usuarioId,
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'PLANEJAMENTO_GASTO_ATUALIZADO',
+            module: 'planejamentos',
+            action: 'update',
+            success: true,
+            userId: usuarioId,
+            entity: 'gasto_planejamento',
+            entityId: gastoSalvo.id,
+            details: {
+              planejamentoId,
+              camposAlterados,
+              alteracoes,
+            },
+            context: {
+              statusCode: 200,
+            },
+          },
+          manager,
         );
-        await this.reconciliarAcertos(repository, planejamentoAtualizado);
 
         return gastoSalvo.id;
       },
@@ -1029,7 +1189,7 @@ export class PlanejamentosService {
   ): Promise<GastoPlanejamento> {
     const gastoCancelado =
       await this.planejamentosRepository.executarEmTransacao(
-        async (repository) => {
+        async (repository, manager) => {
           const planejamentoInicial =
             await this.buscarPlanejamentoAcessivelComRepository(
               repository,
@@ -1107,6 +1267,32 @@ export class PlanejamentosService {
             );
 
           await this.reconciliarAcertos(repository, planejamentoAtualizado);
+
+          await this.logsService.logEntityEventTransactional(
+            {
+              event: 'PLANEJAMENTO_GASTO_CANCELADO',
+              module: 'planejamentos',
+              action: 'update',
+              success: true,
+              userId: usuarioId,
+              entity: 'gasto_planejamento',
+              entityId: gastoSalvo.id,
+              details: {
+                planejamentoId,
+                statusAnterior: GastoStatus.ATIVO,
+                statusPosterior: GastoStatus.CANCELADO,
+                valorCentavos: gasto.valorCentavos,
+                pagoPorParticipanteId: gasto.pagoPorParticipanteId,
+                participantesIds: divisoesAtivas
+                  .map((divisao) => divisao.participanteId)
+                  .sort((a, b) => a.localeCompare(b)),
+              },
+              context: {
+                statusCode: 200,
+              },
+            },
+            manager,
+          );
 
           return gastoSalvo;
         },

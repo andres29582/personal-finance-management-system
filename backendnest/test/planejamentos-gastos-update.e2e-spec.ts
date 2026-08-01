@@ -1,5 +1,7 @@
+import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
+import { AuditLog } from '../src/logs/entities/audit-log.entity';
 import { calcularDivisaoIgualitaria } from '../src/planejamentos/domain';
 import { AcertoPlanejamento } from '../src/planejamentos/entities/acerto-planejamento.entity';
 import { DivisaoGasto } from '../src/planejamentos/entities/divisao-gasto.entity';
@@ -52,6 +54,11 @@ type CenarioGasto = {
   planejamento: PlanejamentoResponse;
 };
 
+type AuditFailureTrigger = {
+  functionName: string;
+  triggerName: string;
+};
+
 const ordenarPorId = <T extends { id: string }>(items: T[]): T[] =>
   [...items].sort((a, b) => a.id.localeCompare(b.id));
 
@@ -101,6 +108,7 @@ describe('Planejamentos expense update (e2e)', () => {
   let proprietario: E2eAuthSession;
   let usuarioParticipante: E2eAuthSession;
   let usuarioNaoVinculado: E2eAuthSession;
+  let auditFailureTrigger: AuditFailureTrigger | null = null;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();
@@ -128,6 +136,58 @@ describe('Planejamentos expense update (e2e)', () => {
   afterAll(async () => {
     await app?.close();
   });
+
+  async function removerTriggerAuditoria(): Promise<void> {
+    if (!auditFailureTrigger) {
+      return;
+    }
+
+    const { functionName, triggerName } = auditFailureTrigger;
+    await dataSource.query(
+      `DROP TRIGGER IF EXISTS ${triggerName} ON audit_log`,
+    );
+    await dataSource.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    auditFailureTrigger = null;
+  }
+
+  afterEach(async () => {
+    await removerTriggerAuditoria();
+  });
+
+  async function instalarFalhaAuditoriaGasto(
+    event: string,
+    entityId?: string,
+    planejamentoId?: string,
+  ): Promise<void> {
+    const suffix = randomUUID().replace(/-/g, '_');
+    auditFailureTrigger = {
+      functionName: `falhar_auditoria_gasto_${suffix}`,
+      triggerName: `trigger_falhar_auditoria_gasto_${suffix}`,
+    };
+    const { functionName, triggerName } = auditFailureTrigger;
+    const entityIdFilter = entityId ? `AND NEW.entity_id = '${entityId}'` : '';
+    const planejamentoIdFilter = planejamentoId
+      ? `AND NEW.details ->> 'planejamentoId' = '${planejamentoId}'`
+      : '';
+
+    await dataSource.query(`
+      CREATE FUNCTION ${functionName}() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.entity = 'gasto_planejamento'
+          AND NEW.event = '${event}'
+          AND NEW.user_id = '${proprietario.userId}'
+          ${entityIdFilter}
+          ${planejamentoIdFilter} THEN
+          RAISE EXCEPTION 'falha de auditoria de gasto induzida pelo teste';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER ${triggerName}
+      BEFORE INSERT ON audit_log
+      FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+    `);
+  }
 
   const criarPlanejamento = async (
     nome: string,
@@ -216,6 +276,149 @@ describe('Planejamentos expense update (e2e)', () => {
     };
   };
 
+  it('audits expense creation once with the allowed deterministic payload', async () => {
+    const { planejamento, participanteProprietario } = await criarPlanejamento(
+      'Auditoria de criacao de gasto',
+    );
+    const participante = await adicionarParticipante(
+      planejamento.id,
+      'Participante da auditoria de criacao',
+    );
+    const descricao = 'Descricao sensivel da criacao';
+    const categoria = 'Categoria sensivel da criacao';
+    const observacao = 'Observacao sensivel da criacao';
+    const response = await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .send({
+        categoria,
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-14',
+        descricao,
+        observacao,
+        pagoPorParticipanteId: participanteProprietario.id,
+        participantesIds: [participante.id, participanteProprietario.id],
+        valorCentavos: 10001,
+      })
+      .expect(201);
+    const gasto = unwrapSuccess<GastoResponse>(response);
+
+    await expect(
+      dataSource.getRepository(GastoPlanejamento).findOneByOrFail({
+        id: gasto.id,
+        planejamentoId: planejamento.id,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: GastoStatus.ATIVO,
+        valorCentavos: 10001,
+      }),
+    );
+    await expect(
+      dataSource.getRepository(DivisaoGasto).countBy({ gastoId: gasto.id }),
+    ).resolves.toBe(2);
+
+    const logs = await dataSource.getRepository(AuditLog).find({
+      where: {
+        entityId: gasto.id,
+        event: 'PLANEJAMENTO_GASTO_CRIADO',
+        userId: proprietario.userId,
+      },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({
+        action: 'create',
+        entity: 'gasto_planejamento',
+        entityId: gasto.id,
+        event: 'PLANEJAMENTO_GASTO_CRIADO',
+        module: 'planejamentos',
+        statusCode: 201,
+        success: true,
+        userId: proprietario.userId,
+      }),
+    );
+    expect(logs[0].details).toEqual({
+      planejamentoId: planejamento.id,
+      statusPosterior: GastoStatus.ATIVO,
+      valorCentavos: 10001,
+      comportamento: GastoComportamento.EVENTUAL,
+      pagoPorParticipanteId: participanteProprietario.id,
+      participantesIds: [participante.id, participanteProprietario.id].sort(),
+    });
+    const serializado = JSON.stringify(logs[0]);
+    expect(serializado).not.toContain(descricao);
+    expect(serializado).not.toContain(categoria);
+    expect(serializado).not.toContain(observacao);
+  });
+
+  it('rolls back expense, divisions and reconciliation when creation audit fails', async () => {
+    const { planejamento, participanteProprietario } = await criarPlanejamento(
+      'Rollback da criacao auditada',
+    );
+    const participante = await adicionarParticipante(
+      planejamento.id,
+      'Participante do rollback da criacao',
+    );
+    const gastoRepository = dataSource.getRepository(GastoPlanejamento);
+    const divisaoRepository = dataSource.getRepository(DivisaoGasto);
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    const auditRepository = dataSource.getRepository(AuditLog);
+    const gastosAntes = await gastoRepository.countBy({
+      planejamentoId: planejamento.id,
+    });
+    const divisoesAntes = await divisaoRepository.count();
+    const acertosAntes = snapshotAcertos(
+      await acertoRepository.find({
+        where: { planejamentoId: planejamento.id },
+      }),
+    );
+    const logsAntes = await auditRepository.countBy({
+      event: 'PLANEJAMENTO_GASTO_CRIADO',
+      userId: proprietario.userId,
+    });
+    await instalarFalhaAuditoriaGasto(
+      'PLANEJAMENTO_GASTO_CRIADO',
+      undefined,
+      planejamento.id,
+    );
+
+    try {
+      await request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/gastos`)
+        .set('Authorization', `Bearer ${proprietario.token}`)
+        .send({
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-14',
+          descricao: 'Gasto revertido pela auditoria',
+          pagoPorParticipanteId: participanteProprietario.id,
+          participantesIds: [participanteProprietario.id, participante.id],
+          valorCentavos: 10000,
+        })
+        .expect(500);
+    } finally {
+      await removerTriggerAuditoria();
+    }
+
+    await expect(
+      gastoRepository.countBy({ planejamentoId: planejamento.id }),
+    ).resolves.toBe(gastosAntes);
+    await expect(divisaoRepository.count()).resolves.toBe(divisoesAntes);
+    expect(
+      snapshotAcertos(
+        await acertoRepository.find({
+          where: { planejamentoId: planejamento.id },
+        }),
+      ),
+    ).toEqual(acertosAntes);
+    await expect(
+      auditRepository.countBy({
+        event: 'PLANEJAMENTO_GASTO_CRIADO',
+        userId: proprietario.userId,
+      }),
+    ).resolves.toBe(logsAntes);
+  });
+
   it('updates only descriptive fields without financial reconciliation', async () => {
     const { gasto, participanteProprietario, planejamento } =
       await criarCenarioComGasto(
@@ -281,6 +484,156 @@ describe('Planejamentos expense update (e2e)', () => {
         }),
       ),
     ).toEqual(acertosAntes);
+    const logs = await dataSource.getRepository(AuditLog).find({
+      where: {
+        entityId: gasto.id,
+        event: 'PLANEJAMENTO_GASTO_ATUALIZADO',
+        userId: proprietario.userId,
+      },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toEqual(
+      expect.objectContaining({
+        action: 'update',
+        entity: 'gasto_planejamento',
+        entityId: gasto.id,
+        event: 'PLANEJAMENTO_GASTO_ATUALIZADO',
+        module: 'planejamentos',
+        statusCode: 200,
+        success: true,
+        userId: proprietario.userId,
+      }),
+    );
+    expect(logs[0].details).toEqual({
+      planejamentoId: planejamento.id,
+      camposAlterados: ['descricao', 'observacao'],
+      alteracoes: {},
+    });
+    const serializado = JSON.stringify(logs[0]);
+    expect(serializado).not.toContain('Mercado revisado');
+    expect(serializado).not.toContain('Somente ajuste descritivo');
+  });
+
+  it('does not audit a semantically equivalent expense update', async () => {
+    const {
+      gasto,
+      participanteDevedor,
+      participanteProprietario,
+      planejamento,
+    } = await criarCenarioComGasto(
+      'Atualizacao equivalente sem auditoria',
+      'Participante da atualizacao equivalente',
+      'Gasto semanticamente igual',
+    );
+    const gastoRepository = dataSource.getRepository(GastoPlanejamento);
+    const divisaoRepository = dataSource.getRepository(DivisaoGasto);
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    const gastoAntes = snapshotGasto(
+      await gastoRepository.findOneByOrFail({ id: gasto.id }),
+    );
+    const divisoesAntes = snapshotDivisoes(
+      await divisaoRepository.find({ where: { gastoId: gasto.id } }),
+    );
+    const acertosAntes = snapshotAcertos(
+      await acertoRepository.find({
+        where: { planejamentoId: planejamento.id },
+      }),
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/planejamentos/${planejamento.id}/gastos/${gasto.id}`)
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .send({
+        descricao: gasto.descricao,
+        pagoPorParticipanteId: participanteProprietario.id,
+        participantesIds: [participanteDevedor.id, participanteProprietario.id],
+        valorCentavos: gasto.valorCentavos,
+      })
+      .expect(200);
+
+    expect(
+      snapshotGasto(await gastoRepository.findOneByOrFail({ id: gasto.id })),
+    ).toEqual(gastoAntes);
+    expect(
+      snapshotDivisoes(
+        await divisaoRepository.find({ where: { gastoId: gasto.id } }),
+      ),
+    ).toEqual(divisoesAntes);
+    expect(
+      snapshotAcertos(
+        await acertoRepository.find({
+          where: { planejamentoId: planejamento.id },
+        }),
+      ),
+    ).toEqual(acertosAntes);
+    await expect(
+      dataSource.getRepository(AuditLog).countBy({
+        entityId: gasto.id,
+        event: 'PLANEJAMENTO_GASTO_ATUALIZADO',
+      }),
+    ).resolves.toBe(0);
+  });
+
+  it('rolls back expense, divisions and reconciliation when update audit fails', async () => {
+    const { gasto, participanteDevedor, planejamento } =
+      await criarCenarioComGasto(
+        'Rollback da atualizacao auditada',
+        'Participante do rollback da atualizacao',
+        'Gasto preservado no rollback da atualizacao',
+      );
+    const gastoRepository = dataSource.getRepository(GastoPlanejamento);
+    const divisaoRepository = dataSource.getRepository(DivisaoGasto);
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    const gastoAntes = snapshotGasto(
+      await gastoRepository.findOneByOrFail({ id: gasto.id }),
+    );
+    const divisoesAntes = snapshotDivisoes(
+      await divisaoRepository.find({ where: { gastoId: gasto.id } }),
+    );
+    const acertosAntes = snapshotAcertos(
+      await acertoRepository.find({
+        where: { planejamentoId: planejamento.id },
+      }),
+    );
+    await instalarFalhaAuditoriaGasto(
+      'PLANEJAMENTO_GASTO_ATUALIZADO',
+      gasto.id,
+    );
+
+    try {
+      await request(app.getHttpServer())
+        .patch(`/planejamentos/${planejamento.id}/gastos/${gasto.id}`)
+        .set('Authorization', `Bearer ${proprietario.token}`)
+        .send({
+          participantesIds: [participanteDevedor.id],
+          valorCentavos: 12001,
+        })
+        .expect(500);
+    } finally {
+      await removerTriggerAuditoria();
+    }
+
+    expect(
+      snapshotGasto(await gastoRepository.findOneByOrFail({ id: gasto.id })),
+    ).toEqual(gastoAntes);
+    expect(
+      snapshotDivisoes(
+        await divisaoRepository.find({ where: { gastoId: gasto.id } }),
+      ),
+    ).toEqual(divisoesAntes);
+    expect(
+      snapshotAcertos(
+        await acertoRepository.find({
+          where: { planejamentoId: planejamento.id },
+        }),
+      ),
+    ).toEqual(acertosAntes);
+    await expect(
+      dataSource.getRepository(AuditLog).countBy({
+        entityId: gasto.id,
+        event: 'PLANEJAMENTO_GASTO_ATUALIZADO',
+      }),
+    ).resolves.toBe(0);
   });
 
   it('updates only the payer while preserving divisions', async () => {
