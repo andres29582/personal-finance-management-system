@@ -41,6 +41,19 @@ type MutationContext = {
   planejamentoId?: string;
 };
 
+type CurrentMutationCapabilities = {
+  canCancelExpense: (gasto: GastoPlanejamento) => boolean;
+  canPerformSettlementAction: (
+    acerto: AcertoPlanejamento,
+    action: AcertoAction,
+  ) => boolean;
+  canPerformTransition: (transition: PlanejamentoTransition) => boolean;
+  canRemoveParticipant: (
+    participante: ParticipantePlanejamento,
+  ) => boolean;
+  canSyncSettlements: boolean;
+};
+
 const transitionConfig: Record<PlanejamentoTransition, TransitionConfig> = {
   archive: {
     confirmationMessage:
@@ -107,7 +120,22 @@ export type UsePlanejamentoDetailMutationsResult = {
   acertosError: string;
   acertosInfo: string;
   aggregateMutationInProgress: boolean;
-  canNavigateToStructuralMutation: () => boolean;
+  canAddParticipant: boolean;
+  canCancelExpense: (gasto: GastoPlanejamento) => boolean;
+  canCreateExpense: boolean;
+  canEditExpense: (gasto: GastoPlanejamento) => boolean;
+  canManageLifecycle: boolean;
+  canNavigateToAddParticipant: () => boolean;
+  canNavigateToCreateExpense: () => boolean;
+  canNavigateToEditExpense: (gasto: GastoPlanejamento) => boolean;
+  canPerformSettlementAction: (
+    acerto: AcertoPlanejamento,
+    action: AcertoAction,
+  ) => boolean;
+  canRemoveParticipant: (
+    participante: ParticipantePlanejamento,
+  ) => boolean;
+  canSyncSettlements: boolean;
   gastoActionLoading: string | null;
   gastosError: string;
   gastosInfo: string;
@@ -123,14 +151,11 @@ export type UsePlanejamentoDetailMutationsResult = {
   handleTransition: (
     transition: PlanejamentoTransition,
   ) => Promise<void>;
-  isAuthenticatedUserOwner: boolean;
   isFinanciallySettled: boolean;
   isReadOnly: boolean;
   participanteActionLoading: string | null;
   participantesError: string;
   participantesInfo: string;
-  settlementMutationsAllowed: boolean;
-  structuralMutationsAllowed: boolean;
   transitionError: string;
   transitionInfo: string;
   transitionLoading: PlanejamentoTransition | null;
@@ -191,6 +216,8 @@ export function usePlanejamentoDetailMutations({
   const aggregateMutationLockRef = useRef<AggregateMutationToken | null>(
     null,
   );
+  const currentMutationCapabilitiesRef =
+    useRef<CurrentMutationCapabilities | null>(null);
   const mountedRef = useRef(true);
   const mutationContextRef = useRef<MutationContext>({
     generation: 0,
@@ -242,6 +269,26 @@ export function usePlanejamentoDetailMutations({
   const isAuthenticatedUserOwner =
     !!planejamento &&
     usuarioAutenticadoId === planejamento.usuarioCriadorId;
+  const authenticatedParticipant =
+    planejamento?.participantes?.find(
+      (participante) =>
+        !!usuarioAutenticadoId &&
+        participante.usuarioId === usuarioAutenticadoId &&
+        participante.tipo === 'VINCULADO' &&
+        participante.status === 'ATIVO',
+    ) ?? null;
+  const canActAsAggregateMember =
+    isAuthenticatedUserOwner || !!authenticatedParticipant;
+  const canAddParticipant =
+    structuralMutationsAllowed && isAuthenticatedUserOwner;
+  const canCreateExpense =
+    structuralMutationsAllowed && canActAsAggregateMember;
+  const canManageLifecycle =
+    isAuthenticatedUserOwner &&
+    (planejamento?.status === 'ABERTO' ||
+      planejamento?.status === 'FECHADO');
+  const canSyncSettlements =
+    settlementMutationsAllowed && canActAsAggregateMember;
   const aggregateMutationInProgress =
     aggregateMutationLocked ||
     !!acertosActionLoading ||
@@ -332,19 +379,132 @@ export function usePlanejamentoDetailMutations({
     [isCurrentMutationContext],
   );
 
-  const canNavigateToStructuralMutation = useCallback(
+  const canRemoveParticipant = useCallback(
+    (participante: ParticipantePlanejamento) =>
+      canAddParticipant &&
+      participante.status === 'ATIVO' &&
+      participante.usuarioId !== planejamento?.usuarioCriadorId,
+    [canAddParticipant, planejamento?.usuarioCriadorId],
+  );
+
+  const canEditExpense = useCallback(
+    (gasto: GastoPlanejamento) =>
+      structuralMutationsAllowed &&
+      isAuthenticatedUserOwner &&
+      gasto.status === 'ATIVO',
+    [isAuthenticatedUserOwner, structuralMutationsAllowed],
+  );
+
+  const canCancelExpense = useCallback(
+    (gasto: GastoPlanejamento) =>
+      structuralMutationsAllowed &&
+      isAuthenticatedUserOwner &&
+      gasto.status === 'ATIVO',
+    [isAuthenticatedUserOwner, structuralMutationsAllowed],
+  );
+
+  const canPerformSettlementAction = useCallback(
+    (acerto: AcertoPlanejamento, action: AcertoAction) => {
+      if (!settlementMutationsAllowed) {
+        return false;
+      }
+
+      if (action === 'pay') {
+        return (
+          acerto.status === 'PENDENTE' &&
+          (isAuthenticatedUserOwner ||
+            authenticatedParticipant?.id === acerto.deParticipanteId)
+        );
+      }
+
+      if (action === 'cancel') {
+        return (
+          (acerto.status === 'PENDENTE' || acerto.status === 'PAGO') &&
+          isAuthenticatedUserOwner
+        );
+      }
+
+      return acerto.status === 'PAGO' && isAuthenticatedUserOwner;
+    },
+    [
+      authenticatedParticipant?.id,
+      isAuthenticatedUserOwner,
+      settlementMutationsAllowed,
+    ],
+  );
+
+  const canPerformTransition = useCallback(
+    (transition: PlanejamentoTransition) =>
+      canManageLifecycle &&
+      isTransitionAllowed(transition, planejamento, isFinanciallySettled),
+    [canManageLifecycle, isFinanciallySettled, planejamento],
+  );
+
+  currentMutationCapabilitiesRef.current = {
+    canCancelExpense,
+    canPerformSettlementAction,
+    canPerformTransition,
+    canRemoveParticipant,
+    canSyncSettlements,
+  };
+
+  const hasCurrentMutationCapability = useCallback(
+    (
+      expectedPlanejamentoId: string,
+      expectedGeneration: number,
+      isAllowed: (capabilities: CurrentMutationCapabilities) => boolean,
+    ) => {
+      const capabilities = currentMutationCapabilitiesRef.current;
+
+      return (
+        !!capabilities &&
+        isCurrentMutationContext(
+          expectedPlanejamentoId,
+          expectedGeneration,
+        ) &&
+        isAllowed(capabilities)
+      );
+    },
+    [isCurrentMutationContext],
+  );
+
+  const canNavigateToAddParticipant = useCallback(
     () =>
       !!planejamentoId &&
-      structuralMutationsAllowed &&
+      canAddParticipant &&
       !aggregateMutationLockRef.current,
-    [planejamentoId, structuralMutationsAllowed],
+    [canAddParticipant, planejamentoId],
+  );
+
+  const canNavigateToCreateExpense = useCallback(
+    () =>
+      !!planejamentoId &&
+      canCreateExpense &&
+      !aggregateMutationLockRef.current,
+    [canCreateExpense, planejamentoId],
+  );
+
+  const canNavigateToEditExpense = useCallback(
+    (gasto: GastoPlanejamento) =>
+      !!planejamentoId &&
+      canEditExpense(gasto) &&
+      !aggregateMutationLockRef.current,
+    [canEditExpense, planejamentoId],
   );
 
   const handleSyncAcertos = useCallback(async () => {
     const currentPlanejamentoId = planejamentoId;
+    const currentGeneration = mutationContextRef.current.generation;
     const lockKey = 'acerto:sync';
 
-    if (!currentPlanejamentoId || !settlementMutationsAllowed) {
+    if (
+      !currentPlanejamentoId ||
+      !hasCurrentMutationCapability(
+        currentPlanejamentoId,
+        currentGeneration,
+        (capabilities) => capabilities.canSyncSettlements,
+      )
+    ) {
       return;
     }
 
@@ -364,9 +524,10 @@ export function usePlanejamentoDetailMutations({
       );
 
       if (
-        !isCurrentMutationContext(
+        !hasCurrentMutationCapability(
           currentPlanejamentoId,
           mutationToken.contextGeneration,
+          (capabilities) => capabilities.canSyncSettlements,
         )
       ) {
         return;
@@ -410,21 +571,30 @@ export function usePlanejamentoDetailMutations({
     }
   }, [
     acquireAggregateMutationLock,
+    hasCurrentMutationCapability,
     isCurrentMutationContext,
     planejamentoId,
     refreshFinancialData,
     releaseAggregateMutationLock,
     reportMutationError,
-    settlementMutationsAllowed,
   ]);
 
   const handleAcertoAction = useCallback(
     async (acerto: AcertoPlanejamento, action: AcertoAction) => {
       const currentPlanejamentoId = planejamentoId;
+      const currentGeneration = mutationContextRef.current.generation;
       const actionKey = `${action}:${acerto.id}`;
       const lockKey = `acerto:${actionKey}`;
 
-      if (!currentPlanejamentoId || !settlementMutationsAllowed) {
+      if (
+        !currentPlanejamentoId ||
+        !hasCurrentMutationCapability(
+          currentPlanejamentoId,
+          currentGeneration,
+          (capabilities) =>
+            capabilities.canPerformSettlementAction(acerto, action),
+        )
+      ) {
         return;
       }
 
@@ -445,9 +615,11 @@ export function usePlanejamentoDetailMutations({
         );
 
         if (
-          !isCurrentMutationContext(
+          !hasCurrentMutationCapability(
             currentPlanejamentoId,
             mutationToken.contextGeneration,
+            (capabilities) =>
+              capabilities.canPerformSettlementAction(acerto, action),
           )
         ) {
           return;
@@ -488,24 +660,28 @@ export function usePlanejamentoDetailMutations({
     },
     [
       acquireAggregateMutationLock,
+      hasCurrentMutationCapability,
       isCurrentMutationContext,
       planejamentoId,
       refreshFinancialData,
       releaseAggregateMutationLock,
       reportMutationError,
-      settlementMutationsAllowed,
     ],
   );
 
   const handleCancelGasto = useCallback(
     async (gasto: GastoPlanejamento) => {
       const currentPlanejamentoId = planejamentoId;
+      const currentGeneration = mutationContextRef.current.generation;
       const lockKey = `gasto:cancel:${gasto.id}`;
 
       if (
         !currentPlanejamentoId ||
-        !structuralMutationsAllowed ||
-        gasto.status !== 'ATIVO'
+        !hasCurrentMutationCapability(
+          currentPlanejamentoId,
+          currentGeneration,
+          (capabilities) => capabilities.canCancelExpense(gasto),
+        )
       ) {
         return;
       }
@@ -530,9 +706,10 @@ export function usePlanejamentoDetailMutations({
 
         if (
           !confirmed ||
-          !isCurrentMutationContext(
+          !hasCurrentMutationCapability(
             currentPlanejamentoId,
             mutationToken.contextGeneration,
+            (capabilities) => capabilities.canCancelExpense(gasto),
           )
         ) {
           return;
@@ -542,9 +719,10 @@ export function usePlanejamentoDetailMutations({
         cancelamentoConcluido = true;
 
         if (
-          !isCurrentMutationContext(
+          !hasCurrentMutationCapability(
             currentPlanejamentoId,
             mutationToken.contextGeneration,
+            (capabilities) => capabilities.canCancelExpense(gasto),
           )
         ) {
           return;
@@ -587,27 +765,29 @@ export function usePlanejamentoDetailMutations({
     },
     [
       acquireAggregateMutationLock,
+      hasCurrentMutationCapability,
       isCurrentMutationContext,
       planejamentoId,
       refreshExpenseFinancialData,
       releaseAggregateMutationLock,
       reportMutationError,
-      structuralMutationsAllowed,
     ],
   );
 
   const handleRemoveParticipante = useCallback(
     async (participante: ParticipantePlanejamento) => {
       const currentPlanejamentoId = planejamentoId;
+      const currentGeneration = mutationContextRef.current.generation;
       const lockKey = `participante:remove:${participante.id}`;
 
       if (
         !currentPlanejamentoId ||
-        !planejamento ||
-        !isAuthenticatedUserOwner ||
-        !structuralMutationsAllowed ||
-        participante.status !== 'ATIVO' ||
-        participante.usuarioId === planejamento.usuarioCriadorId
+        !hasCurrentMutationCapability(
+          currentPlanejamentoId,
+          currentGeneration,
+          (capabilities) =>
+            capabilities.canRemoveParticipant(participante),
+        )
       ) {
         return;
       }
@@ -632,9 +812,11 @@ export function usePlanejamentoDetailMutations({
 
         if (
           !confirmed ||
-          !isCurrentMutationContext(
+          !hasCurrentMutationCapability(
             currentPlanejamentoId,
             mutationToken.contextGeneration,
+            (capabilities) =>
+              capabilities.canRemoveParticipant(participante),
           )
         ) {
           return;
@@ -647,9 +829,11 @@ export function usePlanejamentoDetailMutations({
         remocaoConcluida = true;
 
         if (
-          !isCurrentMutationContext(
+          !hasCurrentMutationCapability(
             currentPlanejamentoId,
             mutationToken.contextGeneration,
+            (capabilities) =>
+              capabilities.canRemoveParticipant(participante),
           )
         ) {
           return;
@@ -692,28 +876,27 @@ export function usePlanejamentoDetailMutations({
     [
       acquireAggregateMutationLock,
       applyParticipantUpdate,
-      isAuthenticatedUserOwner,
+      hasCurrentMutationCapability,
       isCurrentMutationContext,
-      planejamento,
       planejamentoId,
       reloadAllData,
       releaseAggregateMutationLock,
       reportMutationError,
-      structuralMutationsAllowed,
     ],
   );
 
   const handleTransition = useCallback(
     async (transition: PlanejamentoTransition) => {
       const currentPlanejamentoId = planejamentoId;
+      const currentGeneration = mutationContextRef.current.generation;
       const lockKey = `transition:${transition}`;
 
       if (
         !currentPlanejamentoId ||
-        !isTransitionAllowed(
-          transition,
-          planejamento,
-          isFinanciallySettled,
+        !hasCurrentMutationCapability(
+          currentPlanejamentoId,
+          currentGeneration,
+          (capabilities) => capabilities.canPerformTransition(transition),
         ) ||
         transitionLockRef.current
       ) {
@@ -742,9 +925,10 @@ export function usePlanejamentoDetailMutations({
 
         if (
           !confirmed ||
-          !isCurrentMutationContext(
+          !hasCurrentMutationCapability(
             currentPlanejamentoId,
             mutationToken.contextGeneration,
+            (capabilities) => capabilities.canPerformTransition(transition),
           )
         ) {
           return;
@@ -754,9 +938,10 @@ export function usePlanejamentoDetailMutations({
         transitionCompleted = true;
 
         if (
-          !isCurrentMutationContext(
+          !hasCurrentMutationCapability(
             currentPlanejamentoId,
             mutationToken.contextGeneration,
+            (capabilities) => capabilities.canPerformTransition(transition),
           )
         ) {
           return;
@@ -800,9 +985,8 @@ export function usePlanejamentoDetailMutations({
     },
     [
       acquireAggregateMutationLock,
+      hasCurrentMutationCapability,
       isCurrentMutationContext,
-      isFinanciallySettled,
-      planejamento,
       planejamentoId,
       reloadAllData,
       releaseAggregateMutationLock,
@@ -815,7 +999,17 @@ export function usePlanejamentoDetailMutations({
     acertosError,
     acertosInfo,
     aggregateMutationInProgress,
-    canNavigateToStructuralMutation,
+    canAddParticipant,
+    canCancelExpense,
+    canCreateExpense,
+    canEditExpense,
+    canManageLifecycle,
+    canNavigateToAddParticipant,
+    canNavigateToCreateExpense,
+    canNavigateToEditExpense,
+    canPerformSettlementAction,
+    canRemoveParticipant,
+    canSyncSettlements,
     gastoActionLoading,
     gastosError,
     gastosInfo,
@@ -824,14 +1018,11 @@ export function usePlanejamentoDetailMutations({
     handleRemoveParticipante,
     handleSyncAcertos,
     handleTransition,
-    isAuthenticatedUserOwner,
     isFinanciallySettled,
     isReadOnly,
     participanteActionLoading,
     participantesError,
     participantesInfo,
-    settlementMutationsAllowed,
-    structuralMutationsAllowed,
     transitionError,
     transitionInfo,
     transitionLoading,

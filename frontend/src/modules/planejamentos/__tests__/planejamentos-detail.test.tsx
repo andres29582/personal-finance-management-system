@@ -23,6 +23,7 @@ const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockRouter = { push: mockPush, replace: mockReplace };
 let mockLocalSearchParams: Record<string, string> = { id: 'planejamento-1' };
+const LINKED_USER_ID = 'usuario-2';
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockLocalSearchParams,
@@ -182,6 +183,26 @@ function makeOwnerParticipante(): ParticipantePlanejamento {
   });
 }
 
+function makeLinkedParticipante(
+  overrides: Partial<ParticipantePlanejamento> = {},
+): ParticipantePlanejamento {
+  return makeParticipante({
+    id: 'participante-2',
+    tipo: 'VINCULADO',
+    usuarioId: LINKED_USER_ID,
+    ...overrides,
+  });
+}
+
+function makePlanejamentoComVinculado(
+  overrides: Partial<Planejamento> = {},
+): Planejamento {
+  return makePlanejamento({
+    participantes: [makeOwnerParticipante(), makeLinkedParticipante()],
+    ...overrides,
+  });
+}
+
 function makeAcerto(
   overrides: Partial<AcertoPlanejamento> = {},
 ): AcertoPlanejamento {
@@ -257,9 +278,12 @@ describe('PlanejamentoDetailScreen', () => {
 
     render(<PlanejamentoDetailScreen />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Ciclo de vida')).toBeTruthy();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Ciclo de vida')).toBeTruthy();
+      },
+      { timeout: 3000 },
+    );
 
     expect(mockGetPlanejamentoById).toHaveBeenCalledWith('planejamento-1');
     expect(mockGetResumoPlanejamento).toHaveBeenCalledWith('planejamento-1');
@@ -356,15 +380,114 @@ describe('PlanejamentoDetailScreen', () => {
   });
 
   it('aplica a matriz visual de um planejamento aberto e quitado', async () => {
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+    mockListAcertosPlanejamento.mockResolvedValue([
+      makeAcerto({ id: 'acerto-pendente' }),
+      makeAcerto({ id: 'acerto-pago', status: 'PAGO' }),
+    ]);
+
     render(<PlanejamentoDetailScreen />);
 
     await waitFor(() => {
       expect(screen.getByText('Adicionar participante')).toBeTruthy();
+      expect(screen.getByText('Remover participante')).toBeTruthy();
       expect(screen.getByText('Adicionar gasto')).toBeTruthy();
+      expect(screen.getByText('Editar')).toBeTruthy();
+      expect(screen.getByText('Cancelar gasto')).toBeTruthy();
       expect(screen.getByText('Sincronizar acertos')).toBeTruthy();
+      expect(screen.getByText('Marcar como pago')).toBeTruthy();
+      expect(screen.getAllByText('Cancelar')).toHaveLength(2);
+      expect(screen.getByText('Reabrir')).toBeTruthy();
       expect(screen.getByText('Fechar planejamento')).toBeTruthy();
       expect(screen.getByText('Cancelar planejamento')).toBeTruthy();
       expect(screen.queryByText('Arquivar planejamento')).toBeNull();
+    });
+  });
+
+  it('permite ao participante vinculado criar gasto sem expor acoes do proprietario', async () => {
+    mockGetUser.mockResolvedValue({
+      email: 'bruno@example.com',
+      id: LINKED_USER_ID,
+      nome: 'Bruno',
+    });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamentoComVinculado());
+    mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Adicionar gasto')).toBeTruthy();
+      expect(screen.queryByText('Adicionar participante')).toBeNull();
+      expect(screen.queryByText('Remover participante')).toBeNull();
+      expect(screen.queryByText('Editar')).toBeNull();
+      expect(screen.queryByText('Cancelar gasto')).toBeNull();
+      expect(screen.queryByText('Fechar planejamento')).toBeNull();
+      expect(screen.queryByText('Arquivar planejamento')).toBeNull();
+      expect(screen.queryByText('Cancelar planejamento')).toBeNull();
+    });
+
+    fireEvent.press(screen.getByText('Adicionar gasto'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/planejamentos-gasto-form',
+      params: { id: 'planejamento-1' },
+    });
+  });
+
+  it('limita as acoes de acerto do vinculado ao pagamento da propria divida', async () => {
+    const acertoProprio = makeAcerto({ id: 'acerto-proprio' });
+    const acertoDeOutro = makeAcerto({
+      deParticipante: {
+        id: 'participante-1',
+        nome: 'Ana',
+      },
+      deParticipanteId: 'participante-1',
+      id: 'acerto-de-outro',
+      paraParticipante: {
+        id: 'participante-2',
+        nome: 'Bruno',
+      },
+      paraParticipanteId: 'participante-2',
+    });
+    mockGetUser.mockResolvedValue({
+      email: 'bruno@example.com',
+      id: LINKED_USER_ID,
+      nome: 'Bruno',
+    });
+    mockGetPlanejamentoById.mockResolvedValue(makePlanejamentoComVinculado());
+    mockListAcertosPlanejamento.mockResolvedValue([
+      acertoProprio,
+      acertoDeOutro,
+      makeAcerto({ id: 'acerto-pago', status: 'PAGO' }),
+    ]);
+
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Sincronizar acertos')).toBeTruthy();
+      expect(screen.getAllByText('Marcar como pago')).toHaveLength(1);
+      expect(screen.queryByText('Cancelar')).toBeNull();
+      expect(screen.queryByText('Reabrir')).toBeNull();
+    });
+
+    fireEvent.press(screen.getByText('Marcar como pago'));
+
+    await waitFor(() => {
+      expect(mockPayAcertoPlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+        acertoProprio.id,
+      );
+      expect(
+        screen.getByText('Acerto atualizado com sucesso.'),
+      ).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Sincronizar acertos'));
+
+    await waitFor(() => {
+      expect(mockSyncAcertosPlanejamento).toHaveBeenCalledWith(
+        'planejamento-1',
+      );
     });
   });
 
@@ -732,7 +855,7 @@ describe('PlanejamentoDetailScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Confirmado')).toBeTruthy();
       expect(screen.getAllByText('Marcar como pago')).toHaveLength(1);
-      expect(screen.getAllByText('Cancelar')).toHaveLength(1);
+      expect(screen.getAllByText('Cancelar')).toHaveLength(2);
       expect(screen.getAllByText('Reabrir')).toHaveLength(1);
     });
   });

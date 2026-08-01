@@ -6,6 +6,7 @@ import { PlanejamentoStatus } from '../../types/planejamento';
 export type PlanejamentoTransition = 'archive' | 'cancel' | 'close';
 
 type PlanejamentoLifecycleSectionProps = {
+  canManageLifecycle: boolean;
   errorMessage: string;
   infoMessage: string;
   isFinanciallySettled: boolean;
@@ -17,6 +18,7 @@ type PlanejamentoLifecycleSectionProps = {
 };
 
 export function PlanejamentoLifecycleSection({
+  canManageLifecycle,
   errorMessage,
   infoMessage,
   isFinanciallySettled,
@@ -27,6 +29,10 @@ export function PlanejamentoLifecycleSection({
   transitionLoading,
 }: PlanejamentoLifecycleSectionProps) {
   const isReadOnly = status === 'ARQUIVADO' || status === 'CANCELADO';
+
+  if (!canManageLifecycle && !isReadOnly) {
+    return null;
+  }
 
   return (
     <GlassPanel
@@ -40,7 +46,7 @@ export function PlanejamentoLifecycleSection({
         <Text style={styles.actionInfo}>{infoMessage}</Text>
       ) : null}
 
-      {status === 'ABERTO' ? (
+      {canManageLifecycle && status === 'ABERTO' ? (
         <>
           <View style={styles.lifecycleActions}>
             <GlassButton
@@ -73,7 +79,7 @@ export function PlanejamentoLifecycleSection({
         </>
       ) : null}
 
-      {status === 'FECHADO' ? (
+      {canManageLifecycle && status === 'FECHADO' ? (
         <>
           <View style={styles.lifecycleActions}>
             <GlassButton

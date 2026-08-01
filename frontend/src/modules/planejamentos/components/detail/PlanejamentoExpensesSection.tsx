@@ -9,8 +9,9 @@ import { GastoRow } from './GastoRow';
 
 type PlanejamentoExpensesSectionProps = {
   actionLoadingId: string | null;
-  canAdd: boolean;
-  canManageExpenses: boolean;
+  canCancelExpense: (gasto: GastoPlanejamento) => boolean;
+  canCreateExpense: boolean;
+  canEditExpense: (gasto: GastoPlanejamento) => boolean;
   errorMessage: string;
   gastos: GastoPlanejamento[];
   infoMessage: string;
@@ -23,8 +24,9 @@ type PlanejamentoExpensesSectionProps = {
 
 export function PlanejamentoExpensesSection({
   actionLoadingId,
-  canAdd,
-  canManageExpenses,
+  canCancelExpense,
+  canCreateExpense,
+  canEditExpense,
   errorMessage,
   gastos,
   infoMessage,
@@ -39,7 +41,7 @@ export function PlanejamentoExpensesSection({
       title="Gastos"
       subtitle="Despesas compartilhadas deste planejamento."
       action={
-        canAdd ? (
+        canCreateExpense ? (
           <GlassButton
             disabled={mutationInProgress}
             label="Adicionar gasto"
@@ -61,7 +63,8 @@ export function PlanejamentoExpensesSection({
           <GastoRow
             key={gasto.id}
             actionLoading={actionLoadingId === gasto.id}
-            canMutate={canManageExpenses && gasto.status === 'ATIVO'}
+            canCancel={canCancelExpense(gasto)}
+            canEdit={canEditExpense(gasto)}
             disabled={mutationInProgress}
             gasto={gasto}
             onCancel={onCancel}
