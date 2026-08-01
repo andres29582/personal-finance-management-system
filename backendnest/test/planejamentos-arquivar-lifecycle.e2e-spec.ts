@@ -489,4 +489,86 @@ describe('Planejamentos archive lifecycle (e2e)', () => {
       }),
     ).toEqual(expect.objectContaining({ status: AcertoStatus.PENDENTE }));
   });
+
+  it('rolls back archive status and reconciliation when transactional audit persistence fails', async () => {
+    const cenario = await criarCenarioFinanceiro('rollback auditoria');
+    await fechar(cenario.planejamento.id);
+    await quitar(cenario);
+    const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    await acertoRepository.save(
+      acertoRepository.create({
+        id: randomUUID(),
+        planejamentoId: cenario.planejamento.id,
+        deParticipanteId: cenario.participanteDevedor.id,
+        paraParticipanteId: cenario.participanteProprietario.id,
+        valorCentavos: cenario.acerto.valorCentavos + 1,
+        status: AcertoStatus.PENDENTE,
+        dataPagamento: null,
+        observacao: 'Deve sobreviver ao rollback da auditoria de arquivamento',
+      }),
+    );
+    const mapearEstadoAcertos = (itens: AcertoPlanejamento[]) =>
+      itens.map((item) => ({
+        dataPagamento: item.dataPagamento,
+        deParticipanteId: item.deParticipanteId,
+        id: item.id,
+        paraParticipanteId: item.paraParticipanteId,
+        status: item.status,
+        valorCentavos: item.valorCentavos,
+      }));
+    const acertosAntes = mapearEstadoAcertos(
+      await acertoRepository.find({
+        where: { planejamentoId: cenario.planejamento.id },
+        order: { id: 'ASC' },
+      }),
+    );
+    const triggerSuffix = randomUUID().replace(/-/g, '_');
+    const functionName = `falhar_auditoria_arquivamento_${triggerSuffix}`;
+    const triggerName = `trigger_${functionName}`;
+
+    try {
+      await dataSource.query(`
+        CREATE FUNCTION ${functionName}() RETURNS trigger AS $$
+        BEGIN
+          IF NEW.entity = 'planejamento'
+            AND NEW.entity_id = '${cenario.planejamento.id}'
+            AND NEW.event = 'PLANEJAMENTO_ARQUIVADO' THEN
+            RAISE EXCEPTION 'falha de auditoria induzida pelo teste';
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        CREATE TRIGGER ${triggerName}
+        BEFORE INSERT ON audit_log
+        FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+      `);
+
+      await request(app.getHttpServer())
+        .patch(`/planejamentos/${cenario.planejamento.id}/arquivar`)
+        .set('Authorization', authorization())
+        .expect(500);
+    } finally {
+      await dataSource.query(
+        `DROP TRIGGER IF EXISTS ${triggerName} ON audit_log`,
+      );
+      await dataSource.query(`DROP FUNCTION IF EXISTS ${functionName}()`);
+    }
+
+    expect(
+      await dataSource.getRepository(Planejamento).findOneByOrFail({
+        id: cenario.planejamento.id,
+      }),
+    ).toEqual(expect.objectContaining({ status: PlanejamentoStatus.FECHADO }));
+    expect(
+      mapearEstadoAcertos(
+        await acertoRepository.find({
+          where: { planejamentoId: cenario.planejamento.id },
+          order: { id: 'ASC' },
+        }),
+      ),
+    ).toEqual(acertosAntes);
+    await expect(
+      buscarLogsArquivamento(cenario.planejamento.id),
+    ).resolves.toHaveLength(0);
+  });
 });

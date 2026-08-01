@@ -157,6 +157,7 @@ describe('PlanejamentosService', () => {
   it('creates a planejamento using the authenticated user as owner', async () => {
     repository.salvarPlanejamento.mockResolvedValue({
       id: 'planejamento-1',
+      tipo: PlanejamentoTipo.VIAGEM,
     } as never);
     repository.buscarParticipanteAtivoPorUsuario.mockResolvedValue(null);
     repository.salvarParticipante.mockResolvedValue({
@@ -203,15 +204,92 @@ describe('PlanejamentosService', () => {
       }),
     );
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_CRIADO',
+        module: 'planejamentos',
+        action: 'create',
+        success: true,
+        userId: 'user-1',
+        entity: 'planejamento',
+        entityId: 'planejamento-1',
+        details: {
+          statusPosterior: PlanejamentoStatus.ABERTO,
+          tipo: PlanejamentoTipo.VIAGEM,
+          participanteProprietarioId: 'participante-owner',
+        },
+        context: {
+          statusCode: 201,
+        },
+      },
+      entityManager,
+    );
+    expect(
+      repository.salvarPlanejamento.mock.invocationCallOrder[0],
+    ).toBeLessThan(repository.salvarParticipante.mock.invocationCallOrder[0]);
+    expect(
+      repository.salvarParticipante.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      repository.buscarAcessivelComParticipantes.mock.invocationCallOrder[0],
+    );
     expect(result).toEqual({
       id: 'planejamento-1',
       usuarioCriadorId: 'user-1',
     });
   });
 
+  it('propagates transactional audit failures without reloading the created planejamento', async () => {
+    const erroAuditoria = new Error('falha na auditoria transacional');
+    repository.salvarPlanejamento.mockResolvedValue({
+      id: 'planejamento-1',
+      tipo: PlanejamentoTipo.VIAGEM,
+    } as never);
+    repository.buscarParticipanteAtivoPorUsuario.mockResolvedValue(null);
+    repository.salvarParticipante.mockResolvedValue({
+      id: 'participante-owner',
+    } as never);
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+    const findOneSpy = jest.spyOn(service, 'findOne');
+
+    await expect(
+      service.create(
+        {
+          id: 'user-1',
+          email: 'ana@example.com',
+          nome: 'Ana',
+        },
+        {
+          nome: 'Viagem',
+          tipo: PlanejamentoTipo.VIAGEM,
+        },
+      ),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repository.salvarPlanejamento).toHaveBeenCalledTimes(1);
+    expect(repository.salvarParticipante).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(
+      repository.salvarPlanejamento.mock.invocationCallOrder[0],
+    ).toBeLessThan(repository.salvarParticipante.mock.invocationCallOrder[0]);
+    expect(
+      repository.salvarParticipante.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(findOneSpy).not.toHaveBeenCalled();
+    expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
+  });
+
   it('does not duplicate the owner participant when it already exists', async () => {
     repository.salvarPlanejamento.mockResolvedValue({
       id: 'planejamento-1',
+      tipo: PlanejamentoTipo.VIAGEM,
     } as never);
     repository.buscarParticipanteAtivoPorUsuario.mockResolvedValue({
       id: 'participante-owner',
@@ -220,6 +298,7 @@ describe('PlanejamentosService', () => {
       id: 'planejamento-1',
       usuarioCriadorId: 'user-1',
     } as never);
+    const findOneSpy = jest.spyOn(service, 'findOne');
 
     await service.create(
       {
@@ -234,12 +313,42 @@ describe('PlanejamentosService', () => {
     );
 
     expect(repository.salvarParticipante).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_CRIADO',
+        module: 'planejamentos',
+        action: 'create',
+        success: true,
+        userId: 'user-1',
+        entity: 'planejamento',
+        entityId: 'planejamento-1',
+        details: {
+          statusPosterior: PlanejamentoStatus.ABERTO,
+          tipo: PlanejamentoTipo.VIAGEM,
+          participanteProprietarioId: 'participante-owner',
+        },
+        context: {
+          statusCode: 201,
+        },
+      },
+      entityManager,
+    );
+    expect(
+      repository.buscarParticipanteAtivoPorUsuario.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    ).toBeLessThan(findOneSpy.mock.invocationCallOrder[0]);
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
   });
 
   it('uses the email prefix for the owner participant when authenticated user has no name', async () => {
     repository.salvarPlanejamento.mockResolvedValue({
       id: 'planejamento-1',
+      tipo: PlanejamentoTipo.VIAGEM,
     } as never);
     repository.buscarParticipanteAtivoPorUsuario.mockResolvedValue(null);
     repository.salvarParticipante.mockResolvedValue({
@@ -275,6 +384,7 @@ describe('PlanejamentosService', () => {
   it('uses a safe fallback for the owner participant when authenticated user has no name or email', async () => {
     repository.salvarPlanejamento.mockResolvedValue({
       id: 'planejamento-1',
+      tipo: PlanejamentoTipo.VIAGEM,
     } as never);
     repository.buscarParticipanteAtivoPorUsuario.mockResolvedValue(null);
     repository.salvarParticipante.mockResolvedValue({

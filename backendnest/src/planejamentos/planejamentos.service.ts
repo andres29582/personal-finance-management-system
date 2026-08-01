@@ -104,8 +104,13 @@ export class PlanejamentosService {
     this.validarPeriodo(dto);
 
     const planejamento = await this.planejamentosRepository.executarEmTransacao(
-      (repository) =>
-        this.criarPlanejamentoComProprietario(repository, usuario, dto),
+      (repository, manager) =>
+        this.criarPlanejamentoComProprietario(
+          repository,
+          manager,
+          usuario,
+          dto,
+        ),
     );
 
     return this.findOne(planejamento.id, usuario.id);
@@ -1425,6 +1430,7 @@ export class PlanejamentosService {
 
   private async criarPlanejamentoComProprietario(
     repository: PlanejamentosRepository,
+    manager: EntityManager,
     usuario: PlanejamentoUsuarioAutenticado,
     dto: CreatePlanejamentoDto,
   ): Promise<Planejamento> {
@@ -1440,10 +1446,32 @@ export class PlanejamentosService {
       deletedAt: null,
     });
 
-    await this.criarParticipanteProprietarioSeNecessario(
-      repository,
-      planejamento.id,
-      usuario,
+    const participanteProprietarioId =
+      await this.criarParticipanteProprietarioSeNecessario(
+        repository,
+        planejamento.id,
+        usuario,
+      );
+
+    await this.logsService.logEntityEventTransactional(
+      {
+        event: 'PLANEJAMENTO_CRIADO',
+        module: 'planejamentos',
+        action: 'create',
+        success: true,
+        userId: usuario.id,
+        entity: 'planejamento',
+        entityId: planejamento.id,
+        details: {
+          statusPosterior: PlanejamentoStatus.ABERTO,
+          tipo: planejamento.tipo,
+          participanteProprietarioId,
+        },
+        context: {
+          statusCode: 201,
+        },
+      },
+      manager,
     );
 
     return planejamento;
@@ -1465,7 +1493,7 @@ export class PlanejamentosService {
     repository: PlanejamentosRepository,
     planejamentoId: string,
     usuario: PlanejamentoUsuarioAutenticado,
-  ): Promise<void> {
+  ): Promise<string> {
     const participanteExistente =
       await repository.buscarParticipanteAtivoPorUsuario(
         planejamentoId,
@@ -1473,10 +1501,10 @@ export class PlanejamentosService {
       );
 
     if (participanteExistente) {
-      return;
+      return participanteExistente.id;
     }
 
-    await repository.salvarParticipante({
+    const participanteProprietario = await repository.salvarParticipante({
       id: randomUUID(),
       planejamentoId,
       usuarioId: usuario.id,
@@ -1485,6 +1513,8 @@ export class PlanejamentosService {
       tipo: ParticipanteTipo.VINCULADO,
       status: ParticipanteStatus.ATIVO,
     });
+
+    return participanteProprietario.id;
   }
 
   private obterNomeParticipanteProprietario(
