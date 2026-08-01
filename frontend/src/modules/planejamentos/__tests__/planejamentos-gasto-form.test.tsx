@@ -8,6 +8,8 @@ import {
 } from '@testing-library/react-native';
 import { PlanejamentoGastoFormScreen } from '../screens/PlanejamentoGastoFormScreen';
 import * as planejamentoService from '../services/planejamentoService';
+import * as authStorage from '../../../../storage/authStorage';
+import { UsuarioLogado } from '../../../../types/auth';
 import {
   GastoPlanejamento,
   ParticipantePlanejamento,
@@ -25,6 +27,11 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('../services/planejamentoService');
+jest.mock('../../../../storage/authStorage');
+
+const mockGetUser = authStorage.getUser as jest.MockedFunction<
+  typeof authStorage.getUser
+>;
 
 const mockGetPlanejamentoById =
   planejamentoService.getPlanejamentoById as jest.MockedFunction<
@@ -42,6 +49,31 @@ const mockUpdateGastoPlanejamento =
   planejamentoService.updateGastoPlanejamento as jest.MockedFunction<
     typeof planejamentoService.updateGastoPlanejamento
   >;
+
+type Deferred<T> = {
+  promise: Promise<T>;
+  reject: (reason?: unknown) => void;
+  resolve: (value: T) => void;
+};
+
+function createDeferred<T>(): Deferred<T> {
+  let reject: Deferred<T>['reject'] = () => undefined;
+  let resolve: Deferred<T>['resolve'] = () => undefined;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, reject, resolve };
+}
+
+function makeUser(id = 'usuario-1'): UsuarioLogado {
+  return {
+    email: `${id}@example.com`,
+    id,
+    nome: `Usuario ${id}`,
+  };
+}
 
 function makePlanejamento(
   overrides: Partial<Planejamento> = {},
@@ -214,10 +246,65 @@ function fillRequiredExpenseFields() {
   fireEvent.changeText(screen.getByPlaceholderText('2026-04-07'), '2026-01-12');
 }
 
+function makeActiveLinkedActorPlanejamento(
+  overrides: Partial<Planejamento> = {},
+) {
+  return makePlanejamento({
+    participantes: [
+      makeParticipante({
+        email: 'actor@example.com',
+        id: 'participante-actor',
+        nome: 'Actor vinculado',
+        tipo: 'VINCULADO',
+        usuarioId: 'usuario-actor',
+      }),
+    ],
+    usuarioCriadorId: 'usuario-owner',
+    ...overrides,
+  });
+}
+
+function makeGastoWithActiveDivision(
+  overrides: Partial<GastoPlanejamento> = {},
+) {
+  return makeGasto({
+    divisoes: [
+      {
+        createdAt: '2026-01-01T00:00:00.000Z',
+        gastoId: overrides.id ?? 'gasto-1',
+        id: `divisao-${overrides.id ?? 'gasto-1'}`,
+        participanteId: 'participante-1',
+        status: 'ATIVA',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        valorDevidoCentavos: overrides.valorCentavos ?? 12345,
+      },
+    ],
+    ...overrides,
+  });
+}
+
+function submitValidCreation(
+  payerId = 'participante-1',
+  splitId = payerId,
+) {
+  fillRequiredExpenseFields();
+  fireEvent.press(screen.getByTestId(`payer-${payerId}`));
+  fireEvent.press(screen.getByTestId(`split-${splitId}`));
+  fireEvent.press(screen.getByText('Salvar gasto'));
+}
+
+async function settleAsyncWork() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe('PlanejamentoGastoFormScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLocalSearchParams = { id: 'planejamento-1' };
+    mockGetUser.mockResolvedValue(makeUser());
     mockGetPlanejamentoById.mockResolvedValue(makePlanejamento());
     mockGetGastoPlanejamentoById.mockResolvedValue(makeGasto());
     mockUpdateGastoPlanejamento.mockResolvedValue(makeGasto());
@@ -556,18 +643,16 @@ describe('PlanejamentoGastoFormScreen', () => {
       makePlanejamento({ status: 'FECHADO' }),
     );
 
-    await renderEditReady();
+    render(<PlanejamentoGastoFormScreen />);
 
-    expect(
-      screen.getByText(
+    await waitFor(() => {
+      expect(
+        screen.getByText(
         'Apenas planejamentos abertos permitem criar ou editar gastos.',
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Salvar alteracoes' }).props
-        .accessibilityState,
-    ).toEqual(expect.objectContaining({ disabled: true }));
-    fireEvent.press(screen.getByText('Salvar alteracoes'));
+        ),
+      ).toBeTruthy();
+    });
+    expect(screen.queryByText('Salvar alteracoes')).toBeNull();
     expect(mockUpdateGastoPlanejamento).not.toHaveBeenCalled();
   });
 
@@ -580,16 +665,14 @@ describe('PlanejamentoGastoFormScreen', () => {
       };
       mockGetGastoPlanejamentoById.mockResolvedValue(makeGasto({ status }));
 
-      await renderEditReady();
+      render(<PlanejamentoGastoFormScreen />);
 
-      expect(
-        screen.getByText('Apenas gastos ativos podem ser editados.'),
-      ).toBeTruthy();
-      expect(
-        screen.getByRole('button', { name: 'Salvar alteracoes' }).props
-          .accessibilityState,
-      ).toEqual(expect.objectContaining({ disabled: true }));
-      fireEvent.press(screen.getByText('Salvar alteracoes'));
+      await waitFor(() => {
+        expect(
+          screen.getByText('Apenas gastos ativos podem ser editados.'),
+        ).toBeTruthy();
+      });
+      expect(screen.queryByText('Salvar alteracoes')).toBeNull();
       expect(mockUpdateGastoPlanejamento).not.toHaveBeenCalled();
     },
   );
@@ -712,6 +795,542 @@ describe('PlanejamentoGastoFormScreen', () => {
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/planejamentos-participante-form',
       params: { id: 'planejamento-1' },
+    });
+  });
+
+  describe('autorizacao de criacao', () => {
+    it('permite que participante vinculado ativo crie gasto em planejamento aberto', async () => {
+      mockGetUser.mockResolvedValue(makeUser('usuario-actor'));
+      mockGetPlanejamentoById.mockResolvedValue(
+        makeActiveLinkedActorPlanejamento(),
+      );
+      const creationDeferred = createDeferred<GastoPlanejamento>();
+      mockCreateGastoPlanejamento.mockReturnValue(creationDeferred.promise);
+
+      await renderReady();
+      await submitValidCreation('participante-actor');
+      expect(mockCreateGastoPlanejamento).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        creationDeferred.resolve(makeGasto());
+      });
+
+      await waitFor(() => {
+        expect(mockCreateGastoPlanejamento).toHaveBeenCalledWith(
+          'planejamento-1',
+          expect.objectContaining({
+            pagoPorParticipanteId: 'participante-actor',
+            participantesIds: ['participante-actor'],
+          }),
+        );
+        expect(mockReplace).toHaveBeenCalledWith({
+          pathname: '/planejamentos-detail',
+          params: { id: 'planejamento-1' },
+        });
+      });
+    });
+
+    it.each([
+      {
+        label: 'vinculado removido',
+        participante: {
+          status: 'REMOVIDO' as const,
+          tipo: 'VINCULADO' as const,
+        },
+      },
+      {
+        label: 'vinculado pendente',
+        participante: {
+          status: 'PENDENTE' as const,
+          tipo: 'VINCULADO' as const,
+        },
+      },
+      {
+        label: 'participante manual',
+        participante: {
+          status: 'ATIVO' as const,
+          tipo: 'MANUAL' as const,
+        },
+      },
+    ])(
+      'bloqueia criacao para $label mesmo quando o usuarioId coincide',
+      async ({ participante }) => {
+        mockGetUser.mockResolvedValue(makeUser('usuario-actor'));
+        mockGetPlanejamentoById.mockResolvedValue(
+          makePlanejamento({
+            participantes: [
+              makeParticipante({
+                ...participante,
+                id: 'participante-actor',
+                usuarioId: 'usuario-actor',
+              }),
+            ],
+            usuarioCriadorId: 'usuario-owner',
+          }),
+        );
+
+        render(<PlanejamentoGastoFormScreen />);
+
+        await waitFor(() => {
+          expect(
+            screen.getByText(
+              'Voce nao possui permissao para criar gastos neste planejamento.',
+            ),
+          ).toBeTruthy();
+        });
+        expect(screen.queryByText('Salvar gasto')).toBeNull();
+        expect(mockCreateGastoPlanejamento).not.toHaveBeenCalled();
+      },
+    );
+
+    it('bloqueia criacao para usuario nao vinculado', async () => {
+      mockGetUser.mockResolvedValue(makeUser('usuario-sem-vinculo'));
+      mockGetPlanejamentoById.mockResolvedValue(
+        makePlanejamento({ usuarioCriadorId: 'usuario-owner' }),
+      );
+
+      render(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Acao nao permitida')).toBeTruthy();
+      });
+      expect(screen.queryByText('Salvar gasto')).toBeNull();
+      expect(mockCreateGastoPlanejamento).not.toHaveBeenCalled();
+    });
+
+    it.each(['FECHADO', 'ARQUIVADO', 'CANCELADO'] as const)(
+      'bloqueia criacao em planejamento %s',
+      async (status) => {
+        mockGetPlanejamentoById.mockResolvedValue(
+          makePlanejamento({ status }),
+        );
+
+        render(<PlanejamentoGastoFormScreen />);
+
+        await waitFor(() => {
+          expect(
+            screen.getByText(
+              'Apenas planejamentos abertos permitem criar ou editar gastos.',
+            ),
+          ).toBeTruthy();
+        });
+        expect(screen.queryByText('Salvar gasto')).toBeNull();
+        expect(mockCreateGastoPlanejamento).not.toHaveBeenCalled();
+      },
+    );
+
+    it('mantem o formulario inoperante enquanto a autorizacao carrega', async () => {
+      const planejamentoDeferred = createDeferred<Planejamento>();
+      mockGetPlanejamentoById.mockReturnValue(planejamentoDeferred.promise);
+
+      render(<PlanejamentoGastoFormScreen />);
+
+      expect(screen.getByText('Carregando participantes...')).toBeTruthy();
+      expect(screen.queryByPlaceholderText('Ex.: Hospedagem')).toBeNull();
+      expect(screen.queryByText('Salvar gasto')).toBeNull();
+      expect(mockCreateGastoPlanejamento).not.toHaveBeenCalled();
+
+      await act(async () => {
+        planejamentoDeferred.resolve(makePlanejamento());
+      });
+      await waitFor(() => {
+        expect(screen.getByText('Salvar gasto')).toBeTruthy();
+      });
+    });
+
+    it('mostra adicionar participante somente ao owner aberto sem opcoes', async () => {
+      mockGetPlanejamentoById.mockResolvedValue(
+        makePlanejamento({ participantes: [] }),
+      );
+
+      const view = render(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Adicionar participante')).toBeTruthy();
+      });
+
+      mockLocalSearchParams = { id: 'planejamento-2' };
+      mockGetUser.mockResolvedValue(makeUser('usuario-sem-vinculo'));
+      mockGetPlanejamentoById.mockResolvedValue(
+        makePlanejamento({
+          id: 'planejamento-2',
+          participantes: [],
+          usuarioCriadorId: 'usuario-owner',
+        }),
+      );
+      view.rerender(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Acao nao permitida')).toBeTruthy();
+      });
+      expect(screen.queryByText('Adicionar participante')).toBeNull();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('serializa duplo envio de criacao', async () => {
+      const creationDeferred = createDeferred<GastoPlanejamento>();
+      mockCreateGastoPlanejamento.mockReturnValue(creationDeferred.promise);
+      await renderReady();
+
+      fillRequiredExpenseFields();
+      fireEvent.press(screen.getByTestId('payer-participante-1'));
+      fireEvent.press(screen.getByTestId('split-participante-1'));
+      const saveButton = screen.getByText('Salvar gasto');
+      fireEvent.press(saveButton);
+      fireEvent.press(saveButton);
+
+      expect(mockCreateGastoPlanejamento).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        creationDeferred.resolve(makeGasto());
+      });
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith({
+          pathname: '/planejamentos-detail',
+          params: { id: 'planejamento-1' },
+        });
+      });
+    });
+  });
+
+  describe('autorizacao de edicao', () => {
+    beforeEach(() => {
+      mockLocalSearchParams = {
+        gastoId: 'gasto-1',
+        id: 'planejamento-1',
+      };
+      mockGetGastoPlanejamentoById.mockResolvedValue(
+        makeGastoWithActiveDivision(),
+      );
+    });
+
+    it('permite edicao somente ao owner com planejamento aberto e gasto ativo', async () => {
+      const updateDeferred = createDeferred<GastoPlanejamento>();
+      mockUpdateGastoPlanejamento.mockReturnValue(updateDeferred.promise);
+      await renderEditReady();
+
+      fireEvent.press(screen.getByText('Salvar alteracoes'));
+      expect(mockUpdateGastoPlanejamento).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        updateDeferred.resolve(makeGasto());
+      });
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith({
+          pathname: '/planejamentos-detail',
+          params: { id: 'planejamento-1' },
+        });
+      });
+    });
+
+    it('bloqueia deep link de edicao para participante vinculado ativo', async () => {
+      mockGetUser.mockResolvedValue(makeUser('usuario-actor'));
+      mockGetPlanejamentoById.mockResolvedValue(
+        makeActiveLinkedActorPlanejamento({
+          participantes: [
+            makeParticipante({
+              id: 'participante-1',
+              tipo: 'VINCULADO',
+              usuarioId: 'usuario-actor',
+            }),
+          ],
+        }),
+      );
+
+      render(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            'Somente o proprietario pode editar gastos deste planejamento.',
+          ),
+        ).toBeTruthy();
+      });
+      expect(screen.queryByPlaceholderText('Ex.: Hospedagem')).toBeNull();
+      expect(screen.queryByText('Salvar alteracoes')).toBeNull();
+      expect(mockUpdateGastoPlanejamento).not.toHaveBeenCalled();
+    });
+
+    it('bloqueia deep link de edicao para usuario nao vinculado', async () => {
+      mockGetUser.mockResolvedValue(makeUser('usuario-sem-vinculo'));
+      mockGetPlanejamentoById.mockResolvedValue(
+        makePlanejamento({ usuarioCriadorId: 'usuario-owner' }),
+      );
+
+      render(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Acao nao permitida')).toBeTruthy();
+      });
+      expect(screen.queryByText('Salvar alteracoes')).toBeNull();
+      expect(mockUpdateGastoPlanejamento).not.toHaveBeenCalled();
+    });
+
+    it.each(['FECHADO', 'ARQUIVADO'] as const)(
+      'bloqueia edicao do owner em planejamento %s',
+      async (status) => {
+        mockGetPlanejamentoById.mockResolvedValue(
+          makePlanejamento({ status }),
+        );
+
+        render(<PlanejamentoGastoFormScreen />);
+
+        await waitFor(() => {
+          expect(screen.getByText('Formulario indisponivel')).toBeTruthy();
+        });
+        expect(screen.queryByText('Salvar alteracoes')).toBeNull();
+        expect(mockUpdateGastoPlanejamento).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('isolamento assincrono entre rotas', () => {
+    it('descarta resposta antiga ao trocar gastoId', async () => {
+      const gastoAntigo = createDeferred<GastoPlanejamento>();
+      const gastoAtual = createDeferred<GastoPlanejamento>();
+      mockLocalSearchParams = {
+        gastoId: 'gasto-antigo',
+        id: 'planejamento-1',
+      };
+      mockGetGastoPlanejamentoById.mockImplementation(
+        (_planejamentoId, requestedGastoId) =>
+          requestedGastoId === 'gasto-antigo'
+            ? gastoAntigo.promise
+            : gastoAtual.promise,
+      );
+
+      const view = render(<PlanejamentoGastoFormScreen />);
+      mockLocalSearchParams = {
+        gastoId: 'gasto-atual',
+        id: 'planejamento-1',
+      };
+      view.rerender(<PlanejamentoGastoFormScreen />);
+
+      await act(async () => {
+        gastoAtual.resolve(
+          makeGastoWithActiveDivision({
+            descricao: 'Gasto atual',
+            id: 'gasto-atual',
+          }),
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText('Ex.: Hospedagem').props.value).toBe(
+          'Gasto atual',
+        );
+      });
+
+      await act(async () => {
+        gastoAntigo.resolve(
+          makeGastoWithActiveDivision({
+            descricao: 'Gasto obsoleto',
+            id: 'gasto-antigo',
+          }),
+        );
+      });
+      expect(screen.getByPlaceholderText('Ex.: Hospedagem').props.value).toBe(
+        'Gasto atual',
+      );
+    });
+
+    it('invalida autorizacao antiga ao trocar planejamentoId', async () => {
+      const planejamentoAntigo = createDeferred<Planejamento>();
+      mockGetPlanejamentoById.mockImplementation((requestedId) =>
+        requestedId === 'planejamento-1'
+          ? planejamentoAntigo.promise
+          : Promise.resolve(
+              makePlanejamento({
+                id: 'planejamento-2',
+                status: 'FECHADO',
+              }),
+            ),
+      );
+      const view = render(<PlanejamentoGastoFormScreen />);
+
+      mockLocalSearchParams = { id: 'planejamento-2' };
+      view.rerender(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            'Apenas planejamentos abertos permitem criar ou editar gastos.',
+          ),
+        ).toBeTruthy();
+      });
+      await act(async () => {
+        planejamentoAntigo.resolve(makePlanejamento());
+      });
+
+      expect(screen.queryByText('Salvar gasto')).toBeNull();
+      expect(mockCreateGastoPlanejamento).not.toHaveBeenCalled();
+    });
+
+    it('protege a sequencia A para B para A com geracoes distintas', async () => {
+      const primeiraCargaA = createDeferred<Planejamento>();
+      const cargaB = createDeferred<Planejamento>();
+      const segundaCargaA = createDeferred<Planejamento>();
+      let chamadasA = 0;
+      mockGetPlanejamentoById.mockImplementation((requestedId) => {
+        if (requestedId === 'planejamento-b') {
+          return cargaB.promise;
+        }
+
+        chamadasA += 1;
+        return chamadasA === 1
+          ? primeiraCargaA.promise
+          : segundaCargaA.promise;
+      });
+      mockLocalSearchParams = { id: 'planejamento-a' };
+      const view = render(<PlanejamentoGastoFormScreen />);
+
+      mockLocalSearchParams = { id: 'planejamento-b' };
+      view.rerender(<PlanejamentoGastoFormScreen />);
+      mockLocalSearchParams = { id: 'planejamento-a' };
+      view.rerender(<PlanejamentoGastoFormScreen />);
+
+      await act(async () => {
+        segundaCargaA.resolve(
+          makePlanejamento({
+            id: 'planejamento-a',
+            participantes: [
+              makeParticipante({
+                id: 'participante-a-atual',
+                planejamentoId: 'planejamento-a',
+              }),
+            ],
+          }),
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('payer-participante-a-atual')).toBeTruthy();
+      });
+
+      await act(async () => {
+        primeiraCargaA.resolve(
+          makePlanejamento({
+            id: 'planejamento-a',
+            participantes: [],
+            status: 'FECHADO',
+          }),
+        );
+        cargaB.resolve(
+          makePlanejamento({ id: 'planejamento-b', participantes: [] }),
+        );
+      });
+
+      expect(screen.getByTestId('payer-participante-a-atual')).toBeTruthy();
+      expect(screen.getByText('Salvar gasto')).toBeTruthy();
+    });
+
+    it('nao navega quando sucesso de edicao pertence a gasto antigo', async () => {
+      const updateDeferred = createDeferred<GastoPlanejamento>();
+      mockUpdateGastoPlanejamento.mockReturnValue(updateDeferred.promise);
+      mockLocalSearchParams = {
+        gastoId: 'gasto-1',
+        id: 'planejamento-1',
+      };
+      mockGetGastoPlanejamentoById.mockImplementation(
+        (_planejamentoId, requestedGastoId) =>
+          Promise.resolve(
+            makeGastoWithActiveDivision({ id: requestedGastoId }),
+          ),
+      );
+      const view = render(<PlanejamentoGastoFormScreen />);
+      await waitFor(() => {
+        expect(screen.getByText('Salvar alteracoes')).toBeTruthy();
+      });
+      fireEvent.press(screen.getByText('Salvar alteracoes'));
+      expect(mockUpdateGastoPlanejamento).toHaveBeenCalledTimes(1);
+
+      mockLocalSearchParams = {
+        gastoId: 'gasto-2',
+        id: 'planejamento-1',
+      };
+      view.rerender(<PlanejamentoGastoFormScreen />);
+      await waitFor(() => {
+        expect(mockGetGastoPlanejamentoById).toHaveBeenCalledWith(
+          'planejamento-1',
+          'gasto-2',
+        );
+      });
+
+      await act(async () => {
+        updateDeferred.resolve(makeGasto({ id: 'gasto-1' }));
+      });
+      expect(mockReplace).not.toHaveBeenCalledWith({
+        pathname: '/planejamentos-detail',
+        params: { id: 'planejamento-1' },
+      });
+    });
+
+    it('nao redireciona por unauthorized obsoleto de carga anterior', async () => {
+      const cargaAntiga = createDeferred<Planejamento>();
+      mockGetPlanejamentoById.mockImplementation((requestedId) =>
+        requestedId === 'planejamento-1'
+          ? cargaAntiga.promise
+          : Promise.resolve(makePlanejamento({ id: 'planejamento-2' })),
+      );
+      const view = render(<PlanejamentoGastoFormScreen />);
+
+      mockLocalSearchParams = { id: 'planejamento-2' };
+      view.rerender(<PlanejamentoGastoFormScreen />);
+      await waitFor(() => {
+        expect(screen.getByText('Salvar gasto')).toBeTruthy();
+      });
+
+      await act(async () => {
+        cargaAntiga.reject({ response: { status: 401 } });
+      });
+      await settleAsyncWork();
+
+      expect(mockReplace).not.toHaveBeenCalledWith('/login');
+      expect(screen.getByText('Salvar gasto')).toBeTruthy();
+    });
+
+    it('redireciona por unauthorized somente quando pertence a rota atual', async () => {
+      mockGetPlanejamentoById.mockRejectedValue({
+        response: { data: { message: 'Unauthorized' }, status: 401 },
+      });
+
+      render(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/login');
+        expect(screen.getByText('Sessao expirada')).toBeTruthy();
+      });
+      expect(screen.queryByText('Salvar gasto')).toBeNull();
+    });
+
+    it('trata identidade ausente como sessao expirada da rota atual', async () => {
+      mockGetUser.mockResolvedValue(null);
+
+      render(<PlanejamentoGastoFormScreen />);
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith('/login');
+        expect(screen.getByText('Sessao expirada')).toBeTruthy();
+        expect(
+          screen.getByText('Sessao expirada. Faca login novamente.'),
+        ).toBeTruthy();
+      });
+      expect(screen.queryByText('Salvar gasto')).toBeNull();
+      expect(mockCreateGastoPlanejamento).not.toHaveBeenCalled();
+      expect(mockUpdateGastoPlanejamento).not.toHaveBeenCalled();
+    });
+
+    it('ignora resposta recebida depois do unmount', async () => {
+      const cargaPendente = createDeferred<Planejamento>();
+      mockGetPlanejamentoById.mockReturnValue(cargaPendente.promise);
+      const view = render(<PlanejamentoGastoFormScreen />);
+
+      view.unmount();
+      await act(async () => {
+        cargaPendente.reject({ response: { status: 401 } });
+      });
+      await settleAsyncWork();
+
+      expect(mockReplace).not.toHaveBeenCalled();
     });
   });
 });

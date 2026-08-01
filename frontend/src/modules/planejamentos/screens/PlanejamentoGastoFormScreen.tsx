@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -21,6 +21,12 @@ import {
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
 import { parseDecimalInput } from '../../../../utils/number-input';
+import { getUser } from '../../../../storage/authStorage';
+import {
+  canAddPlanejamentoParticipant,
+  canCreatePlanejamentoExpense,
+  canEditPlanejamentoExpense,
+} from '../authorization/planejamentoAuthorization';
 import {
   createGastoPlanejamento,
   getGastoPlanejamentoById,
@@ -28,8 +34,10 @@ import {
   updateGastoPlanejamento,
 } from '../services/planejamentoService';
 import {
+  GastoPlanejamento,
   GastoPlanejamentoComportamento,
   ParticipantePlanejamento,
+  Planejamento,
 } from '../types/planejamento';
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -71,17 +79,81 @@ function toggleId(ids: string[], id: string) {
     : [...ids, id];
 }
 
+function normalizeRouteParam(value?: string | string[]) {
+  const normalizedValue = (Array.isArray(value) ? value[0] : value)?.trim();
+
+  return normalizedValue || undefined;
+}
+
+type ExpenseFormRouteContext = {
+  gastoId?: string;
+  generation: number;
+  key: string;
+  planejamentoId?: string;
+};
+
+type LoadedExpenseFormContext = {
+  canAddParticipant: boolean;
+  gasto: GastoPlanejamento | null;
+  planejamento: Planejamento;
+  route: ExpenseFormRouteContext;
+  usuarioAutenticadoId: string | null;
+};
+
+type ExpenseFormAccessKind =
+  | 'authorized'
+  | 'blocked-role'
+  | 'blocked-status'
+  | 'inactive-expense'
+  | 'loading'
+  | 'missing-id'
+  | 'missing-participants'
+  | 'session-expired'
+  | 'unavailable';
+
+type ExpenseFormAccessState = {
+  context: LoadedExpenseFormContext | null;
+  kind: ExpenseFormAccessKind;
+  message: string;
+  route: ExpenseFormRouteContext;
+};
+
+type ExpenseFormFeedback = {
+  message: string;
+  route: ExpenseFormRouteContext;
+};
+
+type ExpenseSavingToken = {
+  route: ExpenseFormRouteContext;
+};
+
 export function PlanejamentoGastoFormScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     gastoId?: string | string[];
     id?: string | string[];
   }>();
-  const planejamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const gastoId = Array.isArray(params.gastoId)
-    ? params.gastoId[0]
-    : params.gastoId;
+  const planejamentoId = normalizeRouteParam(params.id);
+  const gastoId = normalizeRouteParam(params.gastoId);
   const isEditing = !!gastoId;
+  const routeKey = JSON.stringify([planejamentoId ?? null, gastoId ?? null]);
+  const routeContextRef = useRef<ExpenseFormRouteContext>({
+    gastoId,
+    generation: 0,
+    key: routeKey,
+    planejamentoId,
+  });
+
+  if (routeContextRef.current.key !== routeKey) {
+    routeContextRef.current = {
+      gastoId,
+      generation: routeContextRef.current.generation + 1,
+      key: routeKey,
+      planejamentoId,
+    };
+  }
+
+  const currentRoute = routeContextRef.current;
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
   const [dataGasto, setDataGasto] = useState(
@@ -101,31 +173,119 @@ export function PlanejamentoGastoFormScreen() {
     participantesDivisaoDisponiveis,
     setParticipantesDivisaoDisponiveis,
   ] = useState<ParticipantePlanejamento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [canMutate, setCanMutate] = useState(false);
-  const [message, setMessage] = useState(
-    planejamentoId ? '' : 'Planejamento nao informado.',
+  const [accessState, setAccessState] = useState<ExpenseFormAccessState>({
+    context: null,
+    kind: planejamentoId ? 'loading' : 'missing-id',
+    message: planejamentoId ? '' : 'Planejamento nao informado.',
+    route: currentRoute,
+  });
+  const [feedback, setFeedback] = useState<ExpenseFormFeedback>({
+    message: '',
+    route: currentRoute,
+  });
+  const [savingToken, setSavingToken] = useState<ExpenseSavingToken | null>(null);
+  const loadGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  const savingLockRef = useRef<ExpenseSavingToken | null>(null);
+
+  const isCurrentRouteContext = useCallback(
+    (expectedRoute: ExpenseFormRouteContext) =>
+      mountedRef.current &&
+      routeContextRef.current.generation === expectedRoute.generation &&
+      routeContextRef.current.key === expectedRoute.key,
+    [],
   );
-  const savingLockRef = useRef(false);
+
+  const isCurrentLoad = useCallback(
+    (expectedRoute: ExpenseFormRouteContext, expectedLoadGeneration: number) =>
+      isCurrentRouteContext(expectedRoute) &&
+      loadGenerationRef.current === expectedLoadGeneration,
+    [isCurrentRouteContext],
+  );
 
   useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      loadGenerationRef.current += 1;
+      routeContextRef.current = {
+        ...routeContextRef.current,
+        generation: routeContextRef.current.generation + 1,
+      };
+      savingLockRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const expectedRoute = routeContextRef.current;
+    const loadGeneration = ++loadGenerationRef.current;
+
+    const updateAccessState = (
+      kind: ExpenseFormAccessKind,
+      message: string,
+      context: LoadedExpenseFormContext | null = null,
+    ) => {
+      if (active && isCurrentLoad(expectedRoute, loadGeneration)) {
+        setAccessState({ context, kind, message, route: expectedRoute });
+      }
+    };
+
+    setAccessState({
+      context: null,
+      kind: planejamentoId ? 'loading' : 'missing-id',
+      message: planejamentoId ? '' : 'Planejamento nao informado.',
+      route: expectedRoute,
+    });
+    setFeedback({ message: '', route: expectedRoute });
+    setPagadoresDisponiveis([]);
+    setParticipantesDivisaoDisponiveis([]);
+    setDescricao('');
+    setValor('');
+    setDataGasto(new Date().toISOString().slice(0, 10));
+    setComportamento('EVENTUAL');
+    setPagoPorParticipanteId('');
+    setParticipantesIds([]);
+    setCategoria('');
+    setObservacao('');
+    setMesReferencia('');
+
     async function loadPlanejamento() {
       if (!planejamentoId) {
-        setLoading(false);
         return;
       }
 
       try {
-        setLoading(true);
-        setCanMutate(false);
-        setMessage('');
-        const [planejamento, gasto] = await Promise.all([
+        const [usuarioAutenticado, planejamento, gasto] = await Promise.all([
+          getUser(),
           getPlanejamentoById(planejamentoId),
           gastoId
             ? getGastoPlanejamentoById(planejamentoId, gastoId)
             : Promise.resolve(null),
         ]);
+
+        if (!active || !isCurrentLoad(expectedRoute, loadGeneration)) {
+          return;
+        }
+
+        if (!usuarioAutenticado?.id) {
+          updateAccessState(
+            'session-expired',
+            'Sessao expirada. Faca login novamente.',
+          );
+          router.replace('/login');
+          return;
+        }
+
+        if (gastoId && !gasto) {
+          updateAccessState(
+            'unavailable',
+            'Gasto inexistente ou inacessivel.',
+          );
+          return;
+        }
+
         const participantesDivisaoIds =
           gasto?.divisoes
             ?.filter((divisao) => divisao.status === 'ATIVA')
@@ -156,40 +316,103 @@ export function PlanejamentoGastoFormScreen() {
           setMesReferencia(gasto.mesReferencia ?? '');
         }
 
-        const planejamentoAberto = planejamento.status === 'ABERTO';
-        const gastoAtivo = !gasto || gasto.status === 'ATIVO';
-        setCanMutate(planejamentoAberto && gastoAtivo);
+        const usuarioAutenticadoId = usuarioAutenticado.id;
+        const loadedContext: LoadedExpenseFormContext = {
+          canAddParticipant: canAddPlanejamentoParticipant(
+            planejamento,
+            usuarioAutenticadoId,
+          ),
+          gasto,
+          planejamento,
+          route: expectedRoute,
+          usuarioAutenticadoId,
+        };
 
-        if (!planejamentoAberto) {
-          setMessage(
+        if (planejamento.status !== 'ABERTO') {
+          updateAccessState(
+            'blocked-status',
             'Apenas planejamentos abertos permitem criar ou editar gastos.',
+            loadedContext,
           );
-        } else if (!gastoAtivo) {
-          setMessage('Apenas gastos ativos podem ser editados.');
-        } else if (!pagadores.length || !participantesDivisao.length) {
-          setMessage(
-            `Adicione ao menos um participante antes de ${
-              isEditing ? 'editar' : 'criar'
-            } um gasto.`,
-          );
+          return;
         }
+
+        if (gasto && gasto.status !== 'ATIVO') {
+          updateAccessState(
+            'inactive-expense',
+            'Apenas gastos ativos podem ser editados.',
+            loadedContext,
+          );
+          return;
+        }
+
+        const canMutate = gasto
+          ? canEditPlanejamentoExpense(
+              planejamento,
+              gasto,
+              usuarioAutenticadoId,
+            )
+          : canCreatePlanejamentoExpense(
+              planejamento,
+              usuarioAutenticadoId,
+            );
+
+        if (!canMutate) {
+          updateAccessState(
+            'blocked-role',
+            gasto
+              ? 'Somente o proprietario pode editar gastos deste planejamento.'
+              : 'Voce nao possui permissao para criar gastos neste planejamento.',
+            loadedContext,
+          );
+          return;
+        }
+
+        if (!pagadores.length || !participantesDivisao.length) {
+          updateAccessState(
+            'missing-participants',
+            `Adicione ao menos um participante antes de ${
+              gasto ? 'editar' : 'criar'
+            } um gasto.`,
+            loadedContext,
+          );
+          return;
+        }
+
+        updateAccessState('authorized', '', loadedContext);
       } catch (error) {
+        if (!active || !isCurrentLoad(expectedRoute, loadGeneration)) {
+          return;
+        }
+
         const resolvedError = await resolveApiError(
           error,
           'Nao foi possivel carregar o formulario de gasto.',
         );
-        setMessage(resolvedError.message);
+
+        if (!active || !isCurrentLoad(expectedRoute, loadGeneration)) {
+          return;
+        }
 
         if (resolvedError.unauthorized) {
+          updateAccessState(
+            'session-expired',
+            resolvedError.message,
+          );
           router.replace('/login');
+          return;
         }
-      } finally {
-        setLoading(false);
+
+        updateAccessState('unavailable', resolvedError.message);
       }
     }
 
     void loadPlanejamento();
-  }, [gastoId, isEditing, planejamentoId, router]);
+
+    return () => {
+      active = false;
+    };
+  }, [gastoId, isCurrentLoad, planejamentoId, router]);
 
   function goBackToDetail() {
     if (planejamentoId) {
@@ -204,8 +427,17 @@ export function PlanejamentoGastoFormScreen() {
   }
 
   function goToParticipantForm() {
-    if (!planejamentoId) {
-      router.push('/planejamentos' as never);
+    if (
+      !planejamentoId ||
+      accessState.kind !== 'missing-participants' ||
+      !accessState.context ||
+      !isCurrentRouteContext(accessState.route) ||
+      !accessState.context.canAddParticipant ||
+      !canAddPlanejamentoParticipant(
+        accessState.context.planejamento,
+        accessState.context.usuarioAutenticadoId,
+      )
+    ) {
       return;
     }
 
@@ -216,7 +448,22 @@ export function PlanejamentoGastoFormScreen() {
   }
 
   async function handleSave() {
-    if (savingLockRef.current) {
+    if (
+      accessState.kind !== 'authorized' ||
+      !accessState.context ||
+      !isCurrentRouteContext(accessState.route)
+    ) {
+      return;
+    }
+
+    const expectedContext = accessState.context;
+    const existingLock = savingLockRef.current;
+
+    if (
+      existingLock &&
+      existingLock.route.generation === expectedContext.route.generation &&
+      existingLock.route.key === expectedContext.route.key
+    ) {
       return;
     }
 
@@ -228,25 +475,32 @@ export function PlanejamentoGastoFormScreen() {
     const trimmedObservacao = observacao.trim();
     const trimmedMesReferencia = mesReferencia.trim();
 
-    if (!planejamentoId) {
-      setMessage('Planejamento nao informado.');
+    const currentCapability = expectedContext.gasto
+      ? canEditPlanejamentoExpense(
+          expectedContext.planejamento,
+          expectedContext.gasto,
+          expectedContext.usuarioAutenticadoId,
+        )
+      : canCreatePlanejamentoExpense(
+          expectedContext.planejamento,
+          expectedContext.usuarioAutenticadoId,
+        );
+
+    if (!currentCapability || !expectedContext.route.planejamentoId) {
       return;
     }
 
-    if (!canMutate) {
-      setMessage(
-        isEditing
-          ? 'Este gasto nao pode ser editado no estado atual.'
-          : 'Este planejamento nao permite criar gastos no estado atual.',
-      );
-      return;
-    }
+    const setCurrentMessage = (message: string) => {
+      if (isCurrentRouteContext(expectedContext.route)) {
+        setFeedback({ message, route: expectedContext.route });
+      }
+    };
 
     if (
       !pagadoresDisponiveis.length ||
       !participantesDivisaoDisponiveis.length
     ) {
-      setMessage(
+      setCurrentMessage(
         `Adicione ao menos um participante antes de ${
           isEditing ? 'editar' : 'criar'
         } um gasto.`,
@@ -255,37 +509,41 @@ export function PlanejamentoGastoFormScreen() {
     }
 
     if (!trimmedDescricao) {
-      setMessage('Informe a descricao do gasto.');
+      setCurrentMessage('Informe a descricao do gasto.');
       return;
     }
 
     if (!Number.isFinite(parsedValor)) {
-      setMessage('Informe um valor valido. Ex.: 150,90');
+      setCurrentMessage('Informe um valor valido. Ex.: 150,90');
       return;
     }
 
     if (valorCentavos <= 0) {
-      setMessage('O valor deve ser maior que zero.');
+      setCurrentMessage('O valor deve ser maior que zero.');
       return;
     }
 
     if (!isValidIsoDate(normalizedDataGasto)) {
-      setMessage('Informe uma data valida no formato YYYY-MM-DD. Ex.: 2026-04-07');
+      setCurrentMessage(
+        'Informe uma data valida no formato YYYY-MM-DD. Ex.: 2026-04-07',
+      );
       return;
     }
 
     if (!comportamento) {
-      setMessage('Selecione o comportamento do gasto.');
+      setCurrentMessage('Selecione o comportamento do gasto.');
       return;
     }
 
     if (!pagoPorParticipanteId) {
-      setMessage('Selecione quem pagou o gasto.');
+      setCurrentMessage('Selecione quem pagou o gasto.');
       return;
     }
 
     if (!participantesIds.length) {
-      setMessage('Selecione ao menos um participante para dividir o gasto.');
+      setCurrentMessage(
+        'Selecione ao menos um participante para dividir o gasto.',
+      );
       return;
     }
 
@@ -293,14 +551,34 @@ export function PlanejamentoGastoFormScreen() {
       trimmedMesReferencia &&
       !MONTH_REFERENCE_PATTERN.test(trimmedMesReferencia)
     ) {
-      setMessage('Informe o mes de referencia no formato YYYY-MM.');
+      setCurrentMessage('Informe o mes de referencia no formato YYYY-MM.');
       return;
     }
 
+    if (
+      !isCurrentRouteContext(expectedContext.route) ||
+      (expectedContext.gasto
+        ? !canEditPlanejamentoExpense(
+            expectedContext.planejamento,
+            expectedContext.gasto,
+            expectedContext.usuarioAutenticadoId,
+          )
+        : !canCreatePlanejamentoExpense(
+            expectedContext.planejamento,
+            expectedContext.usuarioAutenticadoId,
+          ))
+    ) {
+      return;
+    }
+
+    const savingOperationToken: ExpenseSavingToken = {
+      route: expectedContext.route,
+    };
+    savingLockRef.current = savingOperationToken;
+
     try {
-      savingLockRef.current = true;
-      setSaving(true);
-      setMessage('');
+      setSavingToken(savingOperationToken);
+      setFeedback({ message: '', route: expectedContext.route });
 
       const commonData = {
         comportamento,
@@ -311,15 +589,19 @@ export function PlanejamentoGastoFormScreen() {
         valorCentavos,
       };
 
-      if (isEditing && gastoId) {
-        await updateGastoPlanejamento(planejamentoId, gastoId, {
-          ...commonData,
-          categoria: trimmedCategoria || null,
-          mesReferencia: trimmedMesReferencia || null,
-          observacao: trimmedObservacao || null,
-        });
+      if (expectedContext.gasto && expectedContext.route.gastoId) {
+        await updateGastoPlanejamento(
+          expectedContext.route.planejamentoId,
+          expectedContext.route.gastoId,
+          {
+            ...commonData,
+            categoria: trimmedCategoria || null,
+            mesReferencia: trimmedMesReferencia || null,
+            observacao: trimmedObservacao || null,
+          },
+        );
       } else {
-        await createGastoPlanejamento(planejamentoId, {
+        await createGastoPlanejamento(expectedContext.route.planejamentoId, {
           ...commonData,
           ...(trimmedCategoria ? { categoria: trimmedCategoria } : {}),
           ...(trimmedObservacao ? { observacao: trimmedObservacao } : {}),
@@ -329,26 +611,71 @@ export function PlanejamentoGastoFormScreen() {
         });
       }
 
-      goBackToDetail();
+      if (
+        savingLockRef.current === savingOperationToken &&
+        isCurrentRouteContext(expectedContext.route)
+      ) {
+        router.replace({
+          pathname: '/planejamentos-detail',
+          params: { id: expectedContext.route.planejamentoId },
+        } as never);
+      }
     } catch (error) {
+      if (
+        savingLockRef.current !== savingOperationToken ||
+        !isCurrentRouteContext(expectedContext.route)
+      ) {
+        return;
+      }
+
       const resolvedError = await resolveApiError(
         error,
-        isEditing
+        expectedContext.gasto
           ? 'Nao foi possivel atualizar o gasto.'
           : 'Nao foi possivel criar o gasto.',
       );
-      setMessage(resolvedError.message);
+
+      if (
+        savingLockRef.current !== savingOperationToken ||
+        !isCurrentRouteContext(expectedContext.route)
+      ) {
+        return;
+      }
+
+      setFeedback({
+        message: resolvedError.message,
+        route: expectedContext.route,
+      });
 
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      savingLockRef.current = false;
-      setSaving(false);
+      if (savingLockRef.current === savingOperationToken) {
+        savingLockRef.current = null;
+
+        if (isCurrentRouteContext(expectedContext.route)) {
+          setSavingToken((currentToken) =>
+            currentToken === savingOperationToken ? null : currentToken,
+          );
+        }
+      }
     }
   }
 
-  const formDisabled = saving || !canMutate;
+  const accessStateIsCurrent =
+    accessState.route.generation === currentRoute.generation &&
+    accessState.route.key === currentRoute.key;
+  const currentAccessState = accessStateIsCurrent ? accessState : null;
+  const authorizedContext =
+    currentAccessState?.kind === 'authorized'
+      ? currentAccessState.context
+      : null;
+  const saving =
+    !!savingToken &&
+    savingToken.route.generation === currentRoute.generation &&
+    savingToken.route.key === currentRoute.key;
+  const formDisabled = saving || !authorizedContext;
   const hasParticipantOptions =
     pagadoresDisponiveis.length > 0 &&
     participantesDivisaoDisponiveis.length > 0;
@@ -377,7 +704,7 @@ export function PlanejamentoGastoFormScreen() {
       onNavigate={(route) => router.push(route as never)}
       sidebarItems={financeSidebarItems}
     >
-      {loading ? (
+      {!currentAccessState || currentAccessState.kind === 'loading' ? (
         <GlassPanel>
           <View style={styles.loadingRow}>
             <ActivityIndicator color={FinanceTheme.colors.cyan} />
@@ -388,22 +715,39 @@ export function PlanejamentoGastoFormScreen() {
         </GlassPanel>
       ) : null}
 
-      {!loading && !hasParticipantOptions ? (
+      {currentAccessState &&
+      currentAccessState.kind !== 'loading' &&
+      currentAccessState.kind !== 'authorized' ? (
         <GlassStatusCard
-          actionLabel={canMutate ? 'Adicionar participante' : undefined}
-          description={
-            message ||
-            `Adicione ao menos um participante antes de ${
-              isEditing ? 'editar' : 'criar'
-            } um gasto.`
+          actionLabel={
+            currentAccessState.kind === 'missing-participants' &&
+            currentAccessState.context?.canAddParticipant
+              ? 'Adicionar participante'
+              : undefined
           }
-          onActionPress={canMutate ? goToParticipantForm : undefined}
-          title="Nenhum participante disponivel"
+          description={currentAccessState.message}
+          onActionPress={
+            currentAccessState.kind === 'missing-participants' &&
+            currentAccessState.context?.canAddParticipant
+              ? goToParticipantForm
+              : undefined
+          }
+          title={
+            currentAccessState.kind === 'missing-participants'
+              ? 'Nenhum participante disponivel'
+              : currentAccessState.kind === 'inactive-expense'
+                ? 'Gasto indisponivel'
+                : currentAccessState.kind === 'session-expired'
+                  ? 'Sessao expirada'
+                  : currentAccessState.kind === 'blocked-role'
+                    ? 'Acao nao permitida'
+                    : 'Formulario indisponivel'
+          }
           tone="muted"
         />
       ) : null}
 
-      {!loading && hasParticipantOptions ? (
+      {authorizedContext && hasParticipantOptions ? (
         <GlassPanel>
           <GlassField label="Descricao">
             <GlassTextInput
@@ -505,7 +849,11 @@ export function PlanejamentoGastoFormScreen() {
             />
           </GlassField>
 
-          {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+          {feedback.route.generation === currentRoute.generation &&
+          feedback.route.key === currentRoute.key &&
+          feedback.message ? (
+            <Text style={styles.errorMessage}>{feedback.message}</Text>
+          ) : null}
 
           <GlassButton
             disabled={formDisabled}

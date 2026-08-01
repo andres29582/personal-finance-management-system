@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveApiError } from '../../../../utils/api-error';
 import { confirmAction } from '../../../../utils/confirm-action';
+import {
+  canAddPlanejamentoParticipant,
+  canCreatePlanejamentoExpense,
+  canEditPlanejamentoExpense,
+  findActiveLinkedParticipant,
+  isPlanejamentoOwner,
+} from '../authorization/planejamentoAuthorization';
 import type { AcertoAction } from '../components/detail/AcertoRow';
 import type { PlanejamentoTransition } from '../components/detail/PlanejamentoLifecycleSection';
 import {
@@ -266,23 +273,24 @@ export function usePlanejamentoDetailMutations({
   const isReadOnly =
     planejamento?.status === 'ARQUIVADO' ||
     planejamento?.status === 'CANCELADO';
-  const isAuthenticatedUserOwner =
-    !!planejamento &&
-    usuarioAutenticadoId === planejamento.usuarioCriadorId;
-  const authenticatedParticipant =
-    planejamento?.participantes?.find(
-      (participante) =>
-        !!usuarioAutenticadoId &&
-        participante.usuarioId === usuarioAutenticadoId &&
-        participante.tipo === 'VINCULADO' &&
-        participante.status === 'ATIVO',
-    ) ?? null;
+  const isAuthenticatedUserOwner = isPlanejamentoOwner(
+    planejamento,
+    usuarioAutenticadoId,
+  );
+  const authenticatedParticipant = findActiveLinkedParticipant(
+    planejamento,
+    usuarioAutenticadoId,
+  );
   const canActAsAggregateMember =
     isAuthenticatedUserOwner || !!authenticatedParticipant;
-  const canAddParticipant =
-    structuralMutationsAllowed && isAuthenticatedUserOwner;
-  const canCreateExpense =
-    structuralMutationsAllowed && canActAsAggregateMember;
+  const canAddParticipant = canAddPlanejamentoParticipant(
+    planejamento,
+    usuarioAutenticadoId,
+  );
+  const canCreateExpense = canCreatePlanejamentoExpense(
+    planejamento,
+    usuarioAutenticadoId,
+  );
   const canManageLifecycle =
     isAuthenticatedUserOwner &&
     (planejamento?.status === 'ABERTO' ||
@@ -389,10 +397,12 @@ export function usePlanejamentoDetailMutations({
 
   const canEditExpense = useCallback(
     (gasto: GastoPlanejamento) =>
-      structuralMutationsAllowed &&
-      isAuthenticatedUserOwner &&
-      gasto.status === 'ATIVO',
-    [isAuthenticatedUserOwner, structuralMutationsAllowed],
+      canEditPlanejamentoExpense(
+        planejamento,
+        gasto,
+        usuarioAutenticadoId,
+      ),
+    [planejamento, usuarioAutenticadoId],
   );
 
   const canCancelExpense = useCallback(
