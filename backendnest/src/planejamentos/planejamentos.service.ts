@@ -121,7 +121,7 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<AcertoPlanejamento[]> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         await this.buscarPlanejamentoAcessivelComRepository(
           repository,
           planejamentoId,
@@ -152,11 +152,37 @@ export class PlanejamentosService {
           return plano.pendentesPreservados;
         }
 
-        return this.reconciliarAcertos(
+        const acertosReconciliados = await this.reconciliarAcertos(
           repository,
           planejamentoAtualizado,
           plano,
         );
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'PLANEJAMENTO_ACERTOS_SINCRONIZADOS',
+            module: 'planejamentos',
+            action: 'update',
+            success: true,
+            userId: usuarioId,
+            entity: 'planejamento',
+            entityId: planejamentoId,
+            details: {
+              planejamentoId,
+              acertosCriadosIds: plano.novosAcertos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
+              acertosCanceladosIds: plano.acertosObsoletos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
+            },
+            context: {
+              statusCode: 201,
+            },
+          },
+          manager,
+        );
+
+        return acertosReconciliados;
       },
     );
   }
@@ -1371,7 +1397,7 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<AcertoPlanejamento> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const { planejamento, acerto } =
           await this.buscarContextoAcertoBloqueadoComRepository(
             repository,
@@ -1398,8 +1424,44 @@ export class PlanejamentosService {
           planejamentoId,
           usuarioId,
         );
+        const plano = this.criarPlanoReconciliacaoAcertos(
+          planejamentoAtualizado,
+        );
 
-        await this.reconciliarAcertos(repository, planejamentoAtualizado);
+        await this.reconciliarAcertos(
+          repository,
+          planejamentoAtualizado,
+          plano,
+        );
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'PLANEJAMENTO_ACERTO_PAGO',
+            module: 'planejamentos',
+            action: 'update',
+            success: true,
+            userId: usuarioId,
+            entity: 'acerto_planejamento',
+            entityId: acerto.id,
+            details: {
+              planejamentoId,
+              statusAnterior: AcertoStatus.PENDENTE,
+              statusPosterior: AcertoStatus.PAGO,
+              valorCentavos: acerto.valorCentavos,
+              deParticipanteId: acerto.deParticipanteId,
+              paraParticipanteId: acerto.paraParticipanteId,
+              acertosCriadosIds: plano.novosAcertos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
+              acertosCanceladosIds: plano.acertosObsoletos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
+            },
+            context: {
+              statusCode: 200,
+            },
+          },
+          manager,
+        );
 
         return acertoPago;
       },
@@ -1412,7 +1474,7 @@ export class PlanejamentosService {
     usuarioId: string,
   ): Promise<AcertoPlanejamento> {
     return this.planejamentosRepository.executarEmTransacao(
-      async (repository) => {
+      async (repository, manager) => {
         const { planejamento, acerto } =
           await this.buscarContextoAcertoBloqueadoComRepository(
             repository,
@@ -1439,8 +1501,47 @@ export class PlanejamentosService {
           planejamentoId,
           usuarioId,
         );
+        const plano = this.criarPlanoReconciliacaoAcertos(
+          planejamentoAtualizado,
+        );
 
-        await this.reconciliarAcertos(repository, planejamentoAtualizado);
+        await this.reconciliarAcertos(
+          repository,
+          planejamentoAtualizado,
+          plano,
+        );
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'PLANEJAMENTO_ACERTO_CANCELADO',
+            module: 'planejamentos',
+            action: 'update',
+            success: true,
+            userId: usuarioId,
+            entity: 'acerto_planejamento',
+            entityId: acerto.id,
+            details: {
+              planejamentoId,
+              statusAnterior: acerto.status,
+              statusPosterior: AcertoStatus.CANCELADO,
+              valorCentavos: acerto.valorCentavos,
+              deParticipanteId: acerto.deParticipanteId,
+              paraParticipanteId: acerto.paraParticipanteId,
+              ...(acerto.status === AcertoStatus.PAGO
+                ? { dataPagamentoAnterior: acerto.dataPagamento }
+                : {}),
+              acertosCriadosIds: plano.novosAcertos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
+              acertosCanceladosIds: plano.acertosObsoletos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
+            },
+            context: {
+              statusCode: 200,
+            },
+          },
+          manager,
+        );
 
         return acertoCancelado;
       },
@@ -1552,9 +1653,19 @@ export class PlanejamentosService {
             entity: 'acerto_planejamento',
             entityId: acerto.id,
             details: {
+              planejamentoId,
               statusAnterior: AcertoStatus.PAGO,
               statusPosterior: AcertoStatus.PENDENTE,
+              valorCentavos: acerto.valorCentavos,
+              deParticipanteId: acerto.deParticipanteId,
+              paraParticipanteId: acerto.paraParticipanteId,
               dataPagamentoAnterior: acerto.dataPagamento,
+              acertosCriadosIds: plano.novosAcertos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
+              acertosCanceladosIds: plano.acertosObsoletos
+                .map(({ id }) => id)
+                .sort((a, b) => a.localeCompare(b)),
             },
             context: {
               statusCode: 200,

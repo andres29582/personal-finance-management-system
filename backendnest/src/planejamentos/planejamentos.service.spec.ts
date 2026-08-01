@@ -3083,6 +3083,29 @@ describe('PlanejamentosService', () => {
         valorCentavos: 5000,
       }),
     ]);
+    const acertoPlanejado =
+      repositoryTransacional.salvarAcertos.mock.calls[0][0][0];
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_ACERTOS_SINCRONIZADOS',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'planejamento',
+        entityId: 'planejamento-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          acertosCriadosIds: [acertoPlanejado.id],
+          acertosCanceladosIds: [],
+        },
+        context: {
+          statusCode: 201,
+        },
+      },
+      entityManager,
+    );
     expect(result[0].valorCentavos).toBeGreaterThan(0);
   });
 
@@ -3503,6 +3526,11 @@ describe('PlanejamentosService', () => {
       repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
     );
     expect(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+    expect(
       repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
         .invocationCallOrder[0],
     ).toBeLessThan(randomUUIDMock.mock.invocationCallOrder[0]);
@@ -3550,6 +3578,7 @@ describe('PlanejamentosService', () => {
     expect(repository.bloquearPlanejamentoParaAtualizacao).toHaveBeenCalledWith(
       'planejamento-1',
     );
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
     expect(result).toEqual([acertoPendente]);
   });
 
@@ -3599,6 +3628,7 @@ describe('PlanejamentosService', () => {
       }),
     );
     repository.salvarAcertos.mockResolvedValue([acertoNovo]);
+    jest.mocked(crypto.randomUUID).mockReturnValueOnce('acerto-novo' as never);
 
     const result = await service.sincronizarAcertos('planejamento-1', 'user-1');
 
@@ -3618,7 +3648,144 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcertos.mock.invocationCallOrder[0]).toBeLessThan(
       repository.salvarAcertos.mock.invocationCallOrder[1],
     );
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_ACERTOS_SINCRONIZADOS',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'planejamento',
+        entityId: 'planejamento-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          acertosCriadosIds: ['acerto-novo'],
+          acertosCanceladosIds: ['acerto-1'],
+        },
+        context: {
+          statusCode: 201,
+        },
+      },
+      entityManager,
+    );
+    expect(repository.salvarAcertos.mock.invocationCallOrder[1]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
     expect(result).toEqual([acertoNovo]);
+  });
+
+  it('audits only sorted created and canceled ids from the exact synchronization plan', async () => {
+    const pendentePreservado = criarEntidadeAcertoPersistido({
+      id: 'm-preservado',
+    });
+    const plano = {
+      pendentesPreservados: [pendentePreservado],
+      acertosObsoletos: [
+        criarEntidadeAcertoPersistido({
+          id: 'z-cancelado',
+          status: AcertoStatus.CANCELADO,
+        }),
+        criarEntidadeAcertoPersistido({
+          id: 'a-cancelado',
+          status: AcertoStatus.CANCELADO,
+        }),
+      ],
+      novosAcertos: [
+        criarEntidadeAcertoPersistido({ id: 'z-criado' }),
+        criarEntidadeAcertoPersistido({ id: 'a-criado' }),
+      ],
+    };
+    const criarPlanoSpy = jest
+      .spyOn(
+        service as unknown as {
+          criarPlanoReconciliacaoAcertos: () => typeof plano;
+        },
+        'criarPlanoReconciliacaoAcertos',
+      )
+      .mockReturnValue(plano);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes(),
+    );
+    repository.salvarAcertos.mockImplementation((acertos) =>
+      Promise.resolve(
+        acertos.map((acerto) =>
+          Object.assign(new AcertoPlanejamento(), acerto),
+        ),
+      ),
+    );
+
+    await service.sincronizarAcertos('planejamento-1', 'user-1');
+
+    expect(criarPlanoSpy).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcertos).toHaveBeenNthCalledWith(
+      1,
+      plano.acertosObsoletos,
+    );
+    expect(repository.salvarAcertos.mock.calls[0][0]).toBe(
+      plano.acertosObsoletos,
+    );
+    expect(repository.salvarAcertos).toHaveBeenNthCalledWith(
+      2,
+      plano.novosAcertos,
+    );
+    expect(repository.salvarAcertos.mock.calls[1][0]).toBe(plano.novosAcertos);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_ACERTOS_SINCRONIZADOS',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'planejamento',
+        entityId: 'planejamento-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          acertosCriadosIds: ['a-criado', 'z-criado'],
+          acertosCanceladosIds: ['a-cancelado', 'z-cancelado'],
+        },
+        context: {
+          statusCode: 201,
+        },
+      },
+      entityManager,
+    );
+    const evento = logsService.logEntityEventTransactional.mock.calls[0][0];
+    expect(evento.details).not.toHaveProperty('pendentesPreservados');
+    expect(JSON.stringify(evento)).not.toContain('m-preservado');
+    expect(repository.salvarAcertos.mock.invocationCallOrder[1]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('propagates synchronization audit failures after reconciliation', async () => {
+    const erroAuditoria = new Error('falha na auditoria de sincronizacao');
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.salvarAcertos.mockImplementation((acertos) =>
+      Promise.resolve(
+        acertos.map((acerto) =>
+          Object.assign(new AcertoPlanejamento(), acerto),
+        ),
+      ),
+    );
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.sincronizarAcertos('planejamento-1', 'user-1'),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional.mock.calls[0][1]).toBe(
+      entityManager,
+    );
+    expect(repository.salvarAcertos.mock.invocationCallOrder[0]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
   });
 
   it('preserves a valid pending settlement, then cancels an obsolete one before creating and returning a new one', async () => {
@@ -4917,6 +5084,38 @@ describe('PlanejamentosService', () => {
       repositoryTransacional.buscarComGastosDivisoesAcertos.mock
         .invocationCallOrder[0],
     );
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_ACERTO_PAGO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'acerto_planejamento',
+        entityId: 'acerto-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          statusAnterior: AcertoStatus.PENDENTE,
+          statusPosterior: AcertoStatus.PAGO,
+          valorCentavos: 5000,
+          deParticipanteId: 'participante-2',
+          paraParticipanteId: 'participante-1',
+          acertosCriadosIds: [],
+          acertosCanceladosIds: [],
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
+    expect(
+      repositoryTransacional.buscarComGastosDivisoesAcertos.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
     expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
     expect(
       repository.bloquearPlanejamentoParaAtualizacao,
@@ -4974,6 +5173,32 @@ describe('PlanejamentosService', () => {
       expect.objectContaining({ status: AcertoStatus.PAGO }),
     );
     expect(repositoryTransacional.salvarAcertos).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_ACERTO_PAGO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-2',
+        entity: 'acerto_planejamento',
+        entityId: acertoPendente.id,
+        details: {
+          planejamentoId: 'planejamento-1',
+          statusAnterior: AcertoStatus.PENDENTE,
+          statusPosterior: AcertoStatus.PAGO,
+          valorCentavos: acertoPendente.valorCentavos,
+          deParticipanteId: acertoPendente.deParticipanteId,
+          paraParticipanteId: acertoPendente.paraParticipanteId,
+          acertosCriadosIds: [],
+          acertosCanceladosIds: [],
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
     expect(result).toBe(acertoPago);
   });
 
@@ -5013,6 +5238,7 @@ describe('PlanejamentosService', () => {
       repositoryTransacional.buscarComGastosDivisoesAcertos,
     ).not.toHaveBeenCalled();
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects payment when settlement is not pending', async () => {
@@ -5033,6 +5259,7 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
     expect(repository.buscarComGastosDivisoesAcertos).not.toHaveBeenCalled();
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('cancels obsolete pending settlements after persisting the target payment', async () => {
@@ -5127,6 +5354,108 @@ describe('PlanejamentosService', () => {
       repository.salvarAcertos.mock.invocationCallOrder[0],
     );
     expect(result).toBe(acertoPago);
+  });
+
+  it('uses the same payment reconciliation plan for saves and sorted audit ids', async () => {
+    const acertoPendente = criarEntidadeAcertoPersistido();
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    const plano = {
+      pendentesPreservados: [],
+      acertosObsoletos: [
+        criarEntidadeAcertoPersistido({
+          id: 'z-cancelado-pagamento',
+          status: AcertoStatus.CANCELADO,
+        }),
+        criarEntidadeAcertoPersistido({
+          id: 'a-cancelado-pagamento',
+          status: AcertoStatus.CANCELADO,
+        }),
+      ],
+      novosAcertos: [
+        criarEntidadeAcertoPersistido({ id: 'z-criado-pagamento' }),
+        criarEntidadeAcertoPersistido({ id: 'a-criado-pagamento' }),
+      ],
+    };
+    const criarPlanoSpy = jest
+      .spyOn(
+        service as unknown as {
+          criarPlanoReconciliacaoAcertos: () => typeof plano;
+        },
+        'criarPlanoReconciliacaoAcertos',
+      )
+      .mockReturnValue(plano);
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPendente);
+    repository.salvarAcerto.mockResolvedValue(acertoPago);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({ acertos: [acertoPago] }),
+    );
+    repository.salvarAcertos.mockImplementation((acertos) =>
+      Promise.resolve(
+        acertos.map((acerto) =>
+          Object.assign(new AcertoPlanejamento(), acerto),
+        ),
+      ),
+    );
+
+    await service.pagarAcerto('planejamento-1', 'acerto-1', 'user-1');
+
+    expect(criarPlanoSpy).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcertos.mock.calls[0][0]).toBe(
+      plano.acertosObsoletos,
+    );
+    expect(repository.salvarAcertos.mock.calls[1][0]).toBe(plano.novosAcertos);
+    const [evento, manager] =
+      logsService.logEntityEventTransactional.mock.calls[0];
+    expect(manager).toBe(entityManager);
+    expect(evento.event).toBe('PLANEJAMENTO_ACERTO_PAGO');
+    expect(evento.details).toMatchObject({
+      acertosCriadosIds: ['a-criado-pagamento', 'z-criado-pagamento'],
+      acertosCanceladosIds: ['a-cancelado-pagamento', 'z-cancelado-pagamento'],
+    });
+    const details = evento.details as Record<string, unknown>;
+    expect(details.acertosCriadosIds).not.toContain(acertoPendente.id);
+    expect(details.acertosCanceladosIds).not.toContain(acertoPendente.id);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional.mock.calls[0][1]).toBe(
+      entityManager,
+    );
+    expect(repository.salvarAcertos.mock.invocationCallOrder[1]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('propagates payment audit failures after the target save and reconciliation', async () => {
+    const erroAuditoria = new Error('falha na auditoria do pagamento');
+    const acertoPendente = criarEntidadeAcertoPersistido();
+    const acertoPago = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.PAGO,
+      dataPagamento: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPendente);
+    repository.salvarAcerto.mockResolvedValue(acertoPago);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoPago],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.pagarAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repository.salvarAcerto).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional.mock.calls[0][1]).toBe(
+      entityManager,
+    );
+    expect(repository.salvarAcerto.mock.invocationCallOrder[0]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
   });
 
   it('propagates reconciliation failures from the payment transaction', async () => {
@@ -5302,6 +5631,7 @@ describe('PlanejamentosService', () => {
       }),
     );
     repositoryTransacional.salvarAcertos.mockResolvedValue([novaPendencia]);
+    jest.mocked(crypto.randomUUID).mockReturnValueOnce('acerto-novo' as never);
 
     const result = await service.cancelarAcerto(
       'planejamento-1',
@@ -5344,6 +5674,38 @@ describe('PlanejamentosService', () => {
         valorCentavos: 5000,
       }),
     ]);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_ACERTO_CANCELADO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'acerto_planejamento',
+        entityId: 'acerto-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          statusAnterior: AcertoStatus.PAGO,
+          statusPosterior: AcertoStatus.CANCELADO,
+          valorCentavos: 5000,
+          deParticipanteId: 'participante-2',
+          paraParticipanteId: 'participante-1',
+          dataPagamentoAnterior: new Date('2026-07-04T00:00:00.000Z'),
+          acertosCriadosIds: ['acerto-novo'],
+          acertosCanceladosIds: [],
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
+    expect(
+      repositoryTransacional.salvarAcertos.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
     expect(
       repository.executarEmTransacao.mock.invocationCallOrder[0],
     ).toBeLessThan(
@@ -5383,6 +5745,7 @@ describe('PlanejamentosService', () => {
       }),
     );
     repository.salvarAcertos.mockResolvedValue([novaPendencia]);
+    jest.mocked(crypto.randomUUID).mockReturnValueOnce('acerto-novo' as never);
 
     const result = await service.cancelarAcerto(
       'planejamento-1',
@@ -5405,8 +5768,77 @@ describe('PlanejamentosService', () => {
     expect(repository.salvarAcertos.mock.calls[0][0][0]?.id).not.toBe(
       'acerto-1',
     );
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'PLANEJAMENTO_ACERTO_CANCELADO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'acerto_planejamento',
+        entityId: 'acerto-1',
+        details: {
+          planejamentoId: 'planejamento-1',
+          statusAnterior: AcertoStatus.PENDENTE,
+          statusPosterior: AcertoStatus.CANCELADO,
+          valorCentavos: 5000,
+          deParticipanteId: 'participante-2',
+          paraParticipanteId: 'participante-1',
+          acertosCriadosIds: ['acerto-novo'],
+          acertosCanceladosIds: [],
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
+    const details = logsService.logEntityEventTransactional.mock.calls[0][0]
+      .details as Record<string, unknown>;
+    expect(details).not.toHaveProperty('dataPagamentoAnterior');
+    expect(details.acertosCriadosIds).not.toContain('acerto-1');
+    expect(details.acertosCanceladosIds).not.toContain('acerto-1');
+    expect(repository.salvarAcertos.mock.invocationCallOrder[0]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
     expect(result).toBe(acertoCancelado);
     expect(result.status).toBe(AcertoStatus.CANCELADO);
+  });
+
+  it('propagates cancellation audit failures after the target and derived saves', async () => {
+    const erroAuditoria = new Error('falha na auditoria do cancelamento');
+    const acertoPendente = criarEntidadeAcertoPersistido();
+    const acertoCancelado = criarEntidadeAcertoPersistido({
+      status: AcertoStatus.CANCELADO,
+    });
+    const novaPendencia = criarEntidadeAcertoPersistido({
+      id: 'acerto-novo',
+    });
+    repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPendente);
+    repository.salvarAcerto.mockResolvedValue(acertoCancelado);
+    repository.buscarComGastosDivisoesAcertos.mockResolvedValue(
+      criarPlanejamentoComParticipantes({
+        acertos: [acertoCancelado],
+        gastos: [criarGastoComPendencia()],
+      }),
+    );
+    repository.salvarAcertos.mockResolvedValue([novaPendencia]);
+    logsService.logEntityEventTransactional.mockRejectedValue(erroAuditoria);
+
+    await expect(
+      service.cancelarAcerto('planejamento-1', 'acerto-1', 'user-1'),
+    ).rejects.toBe(erroAuditoria);
+
+    expect(repository.salvarAcerto).toHaveBeenCalledTimes(1);
+    expect(repository.salvarAcertos).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional.mock.calls[0][1]).toBe(
+      entityManager,
+    );
+    expect(repository.salvarAcertos.mock.invocationCallOrder[0]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
   });
 
   it('rejects non-owner canceling or reopening settlements', async () => {
@@ -5425,6 +5857,7 @@ describe('PlanejamentosService', () => {
     ).rejects.toBeInstanceOf(ForbiddenResourceException);
 
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('reopens a paid settlement in a closed planejamento when the same obligation remains valid', async () => {
@@ -5513,6 +5946,7 @@ describe('PlanejamentosService', () => {
       repositoryTransacional.bloquearPlanejamentoParaAtualizacao.mock
         .invocationCallOrder[0],
     );
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
     expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
       {
         event: 'ACERTO_PLANEJAMENTO_REABERTO',
@@ -5523,15 +5957,26 @@ describe('PlanejamentosService', () => {
         entity: 'acerto_planejamento',
         entityId: acertoPago.id,
         details: {
+          planejamentoId: 'planejamento-1',
           statusAnterior: AcertoStatus.PAGO,
           statusPosterior: AcertoStatus.PENDENTE,
+          valorCentavos: acertoPago.valorCentavos,
+          deParticipanteId: acertoPago.deParticipanteId,
+          paraParticipanteId: acertoPago.paraParticipanteId,
           dataPagamentoAnterior: dataPagamento,
+          acertosCriadosIds: [],
+          acertosCanceladosIds: [],
         },
         context: {
           statusCode: 200,
         },
       },
       entityManager,
+    );
+    expect(
+      repositoryTransacional.salvarAcerto.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
     );
     expect(repository.buscarAcessivelComParticipantes).not.toHaveBeenCalled();
     expect(
@@ -5545,18 +5990,27 @@ describe('PlanejamentosService', () => {
     expect(result.status).toBe(AcertoStatus.PENDENTE);
   });
 
-  it('cancels an equivalent pending duplicate while preserving the paid settlement id', async () => {
+  it('audits sorted ids from the first reopening plan after canceling equivalent pending duplicates', async () => {
     const acertoPago = criarEntidadeAcertoPersistido({
       id: 'acerto-pago',
       status: AcertoStatus.PAGO,
       dataPagamento: new Date('2026-07-04T00:00:00.000Z'),
     });
-    const pendenteEquivalente = criarEntidadeAcertoPersistido({
-      id: 'acerto-pendente-atual',
+    const pendenteEquivalenteZ = criarEntidadeAcertoPersistido({
+      id: 'z-pendente-equivalente',
       status: AcertoStatus.PENDENTE,
     });
-    const pendenteCancelado = criarEntidadeAcertoPersistido({
-      ...pendenteEquivalente,
+    const pendenteEquivalenteA = criarEntidadeAcertoPersistido({
+      id: 'a-pendente-equivalente',
+      status: AcertoStatus.PENDENTE,
+    });
+    const pendenteCanceladoZ = criarEntidadeAcertoPersistido({
+      ...pendenteEquivalenteZ,
+      status: AcertoStatus.CANCELADO,
+      dataPagamento: null,
+    });
+    const pendenteCanceladoA = criarEntidadeAcertoPersistido({
+      ...pendenteEquivalenteA,
       status: AcertoStatus.CANCELADO,
       dataPagamento: null,
     });
@@ -5571,17 +6025,20 @@ describe('PlanejamentosService', () => {
     repository.buscarAcertoPorIdEPlanejamento.mockResolvedValue(acertoPago);
     repository.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
       criarPlanejamentoComParticipantes({
-        acertos: [acertoPago, pendenteEquivalente],
+        acertos: [acertoPago, pendenteEquivalenteZ, pendenteEquivalenteA],
         gastos: [criarGastoComPendencia()],
       }),
     );
     repository.buscarComGastosDivisoesAcertos.mockResolvedValueOnce(
       criarPlanejamentoComParticipantes({
-        acertos: [acertoPago, pendenteCancelado],
+        acertos: [acertoPago, pendenteCanceladoZ, pendenteCanceladoA],
         gastos: [criarGastoComPendencia()],
       }),
     );
-    repository.salvarAcertos.mockResolvedValue([pendenteCancelado]);
+    repository.salvarAcertos.mockResolvedValue([
+      pendenteCanceladoZ,
+      pendenteCanceladoA,
+    ]);
     repository.salvarAcerto.mockResolvedValue(acertoReaberto);
 
     const result = await service.reabrirAcerto(
@@ -5592,7 +6049,12 @@ describe('PlanejamentosService', () => {
 
     expect(repository.salvarAcertos).toHaveBeenCalledWith([
       expect.objectContaining({
-        id: 'acerto-pendente-atual',
+        id: 'z-pendente-equivalente',
+        status: AcertoStatus.CANCELADO,
+        dataPagamento: null,
+      }),
+      expect.objectContaining({
+        id: 'a-pendente-equivalente',
         status: AcertoStatus.CANCELADO,
         dataPagamento: null,
       }),
@@ -5607,6 +6069,38 @@ describe('PlanejamentosService', () => {
     );
     expect(repository.salvarAcertos.mock.invocationCallOrder[0]).toBeLessThan(
       repository.salvarAcerto.mock.invocationCallOrder[0],
+    );
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
+      {
+        event: 'ACERTO_PLANEJAMENTO_REABERTO',
+        module: 'planejamentos',
+        action: 'update',
+        success: true,
+        userId: 'user-1',
+        entity: 'acerto_planejamento',
+        entityId: 'acerto-pago',
+        details: {
+          planejamentoId: 'planejamento-1',
+          statusAnterior: AcertoStatus.PAGO,
+          statusPosterior: AcertoStatus.PENDENTE,
+          valorCentavos: acertoPago.valorCentavos,
+          deParticipanteId: acertoPago.deParticipanteId,
+          paraParticipanteId: acertoPago.paraParticipanteId,
+          dataPagamentoAnterior: acertoPago.dataPagamento,
+          acertosCriadosIds: [],
+          acertosCanceladosIds: [
+            'a-pendente-equivalente',
+            'z-pendente-equivalente',
+          ],
+        },
+        context: {
+          statusCode: 200,
+        },
+      },
+      entityManager,
+    );
+    expect(repository.salvarAcerto.mock.invocationCallOrder[0]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
     );
     expect(result).toBe(acertoReaberto);
     expect(result.id).toBe('acerto-pago');
@@ -5649,6 +6143,7 @@ describe('PlanejamentosService', () => {
     expect(repository.executarEmTransacao).toHaveBeenCalledTimes(1);
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
     expect(repository.salvarAcertos).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects invalid settlement status transitions and protects confirmed settlements', async () => {
@@ -5682,6 +6177,7 @@ describe('PlanejamentosService', () => {
     ).rejects.toBeInstanceOf(ValidationAppException);
 
     expect(repository.salvarAcerto).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -5738,6 +6234,12 @@ describe('PlanejamentosService', () => {
       }),
     );
     expect(logsService.logEntityEventTransactional).toHaveBeenCalledTimes(1);
+    expect(logsService.logEntityEventTransactional.mock.calls[0][1]).toBe(
+      entityManager,
+    );
+    expect(repository.salvarAcerto.mock.invocationCallOrder[0]).toBeLessThan(
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
+    );
   });
 
   it('rejects creation when dataFim is before dataInicio', async () => {
