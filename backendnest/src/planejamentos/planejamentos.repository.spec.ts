@@ -8,9 +8,33 @@ import { AcertoStatus, ParticipanteStatus, PlanejamentoStatus } from './enums';
 import { PlanejamentosRepository } from './planejamentos.repository';
 
 type RepositoryMock<T> = {
+  createQueryBuilder: jest.Mock<SelectQueryBuilderMock<T>, [string]>;
   findOne: jest.Mock<Promise<T | null>, [unknown]>;
   find: jest.Mock<Promise<T[]>, [unknown]>;
+  queryBuilder: SelectQueryBuilderMock<T>;
   save: jest.Mock<Promise<T | T[]>, [unknown]>;
+};
+
+type SelectQueryBuilderMock<T> = {
+  andWhere: jest.Mock<
+    SelectQueryBuilderMock<T>,
+    [string, Record<string, unknown>?]
+  >;
+  from: jest.Mock<
+    SelectQueryBuilderMock<T>,
+    [typeof ParticipantePlanejamento, string]
+  >;
+  getMany: jest.Mock<Promise<T[]>, []>;
+  getOne: jest.Mock<Promise<T | null>, []>;
+  getQuery: jest.Mock<string, []>;
+  leftJoinAndSelect: jest.Mock<SelectQueryBuilderMock<T>, [string, string]>;
+  orderBy: jest.Mock<SelectQueryBuilderMock<T>, [string, 'DESC' | 'ASC']>;
+  select: jest.Mock<SelectQueryBuilderMock<T>, [string]>;
+  subQuery: jest.Mock<SelectQueryBuilderMock<T>, []>;
+  where: jest.Mock<
+    SelectQueryBuilderMock<T>,
+    [string, Record<string, unknown>?]
+  >;
 };
 
 describe('PlanejamentosRepository', () => {
@@ -135,6 +159,54 @@ describe('PlanejamentosRepository', () => {
     expect(result).toBe(planejamento);
   });
 
+  it('usa o query builder do manager para revalidar acesso e hidratar o agregado completo', async () => {
+    const managerPlanejamentoRepository = criarRepositoryMock<Planejamento>();
+    const manager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === Planejamento) {
+          return comoRepositoryTypeOrm(managerPlanejamentoRepository);
+        }
+
+        return comoRepositoryTypeOrm(criarRepositoryMock());
+      }),
+    };
+    const participantes = [
+      { id: 'participante-proprietario' },
+      { id: 'participante-vinculado' },
+    ] as ParticipantePlanejamento[];
+    const planejamento = {
+      id: 'planejamento-transacao',
+      participantes,
+    } as Planejamento;
+    dataSource.transaction.mockImplementation(
+      (
+        callback: (
+          entityManager: typeof manager,
+        ) => Promise<Planejamento | null>,
+      ) => callback(manager),
+    );
+    managerPlanejamentoRepository.queryBuilder.getOne.mockResolvedValue(
+      planejamento,
+    );
+
+    const result = await repository.executarEmTransacao((transacional) =>
+      transacional.buscarAcessivelComParticipantes(
+        'planejamento-transacao',
+        'usuario-vinculado',
+      ),
+    );
+
+    expect(
+      managerPlanejamentoRepository.createQueryBuilder,
+    ).toHaveBeenCalledWith('planejamento');
+    expect(
+      managerPlanejamentoRepository.queryBuilder.leftJoinAndSelect,
+    ).toHaveBeenCalledWith('planejamento.participantes', 'participantes');
+    expect(planejamentoRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(result).toBe(planejamento);
+    expect(result?.participantes).toBe(participantes);
+  });
+
   it('busca planejamento por id sempre com usuario criador e sem removidos logicamente', async () => {
     planejamentoRepository.findOne.mockResolvedValue(null);
 
@@ -163,34 +235,76 @@ describe('PlanejamentosRepository', () => {
     expect(argumento.order).toEqual({ createdAt: 'DESC' });
   });
 
-  it('lista planejamentos acessiveis por usuario criador ou participante ativo', async () => {
-    planejamentoRepository.find.mockResolvedValue([]);
+  it('lista planejamentos acessiveis sem filtrar a colecao completa de participantes', async () => {
+    const participantes = [
+      { id: 'participante-proprietario', status: ParticipanteStatus.ATIVO },
+      {
+        id: 'participante-vinculado',
+        status: ParticipanteStatus.ATIVO,
+        usuarioId: 'usuario-id',
+      },
+      { id: 'participante-removido', status: ParticipanteStatus.REMOVIDO },
+    ] as ParticipantePlanejamento[];
+    const planejamento = {
+      id: 'planejamento-id',
+      participantes,
+    } as Planejamento;
+    planejamentoRepository.queryBuilder.getMany.mockResolvedValue([
+      planejamento,
+    ]);
 
-    await repository.listarAcessiveisPorUsuario('usuario-id', {
+    const result = await repository.listarAcessiveisPorUsuario('usuario-id', {
       status: PlanejamentoStatus.ABERTO,
     });
 
-    const argumento = obterObjetoDaPrimeiraChamada(planejamentoRepository.find);
-    const where = argumento.where as Record<string, unknown>[];
-    const participantes = obterObjeto(where[1].participantes);
-
-    expect(where).toHaveLength(2);
-    expect(where[0]).toEqual(
-      expect.objectContaining({
-        status: PlanejamentoStatus.ABERTO,
-        usuarioCriadorId: 'usuario-id',
-      }),
+    expect(planejamentoRepository.createQueryBuilder).toHaveBeenCalledWith(
+      'planejamento',
     );
-    expect(participantes).toEqual(
-      expect.objectContaining({
-        status: ParticipanteStatus.ATIVO,
+    expect(planejamentoRepository.queryBuilder.subQuery).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(planejamentoRepository.queryBuilder.from).toHaveBeenCalledWith(
+      ParticipantePlanejamento,
+      'participanteAcesso',
+    );
+    expect(planejamentoRepository.queryBuilder.where).toHaveBeenCalledWith(
+      'participanteAcesso.planejamentoId = planejamento.id',
+    );
+    expect(planejamentoRepository.queryBuilder.where).toHaveBeenCalledWith(
+      'planejamento.deletedAt IS NULL',
+    );
+    expect(planejamentoRepository.queryBuilder.andWhere).toHaveBeenCalledWith(
+      'participanteAcesso.usuarioId = :usuarioId',
+    );
+    expect(planejamentoRepository.queryBuilder.andWhere).toHaveBeenCalledWith(
+      'participanteAcesso.status = :participanteStatusAtivo',
+    );
+    expect(planejamentoRepository.queryBuilder.andWhere).toHaveBeenCalledWith(
+      'planejamento.status = :planejamentoStatus',
+      { planejamentoStatus: PlanejamentoStatus.ABERTO },
+    );
+    const chamadaAcesso =
+      planejamentoRepository.queryBuilder.andWhere.mock.calls.find(
+        ([condicao]) => condicao.includes('EXISTS'),
+      );
+    expect(chamadaAcesso).toEqual([
+      expect.stringContaining('planejamento.usuarioCriadorId = :usuarioId'),
+      {
+        participanteStatusAtivo: ParticipanteStatus.ATIVO,
         usuarioId: 'usuario-id',
-      }),
+      },
+    ]);
+    expect(chamadaAcesso?.[0]).not.toContain('participantes.');
+    expect(
+      planejamentoRepository.queryBuilder.leftJoinAndSelect,
+    ).toHaveBeenCalledWith('planejamento.participantes', 'participantes');
+    expect(planejamentoRepository.queryBuilder.orderBy).toHaveBeenCalledWith(
+      'planejamento.createdAt',
+      'DESC',
     );
-    expect(argumento.relations).toEqual({
-      participantes: true,
-    });
-    expect(argumento.order).toEqual({ createdAt: 'DESC' });
+    expect(planejamentoRepository.find).not.toHaveBeenCalled();
+    expect(result).toEqual([planejamento]);
+    expect(result[0]?.participantes).toBe(participantes);
   });
 
   it('busca planejamento com participantes mantendo escopo por usuario criador', async () => {
@@ -210,37 +324,65 @@ describe('PlanejamentosRepository', () => {
     });
   });
 
-  it('busca planejamento acessivel por usuario criador ou participante ativo', async () => {
-    planejamentoRepository.findOne.mockResolvedValue(null);
-
-    await repository.buscarAcessivelComParticipantes(
-      'planejamento-id',
-      'usuario-id',
-    );
-
-    const argumento = obterObjetoDaPrimeiraChamada(
-      planejamentoRepository.findOne,
-    );
-    const where = argumento.where as Record<string, unknown>[];
-    const participantes = obterObjeto(where[1].participantes);
-
-    expect(where).toHaveLength(2);
-    expect(where[0]).toEqual(
-      expect.objectContaining({
+  it.each([
+    ['proprietario', 'usuario-proprietario'],
+    ['participante vinculado ativo', 'usuario-vinculado'],
+  ])(
+    'busca o agregado completo para %s usando autorizacao separada da hidratacao',
+    async (_descricao, usuarioId) => {
+      const participantes = [
+        {
+          id: 'participante-proprietario',
+          status: ParticipanteStatus.ATIVO,
+          usuarioId: 'usuario-proprietario',
+        },
+        {
+          id: 'participante-vinculado',
+          status: ParticipanteStatus.ATIVO,
+          usuarioId: 'usuario-vinculado',
+        },
+        {
+          id: 'participante-historico',
+          status: ParticipanteStatus.REMOVIDO,
+          usuarioId: null,
+        },
+      ] as ParticipantePlanejamento[];
+      const planejamento = {
         id: 'planejamento-id',
-        usuarioCriadorId: 'usuario-id',
-      }),
-    );
-    expect(participantes).toEqual(
-      expect.objectContaining({
-        status: ParticipanteStatus.ATIVO,
-        usuarioId: 'usuario-id',
-      }),
-    );
-    expect(argumento.relations).toEqual({
-      participantes: true,
-    });
-  });
+        participantes,
+      } as Planejamento;
+      planejamentoRepository.queryBuilder.getOne.mockResolvedValue(
+        planejamento,
+      );
+
+      const result = await repository.buscarAcessivelComParticipantes(
+        'planejamento-id',
+        usuarioId,
+      );
+
+      expect(planejamentoRepository.queryBuilder.andWhere).toHaveBeenCalledWith(
+        'planejamento.id = :planejamentoId',
+        { planejamentoId: 'planejamento-id' },
+      );
+      const chamadaAcesso =
+        planejamentoRepository.queryBuilder.andWhere.mock.calls.find(
+          ([condicao]) => condicao.includes('EXISTS'),
+        );
+      expect(chamadaAcesso?.[0]).toContain(
+        'planejamento.usuarioCriadorId = :usuarioId',
+      );
+      expect(chamadaAcesso?.[1]).toEqual({
+        participanteStatusAtivo: ParticipanteStatus.ATIVO,
+        usuarioId,
+      });
+      expect(
+        planejamentoRepository.queryBuilder.leftJoinAndSelect,
+      ).toHaveBeenCalledWith('planejamento.participantes', 'participantes');
+      expect(planejamentoRepository.findOne).not.toHaveBeenCalled();
+      expect(result).toBe(planejamento);
+      expect(result?.participantes).toBe(participantes);
+    },
+  );
 
   it('bloqueia somente o planejamento ativo solicitado para atualizacao', async () => {
     const planejamento = Object.assign(new Planejamento(), {
@@ -269,44 +411,44 @@ describe('PlanejamentosRepository', () => {
     expect(argumento.relations).toBeUndefined();
   });
 
-  it('busca planejamento com gastos, pagadores, divisoes e acertos mantendo escopo por usuario criador', async () => {
-    planejamentoRepository.findOne.mockResolvedValue(null);
+  it('busca agregado financeiro completo sem reutilizar o filtro de acesso nos joins', async () => {
+    const planejamento = {
+      acertos: [{ id: 'acerto-id' }],
+      gastos: [{ id: 'gasto-id' }],
+      id: 'planejamento-id',
+      participantes: [
+        { id: 'participante-proprietario' },
+        { id: 'participante-vinculado' },
+        { id: 'participante-historico' },
+      ],
+    } as Planejamento;
+    planejamentoRepository.queryBuilder.getOne.mockResolvedValue(planejamento);
 
-    await repository.buscarComGastosDivisoesAcertos(
+    const result = await repository.buscarComGastosDivisoesAcertos(
       'planejamento-id',
       'usuario-id',
     );
 
-    const argumento = obterObjetoDaPrimeiraChamada(
-      planejamentoRepository.findOne,
-    );
-    const where = argumento.where as Record<string, unknown>[];
-    const participantes = obterObjeto(where[1].participantes);
-
-    expect(where).toHaveLength(2);
-    expect(where[0]).toEqual(
-      expect.objectContaining({
-        id: 'planejamento-id',
-        usuarioCriadorId: 'usuario-id',
-      }),
-    );
-    expect(participantes).toEqual(
-      expect.objectContaining({
-        status: ParticipanteStatus.ATIVO,
-        usuarioId: 'usuario-id',
-      }),
-    );
-    expect(argumento.relations).toEqual({
-      participantes: true,
-      gastos: {
-        divisoes: true,
-        pagoPorParticipante: true,
-      },
-      acertos: {
-        deParticipante: true,
-        paraParticipante: true,
-      },
-    });
+    expect(
+      planejamentoRepository.queryBuilder.leftJoinAndSelect.mock.calls,
+    ).toEqual([
+      ['planejamento.participantes', 'participantes'],
+      ['planejamento.gastos', 'gastos'],
+      ['gastos.divisoes', 'divisoes'],
+      ['gastos.pagoPorParticipante', 'gastoPagoPorParticipante'],
+      ['planejamento.acertos', 'acertos'],
+      ['acertos.deParticipante', 'acertoDeParticipante'],
+      ['acertos.paraParticipante', 'acertoParaParticipante'],
+    ]);
+    const chamadaAcesso =
+      planejamentoRepository.queryBuilder.andWhere.mock.calls.find(
+        ([condicao]) => condicao.includes('EXISTS'),
+      );
+    expect(chamadaAcesso?.[0]).not.toContain('participantes.');
+    expect(result).toBe(planejamento);
+    expect(result?.participantes).toHaveLength(3);
+    expect(result?.gastos).toHaveLength(1);
+    expect(result?.acertos).toHaveLength(1);
   });
 
   it('busca participante ativo por usuario no planejamento', async () => {
@@ -525,11 +667,35 @@ describe('PlanejamentosRepository', () => {
   });
 
   function criarRepositoryMock<T>(): RepositoryMock<T> {
+    const queryBuilder = criarSelectQueryBuilderMock<T>();
+
     return {
+      createQueryBuilder: jest.fn(() => queryBuilder),
       findOne: criarFindOneMock<T>(),
       find: criarFindMock<T>(),
+      queryBuilder,
       save: criarSaveMock<T>(),
     };
+  }
+
+  function criarSelectQueryBuilderMock<T>(): SelectQueryBuilderMock<T> {
+    const queryBuilder = {} as SelectQueryBuilderMock<T>;
+    const retornarQueryBuilder = () => queryBuilder;
+
+    Object.assign(queryBuilder, {
+      andWhere: jest.fn(retornarQueryBuilder),
+      from: jest.fn(retornarQueryBuilder),
+      getMany: jest.fn<Promise<T[]>, []>(() => Promise.resolve([])),
+      getOne: jest.fn<Promise<T | null>, []>(() => Promise.resolve(null)),
+      getQuery: jest.fn<string, []>(() => '(SELECT 1)'),
+      leftJoinAndSelect: jest.fn(retornarQueryBuilder),
+      orderBy: jest.fn(retornarQueryBuilder),
+      select: jest.fn(retornarQueryBuilder),
+      subQuery: jest.fn(retornarQueryBuilder),
+      where: jest.fn(retornarQueryBuilder),
+    });
+
+    return queryBuilder;
   }
 
   function criarFindOneMock<T>(): RepositoryMock<T>['findOne'] {

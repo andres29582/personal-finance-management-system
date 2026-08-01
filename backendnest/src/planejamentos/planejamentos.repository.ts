@@ -7,6 +7,7 @@ import {
   FindOptionsWhere,
   IsNull,
   Repository,
+  SelectQueryBuilder,
 } from 'typeorm';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { DivisaoGasto } from './entities/divisao-gasto.entity';
@@ -93,15 +94,10 @@ export class PlanejamentosRepository {
     usuarioId: string,
     filtros: ListarPlanejamentosFiltros = {},
   ): Promise<Planejamento[]> {
-    return this.planejamentoRepository.find({
-      where: this.criarWhereAcessivel(usuarioId, filtros),
-      relations: {
-        participantes: true,
-      },
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+    return this.criarQueryAcessivel(usuarioId, filtros)
+      .leftJoinAndSelect('planejamento.participantes', 'participantes')
+      .orderBy('planejamento.createdAt', 'DESC')
+      .getMany();
   }
 
   async buscarComParticipantes(
@@ -124,12 +120,9 @@ export class PlanejamentosRepository {
     id: string,
     usuarioId: string,
   ): Promise<Planejamento | null> {
-    return this.planejamentoRepository.findOne({
-      where: this.criarWhereAcessivel(usuarioId, { id }),
-      relations: {
-        participantes: true,
-      },
-    });
+    return this.criarQueryAcessivel(usuarioId, { id })
+      .leftJoinAndSelect('planejamento.participantes', 'participantes')
+      .getOne();
   }
 
   async bloquearPlanejamentoParaAtualizacao(
@@ -150,20 +143,18 @@ export class PlanejamentosRepository {
     id: string,
     usuarioId: string,
   ): Promise<Planejamento | null> {
-    return this.planejamentoRepository.findOne({
-      where: this.criarWhereAcessivel(usuarioId, { id }),
-      relations: {
-        participantes: true,
-        gastos: {
-          divisoes: true,
-          pagoPorParticipante: true,
-        },
-        acertos: {
-          deParticipante: true,
-          paraParticipante: true,
-        },
-      },
-    });
+    return this.criarQueryAcessivel(usuarioId, { id })
+      .leftJoinAndSelect('planejamento.participantes', 'participantes')
+      .leftJoinAndSelect('planejamento.gastos', 'gastos')
+      .leftJoinAndSelect('gastos.divisoes', 'divisoes')
+      .leftJoinAndSelect(
+        'gastos.pagoPorParticipante',
+        'gastoPagoPorParticipante',
+      )
+      .leftJoinAndSelect('planejamento.acertos', 'acertos')
+      .leftJoinAndSelect('acertos.deParticipante', 'acertoDeParticipante')
+      .leftJoinAndSelect('acertos.paraParticipante', 'acertoParaParticipante')
+      .getOne();
   }
 
   async buscarAcertoPorIdEPlanejamento(
@@ -347,28 +338,43 @@ export class PlanejamentosRepository {
     return this.acertoRepository.save(acerto);
   }
 
-  private criarWhereAcessivel(
+  private criarQueryAcessivel(
     usuarioId: string,
     filtros: ListarPlanejamentosFiltros & { id?: string },
-  ): FindOptionsWhere<Planejamento>[] {
-    const baseWhere = {
-      ...(filtros.id ? { id: filtros.id } : {}),
-      ...(filtros.status ? { status: filtros.status } : {}),
-      deletedAt: IsNull(),
-    };
+  ): SelectQueryBuilder<Planejamento> {
+    const query =
+      this.planejamentoRepository.createQueryBuilder('planejamento');
+    const participanteAtivoSubquery = query
+      .subQuery()
+      .select('1')
+      .from(ParticipantePlanejamento, 'participanteAcesso')
+      .where('participanteAcesso.planejamentoId = planejamento.id')
+      .andWhere('participanteAcesso.usuarioId = :usuarioId')
+      .andWhere('participanteAcesso.status = :participanteStatusAtivo')
+      .getQuery();
 
-    return [
-      {
-        ...baseWhere,
-        usuarioCriadorId: usuarioId,
-      },
-      {
-        ...baseWhere,
-        participantes: {
+    query
+      .where('planejamento.deletedAt IS NULL')
+      .andWhere(
+        `(planejamento.usuarioCriadorId = :usuarioId OR EXISTS ${participanteAtivoSubquery})`,
+        {
+          participanteStatusAtivo: ParticipanteStatus.ATIVO,
           usuarioId,
-          status: ParticipanteStatus.ATIVO,
         },
-      },
-    ];
+      );
+
+    if (filtros.id) {
+      query.andWhere('planejamento.id = :planejamentoId', {
+        planejamentoId: filtros.id,
+      });
+    }
+
+    if (filtros.status) {
+      query.andWhere('planejamento.status = :planejamentoStatus', {
+        planejamentoStatus: filtros.status,
+      });
+    }
+
+    return query;
   }
 }
