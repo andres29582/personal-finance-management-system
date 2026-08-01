@@ -29,6 +29,7 @@ const mockConfirmAction = jest.mocked(confirmAction);
 
 const PLANEJAMENTO_ID = 'planejamento-1';
 const OWNER_ID = 'usuario-1';
+const LINKED_USER_ID = 'usuario-2';
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -74,6 +75,17 @@ function makeOwnerParticipante(): ParticipantePlanejamento {
   });
 }
 
+function makeLinkedParticipante(
+  overrides: Partial<ParticipantePlanejamento> = {},
+): ParticipantePlanejamento {
+  return makeParticipante({
+    id: 'participante-2',
+    tipo: 'VINCULADO',
+    usuarioId: LINKED_USER_ID,
+    ...overrides,
+  });
+}
+
 function makePlanejamento(
   overrides: Partial<Planejamento> = {},
 ): Planejamento {
@@ -92,6 +104,15 @@ function makePlanejamento(
     usuarioCriadorId: OWNER_ID,
     ...overrides,
   };
+}
+
+function makePlanejamentoComVinculado(
+  overrides: Partial<Planejamento> = {},
+): Planejamento {
+  return makePlanejamento({
+    participantes: [makeOwnerParticipante(), makeLinkedParticipante()],
+    ...overrides,
+  });
 }
 
 function makeResumo(
@@ -250,18 +271,46 @@ describe('usePlanejamentoDetailMutations', () => {
   });
 
   describe('permissoes derivadas', () => {
-    it('permite mutacoes estruturais e de acertos em planejamento ABERTO', () => {
+    it('permite ao proprietario todas as acoes compativeis com planejamento ABERTO', () => {
+      const participante = makeParticipante();
+      const gasto = makeGasto();
+      const acertoPendente = makeAcerto();
+      const acertoPago = makeAcerto({ status: 'PAGO' });
       const { result } = renderMutationsHook();
 
-      expect(result.current.structuralMutationsAllowed).toBe(true);
-      expect(result.current.settlementMutationsAllowed).toBe(true);
+      expect(result.current.canAddParticipant).toBe(true);
+      expect(result.current.canRemoveParticipant(participante)).toBe(true);
+      expect(
+        result.current.canRemoveParticipant(makeOwnerParticipante()),
+      ).toBe(false);
+      expect(result.current.canCreateExpense).toBe(true);
+      expect(result.current.canEditExpense(gasto)).toBe(true);
+      expect(result.current.canCancelExpense(gasto)).toBe(true);
+      expect(result.current.canManageLifecycle).toBe(true);
+      expect(result.current.canSyncSettlements).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acertoPendente, 'pay'),
+      ).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acertoPendente, 'cancel'),
+      ).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acertoPago, 'cancel'),
+      ).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acertoPago, 'reopen'),
+      ).toBe(true);
       expect(result.current.isReadOnly).toBe(false);
       expect(result.current.isFinanciallySettled).toBe(true);
-      expect(result.current.isAuthenticatedUserOwner).toBe(true);
-      expect(result.current.canNavigateToStructuralMutation()).toBe(true);
+      expect(result.current.canNavigateToAddParticipant()).toBe(true);
+      expect(result.current.canNavigateToCreateExpense()).toBe(true);
+      expect(result.current.canNavigateToEditExpense(gasto)).toBe(true);
     });
 
-    it('bloqueia mutacoes estruturais e mantem acertos em planejamento FECHADO', () => {
+    it('mantem somente lifecycle e acertos do proprietario em planejamento FECHADO', () => {
+      const participante = makeParticipante();
+      const gasto = makeGasto();
+      const acerto = makeAcerto();
       const { result } = renderMutationsHook({
         planejamento: makePlanejamento({ status: 'FECHADO' }),
         resumo: makeResumo({
@@ -270,36 +319,211 @@ describe('usePlanejamentoDetailMutations', () => {
         }),
       });
 
-      expect(result.current.structuralMutationsAllowed).toBe(false);
-      expect(result.current.settlementMutationsAllowed).toBe(true);
+      expect(result.current.canAddParticipant).toBe(false);
+      expect(result.current.canRemoveParticipant(participante)).toBe(false);
+      expect(result.current.canCreateExpense).toBe(false);
+      expect(result.current.canEditExpense(gasto)).toBe(false);
+      expect(result.current.canCancelExpense(gasto)).toBe(false);
+      expect(result.current.canManageLifecycle).toBe(true);
+      expect(result.current.canSyncSettlements).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acerto, 'pay'),
+      ).toBe(true);
       expect(result.current.isReadOnly).toBe(false);
       expect(result.current.isFinanciallySettled).toBe(false);
-      expect(result.current.canNavigateToStructuralMutation()).toBe(false);
+      expect(result.current.canNavigateToAddParticipant()).toBe(false);
+      expect(result.current.canNavigateToCreateExpense()).toBe(false);
+      expect(result.current.canNavigateToEditExpense(gasto)).toBe(false);
     });
 
     it('torna planejamento ARQUIVADO somente leitura', () => {
+      const participante = makeParticipante();
+      const gasto = makeGasto();
+      const acerto = makeAcerto();
       const { result } = renderMutationsHook({
         planejamento: makePlanejamento({ status: 'ARQUIVADO' }),
         resumo: makeResumo({ statusOperacional: 'ARQUIVADO' }),
       });
 
-      expect(result.current.structuralMutationsAllowed).toBe(false);
-      expect(result.current.settlementMutationsAllowed).toBe(false);
+      expect(result.current.canAddParticipant).toBe(false);
+      expect(result.current.canRemoveParticipant(participante)).toBe(false);
+      expect(result.current.canCreateExpense).toBe(false);
+      expect(result.current.canEditExpense(gasto)).toBe(false);
+      expect(result.current.canCancelExpense(gasto)).toBe(false);
+      expect(result.current.canManageLifecycle).toBe(false);
+      expect(result.current.canSyncSettlements).toBe(false);
+      expect(
+        result.current.canPerformSettlementAction(acerto, 'pay'),
+      ).toBe(false);
       expect(result.current.isReadOnly).toBe(true);
-      expect(result.current.canNavigateToStructuralMutation()).toBe(false);
+      expect(result.current.canNavigateToAddParticipant()).toBe(false);
+      expect(result.current.canNavigateToCreateExpense()).toBe(false);
+      expect(result.current.canNavigateToEditExpense(gasto)).toBe(false);
     });
 
     it('torna planejamento CANCELADO somente leitura', () => {
+      const participante = makeParticipante();
+      const gasto = makeGasto();
+      const acerto = makeAcerto();
       const { result } = renderMutationsHook({
         planejamento: makePlanejamento({ status: 'CANCELADO' }),
         resumo: makeResumo({ statusOperacional: 'CANCELADO' }),
       });
 
-      expect(result.current.structuralMutationsAllowed).toBe(false);
-      expect(result.current.settlementMutationsAllowed).toBe(false);
+      expect(result.current.canAddParticipant).toBe(false);
+      expect(result.current.canRemoveParticipant(participante)).toBe(false);
+      expect(result.current.canCreateExpense).toBe(false);
+      expect(result.current.canEditExpense(gasto)).toBe(false);
+      expect(result.current.canCancelExpense(gasto)).toBe(false);
+      expect(result.current.canManageLifecycle).toBe(false);
+      expect(result.current.canSyncSettlements).toBe(false);
+      expect(
+        result.current.canPerformSettlementAction(acerto, 'pay'),
+      ).toBe(false);
       expect(result.current.isReadOnly).toBe(true);
-      expect(result.current.canNavigateToStructuralMutation()).toBe(false);
+      expect(result.current.canNavigateToAddParticipant()).toBe(false);
+      expect(result.current.canNavigateToCreateExpense()).toBe(false);
+      expect(result.current.canNavigateToEditExpense(gasto)).toBe(false);
     });
+
+    it('diferencia as capacidades do participante vinculado ATIVO', () => {
+      const participante = makeLinkedParticipante();
+      const gasto = makeGasto();
+      const acertoProprio = makeAcerto();
+      const acertoDeOutro = makeAcerto({
+        deParticipanteId: 'participante-1',
+      });
+      const acertoPago = makeAcerto({ status: 'PAGO' });
+      const { result } = renderMutationsHook({
+        planejamento: makePlanejamentoComVinculado(),
+        usuarioAutenticadoId: LINKED_USER_ID,
+      });
+
+      expect(result.current.canAddParticipant).toBe(false);
+      expect(result.current.canRemoveParticipant(participante)).toBe(false);
+      expect(result.current.canCreateExpense).toBe(true);
+      expect(result.current.canEditExpense(gasto)).toBe(false);
+      expect(result.current.canCancelExpense(gasto)).toBe(false);
+      expect(result.current.canManageLifecycle).toBe(false);
+      expect(result.current.canSyncSettlements).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acertoProprio, 'pay'),
+      ).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acertoDeOutro, 'pay'),
+      ).toBe(false);
+      expect(
+        result.current.canPerformSettlementAction(acertoProprio, 'cancel'),
+      ).toBe(false);
+      expect(
+        result.current.canPerformSettlementAction(acertoPago, 'reopen'),
+      ).toBe(false);
+      expect(result.current.canNavigateToAddParticipant()).toBe(false);
+      expect(result.current.canNavigateToCreateExpense()).toBe(true);
+      expect(result.current.canNavigateToEditExpense(gasto)).toBe(false);
+    });
+
+    it('mantem sincronizacao e pagamento proprio para vinculado em planejamento FECHADO', () => {
+      const acerto = makeAcerto();
+      const { result } = renderMutationsHook({
+        planejamento: makePlanejamentoComVinculado({ status: 'FECHADO' }),
+        resumo: makeResumo({ statusOperacional: 'FECHADO' }),
+        usuarioAutenticadoId: LINKED_USER_ID,
+      });
+
+      expect(result.current.canCreateExpense).toBe(false);
+      expect(result.current.canManageLifecycle).toBe(false);
+      expect(result.current.canSyncSettlements).toBe(true);
+      expect(
+        result.current.canPerformSettlementAction(acerto, 'pay'),
+      ).toBe(true);
+    });
+
+    it.each([
+      {
+        description: 'nao vinculado',
+        planejamento: makePlanejamento(),
+      },
+      {
+        description: 'removido',
+        planejamento: makePlanejamentoComVinculado({
+          participantes: [
+            makeOwnerParticipante(),
+            makeLinkedParticipante({ status: 'REMOVIDO' }),
+          ],
+        }),
+      },
+      {
+        description: 'pendente',
+        planejamento: makePlanejamentoComVinculado({
+          participantes: [
+            makeOwnerParticipante(),
+            makeLinkedParticipante({ status: 'PENDENTE' }),
+          ],
+        }),
+      },
+      {
+        description: 'manual',
+        planejamento: makePlanejamentoComVinculado({
+          participantes: [
+            makeOwnerParticipante(),
+            makeLinkedParticipante({ tipo: 'MANUAL' }),
+          ],
+        }),
+      },
+    ])(
+      'nao concede capacidades de mutacao ao usuario $description',
+      ({ planejamento }) => {
+        const participante = makeParticipante();
+        const gasto = makeGasto();
+        const acerto = makeAcerto();
+        const { result } = renderMutationsHook({
+          planejamento,
+          usuarioAutenticadoId: LINKED_USER_ID,
+        });
+
+        expect(result.current.canAddParticipant).toBe(false);
+        expect(result.current.canRemoveParticipant(participante)).toBe(false);
+        expect(result.current.canCreateExpense).toBe(false);
+        expect(result.current.canEditExpense(gasto)).toBe(false);
+        expect(result.current.canCancelExpense(gasto)).toBe(false);
+        expect(result.current.canManageLifecycle).toBe(false);
+        expect(result.current.canSyncSettlements).toBe(false);
+        expect(
+          result.current.canPerformSettlementAction(acerto, 'pay'),
+        ).toBe(false);
+        expect(result.current.canNavigateToAddParticipant()).toBe(false);
+        expect(result.current.canNavigateToCreateExpense()).toBe(false);
+        expect(result.current.canNavigateToEditExpense(gasto)).toBe(false);
+      },
+    );
+  });
+
+  it('bloqueia os guards de navegacao enquanto outra mutacao detem o lock', async () => {
+    const syncDeferred = createDeferred<AcertoPlanejamento[]>();
+    mockedPlanejamentoService.syncAcertosPlanejamento.mockReturnValue(
+      syncDeferred.promise,
+    );
+    const gasto = makeGasto();
+    const { result } = renderMutationsHook();
+    let syncPromise: Promise<void> = Promise.resolve();
+
+    act(() => {
+      syncPromise = result.current.handleSyncAcertos();
+    });
+
+    expect(result.current.canNavigateToAddParticipant()).toBe(false);
+    expect(result.current.canNavigateToCreateExpense()).toBe(false);
+    expect(result.current.canNavigateToEditExpense(gasto)).toBe(false);
+
+    await act(async () => {
+      syncDeferred.resolve([]);
+      await syncPromise;
+    });
+
+    expect(result.current.canNavigateToAddParticipant()).toBe(true);
+    expect(result.current.canNavigateToCreateExpense()).toBe(true);
+    expect(result.current.canNavigateToEditExpense(gasto)).toBe(true);
   });
 
   it('serializa todas as mutacoes com um lock sincrono do agregado', async () => {
@@ -339,7 +563,9 @@ describe('usePlanejamentoDetailMutations', () => {
     expect(mockConfirmAction).not.toHaveBeenCalled();
     expect(result.current.acertosActionLoading).toBe('sync');
     expect(result.current.aggregateMutationInProgress).toBe(true);
-    expect(result.current.canNavigateToStructuralMutation()).toBe(false);
+    expect(result.current.canNavigateToAddParticipant()).toBe(false);
+    expect(result.current.canNavigateToCreateExpense()).toBe(false);
+    expect(result.current.canNavigateToEditExpense(makeGasto())).toBe(false);
 
     await act(async () => {
       syncDeferred.resolve([]);
@@ -408,6 +634,25 @@ describe('usePlanejamentoDetailMutations', () => {
 
     it('cancela um acerto pendente', async () => {
       const acerto = makeAcerto();
+      const { options, result } = renderMutationsHook();
+
+      await runMutation(() =>
+        result.current.handleAcertoAction(acerto, 'cancel'),
+      );
+
+      expect(
+        mockedPlanejamentoService.cancelAcertoPlanejamento,
+      ).toHaveBeenCalledWith(PLANEJAMENTO_ID, acerto.id);
+      expect(options.refreshFinancialData).toHaveBeenCalledWith(
+        PLANEJAMENTO_ID,
+      );
+      expect(result.current.acertosInfo).toBe(
+        'Acerto atualizado com sucesso.',
+      );
+    });
+
+    it('cancela um acerto pago', async () => {
+      const acerto = makeAcerto({ status: 'PAGO' });
       const { options, result } = renderMutationsHook();
 
       await runMutation(() =>
@@ -942,12 +1187,14 @@ describe('usePlanejamentoDetailMutations', () => {
 
   it('nao remove participante quando o usuario autenticado nao e o criador', async () => {
     const { options, result } = renderMutationsHook({
-      planejamento: makePlanejamento({ status: 'ABERTO' }),
-      usuarioAutenticadoId: 'outro-usuario',
+      planejamento: makePlanejamentoComVinculado({ status: 'ABERTO' }),
+      usuarioAutenticadoId: LINKED_USER_ID,
     });
 
     await runMutation(() =>
-      result.current.handleRemoveParticipante(makeParticipante()),
+      result.current.handleRemoveParticipante(
+        makeParticipante({ id: 'participante-3' }),
+      ),
     );
 
     expect(mockConfirmAction).not.toHaveBeenCalled();
@@ -1002,42 +1249,231 @@ describe('usePlanejamentoDetailMutations', () => {
     expect(mockConfirmAction).not.toHaveBeenCalled();
   });
 
-  it('nao inicia operacoes proibidas pelo status ou pela permissao', async () => {
-    const participante = makeParticipante();
+  it('nao permite ao vinculado cancelar gasto ou executar lifecycle e mantem o lock livre', async () => {
     const gasto = makeGasto();
-    const { result } = renderMutationsHook({
-      planejamento: makePlanejamento({ status: 'FECHADO' }),
-      resumo: makeResumo({
-        situacaoFinanceira: 'PENDENTE',
-        statusOperacional: 'FECHADO',
-      }),
-      usuarioAutenticadoId: 'outro-usuario',
+    const { options, result } = renderMutationsHook({
+      planejamento: makePlanejamentoComVinculado(),
+      usuarioAutenticadoId: LINKED_USER_ID,
     });
 
     await runMutation(() => result.current.handleCancelGasto(gasto));
-    await runMutation(() =>
-      result.current.handleRemoveParticipante(participante),
-    );
-    await runMutation(() => result.current.handleTransition('archive'));
+    await runMutation(() => result.current.handleTransition('close'));
 
     expect(mockConfirmAction).not.toHaveBeenCalled();
     expect(
       mockedPlanejamentoService.cancelGastoPlanejamento,
     ).not.toHaveBeenCalled();
+    expect(mockedPlanejamentoService.fecharPlanejamento).not.toHaveBeenCalled();
+    expect(options.refreshExpenseFinancialData).not.toHaveBeenCalled();
+    expect(options.reloadAllData).not.toHaveBeenCalled();
+    expect(result.current.aggregateMutationInProgress).toBe(false);
+
+    await runMutation(result.current.handleSyncAcertos);
+
     expect(
-      mockedPlanejamentoService.removeParticipantePlanejamento,
-    ).not.toHaveBeenCalled();
+      mockedPlanejamentoService.syncAcertosPlanejamento,
+    ).toHaveBeenCalledWith(PLANEJAMENTO_ID);
+    expect(options.refreshFinancialData).toHaveBeenCalledWith(PLANEJAMENTO_ID);
+  });
+
+  it('revalida a capacidade atual depois da confirmacao e antes do servico', async () => {
+    const confirmationDeferred = createDeferred<boolean>();
+    mockConfirmAction.mockReturnValueOnce(confirmationDeferred.promise);
+    const gasto = makeGasto();
+    const { options, rerender, result } = renderMutationsHook();
+    let cancelPromise: Promise<void> = Promise.resolve();
+
+    act(() => {
+      cancelPromise = result.current.handleCancelGasto(gasto);
+    });
+
+    expect(mockConfirmAction).toHaveBeenCalledTimes(1);
+    expect(result.current.aggregateMutationInProgress).toBe(true);
+
+    rerender({
+      ...options,
+      planejamento: makePlanejamentoComVinculado(),
+      usuarioAutenticadoId: LINKED_USER_ID,
+    });
+
+    await act(async () => {
+      confirmationDeferred.resolve(true);
+      await cancelPromise;
+    });
+
     expect(
-      mockedPlanejamentoService.arquivarPlanejamento,
+      mockedPlanejamentoService.cancelGastoPlanejamento,
     ).not.toHaveBeenCalled();
+    expect(options.refreshExpenseFinancialData).not.toHaveBeenCalled();
+    expect(result.current.aggregateMutationInProgress).toBe(false);
+
+    await runMutation(result.current.handleSyncAcertos);
+
+    expect(
+      mockedPlanejamentoService.syncAcertosPlanejamento,
+    ).toHaveBeenCalledWith(PLANEJAMENTO_ID);
+    expect(options.refreshFinancialData).toHaveBeenCalledWith(PLANEJAMENTO_ID);
+  });
+
+  it('revalida a capacidade atual antes da recarga financeira', async () => {
+    const syncDeferred = createDeferred<AcertoPlanejamento[]>();
+    mockedPlanejamentoService.syncAcertosPlanejamento
+      .mockReturnValueOnce(syncDeferred.promise)
+      .mockResolvedValueOnce([makeAcerto()]);
+    const { options, rerender, result } = renderMutationsHook({
+      planejamento: makePlanejamentoComVinculado(),
+      usuarioAutenticadoId: LINKED_USER_ID,
+    });
+    let syncPromise: Promise<void> = Promise.resolve();
+
+    act(() => {
+      syncPromise = result.current.handleSyncAcertos();
+    });
+
+    rerender({
+      ...options,
+      planejamento: makePlanejamentoComVinculado({
+        participantes: [
+          makeOwnerParticipante(),
+          makeLinkedParticipante({ status: 'REMOVIDO' }),
+        ],
+      }),
+      usuarioAutenticadoId: LINKED_USER_ID,
+    });
+
+    await act(async () => {
+      syncDeferred.resolve([]);
+      await syncPromise;
+    });
+
+    expect(options.refreshFinancialData).not.toHaveBeenCalled();
+    expect(result.current.aggregateMutationInProgress).toBe(false);
+
+    rerender({
+      ...options,
+      planejamento: makePlanejamentoComVinculado(),
+      usuarioAutenticadoId: LINKED_USER_ID,
+    });
+
+    await runMutation(result.current.handleSyncAcertos);
+
+    expect(
+      mockedPlanejamentoService.syncAcertosPlanejamento,
+    ).toHaveBeenCalledTimes(2);
+    expect(options.refreshFinancialData).toHaveBeenCalledWith(PLANEJAMENTO_ID);
+  });
+
+  it('protege os handlers de acerto conforme o devedor e libera o lock para pagamento permitido', async () => {
+    const acertoProprio = makeAcerto({ id: 'acerto-proprio' });
+    const acertoDeOutro = makeAcerto({
+      deParticipanteId: 'participante-1',
+      id: 'acerto-de-outro',
+    });
+    const acertoPago = makeAcerto({
+      id: 'acerto-pago',
+      status: 'PAGO',
+    });
+    const { options, result } = renderMutationsHook({
+      planejamento: makePlanejamentoComVinculado(),
+      usuarioAutenticadoId: LINKED_USER_ID,
+    });
 
     await runMutation(() =>
-      result.current.handleAcertoAction(makeAcerto(), 'pay'),
+      result.current.handleAcertoAction(acertoDeOutro, 'pay'),
     );
+    await runMutation(() =>
+      result.current.handleAcertoAction(acertoProprio, 'cancel'),
+    );
+    await runMutation(() =>
+      result.current.handleAcertoAction(acertoPago, 'reopen'),
+    );
+
     expect(
       mockedPlanejamentoService.payAcertoPlanejamento,
-    ).toHaveBeenCalledTimes(1);
+    ).not.toHaveBeenCalled();
+    expect(
+      mockedPlanejamentoService.cancelAcertoPlanejamento,
+    ).not.toHaveBeenCalled();
+    expect(
+      mockedPlanejamentoService.reopenAcertoPlanejamento,
+    ).not.toHaveBeenCalled();
+    expect(options.refreshFinancialData).not.toHaveBeenCalled();
+    expect(result.current.aggregateMutationInProgress).toBe(false);
+
+    await runMutation(() =>
+      result.current.handleAcertoAction(acertoProprio, 'pay'),
+    );
+
+    expect(
+      mockedPlanejamentoService.payAcertoPlanejamento,
+    ).toHaveBeenCalledWith(PLANEJAMENTO_ID, acertoProprio.id);
+    expect(options.refreshFinancialData).toHaveBeenCalledWith(PLANEJAMENTO_ID);
   });
+
+  it.each([
+    {
+      description: 'nao vinculado',
+      planejamento: makePlanejamento(),
+    },
+      {
+        description: 'removido',
+        planejamento: makePlanejamentoComVinculado({
+          participantes: [
+            makeOwnerParticipante(),
+            makeLinkedParticipante({ status: 'REMOVIDO' }),
+          ],
+        }),
+      },
+      {
+        description: 'pendente',
+        planejamento: makePlanejamentoComVinculado({
+          participantes: [
+            makeOwnerParticipante(),
+            makeLinkedParticipante({ status: 'PENDENTE' }),
+          ],
+        }),
+      },
+      {
+        description: 'manual',
+        planejamento: makePlanejamentoComVinculado({
+          participantes: [
+            makeOwnerParticipante(),
+            makeLinkedParticipante({ tipo: 'MANUAL' }),
+          ],
+        }),
+      },
+  ])(
+    'nao sincroniza acertos para usuario $description e mantem o lock livre',
+    async ({ planejamento }) => {
+      const { options, rerender, result } = renderMutationsHook({
+        planejamento,
+        usuarioAutenticadoId: LINKED_USER_ID,
+      });
+
+      await runMutation(result.current.handleSyncAcertos);
+
+      expect(
+        mockedPlanejamentoService.syncAcertosPlanejamento,
+      ).not.toHaveBeenCalled();
+      expect(options.refreshFinancialData).not.toHaveBeenCalled();
+      expect(result.current.aggregateMutationInProgress).toBe(false);
+
+      rerender({
+        ...options,
+        planejamento: makePlanejamentoComVinculado(),
+        usuarioAutenticadoId: LINKED_USER_ID,
+      });
+
+      await runMutation(result.current.handleSyncAcertos);
+
+      expect(
+        mockedPlanejamentoService.syncAcertosPlanejamento,
+      ).toHaveBeenCalledWith(PLANEJAMENTO_ID);
+      expect(options.refreshFinancialData).toHaveBeenCalledWith(
+        PLANEJAMENTO_ID,
+      );
+    },
+  );
 
   it('ignora a resposta de uma mutacao depois do unmount', async () => {
     const syncDeferred = createDeferred<AcertoPlanejamento[]>();

@@ -10,7 +10,11 @@ import { AcertoAction, AcertoRow } from './AcertoRow';
 type PlanejamentoSettlementsSectionProps = {
   acertos: AcertoPlanejamento[];
   actionLoadingId: string | null;
-  canOperate: boolean;
+  canPerformSettlementAction: (
+    acerto: AcertoPlanejamento,
+    action: AcertoAction,
+  ) => boolean;
+  canSyncSettlements: boolean;
   errorMessage: string;
   infoMessage: string;
   isReadOnly: boolean;
@@ -23,7 +27,8 @@ type PlanejamentoSettlementsSectionProps = {
 export function PlanejamentoSettlementsSection({
   acertos,
   actionLoadingId,
-  canOperate,
+  canPerformSettlementAction,
+  canSyncSettlements,
   errorMessage,
   infoMessage,
   isReadOnly,
@@ -37,7 +42,7 @@ export function PlanejamentoSettlementsSection({
       title="Acertos"
       subtitle="Pagamentos calculados entre participantes."
       action={
-        canOperate ? (
+        canSyncSettlements ? (
           <GlassButton
             disabled={mutationInProgress}
             label={
@@ -64,7 +69,7 @@ export function PlanejamentoSettlementsSection({
             key={acerto.id}
             acerto={acerto}
             actionLoading={actionLoadingId}
-            canOperate={canOperate}
+            canPerformSettlementAction={canPerformSettlementAction}
             disabled={mutationInProgress}
             onAction={onAction}
             participantes={participantes}

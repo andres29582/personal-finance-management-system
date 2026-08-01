@@ -23,7 +23,8 @@ const gastoStatusLabel: Record<GastoPlanejamentoStatus, string> = {
 
 type GastoRowProps = {
   actionLoading: boolean;
-  canMutate: boolean;
+  canCancel: boolean;
+  canEdit: boolean;
   disabled: boolean;
   gasto: GastoPlanejamento;
   onCancel: (gasto: GastoPlanejamento) => void;
@@ -41,7 +42,8 @@ function formatCents(value: number) {
 
 export function GastoRow({
   actionLoading,
-  canMutate,
+  canCancel,
+  canEdit,
   disabled,
   gasto,
   onCancel,
@@ -83,20 +85,26 @@ export function GastoRow({
         <Text style={styles.expenseValue}>
           {formatCents(gasto.valorCentavos)}
         </Text>
-        {canMutate ? (
+        {canEdit || canCancel ? (
           <View style={styles.expenseActions}>
-            <GlassButton
-              disabled={disabled}
-              label="Editar"
-              onPress={() => onEdit(gasto)}
-              variant="ghost"
-            />
-            <GlassButton
-              disabled={disabled}
-              label={actionLoading ? 'Cancelando gasto...' : 'Cancelar gasto'}
-              onPress={() => onCancel(gasto)}
-              variant="danger"
-            />
+            {canEdit ? (
+              <GlassButton
+                disabled={disabled}
+                label="Editar"
+                onPress={() => onEdit(gasto)}
+                variant="ghost"
+              />
+            ) : null}
+            {canCancel ? (
+              <GlassButton
+                disabled={disabled}
+                label={
+                  actionLoading ? 'Cancelando gasto...' : 'Cancelar gasto'
+                }
+                onPress={() => onCancel(gasto)}
+                variant="danger"
+              />
+            ) : null}
           </View>
         ) : null}
       </View>

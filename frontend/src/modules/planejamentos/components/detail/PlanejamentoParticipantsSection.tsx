@@ -6,8 +6,10 @@ import { ParticipanteRow } from './ParticipanteRow';
 
 type PlanejamentoParticipantsSectionProps = {
   actionLoadingId: string | null;
-  canAdd: boolean;
-  canManageParticipants: boolean;
+  canAddParticipant: boolean;
+  canRemoveParticipant: (
+    participante: ParticipantePlanejamento,
+  ) => boolean;
   errorMessage: string;
   infoMessage: string;
   mutationInProgress: boolean;
@@ -19,8 +21,8 @@ type PlanejamentoParticipantsSectionProps = {
 
 export function PlanejamentoParticipantsSection({
   actionLoadingId,
-  canAdd,
-  canManageParticipants,
+  canAddParticipant,
+  canRemoveParticipant,
   errorMessage,
   infoMessage,
   mutationInProgress,
@@ -34,7 +36,7 @@ export function PlanejamentoParticipantsSection({
       title="Participantes"
       subtitle="Pessoas vinculadas a este planejamento."
       action={
-        canAdd ? (
+        canAddParticipant ? (
           <GlassButton
             disabled={mutationInProgress}
             label="Adicionar participante"
@@ -60,11 +62,7 @@ export function PlanejamentoParticipantsSection({
             <ParticipanteRow
               key={participante.id}
               actionLoading={actionLoadingId === participante.id}
-              canRemove={
-                canManageParticipants &&
-                participante.status === 'ATIVO' &&
-                !isOwnerParticipant
-              }
+              canRemove={canRemoveParticipant(participante)}
               disabled={mutationInProgress}
               isOwnerParticipant={isOwnerParticipant}
               onRemove={onRemove}

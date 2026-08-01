@@ -49,7 +49,17 @@ export function PlanejamentoDetailScreen() {
     acertosError,
     acertosInfo,
     aggregateMutationInProgress,
-    canNavigateToStructuralMutation,
+    canAddParticipant,
+    canCancelExpense,
+    canCreateExpense,
+    canEditExpense,
+    canManageLifecycle,
+    canNavigateToAddParticipant,
+    canNavigateToCreateExpense,
+    canNavigateToEditExpense,
+    canPerformSettlementAction,
+    canRemoveParticipant,
+    canSyncSettlements,
     gastoActionLoading,
     gastosError,
     gastosInfo,
@@ -58,14 +68,11 @@ export function PlanejamentoDetailScreen() {
     handleRemoveParticipante,
     handleSyncAcertos,
     handleTransition,
-    isAuthenticatedUserOwner,
     isFinanciallySettled,
     isReadOnly,
     participanteActionLoading,
     participantesError,
     participantesInfo,
-    settlementMutationsAllowed,
-    structuralMutationsAllowed,
     transitionError,
     transitionInfo,
     transitionLoading,
@@ -132,6 +139,7 @@ export function PlanejamentoDetailScreen() {
           ) : null}
 
           <PlanejamentoLifecycleSection
+            canManageLifecycle={canManageLifecycle}
             errorMessage={transitionError}
             infoMessage={transitionInfo}
             isFinanciallySettled={isFinanciallySettled}
@@ -144,17 +152,15 @@ export function PlanejamentoDetailScreen() {
 
           <PlanejamentoParticipantsSection
             actionLoadingId={participanteActionLoading}
-            canAdd={structuralMutationsAllowed}
-            canManageParticipants={
-              isAuthenticatedUserOwner && structuralMutationsAllowed
-            }
+            canAddParticipant={canAddParticipant}
+            canRemoveParticipant={canRemoveParticipant}
             errorMessage={
               participantesError || participantPermissionError
             }
             infoMessage={participantesInfo}
             mutationInProgress={aggregateMutationInProgress}
             onAdd={() => {
-              if (!canNavigateToStructuralMutation()) {
+              if (!canNavigateToAddParticipant()) {
                 return;
               }
 
@@ -170,14 +176,15 @@ export function PlanejamentoDetailScreen() {
 
           <PlanejamentoExpensesSection
             actionLoadingId={gastoActionLoading}
-            canAdd={structuralMutationsAllowed}
-            canManageExpenses={structuralMutationsAllowed}
+            canCancelExpense={canCancelExpense}
+            canCreateExpense={canCreateExpense}
+            canEditExpense={canEditExpense}
             errorMessage={gastosError}
             gastos={gastos}
             infoMessage={gastosInfo}
             mutationInProgress={aggregateMutationInProgress}
             onAdd={() => {
-              if (!canNavigateToStructuralMutation()) {
+              if (!canNavigateToCreateExpense()) {
                 return;
               }
 
@@ -187,22 +194,27 @@ export function PlanejamentoDetailScreen() {
               } as never);
             }}
             onCancel={handleCancelGasto}
-            onEdit={(gastoSelecionado) =>
+            onEdit={(gastoSelecionado) => {
+              if (!canNavigateToEditExpense(gastoSelecionado)) {
+                return;
+              }
+
               router.push({
                 pathname: '/planejamentos-gasto-form',
                 params: {
                   gastoId: gastoSelecionado.id,
                   id: planejamento.id,
                 },
-              } as never)
-            }
+              } as never);
+            }}
             participantes={participantes}
           />
 
           <PlanejamentoSettlementsSection
             acertos={acertos}
             actionLoadingId={acertosActionLoading}
-            canOperate={settlementMutationsAllowed}
+            canPerformSettlementAction={canPerformSettlementAction}
+            canSyncSettlements={canSyncSettlements}
             errorMessage={acertosError}
             infoMessage={acertosInfo}
             isReadOnly={isReadOnly}

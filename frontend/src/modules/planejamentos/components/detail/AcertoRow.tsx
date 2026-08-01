@@ -20,7 +20,10 @@ export type AcertoAction = 'cancel' | 'pay' | 'reopen';
 type AcertoRowProps = {
   acerto: AcertoPlanejamento;
   actionLoading: string | null;
-  canOperate: boolean;
+  canPerformSettlementAction: (
+    acerto: AcertoPlanejamento,
+    action: AcertoAction,
+  ) => boolean;
   disabled: boolean;
   onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
   participantes: ParticipantePlanejamento[];
@@ -37,7 +40,7 @@ function formatCents(value: number) {
 export function AcertoRow({
   acerto,
   actionLoading,
-  canOperate,
+  canPerformSettlementAction,
   disabled,
   onAction,
   participantes,
@@ -95,7 +98,7 @@ export function AcertoRow({
         <AcertoActions
           acerto={acerto}
           actionLoading={actionLoading}
-          canOperate={canOperate}
+          canPerformSettlementAction={canPerformSettlementAction}
           disabled={disabled}
           onAction={onAction}
         />
@@ -107,13 +110,16 @@ export function AcertoRow({
 function AcertoActions({
   acerto,
   actionLoading,
-  canOperate,
+  canPerformSettlementAction,
   disabled,
   onAction,
 }: {
   acerto: AcertoPlanejamento;
   actionLoading: string | null;
-  canOperate: boolean;
+  canPerformSettlementAction: (
+    acerto: AcertoPlanejamento,
+    action: AcertoAction,
+  ) => boolean;
   disabled: boolean;
   onAction: (acerto: AcertoPlanejamento, action: AcertoAction) => void;
 }) {
@@ -121,38 +127,62 @@ function AcertoActions({
   const cancelLoading = actionLoading === `cancel:${acerto.id}`;
   const reopenLoading = actionLoading === `reopen:${acerto.id}`;
 
-  if (!canOperate) {
-    return null;
-  }
-
   if (acerto.status === 'PENDENTE') {
+    const canPay = canPerformSettlementAction(acerto, 'pay');
+    const canCancel = canPerformSettlementAction(acerto, 'cancel');
+
+    if (!canPay && !canCancel) {
+      return null;
+    }
+
     return (
       <View style={styles.settlementActions}>
-        <GlassButton
-          disabled={disabled}
-          label={payLoading ? 'Marcando...' : 'Marcar como pago'}
-          onPress={() => onAction(acerto, 'pay')}
-          variant="primary"
-        />
-        <GlassButton
-          disabled={disabled}
-          label={cancelLoading ? 'Cancelando...' : 'Cancelar'}
-          onPress={() => onAction(acerto, 'cancel')}
-          variant="danger"
-        />
+        {canPay ? (
+          <GlassButton
+            disabled={disabled}
+            label={payLoading ? 'Marcando...' : 'Marcar como pago'}
+            onPress={() => onAction(acerto, 'pay')}
+            variant="primary"
+          />
+        ) : null}
+        {canCancel ? (
+          <GlassButton
+            disabled={disabled}
+            label={cancelLoading ? 'Cancelando...' : 'Cancelar'}
+            onPress={() => onAction(acerto, 'cancel')}
+            variant="danger"
+          />
+        ) : null}
       </View>
     );
   }
 
   if (acerto.status === 'PAGO') {
+    const canCancel = canPerformSettlementAction(acerto, 'cancel');
+    const canReopen = canPerformSettlementAction(acerto, 'reopen');
+
+    if (!canCancel && !canReopen) {
+      return null;
+    }
+
     return (
       <View style={styles.settlementActions}>
-        <GlassButton
-          disabled={disabled}
-          label={reopenLoading ? 'Reabrindo...' : 'Reabrir'}
-          onPress={() => onAction(acerto, 'reopen')}
-          variant="ghost"
-        />
+        {canCancel ? (
+          <GlassButton
+            disabled={disabled}
+            label={cancelLoading ? 'Cancelando...' : 'Cancelar'}
+            onPress={() => onAction(acerto, 'cancel')}
+            variant="danger"
+          />
+        ) : null}
+        {canReopen ? (
+          <GlassButton
+            disabled={disabled}
+            label={reopenLoading ? 'Reabrindo...' : 'Reabrir'}
+            onPress={() => onAction(acerto, 'reopen')}
+            variant="ghost"
+          />
+        ) : null}
       </View>
     );
   }
