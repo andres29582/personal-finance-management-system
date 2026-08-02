@@ -14,7 +14,11 @@ import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
-import { ParticipanteStatus, PlanejamentoStatus } from './enums';
+import {
+  ParticipanteStatus,
+  ParticipanteTipo,
+  PlanejamentoStatus,
+} from './enums';
 
 export type ListarPlanejamentosFiltros = {
   status?: PlanejamentoStatus;
@@ -252,6 +256,7 @@ export class PlanejamentosRepository {
       where: {
         planejamentoId,
         usuarioId,
+        tipo: ParticipanteTipo.VINCULADO,
         status: ParticipanteStatus.ATIVO,
       },
     });
@@ -351,6 +356,7 @@ export class PlanejamentosRepository {
       .where('participanteAcesso.planejamentoId = planejamento.id')
       .andWhere('participanteAcesso.usuarioId = :usuarioId')
       .andWhere('participanteAcesso.status = :participanteStatusAtivo')
+      .andWhere('participanteAcesso.tipo = :participanteTipoVinculado')
       .getQuery();
 
     query
@@ -359,6 +365,7 @@ export class PlanejamentosRepository {
         `(planejamento.usuarioCriadorId = :usuarioId OR EXISTS ${participanteAtivoSubquery})`,
         {
           participanteStatusAtivo: ParticipanteStatus.ATIVO,
+          participanteTipoVinculado: ParticipanteTipo.VINCULADO,
           usuarioId,
         },
       );

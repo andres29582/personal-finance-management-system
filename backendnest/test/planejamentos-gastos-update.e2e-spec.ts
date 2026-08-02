@@ -13,6 +13,7 @@ import {
   GastoComportamento,
   GastoStatus,
   ParticipanteStatus,
+  ParticipanteTipo,
   PlanejamentoTipo,
 } from '../src/planejamentos/enums';
 import { createE2eApp, type E2eApplication } from './e2e-app';
@@ -225,6 +226,22 @@ describe('Planejamentos expense update (e2e)', () => {
 
     return unwrapSuccess<ParticipanteResponse>(response);
   };
+
+  const persistirParticipanteControlado = async (
+    planejamentoId: string,
+    usuarioId: string,
+    tipo: ParticipanteTipo,
+    status: ParticipanteStatus,
+  ) =>
+    dataSource.getRepository(ParticipantePlanejamento).save({
+      email: null,
+      id: randomUUID(),
+      nome: `Participante controlado ${tipo} ${status}`,
+      planejamentoId,
+      status,
+      tipo,
+      usuarioId,
+    });
 
   const criarGasto = async (
     planejamentoId: string,
@@ -1241,6 +1258,129 @@ describe('Planejamentos expense update (e2e)', () => {
         .getRepository(GastoPlanejamento)
         .countBy({ planejamentoId: planejamento.id }),
     ).toBe(0);
+  });
+
+  it.each([
+    [ParticipanteTipo.MANUAL, ParticipanteStatus.ATIVO],
+    [ParticipanteTipo.CONVIDADO, ParticipanteStatus.ATIVO],
+    [ParticipanteTipo.VINCULADO, ParticipanteStatus.PENDENTE],
+    [ParticipanteTipo.VINCULADO, ParticipanteStatus.REMOVIDO],
+  ])(
+    'does not grant read or expense creation to %s + %s with usuarioId',
+    async (tipo, status) => {
+      const { planejamento, participanteProprietario } =
+        await criarPlanejamento(`Acesso controlado ${tipo} ${status}`);
+      await persistirParticipanteControlado(
+        planejamento.id,
+        usuarioNaoVinculado.userId,
+        tipo,
+        status,
+      );
+
+      await request(app.getHttpServer())
+        .get(`/planejamentos/${planejamento.id}`)
+        .set('Authorization', `Bearer ${usuarioNaoVinculado.token}`)
+        .expect(404);
+      const response = await request(app.getHttpServer())
+        .post(`/planejamentos/${planejamento.id}/gastos`)
+        .set('Authorization', `Bearer ${usuarioNaoVinculado.token}`)
+        .send({
+          comportamento: GastoComportamento.EVENTUAL,
+          dataGasto: '2026-07-14',
+          descricao: `Tentativa ${tipo} ${status}`,
+          pagoPorParticipanteId: participanteProprietario.id,
+          participantesIds: [participanteProprietario.id],
+          valorCentavos: 10000,
+        })
+        .expect(404);
+
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            code: 'PLANEJAMENTO_NOT_FOUND',
+          }) as object,
+          success: false,
+        }),
+      );
+      expect(
+        await dataSource
+          .getRepository(GastoPlanejamento)
+          .countBy({ planejamentoId: planejamento.id }),
+      ).toBe(0);
+    },
+  );
+
+  it('grants read and expense creation to a directly persisted active linked participant', async () => {
+    const { planejamento, participanteProprietario } = await criarPlanejamento(
+      'Acesso controlado vinculado ativo',
+    );
+    const participanteVinculado = await persistirParticipanteControlado(
+      planejamento.id,
+      usuarioParticipante.userId,
+      ParticipanteTipo.VINCULADO,
+      ParticipanteStatus.ATIVO,
+    );
+
+    await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', `Bearer ${usuarioParticipante.token}`)
+      .send({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-14',
+        descricao: 'Gasto do vinculado ativo controlado',
+        pagoPorParticipanteId: participanteVinculado.id,
+        participantesIds: [
+          participanteProprietario.id,
+          participanteVinculado.id,
+        ],
+        valorCentavos: 10000,
+      })
+      .expect(201);
+
+    expect(
+      await dataSource
+        .getRepository(GastoPlanejamento)
+        .countBy({ planejamentoId: planejamento.id }),
+    ).toBe(1);
+  });
+
+  it('keeps owner access independent from the linked participant subquery', async () => {
+    const { planejamento, participanteProprietario } = await criarPlanejamento(
+      'Acesso independente do proprietario',
+    );
+    await dataSource
+      .getRepository(ParticipantePlanejamento)
+      .update(
+        { id: participanteProprietario.id },
+        { tipo: ParticipanteTipo.MANUAL },
+      );
+
+    await request(app.getHttpServer())
+      .get(`/planejamentos/${planejamento.id}`)
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/planejamentos/${planejamento.id}/gastos`)
+      .set('Authorization', `Bearer ${proprietario.token}`)
+      .send({
+        comportamento: GastoComportamento.EVENTUAL,
+        dataGasto: '2026-07-14',
+        descricao: 'Gasto do proprietario sem subquery vinculada',
+        pagoPorParticipanteId: participanteProprietario.id,
+        participantesIds: [participanteProprietario.id],
+        valorCentavos: 10000,
+      })
+      .expect(201);
+
+    expect(
+      await dataSource
+        .getRepository(GastoPlanejamento)
+        .countBy({ planejamentoId: planejamento.id }),
+    ).toBe(1);
   });
 
   it('hides the aggregate and expense creation after removing the linked participant', async () => {
