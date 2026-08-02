@@ -72,9 +72,13 @@ export type ResumoFinanceiroPlanejamento = {
   }>;
 };
 
-type AcertosParaSalvar = Parameters<
+type AcertoParaSalvarComId = Parameters<
   PlanejamentosRepository['salvarAcertos']
->[0];
+>[0][number] & {
+  id: string;
+};
+
+type AcertosParaSalvar = AcertoParaSalvarComId[];
 
 type PlanoReconciliacaoAcertos = {
   pendentesPreservados: AcertoPlanejamento[];
