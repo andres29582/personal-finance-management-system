@@ -4,7 +4,12 @@ import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
 import { ParticipantePlanejamento } from './entities/participante-planejamento.entity';
 import { Planejamento } from './entities/planejamento.entity';
-import { AcertoStatus, ParticipanteStatus, PlanejamentoStatus } from './enums';
+import {
+  AcertoStatus,
+  ParticipanteStatus,
+  ParticipanteTipo,
+  PlanejamentoStatus,
+} from './enums';
 import { PlanejamentosRepository } from './planejamentos.repository';
 
 type RepositoryMock<T> = {
@@ -280,6 +285,9 @@ describe('PlanejamentosRepository', () => {
       'participanteAcesso.status = :participanteStatusAtivo',
     );
     expect(planejamentoRepository.queryBuilder.andWhere).toHaveBeenCalledWith(
+      'participanteAcesso.tipo = :participanteTipoVinculado',
+    );
+    expect(planejamentoRepository.queryBuilder.andWhere).toHaveBeenCalledWith(
       'planejamento.status = :planejamentoStatus',
       { planejamentoStatus: PlanejamentoStatus.ABERTO },
     );
@@ -291,9 +299,13 @@ describe('PlanejamentosRepository', () => {
       expect.stringContaining('planejamento.usuarioCriadorId = :usuarioId'),
       {
         participanteStatusAtivo: ParticipanteStatus.ATIVO,
+        participanteTipoVinculado: ParticipanteTipo.VINCULADO,
         usuarioId: 'usuario-id',
       },
     ]);
+    expect(chamadaAcesso?.[0]).toContain(
+      'planejamento.usuarioCriadorId = :usuarioId OR EXISTS',
+    );
     expect(chamadaAcesso?.[0]).not.toContain('participantes.');
     expect(
       planejamentoRepository.queryBuilder.leftJoinAndSelect,
@@ -373,6 +385,7 @@ describe('PlanejamentosRepository', () => {
       );
       expect(chamadaAcesso?.[1]).toEqual({
         participanteStatusAtivo: ParticipanteStatus.ATIVO,
+        participanteTipoVinculado: ParticipanteTipo.VINCULADO,
         usuarioId,
       });
       expect(
@@ -464,6 +477,7 @@ describe('PlanejamentosRepository', () => {
     expect(where).toEqual({
       planejamentoId: 'planejamento-id',
       status: ParticipanteStatus.ATIVO,
+      tipo: ParticipanteTipo.VINCULADO,
       usuarioId: 'usuario-id',
     });
   });
