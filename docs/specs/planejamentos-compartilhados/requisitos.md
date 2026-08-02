@@ -1,340 +1,246 @@
 # Planejamentos Compartilhados - Requisitos
 
-> Nota de status:
-> Este documento contem especificacoes conceituais e itens de roadmap. O
-> contrato atual implementado deve ser conferido no Swagger oficial
-> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
-> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+## Status e fontes de verdade
 
-## Objetivo
+O modulo de Planejamentos esta implementado no backend NestJS e no frontend
+Expo/React Native. Este documento descreve o comportamento atual e separa o
+roadmap de funcionalidades ainda nao entregues.
 
-Especificar a funcionalidade de Planejamentos Compartilhados como um modulo
-independente dentro do backend NestJS atual, mantendo a abordagem de monolito
-modular.
+A fonte oficial do contrato HTTP e `backendnest/swagger.yaml`. Controllers,
+DTOs, services, repository, entities, enums, frontend e testes confirmam as
+regras operacionais. Em caso de divergencia, este documento nao substitui o
+Swagger nem o codigo.
 
-O modulo deve permitir que um usuario autenticado crie planejamentos financeiros
-compartilhados para eventos, festas, viagens, casa compartilhada ou grupos,
-registre participantes manuais, informe gastos pagos por diferentes pessoas,
-calcule divisoes igualitarias em centavos e acompanhe acertos pendentes ou
-pagos.
+## Objetivo implementado
 
-Nesta fase a entrega e apenas documental. Nao devem ser criadas entidades,
-migrations, controllers, services, telas ou alteracoes de banco de dados.
+Planejamentos organiza gastos de um grupo sem criar automaticamente transacoes
+financeiras pessoais. O agregado permite:
 
-## Problema resolvido
+- criar, listar e consultar planejamentos acessiveis;
+- manter participantes manuais ou vinculados;
+- registrar, editar e cancelar gastos com divisao igualitaria em centavos;
+- consultar resumo financeiro e acertos persistidos;
+- sincronizar, pagar, cancelar e reabrir acertos conforme autorizacao e estado;
+- fechar, arquivar ou cancelar o planejamento;
+- preservar historico e auditar transacionalmente as mutacoes implementadas.
 
-O sistema financeiro pessoal controla hoje dados individuais do usuario, como
-contas, transacoes, transferencias, dividas, metas, orcamentos, dashboard,
-relatorios, auditoria e previsao financeira.
+## Atores e acesso atual
 
-Planejamentos compartilhados resolvem um problema complementar: organizar gastos
-que pertencem a um grupo, mas que nao devem ser automaticamente misturados com
-as transacoes pessoais do usuario. Exemplos:
+### Proprietario
 
-- festa em que uma pessoa compra decoracao e outra compra bebidas;
-- viagem com despesas pagas por participantes diferentes;
-- casa compartilhada com aluguel, internet, luz, agua e mercado;
-- grupo eventual com rateio de custos.
+O proprietario e identificado por:
 
-A funcionalidade precisa responder quem participou, quem pagou, quanto cada um
-deve, quem tem saldo a receber, quem tem saldo a pagar e quais acertos ainda
-estao pendentes.
+```text
+planejamento.usuarioCriadorId = usuario autenticado
+```
 
-## Visao geral da funcionalidade
+Conforme estado e regras financeiras, pode consultar o agregado, administrar
+participantes, criar, editar e cancelar gastos, sincronizar acertos, pagar,
+cancelar e reabrir acertos e executar o lifecycle.
 
-Um planejamento compartilhado pertence ao usuario criador. No MVP, somente esse
-criador autenticado acessa e administra o planejamento.
+### Participante vinculado ativo
 
-Dentro de cada planejamento, o criador pode:
+O acesso compartilhado exige simultaneamente:
 
-- cadastrar participantes manuais, que nao precisam ter conta no sistema;
-- registrar gastos em nome de qualquer participante;
-- indicar obrigatoriamente quem pagou cada gasto;
-- selecionar quais participantes entram na divisao de cada gasto;
-- dividir cada gasto de forma igualitaria entre os participantes selecionados;
-- consultar totais pagos, totais devidos, saldo final e status financeiro por
-  participante;
-- consultar acertos minimos sugeridos entre devedores e recebedores;
-- marcar um acerto como pago;
-- cancelar ou reabrir acerto pago, mantendo historico e auditoria;
-- cancelar gastos sem exclusao fisica;
-- replicar planejamentos mensais com participantes e gastos;
-- destacar gastos variaveis replicados que precisam de revisao mensal.
+```text
+participante.usuarioId = usuario autenticado
+participante.tipo = VINCULADO
+participante.status = ATIVO
+```
 
-O modulo deve ser preparado para evoluir para convidados, participantes
-vinculados a usuarios reais, comprovantes com upload, confirmacao de recebimento
-e formas avancadas de divisao. Essas evolucoes nao fazem parte do MVP.
+Esse ator pode listar e consultar planejamentos acessiveis, ler participantes,
+gastos, resumo e acertos pelos endpoints existentes, criar gasto em
+planejamento `ABERTO`, sincronizar acertos em `ABERTO` ou `FECHADO` e pagar
+somente acerto em que representa o devedor.
 
-## Casos de uso
+Nao pode adicionar ou remover participantes, editar ou cancelar gastos,
+cancelar ou reabrir acertos nem executar lifecycle. Registros `MANUAL`,
+`CONVIDADO`, `PENDENTE` ou `REMOVIDO` nao concedem acesso autenticado, mesmo
+quando uma linha inconsistente `MANUAL` ou `CONVIDADO` possui `usuarioId`.
 
-### UC-01 - Criar planejamento compartilhado
+Planejamento inexistente ou inacessivel preserva a ocultacao do recurso:
 
-O usuario autenticado cria um planejamento informando nome, tipo, descricao
-opcional e, quando aplicavel, mes de referencia.
+```text
+404 PLANEJAMENTO_NOT_FOUND
+```
 
-### UC-02 - Administrar dados basicos do planejamento
+## Participante proprietario
 
-O criador lista seus planejamentos, consulta detalhes, edita dados basicos,
-arquiva ou cancela um planejamento.
+Ao criar um planejamento, a mesma transacao:
 
-### UC-03 - Cadastrar participantes manuais
+1. persiste o planejamento com status `ABERTO`;
+2. cria ou reutiliza o participante que representa o proprietario;
+3. associa esse participante ao `usuarioId` do criador;
+4. garante `tipo = VINCULADO` e `status = ATIVO`;
+5. registra `PLANEJAMENTO_CRIADO`.
 
-O criador adiciona participantes ao planejamento usando dados manuais, como nome
-e contato opcional. Os participantes nao precisam ter conta no sistema no MVP.
+Falha na auditoria desfaz planejamento, participante e audit log. Portanto, nao
+e correto afirmar que a criacao deixa o agregado sem participantes.
 
-### UC-04 - Registrar gasto compartilhado
+## Funcionalidades implementadas atualmente
 
-O criador registra um gasto, informa valor em centavos, descricao, data,
-participante pagador, comportamento financeiro e participantes que entram na
-divisao.
+### Planejamento e lifecycle
 
-### UC-05 - Calcular divisao igualitaria
+- criar planejamento;
+- listar planejamentos acessiveis, com filtro opcional de status;
+- consultar detalhe e agregado acessivel;
+- consultar resumo financeiro derivado;
+- fechar planejamento;
+- arquivar planejamento;
+- cancelar planejamento.
 
-O sistema divide o valor total entre os participantes selecionados. A soma das
-partes deve fechar exatamente com o valor total, incluindo distribuicao
-deterministica de centavos restantes.
+### Participantes
 
-### UC-06 - Consultar resumo financeiro
+- adicionar participante;
+- remover participante logicamente, preservando o historico;
+- consultar participantes como parte do detalhe do planejamento.
 
-O criador consulta total do planejamento, total pago por participante, total
-devido por participante, saldo final e classificacao de cada participante como
-devedor, recebedor ou quitado.
+Nao existe endpoint dedicado para listar ou editar participantes.
 
-### UC-07 - Consultar e pagar acertos
+### Gastos
 
-O sistema calcula acertos minimos entre participantes devedores e recebedores. O
-criador pode marcar um acerto como pago sem gerar transacao financeira pessoal
-automaticamente.
+- criar gasto;
+- listar gastos;
+- consultar gasto especifico;
+- atualizar parcialmente gasto ativo;
+- cancelar gasto logicamente;
+- persistir divisoes igualitarias deterministicas;
+- reconciliar acertos depois de mutacoes financeiras.
 
-### UC-08 - Reabrir ou cancelar acerto pago
+### Resumo e acertos
 
-O criador pode reabrir ou cancelar um acerto marcado como pago. A acao deve ser
-auditada e preservar historico.
+- consultar resumo financeiro sem efeitos colaterais;
+- listar acertos persistidos;
+- sincronizar acertos de forma explicita e idempotente;
+- pagar acerto pendente;
+- cancelar acerto pendente ou pago, conforme regra do proprietario;
+- reabrir acerto pago para pendente quando a obrigacao ainda for valida.
 
-### UC-09 - Editar ou cancelar gasto
+## Participantes, tipos e status
 
-O criador pode editar valor, pagador, participantes da divisao e dados basicos
-de um gasto. Alteracoes financeiras devem recalcular divisoes, saldos e acertos.
-Gastos cancelados permanecem no historico e saem dos calculos.
+- `MANUAL`: representa pessoa do grupo sem acesso autenticado obrigatorio;
+- `VINCULADO`: associa um participante a um usuario real e concede acesso
+  somente quando estiver `ATIVO`;
+- `CONVIDADO`: valor persistivel do enum, mas o fluxo de convite por token nao
+  esta implementado;
+- `PENDENTE`: nao concede acesso;
+- `REMOVIDO`: nao concede acesso e permanece no historico financeiro.
 
-### UC-10 - Replicar planejamento mensal
+## Lifecycle e situacao financeira
 
-O criador replica participantes e gastos de um planejamento mensal anterior para
-um novo mes. Gastos variaveis ou configurados como exigindo revisao devem nascer
-com status `PENDENTE_REVISAO`.
+O estado operacional persistido e:
 
-### UC-11 - Fechar sem exigir quitacao e liquidar posteriormente
+```text
+ABERTO -> FECHADO -> ARQUIVADO
+ABERTO -> CANCELADO
+```
 
-O proprietario fecha um planejamento `ABERTO` depois de consolidar os gastos e
-reconciliar os acertos. Acertos `PENDENTE` sao preservados e podem ser pagos ou
-cancelados posteriormente. Um acerto `PAGO` pode ser reaberto para `PENDENTE`,
-sem reabrir o planejamento nem alterar o periodo original; um acerto
-`CANCELADO` nao pode ser reaberto.
+`PlanejamentoStatus` contem apenas `ABERTO`, `FECHADO`, `ARQUIVADO` e
+`CANCELADO`. A situacao financeira `PENDENTE` ou `QUITADO` e derivada; nao
+existe `PlanejamentoStatus.QUITADO`.
 
-### UC-12 - Arquivar historico quitado
+- `FECHADO` congela participantes, gastos, pagador e divisoes, mas permite
+  sincronizar, pagar e corrigir acertos;
+- fechar nao exige quitacao, mas gasto `PENDENTE_REVISAO` bloqueia fechamento;
+- arquivar exige `FECHADO + QUITADO`;
+- cancelar exige `ABERTO + QUITADO`; gasto `PENDENTE_REVISAO` nao bloqueia
+  isoladamente essa transicao;
+- `ARQUIVADO` e `CANCELADO` sao somente leitura;
+- todas as transicoes de lifecycle sao exclusivas do proprietario.
 
-O proprietario arquiva somente planejamento `FECHADO` sem obrigacao financeira
-residual valida. O planejamento `ARQUIVADO` passa a ser somente leitura.
+## Requisitos financeiros implementados
 
-### UC-13 - Cancelar planejamento aberto quitado
+- valores sao inteiros em centavos;
+- todo gasto possui pagador e ao menos um participante na divisao;
+- a soma das divisoes equivale exatamente ao valor do gasto;
+- centavos restantes sao distribuidos deterministicamente;
+- gastos e divisoes cancelados nao participam dos calculos atuais;
+- acertos `PAGO` e `CONFIRMADO` reduzem o saldo aberto;
+- acertos `PENDENTE` e `CANCELADO` nao representam pagamento efetivo;
+- consultas de detalhe, gastos, resumo e acertos nao reconciliam nem escrevem;
+- gastos ou acertos nao criam transacoes pessoais automaticamente.
 
-O proprietario cancela somente planejamento `ABERTO` sem obrigacao financeira
-residual valida. O cancelamento representa interrupcao antes do fechamento,
-preserva participantes, gastos, divisoes, acertos e historico e torna o agregado
-`CANCELADO` completamente somente leitura. A reconciliacao pode ajustar
-pendencias obsoletas, mas a transicao nao reverte pagamentos nem cancela gastos
-ou acertos em massa.
+## Auditoria implementada
 
-## Escopo do MVP
+As mutacoes atuais registram, quando aplicavel:
 
-- Criar planejamento compartilhado.
-- Listar planejamentos do usuario autenticado.
-- Visualizar detalhes do planejamento.
-- Editar dados basicos do planejamento.
-- Arquivar ou cancelar planejamento.
-- Adicionar participantes manuais.
-- Listar participantes.
-- Remover participante sem apagar historico.
-- Registrar gasto compartilhado.
-- Informar obrigatoriamente quem pagou.
-- Selecionar participantes da divisao.
-- Dividir gasto igualmente entre selecionados.
-- Calcular divisao em centavos.
-- Permitir referencia opcional a comprovante, sem upload real obrigatorio.
-- Editar gasto compartilhado.
-- Cancelar gasto compartilhado sem exclusao fisica.
-- Calcular total do planejamento.
-- Calcular total pago por participante.
-- Calcular total devido por participante.
-- Calcular saldo final por participante.
-- Calcular quem deve pagar e quem deve receber.
-- Listar acertos pendentes.
-- Marcar acerto como pago.
-- Cancelar ou reabrir acerto pago mantendo auditoria.
-- Exibir historico de gastos.
-- Exibir historico de acertos.
-- Replicar planejamento mensal com participantes e gastos.
-- Marcar gastos variaveis replicados como pendentes de revisao.
-- Informar mes de referencia ou ultima alteracao do valor replicado.
-- Registrar auditoria das acoes principais.
-- Impedir vazamento de dados entre usuarios.
+- `PLANEJAMENTO_CRIADO`;
+- `PLANEJAMENTO_FECHADO`;
+- `PLANEJAMENTO_ARQUIVADO`;
+- `PLANEJAMENTO_CANCELADO`;
+- `PLANEJAMENTO_PARTICIPANTE_ADICIONADO`;
+- `PLANEJAMENTO_PARTICIPANTE_REMOVIDO`;
+- `PLANEJAMENTO_GASTO_CRIADO`;
+- `PLANEJAMENTO_GASTO_ATUALIZADO`;
+- `PLANEJAMENTO_GASTO_CANCELADO`;
+- `PLANEJAMENTO_ACERTOS_SINCRONIZADOS`;
+- `PLANEJAMENTO_ACERTO_PAGO`;
+- `PLANEJAMENTO_ACERTO_CANCELADO`;
+- `ACERTO_PLANEJAMENTO_REABERTO`.
 
-## Fora de escopo
+Esses eventos usam o mesmo `EntityManager` da mutacao. A auditoria e a ultima
+escrita logica da transacao e sua falha provoca rollback. Payloads evitam nome,
+email, observacao, DTO completo e entidades completas. Sincronizacao sem
+alteracao real nao gera evento.
 
-- Microservico separado.
-- Convites reais por email.
-- Acesso real por token seguro.
-- Participantes obrigatoriamente vinculados a usuarios reais.
-- Upload real de comprovantes.
-- Confirmacao de recebimento pelo participante recebedor.
-- Divisao por porcentagem.
-- Divisao manual avancada.
-- Notificacoes.
-- Integracao automatica com transacoes pessoais.
-- Integracao com Open Finance.
-- Dashboard global com planejamentos.
-- Relatorios avancados.
-- Pagamentos reais ou integracao com gateway de pagamento.
-- Criacao automatica de transacoes financeiras ao marcar acerto como pago.
+## Rastreabilidade atual
 
-## Requisitos funcionais
+### Requisitos implementados
 
-| ID | Requisito |
+| ID | Requisito vigente | Evidencia funcional |
+| --- | --- | --- |
+| `REQ-IMP-01` | Criar planejamento `ABERTO` com participante proprietario `VINCULADO + ATIVO`. | Criacao transacional do agregado. |
+| `REQ-IMP-02` | Garantir ao proprietario acesso e capacidades administrativas conforme estado. | `usuarioCriadorId` e guards do service/frontend. |
+| `REQ-IMP-03` | Conceder acesso compartilhado somente a participante `VINCULADO + ATIVO` com `usuarioId` correspondente. | Query acessivel e autorizacao frontend fail-closed. |
+| `REQ-IMP-04` | Ocultar planejamento inexistente ou inacessivel. | `404 PLANEJAMENTO_NOT_FOUND` observado no service e E2E. |
+| `REQ-IMP-05` | Manter participantes manuais sem conceder acesso autenticado. | Tipo `MANUAL` e testes negativos de acesso. |
+| `REQ-IMP-06` | Registrar gastos e divisoes igualitarias inteiras, exatas e deterministicas. | Dominio de divisao e fluxos de gasto. |
+| `REQ-IMP-07` | Calcular resumo financeiro puro, saldos e situacao derivada. | Endpoint de resumo e funcoes de dominio. |
+| `REQ-IMP-08` | Persistir, sincronizar, pagar, cancelar e reabrir acertos conforme ator e estado. | Service e E2E de acertos. |
+| `REQ-IMP-09` | Executar lifecycle somente pelo proprietario e conforme status e situacao financeira. | Fechar, arquivar e cancelar. |
+| `REQ-IMP-10` | Auditar mutacoes cobertas no mesmo commit ou rollback da operacao. | Eventos transacionais com o mesmo `EntityManager`. |
+| `REQ-IMP-11` | Preservar participantes removidos, gastos, divisoes, pagamentos e acertos como historico. | Cancelamentos logicos e consultas do agregado. |
+| `REQ-IMP-12` | Isolar dados entre usuarios e impedir que vinculos inconsistentes concedam acesso. | Filtro por proprietario ou `usuarioId + VINCULADO + ATIVO`. |
+
+## Requisitos de roadmap
+
+Os itens abaixo nao fazem parte do contrato atual:
+
+| ID | Requisito futuro |
 | --- | --- |
-| RF-01 | O sistema deve permitir que o usuario autenticado crie um planejamento compartilhado. |
-| RF-02 | O sistema deve listar apenas planejamentos pertencentes ao usuario autenticado. |
-| RF-03 | O sistema deve permitir consulta de detalhes de um planejamento do usuario autenticado. |
-| RF-04 | O sistema deve permitir edicao de dados basicos do planejamento. |
-| RF-05 | O sistema deve permitir arquivar, cancelar ou fechar planejamento conforme status permitido. |
-| RF-06 | O sistema deve permitir adicionar participantes manuais ao planejamento. |
-| RF-07 | O sistema deve permitir listar participantes do planejamento. |
-| RF-08 | O sistema deve permitir remover participante sem apagar historico. |
-| RF-09 | O sistema deve permitir registrar gasto compartilhado com valor, descricao, data, pagador e participantes da divisao. |
-| RF-10 | O sistema deve exigir que todo gasto tenha um participante pagador ativo ou historicamente valido no planejamento. |
-| RF-11 | O sistema deve permitir dividir gasto entre participantes selecionados. |
-| RF-12 | O sistema deve calcular divisao igualitaria em centavos. |
-| RF-13 | O sistema deve garantir que a soma das divisoes de um gasto seja igual ao valor total do gasto. |
-| RF-14 | O sistema deve distribuir centavos restantes de forma deterministica entre os primeiros participantes da divisao. |
-| RF-15 | O sistema deve permitir informar comprovante opcional sem upload real no MVP. |
-| RF-16 | O sistema deve permitir editar gasto e recalcular divisoes, saldos e acertos. |
-| RF-17 | O sistema deve permitir cancelar gasto sem exclusao fisica. |
-| RF-18 | O sistema deve excluir gastos cancelados dos calculos financeiros. |
-| RF-19 | O sistema deve calcular total pago por participante. |
-| RF-20 | O sistema deve calcular total devido por participante. |
-| RF-21 | O sistema deve calcular saldo final por participante. |
-| RF-22 | O sistema deve classificar participantes como devedores, recebedores ou quitados. |
-| RF-23 | O sistema deve calcular acertos minimos entre devedores e recebedores. |
-| RF-24 | O sistema deve permitir listar acertos pendentes. |
-| RF-25 | O sistema deve permitir marcar acerto como pago. |
-| RF-26 | O sistema deve permitir cancelar ou reabrir acerto pago. |
-| RF-27 | O sistema deve preservar historico de gastos, cancelamentos e acertos. |
-| RF-28 | O sistema deve permitir replicar planejamento mensal com participantes e gastos. |
-| RF-29 | O sistema deve criar gastos variaveis replicados com status `PENDENTE_REVISAO`. |
-| RF-30 | O sistema deve registrar mes de referencia e ultima alteracao de valor de gastos replicados. |
-| RF-31 | O sistema deve registrar auditoria nas acoes principais. |
-| RF-32 | O sistema nao deve criar transacoes pessoais automaticamente a partir de gastos ou acertos do planejamento no MVP. |
-| RF-33 | O sistema deve tratar o status do planejamento como ciclo operacional e derivar separadamente sua situacao financeira como `PENDENTE` ou `QUITADO`. |
-| RF-34 | O sistema deve permitir fechar planejamento com acertos pendentes, desde que as demais pre-condicoes sejam satisfeitas. |
-| RF-35 | O sistema deve manter entidades e historico visiveis em planejamento `FECHADO`, bloqueando a adicao, remocao ou edicao de participantes, a criacao, edicao ou cancelamento de gastos e alteracoes de pagador ou divisoes. |
-| RF-36 | O sistema deve permitir pagar e corrigir acertos existentes de planejamento `FECHADO`; a data efetiva deve ser registrada quando informada. |
-| RF-37 | O sistema deve permitir arquivar somente planejamento `FECHADO` e financeiramente `QUITADO`. |
-| RF-38 | O sistema deve manter planejamento `ARQUIVADO` em somente leitura. |
-| RF-39 | O sistema nao deve adicionar `QUITADO` ao enum operacional `PlanejamentoStatus`. |
-| RF-40 | O sistema deve permitir cancelar somente planejamento `ABERTO` e financeiramente `QUITADO`, sem aceitar `FECHADO`, `ARQUIVADO` ou `CANCELADO`. |
-| RF-41 | O sistema deve preservar todo o historico em `CANCELADO`, sem cancelamento em massa de gastos ou acertos e sem reversao de pagamentos; a reconciliacao oficial pode ajustar pendencias obsoletas antes da transicao. |
+| `REQ-ROAD-01` | Editar dados basicos do planejamento. |
+| `REQ-ROAD-02` | Disponibilizar endpoint dedicado para listar participantes. |
+| `REQ-ROAD-03` | Editar participante. |
+| `REQ-ROAD-04` | Replicar planejamento e recorrencias mensais. |
+| `REQ-ROAD-05` | Convidar por token, com expiracao e aceite. |
+| `REQ-ROAD-06` | Fazer upload real de comprovante. |
+| `REQ-ROAD-07` | Confirmar recebimento pelo recebedor. |
+| `REQ-ROAD-08` | Dividir por percentual ou valor manual avancado. |
+| `REQ-ROAD-09` | Integrar automaticamente com transacoes pessoais. |
+| `REQ-ROAD-10` | Enviar notificacoes e executar pagamentos reais. |
 
-## Requisitos nao funcionais
+Campos persistidos que apoiam evolucao, como `mesReferencia`,
+`ultimaAlteracaoValorEm`, `requerRevisaoMensal`, `comprovanteUrl` e
+`comprovanteNome`, nao significam que replicacao ou upload estejam
+implementados.
 
-| ID | Requisito |
+## Fora do escopo atual
+
+- separar Planejamentos em microservico;
+- gateway de pagamento ou Open Finance;
+- criacao automatica de receita, despesa ou transferencia pessoal;
+- convite por email/token;
+- dashboard global ou relatorios avancados exclusivos de Planejamentos.
+
+## Requisitos nao funcionais vigentes
+
+| ID | Requisito nao funcional |
 | --- | --- |
-| RNF-01 | O modulo deve seguir a arquitetura NestJS modular existente. |
-| RNF-02 | O modulo deve permanecer dentro do backend atual, sem microservico nesta fase. |
-| RNF-03 | O modulo deve usar JWT e guards existentes para autenticar rotas protegidas. |
-| RNF-04 | Todas as consultas devem aplicar isolamento por usuario criador. |
-| RNF-05 | Valores monetarios devem ser armazenados e calculados em centavos usando inteiros. |
-| RNF-06 | Regras financeiras devem ser deterministicas e testaveis em testes unitarios. |
-| RNF-07 | Operacoes que alteram gastos, divisoes ou acertos devem ser transacionais quando persistidas. |
-| RNF-08 | O contrato HTTP deve ser documentado em Swagger/OpenAPI quando implementado. |
-| RNF-09 | A documentacao, commits e PRs relacionados devem ser mantidos em portugues. |
-| RNF-10 | O modulo deve ser preparado para evoluir sem impor complexidade de convidados, upload ou integracoes no MVP. |
-| RNF-11 | Acertos marcados como pagos devem manter rastreabilidade por historico e auditoria. |
-| RNF-12 | Testes E2E devem validar autenticacao e isolamento de dados entre usuarios. |
-
-## Decisoes de MVP
-
-1. O modulo sera implementado como monolito modular.
-2. Somente o criador autenticado acessa e administra o planejamento no MVP.
-3. Participantes sao manuais no MVP e nao precisam ter conta no sistema.
-4. O criador pode registrar gastos em nome de qualquer participante.
-5. Cada gasto deve informar obrigatoriamente quem pagou.
-6. Cada gasto pode ser dividido entre participantes selecionados.
-7. A divisao do MVP e igualitaria entre os participantes selecionados.
-8. Valores monetarios devem ser armazenados e calculados em centavos.
-9. A distribuicao de centavos deve fechar exatamente com o valor total do gasto.
-10. Quando houver sobra de centavos, o sistema deve distribuir os centavos
-    restantes de forma deterministica entre os primeiros participantes da
-    divisao.
-11. Comprovante e opcional.
-12. Upload real de comprovante fica fora do MVP.
-13. O sistema deve calcular total pago, total devido, saldo final e status
-    financeiro por participante.
-14. O sistema deve calcular acertos minimos entre devedores e recebedores.
-15. No MVP, o criador pode marcar um acerto como `PAGO`.
-16. O criador pode cancelar ou reabrir um acerto `PAGO`, mantendo historico e
-    auditoria.
-17. Confirmacao de recebimento pelo participante recebedor fica para fase
-    futura.
-18. Gastos cancelados nao sao apagados fisicamente; eles saem dos calculos, mas
-    permanecem no historico e na auditoria.
-19. Alteracoes em valor, pagador ou participantes da divisao devem recalcular
-    divisoes, saldos e acertos.
-20. Casa compartilhada mensal pode ser representada por planejamentos mensais
-    replicados.
-21. O sistema deve permitir replicar participantes e gastos de um planejamento
-    mensal anterior para um novo mes.
-22. Gastos replicados que exigem revisao mensal devem nascer com status
-    `PENDENTE_REVISAO`.
-23. O sistema deve informar mes de referencia ou ultima alteracao do valor
-    replicado.
-24. Gastos variaveis, como luz, agua e mercado, devem exibir alerta de revisao.
-25. Integracao automatica com transacoes pessoais fica fora do MVP.
-26. Planejamentos nao devem gerar transacoes pessoais automaticas para evitar
-    duplicidade futura com Open Finance.
-27. O sistema deve permitir marcar acerto como pago sem criar transacao
-    financeira automatica.
-28. Auditoria e obrigatoria nas acoes principais.
-29. Testes E2E devem validar autenticacao e isolamento de dados entre usuarios.
-30. O estado do planejamento e operacional; a situacao financeira e derivada e
-    nao persistida nesta fase.
-31. Fechamento consolida a origem das obrigacoes, mas nao exige quitacao.
-32. Pagamentos e correcoes posteriores de acertos existentes continuam
-    permitidos em planejamento `FECHADO`. Como regra de dominio, a data efetiva
-    do pagamento deve ser registrada quando informada; no contrato atual, que nao
-    recebe essa data, registra-se o instante da marcacao como pago.
-33. Pagamento tardio nao reabre o planejamento, nao altera o periodo original,
-    nao cria gasto e nao modifica divisoes.
-34. Arquivamento exige ausencia de obrigacao financeira residual valida e torna
-    o planejamento somente leitura.
-35. Cancelamento exige planejamento `ABERTO + QUITADO`, preserva obrigacoes e
-    historico sem cancelamentos ou reversoes automaticas e torna o agregado
-    terminal e somente leitura.
-36. `QUITADO` nao deve ser incluido em `PlanejamentoStatus`.
-
-## Decisoes futuras
-
-1. Participantes poderao acessar planejamentos como convidados via web usando
-   convite com token seguro e acesso limitado.
-2. Conta completa sera opcional para convidados. Caso o convidado queira usar
-   todas as funcionalidades, podera ser direcionado para criar conta propria no
-   aplicativo.
-3. Participantes vinculados a usuarios reais poderao registrar seus proprios
-   gastos.
-4. Participantes vinculados poderao editar apenas gastos criados por eles.
-5. O criador continuara podendo administrar todos os gastos do planejamento.
-6. Confirmacao de recebimento pelo recebedor podera ser implementada em fase
-   futura.
-7. Upload real de comprovantes podera ser implementado em fase futura.
-8. Divisao por porcentagem e divisao manual avancada ficam fora do MVP.
-9. Recorrencia mensal automatica avancada fica fora do MVP.
-10. Integracao com transacoes pessoais, dashboard global e relatorios avancados
-    ficam para fases futuras.
+| `REQ-NF-01` | Exigir autenticacao JWT e sessao ativa em todas as rotas. |
+| `REQ-NF-02` | Aplicar autorizacao fail-closed e ocultar recursos inacessiveis. |
+| `REQ-NF-03` | Usar transacoes e, nos fluxos concorrentes previstos, lock pessimista e revalidacao. |
+| `REQ-NF-04` | Preservar idempotencia e serializacao nos fluxos concorrentes. |
+| `REQ-NF-05` | Executar calculos monetarios inteiros e deterministicos. |
+| `REQ-NF-06` | Manter `backendnest/swagger.yaml` como contrato HTTP oficial. |
+| `REQ-NF-07` | Cobrir regras com testes unitarios, frontend e E2E em PostgreSQL real. |
+| `REQ-NF-08` | Preservar historico financeiro e excluir dados sensiveis dos payloads de auditoria. |

@@ -1,10 +1,10 @@
 # ADR - Decisoes de implementacao para Planejamentos Compartilhados
 
 > Nota de status:
-> Este documento contem especificacoes conceituais e itens de roadmap. O
-> contrato atual implementado deve ser conferido no Swagger oficial
-> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
-> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+> Este ADR preserva as decisoes historicas e registra clarificacoes aceitas
+> depois da implementacao. O contrato HTTP oficial deve ser conferido em
+> `backendnest/swagger.yaml`. Declaracoes antigas de futuro sao mantidas como
+> contexto e podem ter sido superadas pelas decisoes posteriores deste ADR.
 
 ## Status
 
@@ -96,6 +96,11 @@ Regras:
 - devem bloquear fechamento do planejamento enquanto nao forem revisados;
 - gastos variaveis replicados, como luz, agua e mercado, devem nascer como
   `PENDENTE_REVISAO`.
+
+Clarificacao atual: o status e os campos de suporte existem no modelo, mas o
+fluxo de replicacao mensal ainda e roadmap. Esta decisao rege o comportamento
+quando esse fluxo vier a ser implementado; hoje, `PENDENTE_REVISAO` ja bloqueia
+o fechamento e nao integra o resumo oficial.
 
 Consequencia:
 
@@ -197,3 +202,83 @@ type SituacaoFinanceiraPlanejamento =
   | 'PENDENTE'
   | 'QUITADO';
 ```
+
+## Decisao 9 - Participante proprietario vinculado
+
+Ao criar o planejamento, o agregado cria ou reutiliza uma linha de participante
+que representa o proprietario. Essa linha possui `usuarioId` do criador,
+`tipo = VINCULADO` e `status = ATIVO`.
+
+Consequencias:
+
+- o proprietario participa corretamente de gastos, divisoes e acertos;
+- planejamento, participante proprietario e auditoria de criacao compartilham
+  a mesma transacao;
+- falha da auditoria desfaz todo o agregado criado;
+- a propriedade continua sendo definida por `usuarioCriadorId`, nao pela linha
+  de participante.
+
+## Decisao 10 - Acesso compartilhado por vinculo ativo
+
+Um usuario nao proprietario recebe acesso somente quando existe participante
+com os tres criterios simultaneos:
+
+```text
+usuarioId correspondente
+tipo = VINCULADO
+status = ATIVO
+```
+
+O participante vinculado ativo pode ler o agregado, criar gasto em `ABERTO`,
+sincronizar acertos em `ABERTO` ou `FECHADO` e pagar apenas o acerto em que
+representa o devedor. Administracao de participantes, edicao/cancelamento de
+gastos, correcoes de acertos e lifecycle permanecem exclusivos do
+proprietario.
+
+Esta decisao supera a premissa inicial de que somente o criador teria acesso e
+a previsao de que participantes vinculados seriam exclusivamente futuros.
+
+## Decisao 11 - Autorizacao fail-closed e separacao de propriedade
+
+A query central de acesso exige explicitamente `VINCULADO + ATIVO`; registros
+inconsistentes `MANUAL` ou `CONVIDADO` com `usuarioId`, assim como participantes
+`PENDENTE` ou `REMOVIDO`, nao concedem acesso. Identidade ou agregado ausente
+tambem resulta em ausencia de capacidade.
+
+O proprietario permanece autorizado pelo ramo independente
+`planejamento.usuarioCriadorId = usuarioId`. Recursos inacessiveis sao ocultados
+com `404 PLANEJAMENTO_NOT_FOUND`.
+
+## Decisao 12 - Auditoria transacional
+
+As mutacoes implementadas de planejamento, participantes, gastos e acertos usam
+`logEntityEventTransactional` com o mesmo `EntityManager` da operacao. A
+auditoria e a ultima escrita logica dentro da transacao e sua falha provoca
+rollback da mutacao e de todos os efeitos derivados.
+
+Payloads usam apenas IDs, status, valores e campos operacionais necessarios.
+Nome, email, descricao, categoria, observacao, DTO completo e entidades
+completas nao devem ser registrados. Sincronizacao sem alteracao real nao gera
+evento. Em concorrencia, somente a transicao vencedora gera audit log.
+
+O evento de reabertura preserva o nome historico
+`ACERTO_PLANEJAMENTO_REABERTO`; nao deve ser renomeado sem analise de
+compatibilidade.
+
+## Decisao 13 - Historico financeiro preservado
+
+Remocao e cancelamento sao logicos. Participantes removidos, gastos e divisoes
+cancelados e acertos historicos permanecem persistidos para explicar fatos
+financeiros anteriores. `ARQUIVADO` e `CANCELADO` preservam o agregado completo
+em somente leitura.
+
+Consequencia: autorizacao de acesso atual e elegibilidade para novas operacoes
+nao devem ser confundidas com a necessidade de carregar registros historicos
+nos calculos e nas consultas do agregado.
+
+## Roadmap preservado
+
+Continuam futuros: edicao de planejamento, listagem dedicada/edicao de
+participante, convite por token, replicacao mensal, upload real de comprovante,
+confirmacao de recebimento, divisao percentual/manual e integracao automatica
+com transacoes pessoais.

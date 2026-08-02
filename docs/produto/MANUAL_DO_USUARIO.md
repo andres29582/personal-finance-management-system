@@ -25,6 +25,24 @@
 - Orçamentos: orçamento do mês com alerta de 80% e 100%.
 - Relatórios: mensal, trimestral ou por intervalo.
 - Metas, alertas, transferências, dívidas e pagamentos de dívida.
+- Planejamentos compartilhados: criação e consulta do agregado, participantes,
+  gastos com divisão igualitária, resumo, acertos e lifecycle.
+
+## Planejamentos compartilhados
+
+- O proprietário pode administrar participantes e gastos, corrigir acertos e
+  fechar, arquivar ou cancelar o planejamento conforme seu estado.
+- Um participante com conta vinculada e acesso ativo pode consultar o
+  planejamento, criar gasto enquanto ele estiver aberto, sincronizar acertos
+  enquanto estiver aberto ou fechado e pagar somente o próprio acerto como
+  devedor.
+- Um participante manual representa alguém do grupo sem acesso ao sistema.
+  Convidados ainda não vinculados, participantes pendentes e participantes
+  removidos também não recebem acesso autenticado.
+- Planejamentos `ARQUIVADO` ou `CANCELADO` permanecem disponíveis apenas para
+  consulta.
+- O sistema não cria automaticamente transações pessoais a partir de gastos ou
+  pagamentos de acerto.
 
 ## Regras importantes
 

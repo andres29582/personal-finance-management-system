@@ -1,66 +1,72 @@
 # Planejamentos Compartilhados - API conceitual
 
-> Nota de status:
-> Este documento contem especificacoes conceituais e itens de roadmap. O
-> contrato atual implementado deve ser conferido no Swagger oficial
-> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
-> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+## Fonte oficial
 
-## Visao geral
-
-Este documento descreve endpoints planejados para o modulo de Planejamentos
-Compartilhados. A API deve seguir o padrao REST do backend NestJS atual, com JWT,
-DTOs validados, respostas padronizadas e documentacao Swagger/OpenAPI quando a
-implementacao for iniciada.
-
-Rotas conceituais usam o prefixo:
+Este documento resume o contrato para leitura humana. Ele nao substitui:
 
 ```text
-/planejamentos
+backendnest/swagger.yaml
 ```
 
-Todas as rotas do MVP devem ser autenticadas.
+Paths, metodos, schemas, codigos HTTP e seguranca devem ser confirmados no
+Swagger antes de alterar consumidores.
 
-## Contrato atual implementado
+## Autenticacao e ocultacao
 
-Endpoints atualmente implementados no backend e documentados no Swagger oficial:
+Todas as rotas usam bearer JWT. Leitura e mutacoes permitidas a participante
+exigem uma linha com `usuarioId` correspondente, `tipo = VINCULADO` e
+`status = ATIVO`. Propriedade e verificada separadamente por
+`usuarioCriadorId`.
 
-| Metodo | Rota | Descricao |
+Recursos inexistentes ou inacessiveis usam:
+
+```text
+404 PLANEJAMENTO_NOT_FOUND
+```
+
+Operacoes em que o usuario tem acesso, mas somente o proprietario pode agir,
+podem retornar `403 PLANEJAMENTO_OWNER_REQUIRED` conforme documentado no
+Swagger.
+
+### Divergencia documental preexistente
+
+O comportamento efetivo do service e dos testes E2E oculta recursos
+inacessiveis com `404 PLANEJAMENTO_NOT_FOUND`. No entanto, o Swagger ainda
+declara uma resposta generica `403` para algumas operacoes de leitura: detalhe
+do planejamento, listagem e detalhe de gastos e listagem de acertos. Esta
+branch nao altera codigo nem Swagger. Ate a correcao do contrato oficial, o
+comportamento observado na implementacao permanece `404`, e a divergencia fica
+registrada aqui. Isso nao implica que todas as respostas `403` do modulo
+estejam incorretas.
+
+## Endpoints implementados
+
+| Metodo | Path | Operacao |
 | --- | --- | --- |
-| `POST` | `/planejamentos` | Cria planejamento compartilhado. |
-| `GET` | `/planejamentos` | Lista planejamentos do usuario autenticado. |
-| `GET` | `/planejamentos/:id` | Consulta detalhes do planejamento. |
-| `GET` | `/planejamentos/:id/resumo` | Retorna o resumo financeiro derivado, sem persistencia, reconciliacao ou alteracao do agregado. |
-| `PATCH` | `/planejamentos/:id/fechar` | Fecha operacionalmente um planejamento `ABERTO`, com lock, reconciliacao final e preservacao dos acertos pendentes. |
-| `PATCH` | `/planejamentos/:id/arquivar` | Arquiva transacionalmente um planejamento `FECHADO + QUITADO` e o torna somente leitura sem excluir seu historico. |
-| `PATCH` | `/planejamentos/:id/cancelar` | Cancela transacionalmente um planejamento `ABERTO + QUITADO`, preservando o agregado como historico somente leitura. |
-| `POST` | `/planejamentos/:id/participantes` | Adiciona participante atomicamente; duplicidades ativas por nome manual, email ou usuario vinculado retornam conflito `409`. |
-| `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remove participante ativo logicamente, sem recalcular obrigacoes existentes; operacao exclusiva do proprietario. |
-| `POST` | `/planejamentos/:planejamentoId/gastos` | Registra o gasto, suas divisoes e reconcilia os acertos pendentes do planejamento na mesma transacao. |
-| `GET` | `/planejamentos/:planejamentoId/gastos` | Lista gastos do planejamento. |
-| `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consulta gasto do planejamento. |
-| `PATCH` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Atualiza parcialmente um gasto ativo e, quando houver alteracao financeira, reconcilia seus efeitos de forma transacional; operacao exclusiva do proprietario. |
-| `PATCH` | `/planejamentos/:planejamentoId/gastos/:gastoId/cancelar` | Cancela logicamente o gasto e reconcilia os acertos atomicamente; operacao exclusiva do proprietario. |
-| `GET` | `/planejamentos/:planejamentoId/acertos` | Lista acertos oficiais persistidos. |
-| `POST` | `/planejamentos/:planejamentoId/acertos/sincronizar` | Executa sincronizacao explicita e idempotente dos acertos pendentes para reparacao ou recuperacao operacional. |
-| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/pagar` | Marca acerto como pago. |
-| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/cancelar` | Cancela acerto mantendo historico. |
-| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/reabrir` | Reabre acerto para pendente. |
+| `POST` | `/planejamentos` | Criar planejamento e participante proprietario. |
+| `GET` | `/planejamentos` | Listar planejamentos acessiveis; aceita filtro `status`. |
+| `GET` | `/planejamentos/:id` | Consultar detalhe acessivel. |
+| `GET` | `/planejamentos/:id/resumo` | Consultar resumo financeiro derivado. |
+| `PATCH` | `/planejamentos/:id/fechar` | Fechar planejamento aberto. |
+| `PATCH` | `/planejamentos/:id/arquivar` | Arquivar planejamento fechado e quitado. |
+| `PATCH` | `/planejamentos/:id/cancelar` | Cancelar planejamento aberto e quitado. |
+| `POST` | `/planejamentos/:id/participantes` | Adicionar participante. |
+| `DELETE` | `/planejamentos/:planejamentoId/participantes/:participanteId` | Remover participante logicamente. |
+| `POST` | `/planejamentos/:planejamentoId/gastos` | Criar gasto e divisoes. |
+| `GET` | `/planejamentos/:planejamentoId/gastos` | Listar gastos. |
+| `GET` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Consultar gasto. |
+| `PATCH` | `/planejamentos/:planejamentoId/gastos/:gastoId` | Atualizar gasto ativo. |
+| `PATCH` | `/planejamentos/:planejamentoId/gastos/:gastoId/cancelar` | Cancelar gasto. |
+| `GET` | `/planejamentos/:planejamentoId/acertos` | Listar acertos persistidos. |
+| `POST` | `/planejamentos/:planejamentoId/acertos/sincronizar` | Sincronizar acertos. |
+| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/pagar` | Pagar acerto pendente. |
+| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/cancelar` | Cancelar acerto pendente ou pago. |
+| `PATCH` | `/planejamentos/:planejamentoId/acertos/:acertoId/reabrir` | Reabrir acerto pago. |
 
-## Roadmap / futuro
+Nao existe endpoint dedicado para listar participantes. O detalhe de
+planejamento inclui a colecao completa acessivel.
 
-Os endpoints abaixo sao planejamento futuro e nao devem ser tratados como
-contrato disponivel no backend atual.
-
-| Metodo | Rota | Descricao |
-| --- | --- | --- |
-| `PATCH` | `/planejamentos/:id` | Edita dados basicos do planejamento. |
-| `DELETE` | `/planejamentos/:id` | Atalho opcional para cancelamento logico, nunca exclusao fisica. |
-| `GET` | `/planejamentos/:id/participantes` | Lista participantes. |
-| `PATCH` | `/planejamentos/:id/participantes/:participanteId` | Edita participante. |
-| `POST` | `/planejamentos/:id/replicar` | Replica planejamento mensal. |
-
-## Payloads conceituais
+## Requests atuais
 
 ### Criar planejamento
 
@@ -68,646 +74,197 @@ contrato disponivel no backend atual.
 
 ```json
 {
-  "nome": "Casa compartilhada - Julho/2026",
-  "descricao": "Despesas mensais do apartamento",
-  "tipo": "CASA",
-  "mesReferencia": "2026-07"
+  "nome": "Viagem",
+  "descricao": "Ferias do grupo",
+  "tipo": "VIAGEM",
+  "dataInicio": "2026-09-01",
+  "dataFim": "2026-09-10"
 }
 ```
 
-Resposta conceitual:
+`nome` e `tipo` sao obrigatorios. `descricao`, `dataInicio` e `dataFim` sao
+opcionais. Tipos: `CASA`, `FESTA`, `VIAGEM`, `EVENTO`, `GRUPO`, `OUTRO`.
 
-```json
-{
-  "id": "uuid",
-  "nome": "Casa compartilhada - Julho/2026",
-  "descricao": "Despesas mensais do apartamento",
-  "tipo": "CASA",
-  "status": "ABERTO",
-  "mesReferencia": "2026-07",
-  "criadoEm": "2026-07-03T10:00:00.000Z"
-}
-```
+`CreatePlanejamentoDto` nao aceita campos de proprietario nem status. O
+`ValidationPipe` global usa `whitelist: true` e `forbidNonWhitelisted: true`;
+portanto, campos extras sao rejeitados pela validacao HTTP.
+`usuarioCriadorId`, status inicial `ABERTO` e participante proprietario
+`VINCULADO + ATIVO` sao definidos exclusivamente pelo backend.
 
-### Editar planejamento
+### Filtro de listagem
 
-`PATCH /planejamentos/:id`
+`GET /planejamentos?status=ABERTO`
 
-```json
-{
-  "nome": "Casa compartilhada - Julho/2026",
-  "descricao": "Despesas revisadas do apartamento",
-  "status": "ABERTO"
-}
-```
-
-Campos editaveis no MVP:
-
-- `nome`;
-- `descricao`;
-- `tipo`, se nao houver restricao de dominio;
-- `mesReferencia`;
-- `status`, para transicoes permitidas.
-
-### Alterar status do planejamento
-
-Endpoints implementados:
-
-```text
-PATCH /planejamentos/:id/fechar
-PATCH /planejamentos/:id/arquivar
-PATCH /planejamentos/:id/cancelar
-```
-
-Endpoints de roadmap:
-
-```text
-POST /planejamentos/:id/replicar
-```
-
-Regras conceituais:
-
-- `fechar` deve bloquear fechamento enquanto houver gastos `PENDENTE_REVISAO`;
-- `fechar` exige proprietario autenticado, planejamento `ABERTO`, transacao
-  serializada no agregado e reconciliacao final dos acertos;
-- `fechar` preserva acertos pendentes e nao exige quitacao total;
-- `arquivar` exige planejamento `FECHADO` sem obrigacao financeira residual
-  valida, calculada pelo resumo financeiro oficial depois da reconciliacao;
-- `arquivar` exige proprietario autenticado e executa acesso, propriedade,
-  lock pessimista, recarga do agregado, reconciliacao, nova recarga, calculo do
-  resumo e persistencia do status em uma unica transacao;
-- se a reconciliacao ou a validacao financeira falhar, toda alteracao da
-  transacao sofre rollback;
-- `ARQUIVADO` preserva detalhe, gastos, acertos, resumo e historico para
-  consulta, mas bloqueia mutacoes estruturais, financeiras e de acertos;
-- `cancelar` exige `ABERTO + QUITADO`, representa interrupcao antes do
-  fechamento normal e nao aceita planejamento `FECHADO`, cujo destino normal e
-  o arquivamento depois da quitacao;
-- `cancelar` usa a mesma fonte oficial de resumo financeiro depois da
-  reconciliacao transacional; gastos `PENDENTE_REVISAO` nao bloqueiam por si so
-  e permanecem preservados, pois nao integram a obrigacao valida atual;
-- `CANCELADO` e terminal e somente leitura. A transicao nao apaga nem cancela
-  em massa gastos ou acertos, nao invalida divisoes, nao remove participantes,
-  nao reverte pagamentos e nao elimina obrigacoes validas; somente a
-  reconciliacao oficial pode ajustar acertos `PENDENTE` obsoletos;
-- se `DELETE /planejamentos/:id` for mantido, ele deve ser tratado como
-  cancelamento logico, nunca exclusao fisica.
-
-O status do planejamento representa seu ciclo operacional. A situacao financeira
-e derivada, nao persistida nesta fase, e conceitualmente possui os valores
-`PENDENTE` e `QUITADO`. Nao deve existir `PlanejamentoStatus.QUITADO`.
-
-Em `FECHADO`, entidades e historico permanecem visiveis. Ficam bloqueadas a
-adicao, remocao ou edicao de participantes, a criacao, edicao ou cancelamento de
-gastos e as alteracoes de pagador ou divisoes. Consulta, pagamento e correcao de
-acertos existentes, alem de sincronizacao para consistencia operacional que nao
-altere a origem das obrigacoes, continuam permitidos. Portanto,
-`FECHADO + PENDENTE` e valido.
-
-O fechamento implementado nao recebe body e retorna o planejamento com status
-`FECHADO`. Erros de dominio atuais:
-
-- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
-- `404 PLANEJAMENTO_NOT_FOUND`: planejamento inexistente ou inacessivel;
-- `422 PLANEJAMENTO_FECHAR_STATUS_INVALIDO`: planejamento nao esta `ABERTO`,
-  com `statusAtual` nos detalhes;
-- `422 PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO`: existe gasto com revisao
-  pendente.
-
-As mutacoes estruturais implementadas exigem planejamento `ABERTO`: adicionar
-ou remover participante e criar, editar ou cancelar gasto. Quando o planejamento
-esta `FECHADO`, `ARQUIVADO` ou `CANCELADO`, elas retornam
-`422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`, com `statusAtual` nos
-detalhes. Consultas e operacoes de acerto nao usam esse bloqueio estrutural.
-Operacoes de acerto usam politica propria e sao permitidas somente em `ABERTO`
-ou `FECHADO`; em `ARQUIVADO` ou `CANCELADO`, retornam
-`422 PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO`, com `statusAtual`.
-
-O arquivamento nao recebe body e retorna o planejamento com status
-`ARQUIVADO`. Erros de dominio:
-
-- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
-- `404 PLANEJAMENTO_NOT_FOUND`: planejamento inexistente ou inacessivel;
-- `422 PLANEJAMENTO_ARQUIVAR_STATUS_INVALIDO`: planejamento nao esta
-  `FECHADO`, com `statusAtual` nos detalhes;
-- `422 PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA`: resumo oficial retorna
-  `PENDENTE`, com `situacaoFinanceira` e `obrigacaoResidualCentavos`.
-
-O cancelamento nao recebe body e retorna o planejamento com status
-`CANCELADO`. A ordem transacional e acesso, propriedade, lock pessimista,
-recarga do agregado, reconciliacao, nova recarga, resumo oficial e persistencia
-somente de `id` e status. Erros de dominio:
-
-- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
-- `404 PLANEJAMENTO_NOT_FOUND`: planejamento inexistente ou inacessivel;
-- `422 PLANEJAMENTO_CANCELAR_STATUS_INVALIDO`: planejamento nao esta
-  `ABERTO`, com `statusAtual` nos detalhes;
-- `422 PLANEJAMENTO_CANCELAR_PENDENCIA_FINANCEIRA`: resumo oficial retorna
-  `PENDENTE`, com `situacaoFinanceira` e `obrigacaoResidualCentavos`.
+Status aceitos: `ABERTO`, `FECHADO`, `ARQUIVADO`, `CANCELADO`.
 
 ### Adicionar participante
 
 `POST /planejamentos/:id/participantes`
 
+Participante manual:
+
 ```json
 {
   "nome": "Ana",
-  "email": "ana@example.com",
-  "telefone": "+5511999999999"
+  "email": "ana@example.com"
 }
 ```
 
-Resposta conceitual:
+Participante vinculado:
 
 ```json
 {
-  "id": "uuid",
-  "planejamentoId": "uuid",
-  "nome": "Ana",
-  "email": "ana@example.com",
-  "telefone": "+5511999999999",
-  "tipo": "MANUAL",
-  "status": "ATIVO"
+  "nome": "Bruno",
+  "usuarioId": "00000000-0000-0000-0000-000000000000"
 }
 ```
 
-### Editar participante
+Campos aceitos: `nome`, `email?`, `usuarioId?`. Nao existem `telefone`,
+`observacao`, `tipo` ou `status` no request. O service deriva tipo e status.
 
-`PATCH /planejamentos/:id/participantes/:participanteId`
+### Criar gasto
 
-```json
-{
-  "nome": "Ana Silva",
-  "email": "ana.silva@example.com",
-  "telefone": "+5511988888888"
-}
-```
-
-### Remover participante
-
-`DELETE /planejamentos/:planejamentoId/participantes/:participanteId`
-
-Operacao sem corpo e exclusiva do proprietario. A operacao e executada de forma
-transacional e serializada no agregado do planejamento, altera somente o status
-de `ATIVO` para `REMOVIDO` e retorna o participante recarregado depois do commit.
-O participante do usuario criador nao pode ser removido.
-
-Nenhum gasto, divisao ou acerto e cancelado ou alterado. A operacao nao executa
-reconciliacao, nao cria transacoes financeiras pessoais e preserva o
-participante nas relacoes e calculos historicos enquanto ele for financeiramente
-relevante. Participantes removidos nao podem ser usados como novos pagadores ou
-introduzidos em novas divisoes.
-
-Erros:
-
-- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario autenticado nao e proprietario;
-- `404 PLANEJAMENTO_NOT_FOUND`: planejamento inexistente ou inacessivel;
-- `404 PLANEJAMENTO_PARTICIPANTE_NOT_FOUND`: participante inexistente ou de
-  outro planejamento;
-- `422 PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO`: participante nao
-  esta `ATIVO`;
-- `422 PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL`: participante
-  representa o usuario criador do planejamento;
-- `422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`: planejamento nao esta
-  `ABERTO`.
-
-### Registrar gasto
-
-`POST /planejamentos/:id/gastos`
-
-Registra o gasto, suas divisoes e reconcilia os acertos pendentes do
-planejamento na mesma transacao. Qualquer falha durante a persistencia ou a
-reconciliacao causa rollback integral. A operacao nao cria automaticamente
-transacoes financeiras pessoais.
+`POST /planejamentos/:planejamentoId/gastos`
 
 ```json
 {
-  "descricao": "Luz",
-  "valorCentavos": 18500,
-  "dataGasto": "2026-07-10",
-  "comportamento": "VARIAVEL",
-  "pagoPorParticipanteId": "uuid",
+  "descricao": "Hospedagem",
+  "valorCentavos": 120000,
+  "dataGasto": "2026-09-01",
+  "comportamento": "EVENTUAL",
+  "pagoPorParticipanteId": "00000000-0000-0000-0000-000000000001",
   "participantesIds": [
-    "uuid-ana",
-    "uuid-bruno",
-    "uuid-carla"
+    "00000000-0000-0000-0000-000000000001",
+    "00000000-0000-0000-0000-000000000002"
   ],
-  "observacao": "Conta enviada no grupo",
-  "mesReferencia": "2026-07"
+  "categoria": "Hospedagem",
+  "observacao": "Reserva do grupo",
+  "mesReferencia": "2026-09"
 }
 ```
 
-Resposta conceitual:
+Obrigatorios: `descricao`, `valorCentavos`, `dataGasto`, `comportamento`,
+`pagoPorParticipanteId`, `participantesIds`. Opcionais: `categoria`,
+`observacao`, `mesReferencia`.
 
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "planejamentoId": "uuid",
-    "descricao": "Luz",
-    "valorCentavos": 18500,
-    "dataGasto": "2026-07-10",
-    "comportamento": "VARIAVEL",
-    "pagoPorParticipanteId": "uuid",
-    "observacao": "Conta enviada no grupo",
-    "mesReferencia": "2026-07",
-    "status": "ATIVO",
-    "divisoes": [
-      {
-        "participanteId": "uuid-ana",
-        "valorDevidoCentavos": 6167,
-        "status": "ATIVA"
-      },
-      {
-        "participanteId": "uuid-bruno",
-        "valorDevidoCentavos": 6167,
-        "status": "ATIVA"
-      },
-      {
-        "participanteId": "uuid-carla",
-        "valorDevidoCentavos": 6166,
-        "status": "ATIVA"
-      }
-    ]
-  },
-  "timestamp": "2026-07-10T12:00:00.000Z",
-  "requestId": "uuid-request"
-}
-```
+`comportamento`: `FIXO`, `VARIAVEL` ou `EVENTUAL`. O request atual nao aceita
+`comprovanteUrl`, `comprovanteNome`, `status` ou configuracao de percentual.
 
-### Editar gasto
+### Atualizar gasto
 
 `PATCH /planejamentos/:planejamentoId/gastos/:gastoId`
 
+Aceita pelo menos um dos mesmos campos editaveis da criacao:
+
 ```json
 {
-  "descricao": "Luz revisada",
-  "valorCentavos": 19240,
-  "dataGasto": "2026-07-11",
-  "comportamento": "VARIAVEL",
-  "pagoPorParticipanteId": "uuid-bruno",
+  "valorCentavos": 125000,
   "participantesIds": [
-    "uuid-ana",
-    "uuid-bruno",
-    "uuid-carla"
-  ],
-  "categoria": null,
-  "observacao": "Valor conferido",
-  "mesReferencia": "2026-07"
-}
-```
-
-Todos os campos sao opcionais, mas o body deve conter ao menos uma propriedade.
-`categoria`, `observacao` e `mesReferencia` aceitam `null` para limpeza.
-`status` nao e editavel por este endpoint. A operacao e exclusiva do
-proprietario, e somente gastos com status `ATIVO` podem ser atualizados.
-
-O efeito depende dos campos realmente alterados:
-
-- alteracao somente descritiva salva o gasto, sem recriar divisoes nem
-  reconciliar acertos;
-- mudanca somente do pagador preserva as divisoes, recalcula os saldos e
-  reconcilia os acertos pendentes;
-- mudanca de `valorCentavos` ou do conjunto de `participantesIds` cancela
-  somente as divisoes `ATIVA`, preserva divisoes ja `CANCELADA`, cria novas
-  divisoes `ATIVA` e reconcilia os acertos na mesma transacao.
-
-A ordem de `participantesIds` nao possui significado financeiro, mas listas
-com identificadores duplicados sao invalidas. Referencias historicas ja
-vinculadas podem permanecer mesmo que o participante tenha sido inativado
-posteriormente; pagadores ou participantes realmente novos precisam estar
-ativos.
-
-Acertos `PAGO`, `CONFIRMADO` e `CANCELADO` permanecem como historico. Acertos
-`PENDENTE` sao reconciliados e podem gerar compensacoes. Uma alteracao real de
-`valorCentavos` atualiza `ultimaAlteracaoValorEm`. A operacao nao cria
-transacoes financeiras pessoais. Qualquer falha na transacao causa rollback
-integral.
-
-Erros relevantes:
-
-- `400 VALIDATION_ERROR`: campo com tipo, formato, limite ou enum invalido
-  conforme a validacao estrutural;
-- `401 UNAUTHORIZED`: JWT ausente ou invalido;
-- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
-- `404 PLANEJAMENTO_NOT_FOUND`: usuario sem acesso ou planejamento inexistente;
-- `404 PLANEJAMENTO_GASTO_NOT_FOUND`: gasto inexistente ou de outro
-  planejamento;
-- `422 PLANEJAMENTO_GASTO_ATUALIZACAO_VAZIA`: nenhum campo efetivo foi
-  informado para atualizacao;
-- `422 PLANEJAMENTO_GASTO_ATUALIZAR_STATUS_INVALIDO`: gasto nao esta `ATIVO`;
-- `422 PLANEJAMENTO_GASTO_DIVISOES_ATIVAS_OBRIGATORIAS`: atualizacao financeira
-  sem participantes informados e sem divisoes ativas existentes;
-- `422 PLANEJAMENTO_PAGADOR_INVALIDO`: novo pagador nao e participante ativo;
-- `422 PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO`: participante realmente novo
-  da divisao nao esta ativo;
-- `422 PARTICIPANTE_DUPLICADO`: `participantesIds` contem duplicidade;
-- `422 VALOR_MENOR_QUE_PARTICIPANTES`: o valor nao permite distribuir ao menos
-  um centavo para cada participante;
-- `422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`: planejamento nao esta
-  `ABERTO`.
-
-### Cancelar gasto
-
-`PATCH /planejamentos/:planejamentoId/gastos/:gastoId/cancelar`
-
-Operacao sem corpo e exclusiva do proprietario do planejamento. O gasto e
-preservado com status `CANCELADO`; somente suas divisoes `ATIVA` passam para
-`CANCELADA`, sem remocao fisica. O cancelamento e a reconciliacao dos acertos
-pendentes ocorrem na mesma transacao, preservando acertos `PAGO`, `CONFIRMADO`
-e `CANCELADO` como historico e criando pendencias compensatorias quando
-necessario. A operacao nao cria transacoes financeiras pessoais.
-
-Erros relevantes:
-
-- `403 PLANEJAMENTO_OWNER_REQUIRED`: usuario com acesso nao e proprietario;
-- `404 PLANEJAMENTO_NOT_FOUND`: usuario sem acesso ou planejamento inexistente;
-- `404 PLANEJAMENTO_GASTO_NOT_FOUND`: gasto inexistente ou de outro planejamento;
-- `422 PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO`: gasto nao esta `ATIVO`.
-- `422 PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`: planejamento nao esta
-  `ABERTO`.
-
-## Endpoint de resumo
-
-`GET /planejamentos/:id/resumo`
-
-Endpoint implementado. O resumo oficial considera gastos `ATIVO`, divisoes
-ativas e acertos `PAGO` ou `CONFIRMADO`. Gastos `CANCELADO` ou
-`PENDENTE_REVISAO` nao entram nos totais oficiais. A consulta e pura: nao abre
-transacao, nao adquire lock, nao reconcilia ou materializa acertos, nao persiste
-entidades e nao altera o status operacional.
-
-Resposta (`data` do envelope global de sucesso):
-
-```json
-{
-  "planejamentoId": "uuid",
-  "statusOperacional": "FECHADO",
-  "situacaoFinanceira": "PENDENTE",
-  "totalGastosAtivosCentavos": 10001,
-  "obrigacaoResidualCentavos": 5000,
-  "participantes": [
-    {
-      "participante": {
-        "id": "uuid-ana",
-        "nome": "Ana",
-        "tipo": "VINCULADO",
-        "status": "ATIVO"
-      },
-      "totalPagoCentavos": 10001,
-      "totalDevidoCentavos": 5001,
-      "totalPagoEmAcertosCentavos": 0,
-      "totalRecebidoEmAcertosCentavos": 0,
-      "saldoBrutoCentavos": 5000,
-      "saldoAbertoCentavos": 5000,
-      "statusFinanceiro": "RECEBEDOR"
-    },
-    {
-      "participante": {
-        "id": "uuid-bruno",
-        "nome": "Bruno",
-        "tipo": "MANUAL",
-        "status": "ATIVO"
-      },
-      "totalPagoCentavos": 0,
-      "totalDevidoCentavos": 5000,
-      "totalPagoEmAcertosCentavos": 0,
-      "totalRecebidoEmAcertosCentavos": 0,
-      "saldoBrutoCentavos": -5000,
-      "saldoAbertoCentavos": -5000,
-      "statusFinanceiro": "DEVEDOR"
-    }
+    "00000000-0000-0000-0000-000000000001",
+    "00000000-0000-0000-0000-000000000002"
   ]
 }
 ```
 
-`situacaoFinanceira` e `QUITADO` somente quando todos os
-`saldoAbertoCentavos` sao zero; havendo qualquer saldo diferente de zero, e
-`PENDENTE`. `obrigacaoResidualCentavos` soma apenas saldos abertos positivos
-(lado credor), evitando contar a mesma obrigacao novamente pelo lado devedor.
+Todos os campos sao opcionais isoladamente, mas o request deve informar ao
+menos um campo. Request vazio e rejeitado com
+`PLANEJAMENTO_GASTO_ATUALIZACAO_VAZIA`; um DTO valido semanticamente equivalente
+ao estado atual retorna sem escrita, reconciliacao ou audit log. `status` nao e
+editavel por este endpoint.
 
-Participantes ativos sao retornados na ordem deterministica do agregado.
-Participante removido continua no resumo enquanto referenciado por gasto ativo,
-divisao ativa ou acerto efetivo; removido sem relevancia financeira e excluido.
-Nao sao expostos `usuarioId`, email ou entidades completas.
+Somente `categoria`, `observacao` e `mesReferencia` aceitam `null` no DTO de
+atualizacao. Para esses tres campos:
 
-`statusFinanceiro`:
+- campo omitido mantem o valor atual;
+- campo enviado como `null` remove o valor opcional;
+- campo enviado com valor atualiza o valor.
 
-- `DEVEDOR`, quando `saldoAbertoCentavos < 0`;
-- `RECEBEDOR`, quando `saldoAbertoCentavos > 0`;
-- `QUITADO`, quando `saldoAbertoCentavos = 0`.
+Essa semantica nao se aplica aos demais campos, que nao aceitam `null`.
 
-## Endpoint de acertos
+### Lifecycle, cancelamentos e acertos
 
-`GET /planejamentos/:id/acertos`
+Os seguintes endpoints nao recebem body:
 
-Lista somente os acertos oficiais persistidos do planejamento, incluindo seus
-identificadores, status historicos e os participantes devedor e recebedor
-necessarios para exibicao. A consulta valida acesso, mas permanece disponivel em
-`ABERTO`, `FECHADO`, `ARQUIVADO` e `CANCELADO`.
-
-As relacoes `deParticipante` e `paraParticipante` expoem somente `id` e `nome`.
-Dados como `usuarioId`, `email`, `planejamentoId` e timestamps do participante
-nao fazem parte deste contrato publico.
-
-A operacao nao abre transacao, nao adquire lock, nao calcula sugestoes e nao
-cria, cancela, reconcilia ou salva acertos. Os acertos oficiais devem ter sido
-materializados por operacoes de escrita anteriores. Gastos `PENDENTE_REVISAO`
-nao devem gerar acertos oficiais ate serem revisados e confirmados.
-
-`POST /planejamentos/:planejamentoId/acertos/sincronizar` permanece disponivel
-como sincronizacao explicita e idempotente para reparacao ou recuperacao
-operacional dos acertos pendentes em planejamentos `ABERTO` ou `FECHADO`.
-Planejamentos `ARQUIVADO` ou `CANCELADO` bloqueiam a operacao.
-
-Resposta (`data` do envelope global de sucesso):
-
-```json
-[
-  {
-    "id": "uuid",
-    "deParticipanteId": "uuid-diego",
-    "paraParticipanteId": "uuid-ana",
-    "valorCentavos": 5000,
-    "status": "PAGO",
-    "dataPagamento": "2026-07-03T10:30:00.000Z",
-    "observacao": null,
-    "deParticipante": { "id": "uuid-diego", "nome": "Diego" },
-    "paraParticipante": { "id": "uuid-ana", "nome": "Ana" }
-  }
-]
+```text
+PATCH /planejamentos/:id/fechar
+PATCH /planejamentos/:id/arquivar
+PATCH /planejamentos/:id/cancelar
+DELETE /planejamentos/:planejamentoId/participantes/:participanteId
+PATCH /planejamentos/:planejamentoId/gastos/:gastoId/cancelar
+POST /planejamentos/:planejamentoId/acertos/sincronizar
+PATCH /planejamentos/:planejamentoId/acertos/:acertoId/pagar
+PATCH /planejamentos/:planejamentoId/acertos/:acertoId/cancelar
+PATCH /planejamentos/:planejamentoId/acertos/:acertoId/reabrir
 ```
 
-### Marcar acerto como pago
+Em especial, pagar acerto nao aceita `dataPagamento` nem `observacao`; o
+backend registra o instante da operacao.
 
-`PATCH /planejamentos/:id/acertos/:acertoId/pagar`
+## Politica por endpoint
 
-O pagamento de acerto existente e permitido em planejamento `ABERTO` ou
-`FECHADO`. Pagamento tardio nao reabre o planejamento, nao altera o periodo
-original, nao cria gasto e nao modifica divisoes. A operacao e bloqueada em
-`ARQUIVADO` ou `CANCELADO`.
-
-Regra de dominio: a data efetiva do pagamento deve ser registrada quando
-informada.
-
-Comportamento do contrato atual: o endpoint nao recebe DTO nem data de pagamento;
-o service atribui `new Date()` a `dataPagamento`, registrando o instante em que o
-acerto e marcado como `PAGO`.
-
-Evolucao futura compativel, fora desta branch e sem alteracao do Swagger atual:
-
-```ts
-type PagarAcertoDto = {
-  dataPagamento?: string;
-  observacao?: string;
-};
-```
-
-Resposta conceitual:
-
-```json
-{
-  "id": "uuid",
-  "status": "PAGO",
-  "dataPagamento": "2026-07-03T10:30:00.000Z"
-}
-```
-
-### Reabrir acerto
-
-`PATCH /planejamentos/:id/acertos/:acertoId/reabrir`
-
-Transicao exclusiva do proprietario e permitida somente para acerto `PAGO` em
-planejamento `ABERTO` ou `FECHADO`; `PENDENTE`, `CANCELADO` e `CONFIRMADO` sao
-rejeitados. A operacao e bloqueada em planejamento `ARQUIVADO` ou `CANCELADO` e
-nao recebe body no contrato atual.
-
-Na mesma transacao, o backend retira o efeito financeiro do pagamento, comprova
-que devedor, recebedor e valor ainda representam uma obrigacao atual, reconcilia
-as demais pendencias, preserva o mesmo `acertoId`, limpa `dataPagamento` e
-registra `ACERTO_PLANEJAMENTO_REABERTO` por auditoria transacional. Obrigacao
-obsoleta retorna `422 PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO`.
-
-Resposta conceitual:
-
-```json
-{
-  "id": "uuid",
-  "status": "PENDENTE",
-  "dataPagamento": null
-}
-```
-
-### Cancelar acerto
-
-`PATCH /planejamentos/:id/acertos/:acertoId/cancelar`
-
-Permitido somente quando o planejamento esta `ABERTO` ou `FECHADO`; bloqueado
-em `ARQUIVADO` ou `CANCELADO`.
-
-Payload opcional:
-
-```json
-{
-  "motivo": "Acerto cancelado apos revisao do planejamento"
-}
-```
-
-Resposta conceitual:
-
-```json
-{
-  "id": "uuid",
-  "status": "CANCELADO",
-  "canceladoEm": "2026-07-03T10:45:00.000Z"
-}
-```
-
-O cancelamento deve preservar historico e auditoria. No MVP, ele nao deve criar,
-alterar ou cancelar transacoes pessoais automaticamente.
-
-## Endpoint de replicacao mensal
-
-`POST /planejamentos/:id/replicar`
-
-```json
-{
-  "nome": "Casa compartilhada - Agosto/2026",
-  "mesReferencia": "2026-08",
-  "replicarGastosEventuais": false
-}
-```
-
-Resposta conceitual:
-
-```json
-{
-  "planejamentoOrigemId": "uuid-julho",
-  "planejamentoCriado": {
-    "id": "uuid-agosto",
-    "nome": "Casa compartilhada - Agosto/2026",
-    "tipo": "CASA",
-    "status": "ABERTO",
-    "mesReferencia": "2026-08"
-  },
-  "participantesReplicados": 3,
-  "gastosReplicados": 5,
-  "gastosPendentesRevisao": 3
-}
-```
-
-Regras conceituais:
-
-- participantes ativos sao copiados;
-- gastos fixos podem nascer `ATIVO`;
-- gastos variaveis nascem `PENDENTE_REVISAO`;
-- gastos eventuais nao sao replicados por padrao;
-- acertos nao sao replicados.
-
-## Erros esperados
-
-| Codigo HTTP | Cenario | Codigo conceitual |
+| Grupo | Proprietario | Vinculado ativo |
 | --- | --- | --- |
-| `400` | Payload invalido, valor menor ou igual a zero, enum invalido, mes invalido. | `VALIDATION_ERROR` |
-| `401` | Requisicao sem JWT valido. | `UNAUTHORIZED` |
-| `403` ou `404` | Recurso nao pertence ao usuario autenticado. | `PLANEJAMENTO_NOT_FOUND` ou `ACCESS_DENIED` |
-| `404` | Planejamento, participante, gasto ou acerto inexistente. | `RESOURCE_NOT_FOUND` |
-| `409` | Conflito real, como duplicidade de recurso. | Codigo especifico documentado pelo endpoint. |
-| `422` | Regra de negocio violada, incluindo transicao ou estado incompativel com o lifecycle. | `BUSINESS_RULE_VIOLATION`, `PLANEJAMENTO_CANCELAR_STATUS_INVALIDO` ou `PLANEJAMENTO_CANCELAR_PENDENCIA_FINANCEIRA` |
+| Listar/detalhe/gastos/resumo/acertos | permitido | permitido |
+| Adicionar/remover participante | `ABERTO` | proibido |
+| Criar gasto | `ABERTO` | `ABERTO` |
+| Editar/cancelar gasto | `ABERTO`, gasto `ATIVO` | proibido |
+| Sincronizar acertos | `ABERTO` ou `FECHADO` | `ABERTO` ou `FECHADO` |
+| Pagar acerto | acerto `PENDENTE` | apenas quando representa o devedor |
+| Cancelar/reabrir acerto | conforme estado | proibido |
+| Lifecycle | conforme pre-condicoes | proibido |
 
-Os codigos especificos documentados na secao de cada endpoint prevalecem sobre
-esta tabela conceitual generica.
+## Resumo e acertos
 
-Mensagens devem ser claras, em portugues, e sem revelar dados de outro usuario.
+`GET /planejamentos/:id/resumo` e uma consulta pura. Retorna totais, saldos por
+participante, obrigacao residual e `situacaoFinanceira` derivada como
+`PENDENTE` ou `QUITADO`.
 
-## Regras de autenticacao e autorizacao
+`GET /planejamentos/:planejamentoId/acertos` lista registros persistidos em
+todos os status. `POST .../sincronizar` e a mutacao explicita para materializar
+o plano atual e retorna os acertos oficiais conforme o schema do Swagger.
 
-- Todas as rotas do MVP devem usar `JwtAuthGuard`.
-- O `usuarioId` deve vir do token autenticado, nunca do payload.
-- Toda busca por planejamento deve filtrar por `id` e `usuarioId`.
-- Participantes, gastos, divisoes e acertos devem ser validados contra o
-  planejamento carregado do usuario autenticado.
-- Tentativas de acesso a recurso de outro usuario devem retornar erro sem
-  vazar existencia do recurso.
-- Auditoria deve registrar usuario autenticado e recurso afetado nas acoes
-  principais.
+## Lifecycle
 
-## Observacoes para Swagger/OpenAPI
+- fechar: `ABERTO`, sem gasto `PENDENTE_REVISAO`; quitacao nao e exigida;
+- arquivar: somente `FECHADO + QUITADO`;
+- cancelar planejamento: somente `ABERTO + QUITADO`;
+- `ARQUIVADO` e `CANCELADO`: somente leitura;
+- todas as transicoes: exclusivas do proprietario.
 
-- Criar tags dedicadas para `Planejamentos`.
-- Documentar enums com exemplos:
-  - `TipoPlanejamento`;
-  - `StatusPlanejamento`;
-  - `TipoParticipante`;
-  - `StatusParticipante`;
-  - `TipoComportamentoGasto`;
-  - `StatusGasto`;
-  - `StatusAcerto`.
-- Informar que valores monetarios usam centavos.
-- Documentar exemplos de divisao com sobra de centavos.
-- Documentar que comprovante e opcional e upload real fica fora do MVP.
-- Documentar que marcar acerto como pago nao cria transacao pessoal.
-- Incluir respostas de erro para autenticacao, isolamento de dados e regras de
-  negocio.
-- Manter contratos alinhados aos DTOs quando a implementacao for criada.
+## Matriz concisa de erros atuais
+
+Os codigos abaixo sao observaveis no service e/ou no Swagger atual. Erros
+genericos do framework sao descritos pela categoria HTTP, sem inventar codigo
+simbolico.
+
+| Categoria | HTTP | Codigos ou situacoes confirmadas |
+| --- | --- | --- |
+| Validacao HTTP | `400` | Body, parametro UUID ou query invalidos; inclui campos extras rejeitados pelo `ValidationPipe`. |
+| Autenticacao | `401` | JWT ausente, invalido ou sessao nao autenticada. |
+| Ocultacao de recurso | `404` | `PLANEJAMENTO_NOT_FOUND`. |
+| Propriedade obrigatoria | `403` | `PLANEJAMENTO_OWNER_REQUIRED`. |
+| Conflito de duplicidade | `409` | `PLANEJAMENTO_PARTICIPANTE_DUPLICADO`. |
+| Regra estrutural | `422` | `PLANEJAMENTO_PERIODO_INVALIDO`, `PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO`, `PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO`. |
+| Lifecycle | `422` | `PLANEJAMENTO_FECHAR_STATUS_INVALIDO`, `PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO`, `PLANEJAMENTO_ARQUIVAR_STATUS_INVALIDO`, `PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA`, `PLANEJAMENTO_CANCELAR_STATUS_INVALIDO`, `PLANEJAMENTO_CANCELAR_PENDENCIA_FINANCEIRA`. |
+| Participantes | `404`/`422` | `PLANEJAMENTO_PARTICIPANTE_NOT_FOUND`, `PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO`, `PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL`. |
+| Gastos | `404`/`422` | `PLANEJAMENTO_GASTO_NOT_FOUND`, `PLANEJAMENTO_GASTO_ATUALIZACAO_VAZIA`, `PLANEJAMENTO_GASTO_ATUALIZAR_STATUS_INVALIDO`, `PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO`, `PLANEJAMENTO_GASTO_DIVISOES_ATIVAS_OBRIGATORIAS`, `PLANEJAMENTO_PAGADOR_INVALIDO`, `PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO`, `PARTICIPANTE_DUPLICADO`, `VALOR_MENOR_QUE_PARTICIPANTES`. |
+| Acertos | `403`/`404`/`422` | `PLANEJAMENTO_ACERTO_PAGAR_FORBIDDEN`, `PLANEJAMENTO_ACERTO_NOT_FOUND`, `PLANEJAMENTO_ACERTO_PAGAR_STATUS_INVALIDO`, `PLANEJAMENTO_ACERTO_CANCELAR_STATUS_INVALIDO`, `PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO`, `PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO`. |
+
+A matriz nao enumera toda excecao interna: registra apenas os erros relevantes
+ao contrato observavel atual. A divergencia `403` versus `404` das leituras
+indicadas acima permanece separada e nao muda esses codigos.
+
+## Roadmap / endpoints nao implementados
+
+Os paths abaixo sao apenas conceituais e nao existem no Swagger atual:
+
+```text
+PATCH /planejamentos/:id
+GET /planejamentos/:id/participantes
+PATCH /planejamentos/:id/participantes/:participanteId
+POST /planejamentos/:id/replicar
+```
+
+Tambem permanecem futuros convite por token, upload real de comprovante,
+confirmacao de recebimento, divisao percentual/manual e integracao com
+transacoes pessoais.

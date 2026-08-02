@@ -112,6 +112,28 @@ Padrao de nomes:
 Endpoints devem seguir os paths reais do Swagger. Evite criar paths em telas.
 Telas devem chamar services.
 
+### Planejamentos
+
+O modulo `frontend/src/modules/planejamentos` consome os endpoints oficiais de
+planejamento, participantes, gastos, resumo, lifecycle e acertos. A politica de
+capacidade usada na UI e nos formularios deve permanecer alinhada ao backend:
+
+- proprietario por `usuarioCriadorId`;
+- participante compartilhado somente com `usuarioId` correspondente,
+  `tipo = VINCULADO` e `status = ATIVO`;
+- criacao de gasto permitida ao vinculado ativo em planejamento `ABERTO`;
+- edicao/cancelamento de gasto, participantes e lifecycle exclusivos do
+  proprietario;
+- sincronizacao compartilhada em `ABERTO` ou `FECHADO`;
+- pagamento pelo proprietario ou pelo participante devedor;
+- recurso inacessivel ocultado como `404 PLANEJAMENTO_NOT_FOUND`.
+
+As funcoes puras em
+`frontend/src/modules/planejamentos/authorization/planejamentoAuthorization.ts`
+sao reutilizadas pelo detalhe e pelos formularios. Deep links nao devem expor
+formularios operacionais antes de identidade e agregado serem carregados. O
+backend continua sendo a autoridade final.
+
 ## Erros HTTP
 
 O helper comum para transformar erro em mensagem de UI e:
