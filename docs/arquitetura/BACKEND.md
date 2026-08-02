@@ -78,6 +78,7 @@ controller, service, DTOs, entidade e repository quando aplicavel.
 | `dashboard` | Agregacoes para resumo mensal. |
 | `relatorios` | Consultas agregadas por periodo. |
 | `orcamentos` | Planejamento mensal. |
+| `planejamentos` | Planejamentos compartilhados, participantes, gastos, resumo, acertos e lifecycle. |
 | `metas` | Objetivos de economia ou reducao de divida. |
 | `alertas` | Alertas por vencimento, metas e limite de gasto. |
 | `previsoes` | Previsao de deficit e integracao com ML. |
@@ -141,7 +142,8 @@ apenas os privilegios necessarios.
 Entidades registradas no modulo raiz incluem usuarios, sessoes de auth, tokens
 de reset, logs de auditoria e os modelos financeiros principais: contas,
 categorias, transacoes, transferencias, dividas, pagamentos, metas, alertas e
-orcamentos.
+orcamentos, alem de planejamento compartilhado, participante, gasto, divisao e
+acerto de Planejamentos.
 
 Como `synchronize` esta desativado, migrations SQL sao parte do contrato de
 evolucao do schema. Hoje elas ficam em `backendnest/migrations/`:
@@ -259,6 +261,14 @@ O contexto de requisicao e propagado por middlewares:
 nao devem derrubar o fluxo principal. Antes de persistir detalhes, o service
 sanitiza campos sensiveis como senha, password, token, access token, refresh
 token e authorization. Emails e CPFs sao mascarados.
+
+Planejamentos possui uma excecao intencional ao caminho defensivo global. Suas
+mutacoes auditadas chamam `logEntityEventTransactional` com o mesmo
+`EntityManager` da transacao do agregado. Nesses fluxos, a auditoria e a ultima
+escrita logica e uma falha ao inserir `audit_log` deve provocar rollback da
+mutacao e dos efeitos derivados. Os payloads registram IDs, status e dados
+operacionais minimos, sem nomes, emails, observacoes, DTOs ou entidades
+completas.
 
 A consulta de auditoria fica em `GET /audit-logs`, protegida por JWT e limitada
 ao usuario autenticado.

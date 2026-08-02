@@ -1,377 +1,281 @@
 # Planejamentos Compartilhados - Regras de negocio
 
-> Nota de status:
-> Este documento contem especificacoes conceituais e itens de roadmap. O
-> contrato atual implementado deve ser conferido no Swagger oficial
-> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
-> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+## Status
 
-## Principios gerais
+Estas regras descrevem o modulo implementado. Itens futuros aparecem apenas na
+secao de roadmap. O contrato HTTP oficial permanece em
+`backendnest/swagger.yaml`.
 
-- O planejamento compartilhado pertence ao usuario criador.
-- No MVP, apenas o criador autenticado acessa e administra o planejamento.
-- Participantes sao entidades do planejamento, nao usuarios obrigatorios do
-  sistema.
-- Valores monetarios devem ser armazenados e calculados em centavos.
-- Gastos cancelados permanecem no historico, mas nao entram em calculos.
-- Acertos podem ser marcados como pagos sem gerar transacoes pessoais.
-- A integridade financeira do planejamento deve ser deterministica e auditavel.
+## Autenticacao, acesso e propriedade
 
-## Regras de criacao de planejamento
+Todas as rotas exigem usuario autenticado.
 
-| ID | Regra |
-| --- | --- |
-| RN-PLAN-01 | Todo planejamento deve ter um usuario criador autenticado. |
-| RN-PLAN-02 | O planejamento deve ter nome obrigatorio. |
-| RN-PLAN-03 | O tipo deve pertencer aos tipos permitidos: `CASA`, `FESTA`, `VIAGEM`, `EVENTO`, `GRUPO` ou `OUTRO`. |
-| RN-PLAN-04 | O status inicial deve ser `ABERTO`, salvo regra futura explicita. |
-| RN-PLAN-05 | A descricao e opcional. |
-| RN-PLAN-06 | O mes de referencia e opcional para planejamentos gerais e recomendado para planejamentos mensais de casa compartilhada. |
-| RN-PLAN-07 | O status do planejamento representa seu ciclo operacional; a situacao financeira e derivada dos fatos financeiros. |
-| RN-PLAN-08 | Planejamento `FECHADO` deve bloquear a adicao, remocao ou edicao de participantes, bem como a criacao, edicao ou cancelamento de gastos e alteracoes de pagador ou divisoes, preservando integralmente a visibilidade das entidades e do historico. A liquidacao e a correcao de acertos existentes continuam permitidas. |
-| RN-PLAN-09 | Fechamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/fechar`. |
-| RN-PLAN-10 | Arquivamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/arquivar`. |
-| RN-PLAN-11 | Cancelamento deve ser feito por endpoint explicito, como `PATCH /planejamentos/:id/cancelar`; se `DELETE /planejamentos/:id` for mantido, deve representar cancelamento logico. |
-| RN-PLAN-12 | Planejamento com gasto `PENDENTE_REVISAO` nao pode ser fechado. |
-| RN-PLAN-13 | Acertos pendentes nao impedem o fechamento do planejamento. |
-| RN-PLAN-14 | Somente planejamento `FECHADO` e financeiramente `QUITADO` pode ser arquivado. |
-| RN-PLAN-15 | Planejamento `ARQUIVADO` e historico finalizado e de somente leitura. |
-| RN-PLAN-16 | Planejamento `CANCELADO` representa abandono ou invalidacao, nao conclusao normal. |
-| RN-PLAN-17 | Cancelamento preserva participantes, gastos, divisoes, acertos e historico; a transicao nao cancela gastos ou acertos em massa, nao reverte pagamentos e nao elimina obrigacoes validas. A reconciliacao oficial pode ajustar apenas acertos `PENDENTE` obsoletos. |
-| RN-PLAN-18 | `QUITADO` nao deve ser adicionado ao enum operacional `PlanejamentoStatus`. |
-| RN-PLAN-19 | Somente planejamento `ABERTO` e financeiramente `QUITADO` pode ser cancelado. |
-| RN-PLAN-20 | Planejamento `CANCELADO` e terminal, somente leitura e representa interrupcao ou abandono antes do fechamento normal. |
-| RN-PLAN-21 | Gasto `PENDENTE_REVISAO` nao bloqueia cancelamento por si so e permanece preservado como historico, sem integrar o resumo financeiro oficial enquanto nao for valido. |
+### Proprietario
 
-## Ciclo operacional e situacao financeira
+O proprietario e identificado por `planejamento.usuarioCriadorId` igual ao ID
+do usuario autenticado. Ele nao depende de uma linha de participante para ter
+acesso. Conforme estado e regras financeiras, pode administrar participantes,
+gastos, acertos e lifecycle.
 
-Decisao central:
+### Participante vinculado ativo
+
+O acesso compartilhado exige que uma unica linha de
+`ParticipantePlanejamento` atenda simultaneamente:
 
 ```text
-FECHADO congela a origem das obrigacoes financeiras, mas nao impede a liquidacao
-ou correcao posterior dos acertos existentes.
+usuarioId correspondente + tipo VINCULADO + status ATIVO
 ```
 
-O fechamento consolida os gastos e bloqueia alteracoes estruturais ou financeiras
-na origem das obrigacoes, mas nao exige a quitacao dos acertos pendentes. Assim,
-`FECHADO + PENDENTE` e uma combinacao valida.
+Esse ator pode ler o agregado completo, criar gasto em `ABERTO`, sincronizar
+acertos em `ABERTO` ou `FECHADO` e pagar seu proprio acerto quando representa o
+devedor. Nao pode administrar participantes, editar ou cancelar gastos,
+cancelar ou reabrir acertos nem executar lifecycle.
 
-A situacao financeira e derivada e nao deve ser persistida nesta fase:
+`MANUAL`, `CONVIDADO`, `PENDENTE` e `REMOVIDO` nao concedem capacidade
+autenticada. A autorizacao e fail-closed: planejamento ou identidade ausente,
+ou linha inconsistente `MANUAL`/`CONVIDADO` com `usuarioId`, resulta em ausencia
+de acesso. Recursos inacessiveis retornam `404 PLANEJAMENTO_NOT_FOUND`.
 
-```ts
-type SituacaoFinanceiraPlanejamento =
-  | 'PENDENTE'
-  | 'QUITADO';
-```
+## Criacao do agregado
 
-`QUITADO` significa ausencia de obrigacao financeira residual valida depois de
-considerar gastos validos, divisoes ativas, acertos pagos, acertos cancelados ou
-obsoletos e a reconciliacao atual. A mera inexistencia fisica de linhas
-`PENDENTE` nao e suficiente.
+- nome e tipo do planejamento sao obrigatorios;
+- descricao, data inicial e data final sao opcionais;
+- o periodo deve ser valido quando as duas datas forem informadas;
+- o status inicial e `ABERTO`;
+- o participante proprietario e criado ou reutilizado com `usuarioId` do
+  criador, tipo `VINCULADO` e status `ATIVO`;
+- planejamento, participante e `PLANEJAMENTO_CRIADO` compartilham a mesma
+  transacao;
+- falha da auditoria provoca rollback integral.
 
-Combinacoes validas:
+## Participantes
+
+- adicionar e remover participante e exclusivo do proprietario e permitido
+  somente em planejamento `ABERTO`;
+- nome e obrigatorio; email e `usuarioId` sao opcionais no DTO atual;
+- participante com `usuarioId` e criado como `VINCULADO`; sem `usuarioId`, como
+  `MANUAL`;
+- `CONVIDADO` existe no enum, mas nao existe fluxo de convite por token;
+- o status inicial de uma nova inclusao e `ATIVO`;
+- duplicidades ativas por usuario, email ou nome manual sao rejeitadas;
+- remover altera `ATIVO` para `REMOVIDO`, sem exclusao fisica;
+- o participante que representa o proprietario nao pode ser removido;
+- participantes removidos deixam de ser selecionaveis em novas operacoes, mas
+  permanecem em gastos, divisoes, acertos e resumo historicos.
+
+Nao existem atualmente endpoint dedicado de listagem nem edicao de
+participante. A colecao e lida pelo detalhe do planejamento.
+
+## Gastos e divisoes
+
+- criar gasto e permitido ao proprietario ou participante vinculado ativo,
+  somente em `ABERTO`;
+- editar e cancelar gasto e exclusivo do proprietario, somente em `ABERTO` e
+  para gasto `ATIVO`;
+- descricao, valor positivo em centavos, data, comportamento, pagador e lista
+  de participantes sao obrigatorios na criacao;
+- categoria, observacao e mes de referencia sao opcionais;
+- o pagador e todos os participantes da divisao pertencem ao mesmo
+  planejamento;
+- o pagador nao precisa estar na divisao;
+- valor menor que a quantidade de participantes e rejeitado;
+- a divisao e igualitaria, inteira e deterministica;
+- a soma das linhas de divisao equivale exatamente ao valor do gasto;
+- alteracao textual salva apenas o gasto; alteracao de pagador reconcilia
+  acertos; alteracao de valor ou participantes cancela as divisoes ativas,
+  cria novas divisoes e reconcilia;
+- update semanticamente equivalente e no-op: nao salva, nao reconcilia e nao
+  audita;
+- cancelamento e logico, cancela as divisoes ativas, preserva o historico e
+  reconcilia acertos;
+- nenhuma dessas operacoes cria transacao financeira pessoal.
+
+### Distribuicao de centavos
+
+Para um gasto dividido entre `quantidadeParticipantes`:
 
 ```text
-ABERTO + PENDENTE
-ABERTO + QUITADO
-FECHADO + PENDENTE
-FECHADO + QUITADO
-ARQUIVADO + QUITADO
-CANCELADO + QUITADO
+base = floor(valorCentavos / quantidadeParticipantes)
+resto = valorCentavos % quantidadeParticipantes
 ```
 
-### Matriz de operacoes por estado
+Cada participante recebe inicialmente `base`. Os primeiros `resto`
+participantes recebem mais um centavo. Na criacao do gasto, a sobra acompanha a
+ordem de `participantesIds` recebida. Na atualizacao financeira, o service
+ordena canonicamente os IDs antes de recalcular as divisoes. Apenas inverter a
+ordem do mesmo conjunto de participantes nao modifica a distribuicao
+persistida. A soma das divisoes deve ser exatamente igual ao valor do gasto. A
+operacao rejeita valores menores que a quantidade de participantes, pois
+nenhuma divisao pode receber zero centavos.
+
+`PENDENTE_REVISAO` existe e bloqueia fechamento, mas o fluxo de replicacao que
+criaria gastos nesse estado ainda e roadmap. Gastos `PENDENTE_REVISAO` nao
+integram o resumo financeiro oficial.
+
+## Calculos financeiros
+
+- valores monetarios sao inteiros em centavos;
+- total pago considera gastos `ATIVO` pelo pagador;
+- total devido considera divisoes `ATIVA` de gastos `ATIVO`;
+- acertos `PAGO` e `CONFIRMADO` reduzem o saldo aberto;
+- acertos `PENDENTE` e `CANCELADO` nao sao pagamento efetivo;
+- a situacao e `QUITADO` somente quando todos os saldos abertos sao zero;
+- consultas `GET` de detalhe, gastos, resumo e acertos sao puras e nao
+  materializam reconciliacao.
+
+Para cada participante:
+
+```text
+saldoBrutoCentavos =
+  totalPagoCentavos - totalDevidoCentavos
+
+saldoAbertoCentavos =
+  saldoBrutoCentavos
+  + totalPagoEmAcertosCentavos
+  - totalRecebidoEmAcertosCentavos
+```
+
+A situacao financeira e a obrigacao residual sao derivadas de
+`saldoAbertoCentavos`. A soma dos saldos abertos de todos os participantes deve
+ser zero. Saldo aberto positivo representa credito, saldo aberto negativo
+representa obrigacao e saldo aberto zero representa participante quitado. A
+obrigacao residual do planejamento soma somente o lado credor dos saldos
+abertos, evitando dupla contagem entre devedores e recebedores.
+
+## Acertos
+
+Acertos oficiais sao persistidos e reconciliados depois de mutacoes financeiras
+ou pela sincronizacao explicita. O plano distingue acertos pendentes
+preservados, obsoletos cancelados e novos acertos.
+
+### Acertos minimos
+
+O calculo separa devedores e recebedores. Os dois grupos ficam ordenados pela
+ordem deterministica dos participantes fornecida a funcao, sem reordenacao por
+valor. Cada acerto usa o menor valor entre a divida restante e o credito
+restante; os dois saldos sao reduzidos ate zerar. Valores zero nao sao
+materializados. A mesma entrada ordenada produz os mesmos acertos na mesma
+ordem. Acertos `PAGO` permanecem como fatos historicos, e a reconciliacao altera
+somente as pendencias restantes.
+
+### Sincronizacao
+
+- proprietario e participante vinculado ativo podem sincronizar em `ABERTO` ou
+  `FECHADO`;
+- a operacao usa lock pessimista do planejamento;
+- plano sem novos ou obsoletos e no-op, sem save e sem audit log;
+- concorrencia serializada produz apenas um evento para a escrita vencedora.
+
+### Pagamento
+
+- somente acerto `PENDENTE` pode passar para `PAGO`;
+- o proprietario pode pagar qualquer acerto do planejamento;
+- participante vinculado ativo pode pagar apenas quando seu participante e o
+  `deParticipanteId` do acerto;
+- o endpoint nao recebe body; `dataPagamento` recebe o instante da operacao;
+- o pagamento e permitido em planejamento `ABERTO` ou `FECHADO`;
+- a operacao reconcilia as obrigacoes sem alterar gastos ou divisoes.
+
+### Cancelamento
+
+- e exclusivo do proprietario;
+- aceita origem `PENDENTE` ou `PAGO`;
+- altera o status para `CANCELADO`;
+- quando a origem e `PAGO`, limpa `dataPagamento` e remove o efeito financeiro
+  do pagamento antes da reconciliacao;
+- permanece permitido em `ABERTO` ou `FECHADO`.
+
+### Reabertura
+
+- e exclusiva do proprietario;
+- somente `PAGO` pode voltar para `PENDENTE`;
+- preserva o mesmo ID e exige que a obrigacao continue valida;
+- limpa a data de pagamento, reconcilia e valida o plano resultante;
+- acerto `CANCELADO` nao pode ser reaberto;
+- permanece permitida em `ABERTO` ou `FECHADO`.
+
+## Lifecycle operacional
+
+O enum persistido e:
+
+```text
+ABERTO | FECHADO | ARQUIVADO | CANCELADO
+```
+
+A situacao financeira e derivada:
+
+```text
+PENDENTE | QUITADO
+```
+
+Nao existe `PlanejamentoStatus.QUITADO`.
 
 | Operacao | ABERTO | FECHADO | ARQUIVADO | CANCELADO |
 | --- | --- | --- | --- | --- |
-| Consultar historico | Permitido | Permitido | Permitido | Permitido |
-| Adicionar/remover participante | Permitido | Bloqueado | Bloqueado | Bloqueado |
-| Criar/editar/cancelar gasto | Permitido | Bloqueado | Bloqueado | Bloqueado |
-| Alterar pagador/divisoes | Permitido | Bloqueado | Bloqueado | Bloqueado |
-| Sincronizar acertos | Permitido | Permitido para consistencia operacional | Bloqueado | Bloqueado |
-| Marcar acerto como pago | Permitido | Permitido | Bloqueado | Bloqueado |
-| Cancelar/reabrir acerto | Permitido | Permitido | Bloqueado | Bloqueado |
-| Fechar | Permitido conforme validacoes | Nao aplicavel | Bloqueado | Bloqueado |
-| Arquivar | Bloqueado | Permitido somente quando `QUITADO` | Nao aplicavel | Bloqueado |
-| Cancelar | Permitido somente quando `QUITADO` | Bloqueado | Bloqueado | Nao aplicavel |
+| Consultar | permitido | permitido | permitido | permitido |
+| Adicionar/remover participante | proprietario | bloqueado | bloqueado | bloqueado |
+| Criar gasto | proprietario ou vinculado ativo | bloqueado | bloqueado | bloqueado |
+| Editar/cancelar gasto | proprietario | bloqueado | bloqueado | bloqueado |
+| Sincronizar acertos | proprietario ou vinculado ativo | proprietario ou vinculado ativo | bloqueado | bloqueado |
+| Pagar acerto | proprietario ou devedor vinculado | proprietario ou devedor vinculado | bloqueado | bloqueado |
+| Cancelar/reabrir acerto | proprietario | proprietario | bloqueado | bloqueado |
+| Fechar | proprietario, conforme regras | bloqueado | bloqueado | bloqueado |
+| Arquivar | bloqueado | proprietario, se `QUITADO` | bloqueado | bloqueado |
+| Cancelar planejamento | proprietario, se `QUITADO` | bloqueado | bloqueado | bloqueado |
 
-Em `FECHADO`, sincronizacao e reconciliacao podem manter a consistencia
-operacional dos acertos, desde que nao alterem gastos, divisoes nem a origem das
-obrigacoes.
+Fechar reconcilia acertos, rejeita gastos `PENDENTE_REVISAO` e nao exige
+quitacao. Arquivar exige `FECHADO + QUITADO`. Cancelar exige
+`ABERTO + QUITADO`; gasto `PENDENTE_REVISAO` nao bloqueia isoladamente o
+cancelamento. `ARQUIVADO` e `CANCELADO` sao terminais e somente leitura.
 
-### Pre-condicoes para fechamento
+## Concorrencia e atomicidade
 
-O fechamento deve exigir:
+- operacoes que alteram agregados existentes e dependem de consistencia
+  concorrente usam transacao, lock pessimista e revalidacao quando previstos
+  pelo fluxo;
+- a criacao do planejamento usa transacao, mas nao bloqueia um agregado ainda
+  inexistente;
+- nem toda operacao simples deve ser descrita genericamente como possuidora de
+  lock;
+- revalidacoes de autorizacao e estado ocorrem dentro da transacao;
+- gasto, divisoes, acertos derivados e auditoria fazem parte do mesmo commit;
+- falha da auditoria reverte todas as escritas da operacao;
+- operacoes concorrentes nao devem duplicar participante, acerto ou evento da
+  mesma transicao;
+- releituras posteriores ao commit nao ocorrem quando a transacao falha.
 
-- usuario autenticado proprietario do planejamento;
-- planejamento em `ABERTO`;
-- operacao transacional e serializada no agregado;
-- ausencia de gastos `PENDENTE_REVISAO`;
-- reconciliacao final dos acertos;
-- preservacao dos acertos pendentes.
+## Auditoria transacional
 
-A quitacao total nao e pre-condicao para fechamento.
+Eventos confirmados no service:
 
-### Pre-condicoes para cancelamento
+```text
+PLANEJAMENTO_CRIADO
+PLANEJAMENTO_FECHADO
+PLANEJAMENTO_ARQUIVADO
+PLANEJAMENTO_CANCELADO
+PLANEJAMENTO_PARTICIPANTE_ADICIONADO
+PLANEJAMENTO_PARTICIPANTE_REMOVIDO
+PLANEJAMENTO_GASTO_CRIADO
+PLANEJAMENTO_GASTO_ATUALIZADO
+PLANEJAMENTO_GASTO_CANCELADO
+PLANEJAMENTO_ACERTOS_SINCRONIZADOS
+PLANEJAMENTO_ACERTO_PAGO
+PLANEJAMENTO_ACERTO_CANCELADO
+ACERTO_PLANEJAMENTO_REABERTO
+```
 
-O cancelamento deve exigir proprietario autenticado, planejamento `ABERTO`,
-operacao transacional serializada no agregado, reconciliacao dos acertos e
-situacao financeira oficial `QUITADO`. Diferentemente do fechamento, gasto
-`PENDENTE_REVISAO` nao e impedimento isolado. O estado `CANCELADO` preserva todo
-o historico e bloqueia qualquer mutacao posterior.
+O nome legado `ACERTO_PLANEJAMENTO_REABERTO` e preservado. Todos usam
+`logEntityEventTransactional` com o mesmo `EntityManager` da mutacao e sao a
+ultima escrita logica. Payloads usam IDs, status e dados operacionais minimos;
+nao registram nomes, emails, observacoes, DTOs ou entidades completas.
 
-## Regras de participantes
+## Roadmap / futuro
 
-| ID | Regra |
-| --- | --- |
-| RN-PART-01 | O participante deve pertencer a um planejamento existente do usuario autenticado. |
-| RN-PART-02 | No MVP, participantes sao criados com tipo `MANUAL`. |
-| RN-PART-03 | Participante manual deve ter nome obrigatorio. |
-| RN-PART-04 | Email, telefone e observacao do participante sao opcionais no MVP. |
-| RN-PART-05 | O status inicial do participante deve ser `ATIVO`. |
-| RN-PART-06 | Participante removido deve receber status `REMOVIDO` ou marcador equivalente de remocao logica. |
-| RN-PART-07 | Participante removido nao deve ser selecionavel em novos gastos. |
-| RN-PART-08 | Participante removido deve continuar aparecendo no historico de gastos, divisoes e acertos ja existentes. |
-| RN-PART-09 | Nao deve haver exclusao fisica de participante com vinculo historico. |
-| RN-PART-10 | O MVP nao exige que participante tenha conta no sistema. |
-| RN-PART-11 | Participante removido com pendencia financeira deve continuar aparecendo no resumo e nos acertos ate quitacao ou compensacao. |
-
-## Regras de convidados futuros
-
-| ID | Regra |
-| --- | --- |
-| RN-CONV-01 | Convidados ficam fora do MVP. |
-| RN-CONV-02 | Em fase futura, convite deve usar token seguro, preferencialmente persistido como hash. |
-| RN-CONV-03 | Em fase futura, convite deve ter expiracao, status e escopo de permissao. |
-| RN-CONV-04 | Em fase futura, convidado deve ter acesso limitado ao planejamento ao qual foi convidado. |
-| RN-CONV-05 | Em fase futura, conta completa deve ser opcional para convidados. |
-| RN-CONV-06 | Em fase futura, participante vinculado a usuario real pode registrar seus proprios gastos conforme permissao. |
-
-## Regras de gastos
-
-| ID | Regra |
-| --- | --- |
-| RN-GASTO-01 | Gasto deve pertencer a um planejamento do usuario autenticado. |
-| RN-GASTO-02 | Gasto deve ter descricao obrigatoria. |
-| RN-GASTO-03 | Gasto deve ter valor em centavos maior que zero. |
-| RN-GASTO-04 | Gasto deve informar obrigatoriamente quem pagou. |
-| RN-GASTO-05 | O pagador deve ser participante do mesmo planejamento. |
-| RN-GASTO-06 | O criador pode registrar gasto pago por qualquer participante. |
-| RN-GASTO-07 | Gasto deve ter pelo menos um participante na divisao. |
-| RN-GASTO-08 | Todos os participantes da divisao devem pertencer ao mesmo planejamento. |
-| RN-GASTO-09 | O pagador nao precisa necessariamente estar entre os participantes da divisao, embora isso seja comum. |
-| RN-GASTO-10 | O status inicial de um gasto novo deve ser `ATIVO`, exceto gastos replicados pendentes de revisao. |
-| RN-GASTO-11 | Gastos cancelados nao entram em totais, saldos ou acertos. |
-| RN-GASTO-12 | Gastos cancelados permanecem consultaveis no historico. |
-| RN-GASTO-13 | Alterar valor, pagador ou participantes da divisao exige recalculo das divisoes. |
-| RN-GASTO-14 | Alteracoes financeiras devem invalidar ou recalcular saldos e acertos pendentes. |
-| RN-GASTO-15 | Gasto com status `PENDENTE_REVISAO` deve aparecer como alerta para o criador antes de fechamento ou confirmacao mensal. |
-| RN-GASTO-16 | Gasto com status `PENDENTE_REVISAO` nao deve gerar acertos oficiais ate ser revisado e confirmado. |
-
-## Regras de comprovante opcional
-
-| ID | Regra |
-| --- | --- |
-| RN-COMP-01 | Comprovante e opcional no MVP. |
-| RN-COMP-02 | Upload real de arquivo fica fora do MVP. |
-| RN-COMP-03 | O MVP pode prever campos conceituais para referencia externa, observacao ou URL futura de comprovante. |
-| RN-COMP-04 | Ausencia de comprovante nao impede criacao, edicao, divisao ou acerto de gasto. |
-| RN-COMP-05 | Em fase futura, comprovantes devem respeitar controle de acesso do planejamento. |
-
-## Regras de divisao
-
-| ID | Regra |
-| --- | --- |
-| RN-DIV-01 | A divisao do MVP e sempre igualitaria entre os participantes selecionados. |
-| RN-DIV-02 | Deve existir uma linha de divisao para cada participante selecionado. |
-| RN-DIV-03 | A soma das linhas de divisao deve ser exatamente igual ao valor total do gasto. |
-| RN-DIV-04 | O sistema deve persistir ou retornar o valor devido por participante em centavos. |
-| RN-DIV-05 | Participantes removidos podem permanecer em divisoes historicas existentes. |
-| RN-DIV-06 | Editar participantes da divisao deve substituir o conjunto anterior de divisoes do gasto. |
-| RN-DIV-07 | Divisao por porcentagem ou valor manual fica fora do MVP. |
-| RN-DIV-08 | No MVP, nao deve ser permitida divisao quando `valorCentavos` for menor que a quantidade de participantes selecionados. |
-
-## Regras de centavos e arredondamento
-
-| ID | Regra |
-| --- | --- |
-| RN-CENT-01 | Nenhum calculo monetario deve depender de ponto flutuante. |
-| RN-CENT-02 | O valor base de cada participante deve ser `Math.floor(valorCentavos / quantidadeParticipantes)` ou equivalente inteiro. |
-| RN-CENT-03 | A sobra deve ser `valorCentavos % quantidadeParticipantes`. |
-| RN-CENT-04 | Os centavos restantes devem ser distribuidos um a um para os primeiros participantes da divisao. |
-| RN-CENT-05 | A ordem de distribuicao deve ser deterministica. |
-| RN-CENT-06 | A ordem recomendada e a ordem enviada no payload, persistida na divisao, ou uma ordenacao estavel por data de inclusao e identificador. |
-| RN-CENT-07 | O mesmo gasto com os mesmos participantes e mesma ordem deve gerar sempre a mesma divisao. |
-| RN-CENT-08 | Cada participante selecionado deve receber pelo menos 1 centavo de responsabilidade no MVP. |
-
-Exemplo: gasto de `10000` centavos dividido entre 3 participantes:
-
-- base: `3333`;
-- sobra: `1`;
-- participante 1: `3334`;
-- participante 2: `3333`;
-- participante 3: `3333`;
-- soma final: `10000`.
-
-## Regras de calculo de saldo por participante
-
-| ID | Regra |
-| --- | --- |
-| RN-SALDO-01 | Total pago por participante e a soma dos gastos ativos em que ele aparece como pagador. |
-| RN-SALDO-02 | Total devido por participante e a soma das divisoes de gastos ativos em que ele aparece como participante de divisao. |
-| RN-SALDO-03 | Saldo bruto deve ser `totalPagoCentavos - totalDevidoCentavos`. |
-| RN-SALDO-04 | Saldo positivo indica valor a receber. |
-| RN-SALDO-05 | Saldo negativo indica valor a pagar. |
-| RN-SALDO-06 | Saldo zero indica participante quitado. |
-| RN-SALDO-07 | A soma dos saldos finais de todos os participantes deve ser zero. |
-| RN-SALDO-08 | Gastos cancelados devem ser ignorados em total pago, total devido e saldo. |
-| RN-SALDO-09 | O resumo financeiro oficial deve considerar gastos ativos, divisoes ativas e acertos pagos. |
-| RN-SALDO-10 | Acertos pendentes devem ser calculados sobre a pendencia restante apos considerar acertos pagos. |
-| RN-SALDO-11 | Gastos `PENDENTE_REVISAO` podem aparecer em totais provisorios separados, mas nao entram em acertos oficiais. |
-| RN-SALDO-12 | A obrigacao residual do resumo e a soma apenas dos `saldoAbertoCentavos` positivos; somar tambem o lado devedor duplicaria a mesma obrigacao. |
-| RN-SALDO-13 | O resumo e `QUITADO` quando todos os saldos abertos sao zero e `PENDENTE` quando existe qualquer saldo aberto diferente de zero. |
-| RN-SALDO-14 | Acertos `PAGO` e `CONFIRMADO` reduzem o saldo aberto; acertos `PENDENTE` e `CANCELADO` nao sao pagamentos efetivos. |
-
-## Regras de acertos minimos
-
-| ID | Regra |
-| --- | --- |
-| RN-ACERTO-01 | Acertos devem ser calculados a partir dos saldos finais dos participantes. |
-| RN-ACERTO-02 | Participantes com saldo negativo sao devedores. |
-| RN-ACERTO-03 | Participantes com saldo positivo sao recebedores. |
-| RN-ACERTO-04 | O algoritmo deve reduzir a quantidade de pagamentos necessarios. |
-| RN-ACERTO-05 | O algoritmo deve parear devedores e recebedores ate zerar saldos pendentes. |
-| RN-ACERTO-06 | O valor de cada acerto deve ser o menor valor absoluto entre a divida do devedor e o credito do recebedor. |
-| RN-ACERTO-07 | A soma dos acertos de um devedor deve ser igual ao valor que ele deve pagar, descontados acertos ja pagos quando aplicavel. |
-| RN-ACERTO-08 | A soma dos acertos de um recebedor deve ser igual ao valor que ele deve receber, descontados acertos ja pagos quando aplicavel. |
-| RN-ACERTO-09 | A ordem de pareamento deve ser deterministica para evitar resultados instaveis entre chamadas. |
-| RN-ACERTO-10 | Acertos com valor zero nao devem ser criados ou exibidos. |
-| RN-ACERTO-11 | Acertos oficiais devem ser materializados e persistidos apos cada alteracao financeira relevante. |
-| RN-ACERTO-12 | Acertos `PENDENTE` podem ser recalculados e substituidos. |
-| RN-ACERTO-13 | Acertos `PAGO` nao devem ser apagados automaticamente. |
-| RN-ACERTO-14 | Consultas `GET` de resumo ou acertos nao devem alterar o banco de dados. |
-
-## Regras para marcar acerto como pago
-
-| ID | Regra |
-| --- | --- |
-| RN-PAGAR-01 | Apenas o criador autenticado pode marcar acerto como pago no MVP. |
-| RN-PAGAR-02 | O acerto deve pertencer a planejamento do usuario autenticado. |
-| RN-PAGAR-03 | Somente acerto `PENDENTE` pode ser marcado como `PAGO`. |
-| RN-PAGAR-04 | Marcar como pago deve registrar data/hora da acao. |
-| RN-PAGAR-05 | Marcar como pago deve registrar auditoria. |
-| RN-PAGAR-06 | Marcar como pago nao deve criar transacao financeira pessoal automaticamente. |
-| RN-PAGAR-07 | Confirmacao pelo recebedor fica fora do MVP. |
-| RN-PAGAR-08 | Acerto existente pode ser marcado como pago em planejamento `ABERTO` ou `FECHADO`. |
-| RN-PAGAR-09 | Como regra de dominio, a data efetiva do pagamento deve ser registrada quando informada. |
-| RN-PAGAR-10 | Pagamento posterior ao fechamento nao reabre o planejamento, nao altera seu periodo, nao cria gasto e nao modifica divisoes. |
-| RN-PAGAR-11 | No contrato atual, o endpoint nao recebe data de pagamento e registra em `dataPagamento` o instante em que o acerto e marcado como `PAGO`. |
-| RN-PAGAR-12 | Aceitar `dataPagamento` e `observacao` em DTO opcional e uma evolucao futura compativel, fora desta branch e sem alteracao do Swagger atual. |
-
-## Regras para cancelar ou reabrir acerto pago
-
-| ID | Regra |
-| --- | --- |
-| RN-REABRIR-01 | Apenas o criador autenticado pode cancelar ou reabrir acerto pago no MVP. |
-| RN-REABRIR-02 | O acerto deve pertencer a planejamento do usuario autenticado. |
-| RN-REABRIR-03 | Somente acerto `PAGO` pode ser reaberto para `PENDENTE` no fluxo principal do MVP. |
-| RN-REABRIR-04 | Cancelamento de acerto deve preservar historico e auditoria. |
-| RN-REABRIR-05 | Reabertura de acerto deve preservar historico e auditoria. |
-| RN-REABRIR-06 | A operacao deve registrar quem executou a acao e quando. |
-| RN-REABRIR-07 | Se gastos forem editados apos um acerto pago, a implementacao deve preservar o acerto historico e recalcular pendencias restantes de forma explicita. |
-| RN-REABRIR-08 | Cancelar ou reabrir acerto pago deve remover o efeito financeiro daquele pagamento. |
-| RN-REABRIR-09 | Apos cancelar ou reabrir acerto pago, o sistema deve recalcular os acertos pendentes. |
-| RN-REABRIR-10 | Cancelar uma marcacao incorreta ou reabrir um acerto permanece permitido em planejamento `FECHADO`, quando a transicao do acerto for valida. |
-| RN-REABRIR-11 | Acerto `CANCELADO` nao pode ser reaberto; no contrato atual a unica reabertura valida e `PAGO -> PENDENTE`. |
-| RN-REABRIR-12 | A reabertura deve preservar o mesmo identificador e rejeitar a operacao quando devedor, recebedor ou valor nao corresponderem mais a uma obrigacao atual. |
-| RN-REABRIR-13 | A reabertura e sua reconciliacao devem compartilhar a mesma transacao e a falha da auditoria deve causar rollback integral. |
-
-## Regras de edicao e cancelamento de gastos
-
-| ID | Regra |
-| --- | --- |
-| RN-EDIT-01 | Apenas o criador autenticado pode editar ou cancelar gastos no MVP. |
-| RN-EDIT-02 | Edicao de valor deve recalcular divisoes e saldos. |
-| RN-EDIT-03 | Edicao de pagador deve recalcular total pago e saldos. |
-| RN-EDIT-04 | Edicao de participantes da divisao deve recalcular total devido e saldos. |
-| RN-EDIT-05 | Edicoes devem registrar auditoria com os campos alterados quando possivel. |
-| RN-EDIT-06 | Cancelar gasto deve alterar status para `CANCELADO` ou marcador equivalente. |
-| RN-EDIT-07 | Cancelar gasto nao deve apagar suas divisoes historicas. |
-| RN-EDIT-08 | Gasto cancelado deve sair de resumo, saldos e acertos. |
-| RN-EDIT-09 | Gasto cancelado deve continuar visivel no historico do planejamento. |
-| RN-EDIT-10 | Acertos pagos devem permanecer como historico financeiro apos edicao ou cancelamento de gasto. |
-| RN-EDIT-11 | Se a edicao ou cancelamento gerar nova pendencia, novos acertos `PENDENTE` devem ser criados para compensacao. |
-
-## Regras de replicacao mensal
-
-| ID | Regra |
-| --- | --- |
-| RN-REPL-01 | Replicacao mensal deve criar um novo planejamento a partir de um planejamento de origem. |
-| RN-REPL-02 | O novo planejamento deve pertencer ao mesmo usuario criador. |
-| RN-REPL-03 | Participantes ativos devem ser replicados para o novo planejamento. |
-| RN-REPL-04 | Participantes removidos nao devem ser replicados como ativos, salvo decisao explicita futura. |
-| RN-REPL-05 | Gastos replicaveis devem ser copiados com novo identificador. |
-| RN-REPL-06 | O gasto replicado deve guardar referencia ao gasto de origem quando o modelo permitir. |
-| RN-REPL-07 | O novo planejamento deve registrar o mes de referencia informado. |
-| RN-REPL-08 | Gasto fixo pode nascer como `ATIVO` quando nao exigir revisao. |
-| RN-REPL-09 | Gasto variavel deve nascer como `PENDENTE_REVISAO`. |
-| RN-REPL-10 | Gasto eventual nao deve ser replicado por padrao, salvo escolha explicita do criador. |
-| RN-REPL-11 | Replicacao nao deve copiar acertos pagos ou pendentes como acertos do novo planejamento. |
-| RN-REPL-12 | Replicacao deve registrar auditoria no planejamento de origem e no planejamento criado, quando aplicavel. |
-
-## Regras de gastos fixos, variaveis e eventuais
-
-| ID | Regra |
-| --- | --- |
-| RN-TIPO-GASTO-01 | `FIXO` representa gasto recorrente com valor normalmente estavel, como aluguel ou internet. |
-| RN-TIPO-GASTO-02 | `VARIAVEL` representa gasto recorrente com valor sujeito a mudanca mensal, como luz, agua ou mercado. |
-| RN-TIPO-GASTO-03 | `EVENTUAL` representa gasto pontual, como decoracao de festa ou passeio de viagem. |
-| RN-TIPO-GASTO-04 | Gastos `VARIAVEL` replicados devem exigir revisao mensal. |
-| RN-TIPO-GASTO-05 | Gastos `EVENTUAL` devem ficar fora da replicacao automatica padrao. |
-| RN-TIPO-GASTO-06 | O comportamento financeiro do gasto deve ser independente do tipo do planejamento. |
-
-## Regras de revisao mensal
-
-| ID | Regra |
-| --- | --- |
-| RN-REV-01 | Gasto com status `PENDENTE_REVISAO` deve aparecer em listas e detalhes com indicacao de revisao. |
-| RN-REV-02 | Gasto variavel replicado deve nascer como `PENDENTE_REVISAO`. |
-| RN-REV-03 | O sistema deve informar o mes de referencia do valor replicado. |
-| RN-REV-04 | O sistema deve informar quando o valor do gasto foi alterado pela ultima vez, quando esse dado existir. |
-| RN-REV-05 | Ao revisar e confirmar o valor mensal, o gasto pode passar para `ATIVO`. |
-| RN-REV-06 | Enquanto estiver `PENDENTE_REVISAO`, o gasto nao deve entrar em acertos oficiais. |
-| RN-REV-07 | Gastos `PENDENTE_REVISAO` podem aparecer em totais provisorios separados. |
-| RN-REV-08 | A existencia de gasto `PENDENTE_REVISAO` deve bloquear fechamento do planejamento. |
-
-## Regras de auditoria
-
-| ID | Regra |
-| --- | --- |
-| RN-AUD-01 | Criacao, edicao, fechamento, arquivamento e cancelamento de planejamento devem ser auditados. |
-| RN-AUD-02 | Criacao, edicao e remocao de participante devem ser auditadas. |
-| RN-AUD-03 | Criacao, edicao e cancelamento de gasto devem ser auditadas. |
-| RN-AUD-04 | Marcacao, cancelamento e reabertura de acerto devem ser auditadas. |
-| RN-AUD-05 | Replicacao mensal deve ser auditada. |
-| RN-AUD-06 | Auditoria deve registrar usuario autenticado, entidade afetada, acao, data/hora e dados relevantes sanitizados. |
-| RN-AUD-07 | Falha ao registrar auditoria nao deve expor dados sensiveis. |
-
-## Regras de isolamento de dados
-
-| ID | Regra |
-| --- | --- |
-| RN-ISO-01 | Todas as rotas do modulo devem exigir autenticacao no MVP. |
-| RN-ISO-02 | Usuario autenticado so pode consultar planejamentos criados por ele. |
-| RN-ISO-03 | Usuario autenticado so pode alterar planejamentos criados por ele. |
-| RN-ISO-04 | Participantes, gastos, divisoes e acertos devem ser validados contra o planejamento do usuario autenticado. |
-| RN-ISO-05 | Identificadores validos de outro usuario nao devem revelar existencia do recurso. |
-| RN-ISO-06 | Testes E2E devem cobrir tentativa de acesso cruzado entre usuarios. |
-
-## Regra de nao integracao automatica com transacoes pessoais no MVP
-
-| ID | Regra |
-| --- | --- |
-| RN-TRANS-01 | Planejamentos compartilhados nao devem criar transacoes pessoais automaticamente no MVP. |
-| RN-TRANS-02 | Gasto registrado no planejamento nao deve alterar saldo de conta pessoal. |
-| RN-TRANS-03 | Acerto marcado como pago nao deve criar receita, despesa ou transferencia automaticamente. |
-| RN-TRANS-04 | A ausencia de integracao automatica deve evitar duplicidade futura com Open Finance. |
-| RN-TRANS-05 | Integracao manual ou assistida com transacoes pessoais deve ser tratada como fase futura. |
+- edicao de dados basicos do planejamento;
+- listagem dedicada e edicao de participante;
+- convites por token;
+- replicacao mensal;
+- upload real de comprovante;
+- confirmacao pelo recebedor;
+- divisao percentual ou manual avancada;
+- integracao automatica com transacoes pessoais.

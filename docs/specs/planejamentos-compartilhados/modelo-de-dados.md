@@ -1,348 +1,217 @@
 # Planejamentos Compartilhados - Modelo de dados
 
-> Nota de status:
-> Este documento contem especificacoes conceituais e itens de roadmap. O
-> contrato atual implementado deve ser conferido no Swagger oficial
-> (`backendnest/swagger.yaml`) e na validacao documental disponivel em
-> `docs/validacao/VALIDACAO_ENDPOINTS_APIS.md`.
+## Status e fontes
 
-## Objetivo do modelo
+O modelo persistido atual e definido pelas entities em
+`backendnest/src/planejamentos/entities`, pelas migrations
+`backendnest/migrations/0007_create_planejamentos_compartilhados.sql` e
+`0005_add_audit_log.sql` e pelos enums do modulo. Campos conceituais e entidades
+futuras aparecem em secoes separadas.
 
-Documentar as entidades conceituais iniciais para orientar a implementacao do
-modulo de Planejamentos Compartilhados no backend NestJS.
+## Modelo persistido atual
 
-Este documento nao define migrations nem entidades TypeORM nesta fase. Os campos
-abaixo sao proposta de modelagem para validacao tecnica e futura implementacao.
+### `planejamento`
 
-## Entidades propostas
-
-Entidades minimas para o MVP:
-
-- `Planejamento`
-- `ParticipantePlanejamento`
-- `GastoPlanejamento`
-- `DivisaoGasto`
-- `AcertoPlanejamento`
-
-Entidades ou estruturas futuras documentadas:
-
-- `ConvitePlanejamento`
-- `HistoricoPlanejamento`
-- `ComprovantePlanejamento`
-
-## Planejamento
-
-Representa o agrupador financeiro compartilhado.
-
-| Campo | Tipo conceitual | Obrigatorio | Observacoes |
+| Coluna | Tipo | Nulo | Observacao |
 | --- | --- | --- | --- |
-| `id` | UUID | Sim | Identificador do planejamento. |
-| `usuarioId` | UUID | Sim | Usuario criador e dono do planejamento no MVP. |
-| `nome` | string | Sim | Nome exibido ao usuario. |
-| `descricao` | string | Nao | Descricao livre. |
-| `tipo` | enum `TipoPlanejamento` | Sim | `CASA`, `FESTA`, `VIAGEM`, `EVENTO`, `GRUPO`, `OUTRO`. |
-| `status` | enum `StatusPlanejamento` | Sim | Inicialmente `ABERTO`. |
-| `mesReferencia` | string `YYYY-MM` | Nao | Recomendado para planejamentos mensais. |
-| `planejamentoOrigemId` | UUID | Nao | Prepara replicacao mensal. |
-| `criadoEm` | datetime | Sim | Data de criacao. |
-| `atualizadoEm` | datetime | Sim | Data da ultima atualizacao. |
-| `fechadoEm` | datetime | Nao | Preparo para fechamento. |
-| `arquivadoEm` | datetime | Nao | Quando status virar `ARQUIVADO`. |
-| `canceladoEm` | datetime | Nao | Quando status virar `CANCELADO`. |
+| `id` | UUID | nao | Chave primaria. |
+| `usuario_criador_id` | UUID | nao | FK para `usuario`; identifica o proprietario. |
+| `nome` | varchar(150) | nao | Nome do planejamento. |
+| `descricao` | varchar(500) | sim | Descricao opcional. |
+| `tipo` | varchar(20) | nao | `CASA`, `FESTA`, `VIAGEM`, `EVENTO`, `GRUPO` ou `OUTRO`. |
+| `status` | varchar(20) | nao | `ABERTO`, `FECHADO`, `ARQUIVADO` ou `CANCELADO`. |
+| `data_inicio` | date | sim | Inicio opcional. |
+| `data_fim` | date | sim | Fim opcional. |
+| `created_at` | timestamp | nao | Criacao. |
+| `updated_at` | timestamp | nao | Ultima atualizacao. |
+| `deleted_at` | timestamp | sim | Suporte a exclusao logica; lifecycle nao usa exclusao fisica. |
 
-Relacionamentos:
+Nao existem `mesReferencia`, `planejamentoOrigemId`, ordem ou campos de
+replicacao no planejamento atual.
 
-- pertence a um usuario criador;
-- possui muitos participantes;
-- possui muitos gastos;
-- possui muitos acertos;
-- pode ter um planejamento de origem em replicacoes mensais;
-- pode originar outros planejamentos replicados.
+### `participante_planejamento`
 
-## ParticipantePlanejamento
-
-Representa uma pessoa que participa do planejamento. No MVP, nao precisa ser
-usuario real do sistema.
-
-| Campo | Tipo conceitual | Obrigatorio | Observacoes |
+| Coluna | Tipo | Nulo | Observacao |
 | --- | --- | --- | --- |
-| `id` | UUID | Sim | Identificador do participante. |
-| `planejamentoId` | UUID | Sim | Planejamento ao qual pertence. |
-| `usuarioVinculadoId` | UUID | Nao | Futuro vinculo com usuario real. |
-| `nome` | string | Sim | Nome informado manualmente. |
-| `email` | string | Nao | Campo opcional para futuro convite. |
-| `telefone` | string | Nao | Campo opcional. |
-| `tipo` | enum `TipoParticipante` | Sim | No MVP, `MANUAL`. |
-| `status` | enum `StatusParticipante` | Sim | Inicialmente `ATIVO`. |
-| `ordem` | integer | Sim | Ordem estavel para listagem e desempates de centavos. |
-| `criadoEm` | datetime | Sim | Data de criacao. |
-| `atualizadoEm` | datetime | Sim | Data da ultima atualizacao. |
-| `removidoEm` | datetime | Nao | Remocao logica. |
+| `id` | UUID | nao | Chave primaria. |
+| `planejamento_id` | UUID | nao | FK para planejamento com `ON DELETE CASCADE`. |
+| `usuario_id` | UUID | sim | FK para usuario com `ON DELETE SET NULL`. |
+| `nome` | varchar(150) | nao | Nome apresentado no agregado. |
+| `email` | varchar(150) | sim | Email opcional; nao concede acesso. |
+| `tipo` | varchar(20) | nao | `MANUAL`, `CONVIDADO` ou `VINCULADO`. |
+| `status` | varchar(20) | nao | `ATIVO`, `PENDENTE` ou `REMOVIDO`. |
+| `created_at` | timestamp | nao | Criacao. |
+| `updated_at` | timestamp | nao | Ultima atualizacao. |
 
-Relacionamentos:
+O acesso compartilhado exige `usuario_id` correspondente,
+`tipo = VINCULADO` e `status = ATIVO`. Email, linha `MANUAL` ou `CONVIDADO`,
+status `PENDENTE` ou `REMOVIDO` nao concedem acesso.
 
-- pertence a um planejamento;
-- pode ser pagador de muitos gastos;
-- pode participar de muitas divisoes;
-- pode ser devedor em muitos acertos;
-- pode ser recebedor em muitos acertos;
-- futuramente pode estar vinculado a um usuario real.
+Nao existem telefone, observacao, ordem, token ou timestamps de convite nessa
+tabela.
 
-## GastoPlanejamento
+### `gasto_planejamento`
 
-Representa uma despesa registrada dentro do planejamento.
-
-| Campo | Tipo conceitual | Obrigatorio | Observacoes |
+| Coluna | Tipo | Nulo | Observacao |
 | --- | --- | --- | --- |
-| `id` | UUID | Sim | Identificador do gasto. |
-| `planejamentoId` | UUID | Sim | Planejamento ao qual pertence. |
-| `pagoPorParticipanteId` | UUID | Sim | Participante que pagou o gasto. |
-| `gastoOrigemId` | UUID | Nao | Gasto original em caso de replicacao mensal. |
-| `descricao` | string | Sim | Descricao do gasto. |
-| `valorCentavos` | integer | Sim | Valor total em centavos, maior que zero. |
-| `dataGasto` | date | Sim | Data do gasto. |
-| `comportamentoFinanceiro` | enum `TipoComportamentoGasto` | Sim | `FIXO`, `VARIAVEL` ou `EVENTUAL`. |
-| `status` | enum `StatusGasto` | Sim | `ATIVO`, `CANCELADO` ou `PENDENTE_REVISAO`. |
-| `mesReferencia` | string `YYYY-MM` | Nao | Mes ao qual o gasto se refere. |
-| `valorReplicadoDeMes` | string `YYYY-MM` | Nao | Mes de origem do valor copiado. |
-| `valorAlteradoEm` | datetime | Nao | Ultima alteracao de valor. |
-| `exigeRevisaoMensal` | boolean | Sim | Verdadeiro para variaveis replicados. |
-| `observacaoComprovante` | string | Nao | Referencia textual opcional no MVP. |
-| `comprovanteUrl` | string | Nao | Reservado para fase futura ou URL externa controlada. |
-| `criadoPorUsuarioId` | UUID | Sim | No MVP, usuario criador. |
-| `criadoEm` | datetime | Sim | Data de criacao. |
-| `atualizadoEm` | datetime | Sim | Data da ultima atualizacao. |
-| `canceladoEm` | datetime | Nao | Remocao logica do gasto. |
+| `id` | UUID | nao | Chave primaria. |
+| `planejamento_id` | UUID | nao | FK para planejamento com `ON DELETE CASCADE`. |
+| `descricao` | varchar(255) | nao | Descricao do gasto. |
+| `valor_centavos` | integer | nao | Valor positivo em centavos. |
+| `data_gasto` | date | nao | Data civil do gasto. |
+| `categoria` | varchar(100) | sim | Categoria textual opcional. |
+| `comportamento` | varchar(20) | nao | `FIXO`, `VARIAVEL` ou `EVENTUAL`. |
+| `status` | varchar(20) | nao | `ATIVO`, `CANCELADO` ou `PENDENTE_REVISAO`. |
+| `pago_por_participante_id` | UUID | nao | FK do participante pagador. |
+| `observacao` | varchar(500) | sim | Observacao opcional. |
+| `comprovante_url` | varchar(500) | sim | Campo persistido, sem fluxo de upload atual. |
+| `comprovante_nome` | varchar(255) | sim | Campo persistido, sem fluxo de upload atual. |
+| `mes_referencia` | varchar(7) | sim | `YYYY-MM`; aceito nos DTOs de gasto. |
+| `ultima_alteracao_valor_em` | timestamp | sim | Atualizado quando o valor muda. |
+| `requer_revisao_mensal` | boolean | nao | Default `false`; nao implementa replicacao por si so. |
+| `created_at` | timestamp | nao | Criacao. |
+| `updated_at` | timestamp | nao | Ultima atualizacao. |
+| `deleted_at` | timestamp | sim | Campo de exclusao logica; cancelamento usa status. |
 
-Relacionamentos:
+`comprovante_url` e `comprovante_nome` nao sao aceitos pelos DTOs atuais de
+criacao/edicao e nao significam upload implementado. Nao existe
+`gastoOrigemId` nem `valorReplicadoDeMes`.
 
-- pertence a um planejamento;
-- possui um participante pagador;
-- possui muitas divisoes;
-- pode ter um gasto de origem em replicacao mensal;
-- pode originar gastos replicados futuros.
+### `divisao_gasto`
 
-## DivisaoGasto
-
-Representa a parte de um gasto atribuida a um participante.
-
-| Campo | Tipo conceitual | Obrigatorio | Observacoes |
+| Coluna | Tipo | Nulo | Observacao |
 | --- | --- | --- | --- |
-| `id` | UUID | Sim | Identificador da divisao. |
-| `gastoId` | UUID | Sim | Gasto dividido. |
-| `participanteId` | UUID | Sim | Participante que deve essa parte. |
-| `valorCentavos` | integer | Sim | Valor devido pelo participante. |
-| `ordemDistribuicaoCentavos` | integer | Sim | Ordem usada para distribuir sobra de centavos. |
-| `criadoEm` | datetime | Sim | Data de criacao. |
-| `atualizadoEm` | datetime | Sim | Data da ultima atualizacao. |
+| `id` | UUID | nao | Chave primaria. |
+| `gasto_id` | UUID | nao | FK para gasto com `ON DELETE CASCADE`. |
+| `participante_id` | UUID | nao | FK para participante. |
+| `valor_devido_centavos` | integer | nao | Parcela positiva em centavos. |
+| `status` | varchar(20) | nao | `ATIVA` ou `CANCELADA`. |
+| `created_at` | timestamp | nao | Criacao. |
+| `updated_at` | timestamp | nao | Ultima atualizacao. |
 
-Relacionamentos:
+Nao existe coluna de ordem, percentual ou valor manual informado. A ordem
+deterministica e resolvida pela regra de dominio ao criar as divisoes.
 
-- pertence a um gasto;
-- referencia um participante do mesmo planejamento do gasto.
+### `acerto_planejamento`
 
-Observacoes:
-
-- A soma de `valorCentavos` de todas as divisoes de um gasto ativo deve ser
-  exatamente igual a `GastoPlanejamento.valorCentavos`.
-- A ordem de distribuicao deve ser persistida ou reconstruivel de forma
-  deterministica.
-- Ao editar participantes da divisao, a implementacao pode recriar as linhas de
-  divisao do gasto, preservando historico por auditoria.
-
-## AcertoPlanejamento
-
-Representa um pagamento sugerido ou registrado entre participantes para quitar
-saldos do planejamento.
-
-| Campo | Tipo conceitual | Obrigatorio | Observacoes |
+| Coluna | Tipo | Nulo | Observacao |
 | --- | --- | --- | --- |
-| `id` | UUID | Sim | Identificador do acerto. |
-| `planejamentoId` | UUID | Sim | Planejamento ao qual pertence. |
-| `devedorParticipanteId` | UUID | Sim | Participante que deve pagar. |
-| `recebedorParticipanteId` | UUID | Sim | Participante que deve receber. |
-| `valorCentavos` | integer | Sim | Valor do acerto em centavos. |
-| `status` | enum `StatusAcerto` | Sim | No MVP: `PENDENTE` e `PAGO`; futuros: `CONFIRMADO`, `CANCELADO`. |
-| `versaoCalculo` | integer | Nao | Ajuda a rastrear recalculos. |
-| `calculadoEm` | datetime | Sim | Momento em que o acerto foi calculado e materializado. |
-| `pagoEm` | datetime | Nao | Momento em que foi marcado como pago. |
-| `reabertoEm` | datetime | Nao | Momento da ultima reabertura. |
-| `canceladoEm` | datetime | Nao | Momento do cancelamento. |
-| `criadoEm` | datetime | Sim | Data de criacao. |
-| `atualizadoEm` | datetime | Sim | Data da ultima atualizacao. |
+| `id` | UUID | nao | Chave primaria. |
+| `planejamento_id` | UUID | nao | FK para planejamento com `ON DELETE CASCADE`. |
+| `de_participante_id` | UUID | nao | FK do devedor. |
+| `para_participante_id` | UUID | nao | FK do recebedor. |
+| `valor_centavos` | integer | nao | Valor positivo. |
+| `status` | varchar(20) | nao | `PENDENTE`, `PAGO`, `CONFIRMADO` ou `CANCELADO`. |
+| `data_pagamento` | timestamp | sim | Instante do pagamento; limpo em cancelamento/reabertura. |
+| `observacao` | varchar(500) | sim | Campo persistido, nao aceito pelo endpoint atual de pagamento. |
+| `created_at` | timestamp | nao | Criacao. |
+| `updated_at` | timestamp | nao | Ultima atualizacao. |
 
-Relacionamentos:
+`CONFIRMADO` existe no schema e participa dos calculos como pagamento efetivo,
+mas nao existe endpoint atual de confirmacao pelo recebedor.
 
-- pertence a um planejamento;
-- referencia um participante devedor;
-- referencia um participante recebedor;
-- pode ter eventos de historico ou auditoria associados.
+### `audit_log`
 
-Observacoes:
+Audit logs nao pertencem exclusivamente ao modulo, mas registram seus eventos.
+Campos persistidos:
 
-- Acertos oficiais devem ser materializados e persistidos apos cada alteracao
-  financeira relevante.
-- Acertos `PENDENTE` podem ser recalculados e substituidos.
-- Acertos `PAGO` nao devem ser apagados automaticamente.
-- Consultas `GET` de resumo e acertos nao devem alterar o banco de dados.
-- Ao editar gastos depois de acertos pagos, a implementacao deve preservar o
-  que ja foi pago e recalcular pendencias restantes de forma auditavel.
-
-## ConvitePlanejamento
-
-Entidade futura para acesso por convidados. Fora do MVP.
-
-| Campo | Tipo conceitual | Observacoes |
+| Coluna | Tipo | Nulo |
 | --- | --- | --- |
-| `id` | UUID | Identificador do convite. |
-| `planejamentoId` | UUID | Planejamento convidado. |
-| `participanteId` | UUID | Participante associado ao convite. |
-| `tokenHash` | string | Hash do token, nunca token em claro. |
-| `email` | string | Email de destino, se houver. |
-| `status` | enum | `PENDENTE`, `ACEITO`, `EXPIRADO`, `REVOGADO`. |
-| `expiraEm` | datetime | Expiracao do convite. |
-| `aceitoEm` | datetime | Data de aceite. |
-| `criadoEm` | datetime | Data de criacao. |
+| `id` | uuid | nao |
+| `created_at` | timestamp without time zone | nao |
+| `level` | varchar(20) | nao |
+| `event` | varchar(60) | nao |
+| `module` | varchar(40) | nao |
+| `action` | varchar(40) | nao |
+| `success` | boolean | nao |
+| `message` | varchar(255) | sim |
+| `user_id` | uuid | sim |
+| `entity` | varchar(40) | sim |
+| `entity_id` | uuid | sim |
+| `method` | varchar(10) | sim |
+| `route` | varchar(255) | sim |
+| `status_code` | integer | sim |
+| `ip` | varchar(45) | sim |
+| `user_agent` | varchar(255) | sim |
+| `details` | jsonb | sim |
 
-## HistoricoPlanejamento
+Nos eventos transacionais de Planejamentos, contexto HTTP como `statusCode` e
+details operacionais sao mapeados para essas colunas. O timestamp e
+`created_at`. Os payloads nao devem conter nomes, emails, observacoes, DTOs ou
+entidades completas.
 
-Entidade futura ou alternativa complementar ao modulo de audit logs.
-
-| Campo | Tipo conceitual | Observacoes |
-| --- | --- | --- |
-| `id` | UUID | Identificador do evento. |
-| `planejamentoId` | UUID | Planejamento relacionado. |
-| `usuarioId` | UUID | Usuario que executou a acao, quando houver. |
-| `participanteId` | UUID | Participante relacionado, quando houver. |
-| `tipoEvento` | string ou enum | Ex.: gasto criado, gasto cancelado, acerto pago. |
-| `entidadeTipo` | string | Tipo da entidade afetada. |
-| `entidadeId` | UUID | Identificador da entidade afetada. |
-| `detalhes` | JSON | Dados sanitizados. |
-| `criadoEm` | datetime | Data do evento. |
-
-Observacao: se o `AuditLog` atual atender a rastreabilidade exigida, esta
-entidade pode ser adiada.
-
-## ComprovantePlanejamento
-
-Entidade futura para upload real de comprovantes. Fora do MVP.
-
-| Campo | Tipo conceitual | Observacoes |
-| --- | --- | --- |
-| `id` | UUID | Identificador do comprovante. |
-| `gastoId` | UUID | Gasto associado. |
-| `storageKey` | string | Chave do arquivo no provedor de storage. |
-| `nomeOriginal` | string | Nome original do arquivo. |
-| `mimeType` | string | Tipo do arquivo. |
-| `tamanhoBytes` | integer | Tamanho do arquivo. |
-| `enviadoPorUsuarioId` | UUID | Usuario que enviou. |
-| `criadoEm` | datetime | Data de envio. |
-
-## Enums
-
-### TipoPlanejamento
-
-- `CASA`
-- `FESTA`
-- `VIAGEM`
-- `EVENTO`
-- `GRUPO`
-- `OUTRO`
-
-### StatusPlanejamento
-
-- `ABERTO`
-- `FECHADO`
-- `ARQUIVADO`
-- `CANCELADO`
-
-### TipoParticipante
-
-- `MANUAL`
-- `CONVIDADO`
-- `VINCULADO`
-
-No MVP, apenas `MANUAL` deve ser usado em fluxo real.
-
-### StatusParticipante
-
-- `ATIVO`
-- `PENDENTE`
-- `REMOVIDO`
-
-No MVP, `PENDENTE` fica reservado para convites futuros.
-
-### TipoComportamentoGasto
-
-- `FIXO`
-- `VARIAVEL`
-- `EVENTUAL`
-
-### StatusGasto
-
-- `ATIVO`
-- `CANCELADO`
-- `PENDENTE_REVISAO`
-
-### StatusAcerto
-
-- `PENDENTE`
-- `PAGO`
-- `CONFIRMADO`
-- `CANCELADO`
-
-No MVP, o fluxo principal e `PENDENTE -> PAGO`. `CONFIRMADO` fica reservado para
-confirmacao futura pelo recebedor.
-
-## Relacionamentos principais
+## Relacionamentos
 
 ```text
-Usuario 1 --- N Planejamento
+Usuario 1 --- N Planejamento (proprietario)
 Planejamento 1 --- N ParticipantePlanejamento
+Usuario 0..1 --- N ParticipantePlanejamento
 Planejamento 1 --- N GastoPlanejamento
+ParticipantePlanejamento 1 --- N GastoPlanejamento (pagador)
 GastoPlanejamento 1 --- N DivisaoGasto
-ParticipantePlanejamento 1 --- N GastoPlanejamento como pagador
 ParticipantePlanejamento 1 --- N DivisaoGasto
 Planejamento 1 --- N AcertoPlanejamento
-ParticipantePlanejamento 1 --- N AcertoPlanejamento como devedor
-ParticipantePlanejamento 1 --- N AcertoPlanejamento como recebedor
-Planejamento 1 --- N Planejamento como origem de replicacao mensal
-GastoPlanejamento 1 --- N GastoPlanejamento como origem de replicacao mensal
+ParticipantePlanejamento 1 --- N AcertoPlanejamento (devedor/recebedor)
 ```
 
-## Observacoes para MER/DER futuro
+## Constraints e indices atuais
 
-- Todas as tabelas do modulo devem permitir rastrear `planejamentoId` direta ou
-  indiretamente para facilitar isolamento por usuario.
-- Chaves estrangeiras devem impedir que gastos, divisoes e acertos misturem
-  participantes de planejamentos diferentes.
-- Indices recomendados:
-  - `planejamento.usuarioId`;
-  - `planejamento.status`;
-  - `planejamento.mesReferencia`;
-  - `participante.planejamentoId`;
-  - `participante.status`;
-  - `gasto.planejamentoId`;
-  - `gasto.status`;
-  - `gasto.pagoPorParticipanteId`;
-  - `divisao.gastoId`;
-  - `divisao.participanteId`;
-  - `acerto.planejamentoId`;
-  - `acerto.status`.
-- Exclusao fisica deve ser evitada em entidades com valor historico financeiro.
-- Migrations futuras devem manter compatibilidade com `synchronize: false`.
-- Campos monetarios devem usar inteiros em centavos e nunca `float`.
+A migration `0007` define:
 
-## Campos preparados para evolucao futura
+- primary keys UUID nas cinco tabelas;
+- checks dos enums de planejamento, participante, gasto, divisao e acerto;
+- checks positivos para valores de gasto, divisao e acerto;
+- check de `mes_referencia` no formato `YYYY-MM`;
+- FKs descritas acima;
+- indices por proprietario/status de planejamento;
+- indices por planejamento/status e usuario/status de participante;
+- unicidade parcial de participante ativo por `(planejamento_id, usuario_id)`;
+- unicidade parcial de email ativo por `(planejamento_id, email)`;
+- indices de gastos, divisoes e acertos por suas FKs e status;
+- unicidade parcial de acerto `PENDENTE` por planejamento, devedor, recebedor e
+  valor.
 
-- `usuarioVinculadoId` em participante para permitir associacao a usuario real.
-- `tipo` e `status` de participante para suportar convidados e vinculos.
-- `planejamentoOrigemId` em planejamento para replicacao mensal.
-- `gastoOrigemId` em gasto para rastrear valores replicados.
-- `valorReplicadoDeMes` e `valorAlteradoEm` para explicar revisao mensal.
-- `observacaoComprovante` e `comprovanteUrl` como preparacao leve para
-  comprovantes.
-- `versaoCalculo` em acerto para rastrear recalculos.
-- `CONFIRMADO` em acerto para confirmacao futura pelo recebedor.
-- Entidades futuras de convite, historico especifico e comprovante podem ser
-  adicionadas sem mudar o contrato principal do MVP.
+O indice parcial de participante nao inclui `tipo`. A autorizacao fail-closed e
+garantida pela query, que exige explicitamente `VINCULADO + ATIVO`.
+
+A migration `0005` cria indices de auditoria por data, usuario/data, evento,
+modulo e status HTTP.
+
+## Modelo conceitual de roadmap - nao persistido atualmente
+
+Os itens desta secao nao fazem parte do schema nem do contrato HTTP atual.
+Somente devem ser promovidos ao modelo persistido quando a funcionalidade
+correspondente for especificada.
+
+### Marcos temporais especificos
+
+Timestamps dedicados como `fechadoEm`, `arquivadoEm`, `canceladoEm`,
+`removidoEm` ou `reabertoEm` podem ser considerados futuramente caso consultas
+diretas desses marcos justifiquem a desnormalizacao. Hoje o historico e
+preservado pelos status, `updated_at` e eventos de `audit_log`; esses campos
+especificos nao existem.
+
+### Convites
+
+Um fluxo futuro de convite pode exigir uma estrutura conceitual com referencias
+ao planejamento e participante, hash de token seguro, status, expiracao, aceite
+e timestamps. Token em texto puro nao deve ser persistido. `CONVIDADO` ja
+existe no enum, mas nao existe tabela, token, expiracao nem endpoint de convite.
+
+### Upload de comprovante
+
+`comprovante_url` e `comprovante_nome` existem em `gasto_planejamento`, mas nao
+ha upload real. Uma implementacao futura pode exigir chave de armazenamento,
+tipo MIME, tamanho, ator do envio e timestamp, possivelmente em entidade
+separada. Nenhum desses campos adicionais esta persistido atualmente.
+
+### Replicacao mensal
+
+Referencias como `planejamentoOrigemId`, `gastoOrigemId` e mes de origem podem
+ser necessarias para rastrear replicacoes futuras. Nao existem hoje entidade de
+replicacao/recorrencia nem essas referencias no planejamento ou no gasto.
+
+Tambem permanecem conceituais telefone ou observacao do participante, ordem
+persistida da divisao, percentual ou valor manual de divisao e timestamp de
+confirmacao pelo recebedor. Historico atual e preservado pelos status das
+entidades e por `audit_log`.

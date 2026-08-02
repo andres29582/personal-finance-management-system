@@ -73,7 +73,8 @@ Regra de manutencao para pastas raiz legadas:
 As rotas em `app/` refletem as telas do produto: login, cadastro, dashboard,
 contas, transacoes, transferencias, dividas, pagamentos de divida, categorias,
 orcamentos, metas, alertas, relatorios, previsao de deficit, auditoria e
-perfil do usuario.
+perfil do usuario, alem de listagem, criacao, detalhe e formularios protegidos
+de Planejamentos compartilhados.
 
 Cada dominio principal possui um modulo em `src/modules/<dominio>` com uma
 combinacao de:
@@ -165,6 +166,9 @@ O frontend organiza as telas por dominio:
 - **Dividas e pagamentos**: ciclo de dividas e pagamentos associados.
 - **Categorias**: categorias de receita/despesa.
 - **Orcamentos, metas e alertas**: planejamento e acompanhamento financeiro.
+- **Planejamentos compartilhados**: listagem, criacao, detalhe agregado,
+  participantes, gastos, resumo, acertos e lifecycle conforme capacidade do
+  ator.
 - **Relatorios**: agregacoes por periodo.
 - **Previsao de deficit**: leitura do endpoint de ML via backend.
 - **Audit logs**: consulta de eventos de auditoria do usuario.
@@ -280,6 +284,14 @@ recomendada e:
 
 Prioridades atuais de atencao: planejamentos, usuario, relatorios, cadastro e
 formularios financeiros complexos.
+
+No detalhe de Planejamentos, carregamento de dados e mutacoes permanecem
+separados em hooks, com capacidades centralizadas. Proprietario e participante
+`VINCULADO + ATIVO` possuem permissoes diferentes. Formularios de participante
+e gasto carregam identidade e agregado antes de habilitar campos, distinguem
+criacao de edicao e invalidam respostas obsoletas em trocas de rota, sequencias
+`A -> B -> A` e unmount. Essa protecao melhora UX e defesa em profundidade, sem
+substituir a autorizacao do backend.
 
 ## Contratos de API
 
