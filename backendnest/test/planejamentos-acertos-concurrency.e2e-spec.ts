@@ -127,6 +127,15 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
     });
   }
 
+  async function buscarLogsDeEvento(params: {
+    entity: string;
+    entityId: string;
+    event: string;
+    userId: string;
+  }): Promise<AuditLog[]> {
+    return dataSource.getRepository(AuditLog).find({ where: params });
+  }
+
   it('serializes concurrent synchronizations for the same planejamento', async () => {
     const session = await registerAndLoginTestUser(app, {
       cpf: '52998224725',
@@ -174,6 +183,12 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
       .expect(201);
 
     const acertoRepository = dataSource.getRepository(AcertoPlanejamento);
+    const acertoPendenteAutomatico = await acertoRepository.findOneByOrFail({
+      planejamentoId: planejamento.id,
+      status: AcertoStatus.PENDENTE,
+    });
+    await acertoRepository.delete(acertoPendenteAutomatico.id);
+
     const acertoHistorico = Object.assign(new AcertoPlanejamento(), {
       id: randomUUID(),
       planejamentoId: planejamento.id,
@@ -243,9 +258,17 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
         }),
       ]),
     );
+    await expect(
+      buscarLogsDeEvento({
+        entity: 'planejamento',
+        entityId: planejamento.id,
+        event: 'PLANEJAMENTO_ACERTOS_SINCRONIZADOS',
+        userId: session.userId,
+      }),
+    ).resolves.toHaveLength(1);
   });
 
-  it('serializes settlement synchronization with payment', async () => {
+  it('serializes settlement synchronization with payment and concurrent cancellation', async () => {
     const { acertoPendente, planejamento, session } =
       await criarCenarioComAcertoPendente({
         cpf: '39053344705',
@@ -288,6 +311,72 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
     expect(pagos).toHaveLength(1);
     expect(pagos[0]?.id).toBe(acertoPendente.id);
     expect(acertosPersistidos).toHaveLength(1);
+    await expect(
+      buscarLogsDeEvento({
+        entity: 'acerto_planejamento',
+        entityId: acertoPendente.id,
+        event: 'PLANEJAMENTO_ACERTO_PAGO',
+        userId: session.userId,
+      }),
+    ).resolves.toHaveLength(1);
+    const endpoint = `/planejamentos/${planejamento.id}/acertos/${acertoPendente.id}/cancelar`;
+
+    const respostas = await Promise.all([
+      request(app.getHttpServer())
+        .patch(endpoint)
+        .set('Authorization', authorization),
+      request(app.getHttpServer())
+        .patch(endpoint)
+        .set('Authorization', authorization),
+    ]);
+
+    expect(respostas.map((resposta) => resposta.status).sort()).toEqual([
+      200, 422,
+    ]);
+    const respostaValida = respostas.find(
+      (resposta) => resposta.status === 200,
+    );
+    const respostaInvalida = respostas.find(
+      (resposta) => resposta.status === 422,
+    );
+
+    expect(respostaValida).toBeDefined();
+    if (!respostaValida) {
+      throw new Error('A resposta valida do cancelamento nao foi encontrada.');
+    }
+    expect(unwrapSuccess<AcertoResponse>(respostaValida)).toEqual(
+      expect.objectContaining({
+        id: acertoPendente.id,
+        status: AcertoStatus.CANCELADO,
+      }),
+    );
+    expect(respostaInvalida?.body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'PLANEJAMENTO_ACERTO_CANCELAR_STATUS_INVALIDO',
+        }) as object,
+        success: false,
+      }),
+    );
+
+    const acertoCancelado = await dataSource
+      .getRepository(AcertoPlanejamento)
+      .findOneByOrFail({ id: acertoPendente.id });
+
+    expect(acertoCancelado).toEqual(
+      expect.objectContaining({
+        dataPagamento: null,
+        status: AcertoStatus.CANCELADO,
+      }),
+    );
+    await expect(
+      buscarLogsDeEvento({
+        entity: 'acerto_planejamento',
+        entityId: acertoPendente.id,
+        event: 'PLANEJAMENTO_ACERTO_CANCELADO',
+        userId: session.userId,
+      }),
+    ).resolves.toHaveLength(1);
   });
 
   it('serializes reopening a paid settlement with synchronization without changing its id', async () => {
@@ -543,6 +632,14 @@ describe('Planejamentos settlement synchronization concurrency (e2e)', () => {
     expect(pagos).toHaveLength(1);
     expect(pagos[0]?.id).toBe(acertoPendente.id);
     expect(acertosPersistidos).toHaveLength(1);
+    await expect(
+      buscarLogsDeEvento({
+        entity: 'acerto_planejamento',
+        entityId: acertoPendente.id,
+        event: 'PLANEJAMENTO_ACERTO_PAGO',
+        userId: session.userId,
+      }),
+    ).resolves.toHaveLength(1);
   });
 
   it('serializes expense creation with explicit settlement synchronization', async () => {
