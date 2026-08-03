@@ -808,6 +808,7 @@ components:
           minimum: 1
         dataGasto:
           type: string
+          format: date
           pattern: ^\d{4}-\d{2}-\d{2}$
         comportamento:
           type: string
@@ -3707,10 +3708,14 @@ paths:
                 $ref: '#/components/schemas/PlanejamentoSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            code: PLANEJAMENTO_NOT_FOUND; message: Planejamento nao encontrado.
+            O mesmo erro oculta planejamento inexistente ou inacessivel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: getPlanejamentoById
   /planejamentos/{id}/resumo:
     get:
@@ -4050,10 +4055,14 @@ paths:
                 $ref: '#/components/schemas/GastoPlanejamentoListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            code: PLANEJAMENTO_NOT_FOUND; message: Planejamento nao encontrado.
+            O mesmo erro oculta planejamento inexistente ou inacessivel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: listGastosPlanejamento
   /planejamentos/{planejamentoId}/gastos/{gastoId}:
     get:
@@ -4074,10 +4083,16 @@ paths:
                 $ref: '#/components/schemas/GastoPlanejamentoSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            code: PLANEJAMENTO_NOT_FOUND; message: Planejamento nao encontrado.
+            O mesmo erro oculta planejamento inexistente ou inacessivel. Quando
+            o planejamento e acessivel, code: PLANEJAMENTO_GASTO_NOT_FOUND;
+            message: Gasto do planejamento nao encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: getGastoPlanejamentoById
     patch:
       tags:
@@ -4214,10 +4229,14 @@ paths:
                 $ref: '#/components/schemas/AcertoPlanejamentoListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            code: PLANEJAMENTO_NOT_FOUND; message: Planejamento nao encontrado.
+            O mesmo erro oculta planejamento inexistente ou inacessivel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       operationId: listAcertosPlanejamento
   /planejamentos/{planejamentoId}/acertos/sincronizar:
     post:

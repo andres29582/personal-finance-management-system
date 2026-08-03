@@ -28,17 +28,6 @@ Operacoes em que o usuario tem acesso, mas somente o proprietario pode agir,
 podem retornar `403 PLANEJAMENTO_OWNER_REQUIRED` conforme documentado no
 Swagger.
 
-### Divergencia documental preexistente
-
-O comportamento efetivo do service e dos testes E2E oculta recursos
-inacessiveis com `404 PLANEJAMENTO_NOT_FOUND`. No entanto, o Swagger ainda
-declara uma resposta generica `403` para algumas operacoes de leitura: detalhe
-do planejamento, listagem e detalhe de gastos e listagem de acertos. Esta
-branch nao altera codigo nem Swagger. Ate a correcao do contrato oficial, o
-comportamento observado na implementacao permanece `404`, e a divergencia fica
-registrada aqui. Isso nao implica que todas as respostas `403` do modulo
-estejam incorretas.
-
 ## Endpoints implementados
 
 | Metodo | Path | Operacao |
