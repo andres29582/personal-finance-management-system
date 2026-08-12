@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { BaseRepository } from '../../common/abstract/base.repository';
 import { notSoftDeleted } from '../../common/soft-delete.query';
 import { Transacao } from '../../transacoes/entities/transacao.entity';
@@ -29,6 +29,37 @@ export class ContaRepository extends BaseRepository<Conta> {
 
   async findByIdAndUser(id: string, usuarioId: string): Promise<Conta | null> {
     return this.contaRepository.findOneBy({ id, usuarioId });
+  }
+
+  async findByIdAndUserForWrite(
+    id: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Conta | null> {
+    return manager.getRepository(Conta).findOne({
+      where: { id, usuarioId },
+      lock: { mode: 'pessimistic_read' },
+    });
+  }
+
+  async findManyByIdsAndUserForWrite(
+    ids: string[],
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Conta[]> {
+    const sortedIds = [...new Set(ids)].sort((left, right) =>
+      left.localeCompare(right),
+    );
+
+    if (sortedIds.length === 0) {
+      return [];
+    }
+
+    return manager.getRepository(Conta).find({
+      where: { id: In(sortedIds), usuarioId },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_read' },
+    });
   }
 
   async updateByIdAndUser(

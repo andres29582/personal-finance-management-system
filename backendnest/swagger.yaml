@@ -2190,6 +2190,22 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    FinancialOperationBadRequest:
+      description: Payload, parametro ou query invalido, ou operacao financeira em conta inativa.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            contaInativa:
+              summary: Conta inativa para operacoes financeiras
+              value:
+                success: false
+                error:
+                  code: CONTA_INACTIVE
+                  message: Não é possível realizar operações financeiras em uma conta inativa.
+                timestamp: '2026-08-03T12:00:00.000Z'
+                requestId: 123e4567-e89b-12d3-a456-426614174000
     Unauthorized:
       description: Token ausente, invalido, expirado ou sessao invalida.
       content:
@@ -2704,7 +2720,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TransacaoSuccess'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/FinancialOperationBadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -2798,7 +2814,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TransacaoSuccess'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/FinancialOperationBadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -2841,7 +2857,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TransferenciaSuccess'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/FinancialOperationBadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -2906,7 +2922,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/TransferenciaSuccess'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/FinancialOperationBadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -3058,7 +3074,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PagoDividaSuccess'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/FinancialOperationBadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

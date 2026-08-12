@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { DataSource, EntityManager } from 'typeorm';
 import {
   BusinessRuleException,
   ResourceNotFoundException,
@@ -8,7 +9,7 @@ import {
   assertNonNegativeFinancialValue,
   assertPositiveFinancialValue,
 } from '../common/financial-validation.util';
-import { Conta } from '../contas/entities/conta.entity';
+import { notSoftDeleted } from '../common/soft-delete.query';
 import { Transferencia } from './entities/transferencia.entity';
 import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
 import { UpdateTransferenciaDto } from './dto/update-transferencia.dto';
@@ -21,6 +22,7 @@ export class TransferenciasService {
   constructor(
     private readonly transferenciaRepository: TransferenciaRepository,
     private readonly contasService: ContasService,
+    private readonly dataSource: DataSource,
     private readonly logsService: LogsService,
   ) {}
 
@@ -28,32 +30,30 @@ export class TransferenciasService {
     usuarioId: string,
     dto: CreateTransferenciaDto,
   ): Promise<Transferencia> {
-    if (dto.contaOrigemId === dto.contaDestinoId) {
-      throw new BusinessRuleException(
-        'TRANSFERENCIA_SAME_ACCOUNT',
-        'Conta origem e destino devem ser diferentes',
+    const savedTransfer = await this.dataSource.transaction(async (manager) => {
+      if (dto.contaOrigemId === dto.contaDestinoId) {
+        throw new BusinessRuleException(
+          'TRANSFERENCIA_SAME_ACCOUNT',
+          'Conta origem e destino devem ser diferentes',
+        );
+      }
+
+      assertPositiveFinancialValue(dto.valor, 'Valor da transferencia');
+      assertNonNegativeFinancialValue(dto.comissao ?? 0, 'Comissao');
+
+      await this.contasService.findActiveManyForWrite(
+        [dto.contaOrigemId, dto.contaDestinoId],
+        usuarioId,
+        manager,
       );
-    }
 
-    assertPositiveFinancialValue(dto.valor, 'Valor da transferencia');
-    assertNonNegativeFinancialValue(dto.comissao ?? 0, 'Comissao');
+      const transfer = manager.create(Transferencia, {
+        id: randomUUID(),
+        usuarioId,
+        ...dto,
+      });
 
-    const contaOrigem = await this.contasService.findOne(
-      dto.contaOrigemId,
-      usuarioId,
-    );
-    const contaDestino = await this.contasService.findOne(
-      dto.contaDestinoId,
-      usuarioId,
-    );
-
-    this.ensureAccountBelongsToUser(contaOrigem, usuarioId);
-    this.ensureAccountBelongsToUser(contaDestino, usuarioId);
-
-    const savedTransfer = await this.transferenciaRepository.create({
-      id: randomUUID(),
-      usuarioId,
-      ...dto,
+      return manager.save(transfer);
     });
 
     await this.logsService.logEntityEvent({
@@ -97,18 +97,37 @@ export class TransferenciasService {
     usuarioId: string,
     dto: UpdateTransferenciaDto,
   ): Promise<Transferencia> {
-    await this.findOne(id, usuarioId);
+    const updatedTransfer = await this.dataSource.transaction(
+      async (manager) => {
+        const currentTransfer = await this.findOneForWrite(
+          id,
+          usuarioId,
+          manager,
+        );
 
-    if (dto.valor !== undefined) {
-      assertPositiveFinancialValue(dto.valor, 'Valor da transferencia');
-    }
+        if (dto.valor !== undefined) {
+          assertPositiveFinancialValue(dto.valor, 'Valor da transferencia');
+        }
 
-    if (dto.comissao !== undefined) {
-      assertNonNegativeFinancialValue(dto.comissao, 'Comissao');
-    }
+        if (dto.comissao !== undefined) {
+          assertNonNegativeFinancialValue(dto.comissao, 'Comissao');
+        }
 
-    await this.transferenciaRepository.updateByIdAndUser(id, usuarioId, dto);
-    const updatedTransfer = await this.findOne(id, usuarioId);
+        await this.contasService.findActiveManyForWrite(
+          [currentTransfer.contaOrigemId, currentTransfer.contaDestinoId],
+          usuarioId,
+          manager,
+        );
+
+        await manager.update(
+          Transferencia,
+          { id, usuarioId, ...notSoftDeleted },
+          dto,
+        );
+
+        return this.findOneForWrite(id, usuarioId, manager);
+      },
+    );
 
     await this.logsService.logEntityEvent({
       event: 'TRANSFERENCIA_UPDATED',
@@ -151,15 +170,23 @@ export class TransferenciasService {
       .map(([key]) => key);
   }
 
-  private ensureAccountBelongsToUser(
-    conta: Pick<Conta, 'usuarioId'>,
+  private async findOneForWrite(
+    id: string,
     usuarioId: string,
-  ): void {
-    if (conta.usuarioId !== usuarioId) {
+    manager: EntityManager,
+  ): Promise<Transferencia> {
+    const transfer = await manager.findOne(Transferencia, {
+      where: { id, usuarioId, ...notSoftDeleted },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!transfer) {
       throw new ResourceNotFoundException(
-        'TRANSFERENCIA_ACCOUNT_NOT_FOUND',
-        'Conta nao encontrada',
+        'TRANSFERENCIA_NOT_FOUND',
+        'Transferência não encontrada',
       );
     }
+
+    return transfer;
   }
 }

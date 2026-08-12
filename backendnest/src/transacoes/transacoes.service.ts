@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { DataSource, EntityManager } from 'typeorm';
 import {
   BusinessRuleException,
   ResourceNotFoundException,
@@ -13,6 +14,7 @@ import { ContasService } from '../contas/contas.service';
 import { CategoriasService } from '../categorias/categorias.service';
 import { LogsService } from '../logs/logs.service';
 import { TransacaoRepository } from './repositories/transacao.repository';
+import { notSoftDeleted } from '../common/soft-delete.query';
 
 @Injectable()
 export class TransacoesService {
@@ -20,24 +22,35 @@ export class TransacoesService {
     private readonly transacaoRepository: TransacaoRepository,
     private readonly contasService: ContasService,
     private readonly categoriasService: CategoriasService,
+    private readonly dataSource: DataSource,
     private readonly logsService: LogsService,
   ) {}
 
   async create(usuarioId: string, dto: CreateTransacaoDto): Promise<Transacao> {
-    assertPositiveFinancialValue(dto.valor, 'Valor da transacao');
-    await this.contasService.findOne(dto.contaId, usuarioId);
-    const categoria = await this.categoriasService.findOne(
-      dto.categoriaId,
-      usuarioId,
+    const savedTransaction = await this.dataSource.transaction(
+      async (manager) => {
+        assertPositiveFinancialValue(dto.valor, 'Valor da transacao');
+        await this.contasService.findActiveForWrite(
+          dto.contaId,
+          usuarioId,
+          manager,
+        );
+        const categoria = await this.categoriasService.findOne(
+          dto.categoriaId,
+          usuarioId,
+        );
+
+        this.ensureCategoryMatchesTransactionType(categoria.tipo, dto.tipo);
+
+        const transaction = manager.create(Transacao, {
+          id: randomUUID(),
+          usuarioId,
+          ...dto,
+        });
+
+        return manager.save(transaction);
+      },
     );
-
-    this.ensureCategoryMatchesTransactionType(categoria.tipo, dto.tipo);
-
-    const savedTransaction = await this.transacaoRepository.create({
-      id: randomUUID(),
-      usuarioId,
-      ...dto,
-    });
 
     await this.logsService.logEntityEvent({
       event: 'TRANSACAO_CREATED',
@@ -84,26 +97,46 @@ export class TransacoesService {
     usuarioId: string,
     dto: UpdateTransacaoDto,
   ): Promise<Transacao> {
-    const currentTransaction = await this.findOne(id, usuarioId);
+    const updatedTransaction = await this.dataSource.transaction(
+      async (manager) => {
+        const currentTransaction = await this.findOneForWrite(
+          id,
+          usuarioId,
+          manager,
+        );
 
-    if (dto.valor !== undefined) {
-      assertPositiveFinancialValue(dto.valor, 'Valor da transacao');
-    }
+        if (dto.valor !== undefined) {
+          assertPositiveFinancialValue(dto.valor, 'Valor da transacao');
+        }
 
-    if (dto.contaId) {
-      await this.contasService.findOne(dto.contaId, usuarioId);
-    }
-    const updatedCategoryId = dto.categoriaId ?? currentTransaction.categoriaId;
-    const updatedType = dto.tipo ?? currentTransaction.tipo;
-    const categoria = await this.categoriasService.findOne(
-      updatedCategoryId,
-      usuarioId,
+        await this.contasService.findActiveManyForWrite(
+          [
+            currentTransaction.contaId,
+            dto.contaId ?? currentTransaction.contaId,
+          ],
+          usuarioId,
+          manager,
+        );
+
+        const updatedCategoryId =
+          dto.categoriaId ?? currentTransaction.categoriaId;
+        const updatedType = dto.tipo ?? currentTransaction.tipo;
+        const categoria = await this.categoriasService.findOne(
+          updatedCategoryId,
+          usuarioId,
+        );
+
+        this.ensureCategoryMatchesTransactionType(categoria.tipo, updatedType);
+
+        await manager.update(
+          Transacao,
+          { id, usuarioId, ...notSoftDeleted },
+          dto,
+        );
+
+        return this.findOneForWrite(id, usuarioId, manager);
+      },
     );
-
-    this.ensureCategoryMatchesTransactionType(categoria.tipo, updatedType);
-
-    await this.transacaoRepository.updateByIdAndUser(id, usuarioId, dto);
-    const updatedTransaction = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
       event: 'TRANSACAO_UPDATED',
@@ -151,6 +184,26 @@ export class TransacoesService {
         'O tipo da categoria precisa coincidir com o tipo da transacao.',
       );
     }
+  }
+
+  private async findOneForWrite(
+    id: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Transacao> {
+    const transaction = await manager.findOne(Transacao, {
+      where: { id, usuarioId, ...notSoftDeleted },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!transaction) {
+      throw new ResourceNotFoundException(
+        'TRANSACAO_NOT_FOUND',
+        'Transação não encontrada',
+      );
+    }
+
+    return transaction;
   }
 
   private getChangedFields(dto: UpdateTransacaoDto): string[] {

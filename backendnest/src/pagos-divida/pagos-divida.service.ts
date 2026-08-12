@@ -42,20 +42,24 @@ export class PagosDividaService {
       );
     }
 
-    await this.contasService.findOne(dto.contaId, usuarioId);
-    const categoria = await this.categoriasService.findOne(
-      dto.categoriaId,
-      usuarioId,
-    );
-
-    if (categoria.tipo !== TipoCategoria.DESPESA) {
-      throw new BusinessRuleException(
-        'PAGAMENTO_DIVIDA_CATEGORY_MUST_BE_EXPENSE',
-        'A categoria do pagamento de divida deve ser do tipo despesa.',
-      );
-    }
-
     const savedPayment = await this.dataSource.transaction(async (manager) => {
+      await this.contasService.findActiveForWrite(
+        dto.contaId,
+        usuarioId,
+        manager,
+      );
+      const categoria = await this.categoriasService.findOne(
+        dto.categoriaId,
+        usuarioId,
+      );
+
+      if (categoria.tipo !== TipoCategoria.DESPESA) {
+        throw new BusinessRuleException(
+          'PAGAMENTO_DIVIDA_CATEGORY_MUST_BE_EXPENSE',
+          'A categoria do pagamento de divida deve ser do tipo despesa.',
+        );
+      }
+
       const transacaoId = randomUUID();
 
       const transacao = manager.create(Transacao, {
