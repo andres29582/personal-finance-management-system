@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { ResourceNotFoundException } from '../common/exceptions';
+import { EntityManager } from 'typeorm';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { toNumber } from '../common/number.util';
 import { LogsService } from '../logs/logs.service';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
@@ -71,6 +75,53 @@ export class ContasService {
     );
 
     return enrichedAccount;
+  }
+
+  async findActiveForWrite(
+    id: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Conta> {
+    const conta = await this.contaRepository.findByIdAndUserForWrite(
+      id,
+      usuarioId,
+      manager,
+    );
+
+    if (!conta) {
+      throw this.createContaNotFoundException();
+    }
+
+    this.assertAccountsAreActive([conta]);
+
+    return conta;
+  }
+
+  async findActiveManyForWrite(
+    ids: string[],
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Conta[]> {
+    const requestedIds = [...new Set(ids)].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    const contas = await this.contaRepository.findManyByIdsAndUserForWrite(
+      requestedIds,
+      usuarioId,
+      manager,
+    );
+    const foundIds = new Set(contas.map((conta) => conta.id));
+    const hasMissingAccount =
+      contas.length !== requestedIds.length ||
+      requestedIds.some((id) => !foundIds.has(id));
+
+    if (hasMissingAccount) {
+      throw this.createContaNotFoundException();
+    }
+
+    this.assertAccountsAreActive(contas);
+
+    return contas;
   }
 
   async update(
@@ -198,5 +249,21 @@ export class ContasService {
     return Object.entries(dto)
       .filter(([, value]) => value !== undefined)
       .map(([key]) => key);
+  }
+
+  private assertAccountsAreActive(contas: Conta[]): void {
+    if (contas.some((conta) => conta.ativa === false)) {
+      throw new BusinessRuleException(
+        'CONTA_INACTIVE',
+        'Não é possível realizar operações financeiras em uma conta inativa.',
+      );
+    }
+  }
+
+  private createContaNotFoundException(): ResourceNotFoundException {
+    return new ResourceNotFoundException(
+      'CONTA_NOT_FOUND',
+      'Conta não encontrada',
+    );
   }
 }

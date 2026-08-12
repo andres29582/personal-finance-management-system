@@ -1,4 +1,8 @@
-import { ResourceNotFoundException } from '../common/exceptions';
+import { EntityManager } from 'typeorm';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { LogsService } from '../logs/logs.service';
 import { Transacao } from '../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
@@ -16,12 +20,15 @@ describe('ContasService', () => {
       | 'create'
       | 'findActiveByUser'
       | 'findByIdAndUser'
+      | 'findByIdAndUserForWrite'
+      | 'findManyByIdsAndUserForWrite'
       | 'findTransactionsForAccounts'
       | 'findTransfersByUser'
       | 'updateByIdAndUser'
     >
   >;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
+  let manager: EntityManager;
 
   const contas = [
     {
@@ -165,14 +172,18 @@ describe('ContasService', () => {
           ) ?? null,
         ),
       ),
-      findTransactionsForAccounts: jest.fn((usuarioId: string) =>
-        Promise.resolve(
-          transacoes.filter(
-            (transacao) =>
-              transacao.usuarioId === usuarioId &&
-              transacao.excluidoEm === null,
+      findByIdAndUserForWrite: jest.fn(),
+      findManyByIdsAndUserForWrite: jest.fn(),
+      findTransactionsForAccounts: jest.fn(
+        (usuarioId: string, contaIds: string[]) =>
+          Promise.resolve(
+            transacoes.filter(
+              (transacao) =>
+                transacao.usuarioId === usuarioId &&
+                contaIds.includes(transacao.contaId) &&
+                transacao.excluidoEm === null,
+            ),
           ),
-        ),
       ),
       findTransfersByUser: jest.fn((usuarioId: string) =>
         Promise.resolve(
@@ -188,6 +199,7 @@ describe('ContasService', () => {
     logsService = {
       logEntityEvent: jest.fn(),
     };
+    manager = {} as EntityManager;
 
     service = new ContasService(
       contasRepository as unknown as ContaRepository,
@@ -224,6 +236,166 @@ describe('ContasService', () => {
 
     expect(result.some((conta) => conta.id === 'conta-inativa')).toBe(false);
     expect(result.every((conta) => conta.ativa)).toBe(true);
+  });
+
+  it('keeps inactive accounts available through historical lookup with their current balance', async () => {
+    const result = await service.findOne('conta-inativa', 'user-1');
+
+    expect(contasRepository.findByIdAndUser).toHaveBeenCalledWith(
+      'conta-inativa',
+      'user-1',
+    );
+    expect(contasRepository.findTransactionsForAccounts).toHaveBeenCalledWith(
+      'user-1',
+      ['conta-inativa'],
+    );
+    expect(contasRepository.findTransfersByUser).toHaveBeenCalledWith('user-1');
+    expect(result).toMatchObject({
+      ativa: false,
+      id: 'conta-inativa',
+      saldoAtual: 10000,
+    });
+  });
+
+  it('returns an active account for writes through the transactional repository without calculating balance', async () => {
+    contasRepository.findByIdAndUserForWrite.mockResolvedValue(contas[0]);
+
+    await expect(
+      service.findActiveForWrite('conta-1', 'user-1', manager),
+    ).resolves.toBe(contas[0]);
+
+    expect(contasRepository.findByIdAndUserForWrite).toHaveBeenCalledWith(
+      'conta-1',
+      'user-1',
+      manager,
+    );
+    expect(contasRepository.findByIdAndUser).not.toHaveBeenCalled();
+    expect(contasRepository.findTransactionsForAccounts).not.toHaveBeenCalled();
+    expect(contasRepository.findTransfersByUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inactive account for writes without calculating balance', async () => {
+    contasRepository.findByIdAndUserForWrite.mockResolvedValue(contas[2]);
+
+    const promise = service.findActiveForWrite(
+      'conta-inativa',
+      'user-1',
+      manager,
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(BusinessRuleException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'CONTA_INACTIVE',
+      message:
+        'Não é possível realizar operações financeiras em uma conta inativa.',
+      statusCode: 400,
+    });
+    expect(contasRepository.findTransactionsForAccounts).not.toHaveBeenCalled();
+    expect(contasRepository.findTransfersByUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps nonexistent and foreign accounts indistinguishable for writes', async () => {
+    contasRepository.findByIdAndUserForWrite.mockResolvedValue(null);
+
+    const promise = service.findActiveForWrite(
+      'conta-outro-usuario',
+      'user-1',
+      manager,
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'CONTA_NOT_FOUND',
+      message: 'Conta não encontrada',
+      statusCode: 404,
+    });
+    expect(contasRepository.findByIdAndUserForWrite).toHaveBeenCalledWith(
+      'conta-outro-usuario',
+      'user-1',
+      manager,
+    );
+    expect(contasRepository.findTransactionsForAccounts).not.toHaveBeenCalled();
+    expect(contasRepository.findTransfersByUser).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates and sorts account ids before validating multiple active accounts', async () => {
+    contasRepository.findManyByIdsAndUserForWrite.mockResolvedValue([
+      contas[0],
+      contas[1],
+    ]);
+
+    await expect(
+      service.findActiveManyForWrite(
+        ['conta-2', 'conta-1', 'conta-2'],
+        'user-1',
+        manager,
+      ),
+    ).resolves.toEqual([contas[0], contas[1]]);
+
+    expect(contasRepository.findManyByIdsAndUserForWrite).toHaveBeenCalledWith(
+      ['conta-1', 'conta-2'],
+      'user-1',
+      manager,
+    );
+    expect(contasRepository.findTransactionsForAccounts).not.toHaveBeenCalled();
+    expect(contasRepository.findTransfersByUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects multiple-account writes when any owned account is inactive', async () => {
+    contasRepository.findManyByIdsAndUserForWrite.mockResolvedValue([
+      contas[0],
+      contas[2],
+    ]);
+
+    await expect(
+      service.findActiveManyForWrite(
+        ['conta-1', 'conta-inativa'],
+        'user-1',
+        manager,
+      ),
+    ).rejects.toMatchObject({
+      code: 'CONTA_INACTIVE',
+      statusCode: 400,
+    });
+  });
+
+  it('prioritizes not found over inactive when validating multiple accounts', async () => {
+    contasRepository.findManyByIdsAndUserForWrite.mockResolvedValue([
+      contas[2],
+    ]);
+
+    const promise = service.findActiveManyForWrite(
+      ['conta-inativa', 'conta-outro-usuario'],
+      'user-1',
+      manager,
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'CONTA_NOT_FOUND',
+      message: 'Conta não encontrada',
+      statusCode: 404,
+    });
+  });
+
+  it('rejects a same-size bulk result when it contains a different account id', async () => {
+    contasRepository.findManyByIdsAndUserForWrite.mockResolvedValue([
+      contas[2],
+      contas[3],
+    ]);
+
+    const promise = service.findActiveManyForWrite(
+      ['conta-1', 'conta-inativa'],
+      'user-1',
+      manager,
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'CONTA_NOT_FOUND',
+      message: 'Conta não encontrada',
+      statusCode: 404,
+    });
   });
 
   it('throws a typed not found error when account does not exist', async () => {
