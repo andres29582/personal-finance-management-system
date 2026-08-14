@@ -27,7 +27,9 @@ describe('PagosDividaService', () => {
     Pick<PagoDividaRepository, 'findActiveById' | 'findByDivida'>
   >;
   let contasService: jest.Mocked<Pick<ContasService, 'findActiveForWrite'>>;
-  let dividasService: jest.Mocked<Pick<DividasService, 'findOne'>>;
+  let dividasService: jest.Mocked<
+    Pick<DividasService, 'findOne' | 'findOneForWrite'>
+  >;
   let categoriasService: jest.Mocked<Pick<CategoriasService, 'findOne'>>;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
@@ -42,6 +44,7 @@ describe('PagosDividaService', () => {
     };
     dividasService = {
       findOne: jest.fn(),
+      findOneForWrite: jest.fn(),
     };
     categoriasService = {
       findOne: jest.fn(),
@@ -89,7 +92,7 @@ describe('PagosDividaService', () => {
       ativa: true,
       id: 'conta-1',
     } as never);
-    dividasService.findOne.mockResolvedValue({
+    dividasService.findOneForWrite.mockResolvedValue({
       ativa: true,
       id: 'divida-1',
     } as never);
@@ -129,6 +132,22 @@ describe('PagosDividaService', () => {
     const pagoDividaPayload = createMock.mock.calls[1][1] as PagoDivida;
 
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(dataSource.transaction).toHaveBeenCalledWith(expect.any(Function));
+    expect(dividasService.findOneForWrite).toHaveBeenCalledWith(
+      'divida-1',
+      'user-1',
+      manager,
+    );
+    expect(contasService.findActiveForWrite).toHaveBeenCalledWith(
+      'conta-1',
+      'user-1',
+      manager,
+    );
+    expect(
+      dividasService.findOneForWrite.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      contasService.findActiveForWrite.mock.invocationCallOrder[0],
+    );
     expect(transacaoPayload.id).toBeDefined();
     expect(pagoDividaPayload.transacaoId).toBe(transacaoPayload.id);
     expect(result.transacaoId).toBe(transacaoPayload.id);
@@ -165,7 +184,7 @@ describe('PagosDividaService', () => {
       ativa: true,
       id: 'conta-1',
     } as never);
-    dividasService.findOne.mockResolvedValue({
+    dividasService.findOneForWrite.mockResolvedValue({
       ativa: true,
       id: 'divida-1',
     } as never);
@@ -204,32 +223,30 @@ describe('PagosDividaService', () => {
     ).rejects.toBeInstanceOf(ValidationAppException);
 
     expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(dividasService.findOneForWrite).not.toHaveBeenCalled();
   });
 
   it('rejects debt payment when debt is inactive before creating side effects', async () => {
-    dividasService.findOne.mockResolvedValue({
+    const manager = {
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+    dividasService.findOneForWrite.mockResolvedValue({
       ativa: false,
       id: 'divida-1',
     } as never);
+    mockTransaction(manager);
 
-    await expect(
-      service.create('user-1', {
-        categoriaId: 'categoria-1',
-        contaId: 'conta-1',
-        data: '2026-04-01',
-        dividaId: 'divida-1',
-        valor: 350,
-      }),
-    ).rejects.toBeInstanceOf(BusinessRuleException);
-    await expect(
-      service.create('user-1', {
-        categoriaId: 'categoria-1',
-        contaId: 'conta-1',
-        data: '2026-04-01',
-        dividaId: 'divida-1',
-        valor: 350,
-      }),
-    ).rejects.toMatchObject({
+    const promise = service.create('user-1', {
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      data: '2026-04-01',
+      dividaId: 'divida-1',
+      valor: 350,
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(BusinessRuleException);
+    await expect(promise).rejects.toMatchObject({
       code: 'PAGAMENTO_DIVIDA_INACTIVE_DEBT',
       message: 'Nao e possivel registrar pagamento para uma divida inativa.',
       statusCode: 400,
@@ -237,9 +254,59 @@ describe('PagosDividaService', () => {
 
     expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(categoriasService.findOne).not.toHaveBeenCalled();
-    expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(dividasService.findOneForWrite).toHaveBeenCalledWith(
+      'divida-1',
+      'user-1',
+      manager,
+    );
+    expect(manager.create).not.toHaveBeenCalled();
+    expect(manager.save).not.toHaveBeenCalled();
     expect(logsService.logEntityEvent).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { debtId: 'missing-debt', description: 'missing' },
+    { debtId: 'foreign-debt', description: 'owned by another user' },
+  ])(
+    'keeps a $description debt private before validating account or category',
+    async ({ debtId }) => {
+      const manager = {
+        create: jest.fn(),
+        save: jest.fn(),
+      };
+      const error = new ResourceNotFoundException(
+        'DIVIDA_NOT_FOUND',
+        'Dívida não encontrada',
+      );
+      dividasService.findOneForWrite.mockRejectedValue(error);
+      mockTransaction(manager);
+
+      const promise = service.create('user-1', {
+        categoriaId: 'categoria-1',
+        contaId: 'conta-1',
+        data: '2026-04-01',
+        dividaId: debtId,
+        valor: 350,
+      });
+
+      await expect(promise).rejects.toMatchObject({
+        code: 'DIVIDA_NOT_FOUND',
+        message: 'Dívida não encontrada',
+        statusCode: 404,
+      });
+      expect(dividasService.findOneForWrite).toHaveBeenCalledWith(
+        debtId,
+        'user-1',
+        manager,
+      );
+      expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
+      expect(categoriasService.findOne).not.toHaveBeenCalled();
+      expect(manager.create).not.toHaveBeenCalled();
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     {
@@ -265,7 +332,7 @@ describe('PagosDividaService', () => {
         create: jest.fn(),
         save: jest.fn(),
       };
-      dividasService.findOne.mockResolvedValue({
+      dividasService.findOneForWrite.mockResolvedValue({
         ativa: true,
         id: 'divida-1',
       } as never);
@@ -303,7 +370,7 @@ describe('PagosDividaService', () => {
       ativa: true,
       id: 'conta-1',
     } as never);
-    dividasService.findOne.mockResolvedValue({
+    dividasService.findOneForWrite.mockResolvedValue({
       ativa: true,
       id: 'divida-1',
     } as never);
