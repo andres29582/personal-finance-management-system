@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import request, { type Response } from 'supertest';
-import { DataSource, type QueryRunner } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { TipoCategoria } from '../src/categorias/enums/tipo-categoria.enum';
 import { TipoConta } from '../src/contas/enums/tipo-conta.enum';
 import { TipoTransacao } from '../src/transacoes/enums/tipo-transacao.enum';
@@ -20,6 +19,13 @@ import {
   createDivida,
 } from './helpers/financial-scenario.helper';
 import { unwrapSuccess } from './helpers/http.helper';
+import {
+  type BackendActivity,
+  expectBlockedBy,
+  PostgresConcurrencyHarness,
+  type PostgresBarrier as Barrier,
+  withTimeout,
+} from './helpers/postgres-concurrency.helper';
 
 type ContaResponse = {
   ativa: boolean;
@@ -50,33 +56,10 @@ type PagamentoDividaResponse = {
   valor: number | string;
 };
 
-type BackendActivity = {
-  blockers: number[];
-  pid: number;
-  query: string;
-  waitEvent: string | null;
-  waitEventType: string | null;
-};
-
-type Barrier = {
-  applicationName: string;
-  functionName: string;
-  marker: string;
-  pendingRequests: Promise<Response>[];
-  pids: Set<number>;
-  queryRunner: QueryRunner;
-  table: 'conta' | 'pagamento_divida' | 'transacao' | 'transferencia';
-  triggerName: string;
-  unlocked: boolean;
-};
-
 type BarrierDefinition = {
   accountId: string;
   holder: 'deactivation' | 'debt-payment' | 'transaction' | 'transfer';
 };
-
-const DATABASE_POLL_DEADLINE_MS = 5000;
-const REQUEST_DEADLINE_MS = 15000;
 
 jest.setTimeout(60000);
 
@@ -84,8 +67,8 @@ describe('Financial active account concurrency (e2e)', () => {
   let app: E2eApplication;
   let appDataSource: DataSource;
   let coordinatorDataSource: DataSource;
+  let concurrencyHarness: PostgresConcurrencyHarness;
   let originalPgOptions: string | undefined;
-  const activeBarriers = new Set<Barrier>();
 
   beforeAll(async () => {
     originalPgOptions = process.env.PGOPTIONS;
@@ -111,24 +94,19 @@ describe('Financial active account concurrency (e2e)', () => {
       database: databaseConfig.database,
     });
     await coordinatorDataSource.initialize();
+    concurrencyHarness = new PostgresConcurrencyHarness(coordinatorDataSource);
   });
 
   afterEach(async () => {
-    const results = await Promise.allSettled(
-      [...activeBarriers].map(cleanupBarrier),
-    );
-    const failure = results.find((result) => result.status === 'rejected');
-    if (failure?.status === 'rejected') {
-      throw failure.reason instanceof Error
-        ? failure.reason
-        : new Error('Concurrency barrier cleanup failed');
+    if (concurrencyHarness) {
+      await concurrencyHarness.cleanupAll();
     }
   });
 
   afterAll(async () => {
-    const cleanupResults = await Promise.allSettled(
-      [...activeBarriers].map(cleanupBarrier),
-    );
+    const cleanupResults = concurrencyHarness
+      ? await concurrencyHarness.cleanupAllSettled()
+      : [];
     if (coordinatorDataSource?.isInitialized) {
       await coordinatorDataSource.destroy();
     }
@@ -794,53 +772,14 @@ describe('Financial active account concurrency (e2e)', () => {
     accountId,
     holder,
   }: BarrierDefinition): Promise<Barrier> {
-    const marker = `fc_${randomUUID().replaceAll('-', '')}`;
     const table = getBarrierTable(holder);
-    const barrier: Barrier = {
-      applicationName: `${marker}_${holder}`,
-      functionName: `fn_${marker}`,
-      marker,
-      pendingRequests: [],
-      pids: new Set<number>(),
-      queryRunner: coordinatorDataSource.createQueryRunner(),
-      table,
-      triggerName: `trg_${marker}`,
-      unlocked: false,
-    };
-    activeBarriers.add(barrier);
-    await barrier.queryRunner.connect();
-    await barrier.queryRunner.query(`SET lock_timeout = '5s'`);
-    await barrier.queryRunner.query(`SET statement_timeout = '15s'`);
-
     const accountLiteral = quoteLiteral(accountId);
-    const markerLiteral = quoteLiteral(marker);
-    const applicationNameLiteral = quoteLiteral(barrier.applicationName);
-    await barrier.queryRunner.query(`
-      CREATE FUNCTION ${quoteIdentifier(barrier.functionName)}()
-      RETURNS trigger
-      LANGUAGE plpgsql
-      AS $barrier$
-      BEGIN
-        PERFORM set_config('application_name', ${applicationNameLiteral}, true);
-        PERFORM set_config('lock_timeout', '10000', true);
-        PERFORM pg_advisory_xact_lock(hashtextextended(${markerLiteral}, 0));
-        RETURN NEW;
-      END;
-      $barrier$
-    `);
 
-    const triggerEvent = getBarrierTriggerEvent(holder, accountLiteral);
-    await barrier.queryRunner.query(`
-      CREATE TRIGGER ${quoteIdentifier(barrier.triggerName)}
-      ${triggerEvent}
-      EXECUTE FUNCTION ${quoteIdentifier(barrier.functionName)}()
-    `);
-    await barrier.queryRunner.query(
-      'SELECT pg_advisory_lock(hashtextextended($1, 0))',
-      [marker],
-    );
-
-    return barrier;
+    return concurrencyHarness.installBarrier({
+      holder,
+      table,
+      triggerEvent: getBarrierTriggerEvent(holder, accountLiteral),
+    });
   }
 
   function getBarrierTable(
@@ -885,104 +824,38 @@ describe('Financial active account concurrency (e2e)', () => {
     }
   }
 
-  async function waitForTaggedHolder(
-    barrier: Barrier,
-  ): Promise<BackendActivity> {
-    const coordinatorPid = await getCoordinatorPid(barrier);
-    const activity = await pollDatabase(async () => {
-      const rows = await readActivities(
-        barrier,
-        'WHERE application_name = $1',
-        [barrier.applicationName],
-      );
-
-      return rows.find(
-        (row) =>
-          row.waitEventType === 'Lock' && row.blockers.includes(coordinatorPid),
-      );
-    }, `${barrier.applicationName} to reach its advisory barrier`);
-
-    barrier.pids.add(activity.pid);
-    expectBlockedBy(activity, coordinatorPid);
-    return activity;
+  function waitForTaggedHolder(barrier: Barrier): Promise<BackendActivity> {
+    return concurrencyHarness.waitForTaggedHolder(barrier);
   }
 
-  async function expectTaggedHolderStillBlocked(
-    barrier: Barrier,
-    holderPid: number,
-  ): Promise<void> {
-    const coordinatorPid = await getCoordinatorPid(barrier);
-    const [activity] = await readActivities(
-      barrier,
-      'WHERE pid = $1 AND application_name = $2',
-      [holderPid, barrier.applicationName],
-    );
-
-    expect(activity).toBeDefined();
-    expectBlockedBy(activity, coordinatorPid);
-  }
-
-  async function getCoordinatorPid(barrier: Barrier): Promise<number> {
-    const [{ pid }] = (await barrier.queryRunner.query(
-      'SELECT pg_backend_pid() AS pid',
-    )) as Array<{ pid: number }>;
-    return pid;
-  }
-
-  async function waitForBlockedActivity(
+  function waitForBlockedActivity(
     barrier: Barrier,
     blockerPid: number,
     matchesRequest: (activity: BackendActivity) => boolean,
   ): Promise<BackendActivity> {
-    const activity = await pollDatabase(async () => {
-      const rows = await readActivities(
-        barrier,
-        'WHERE $1::integer = ANY(pg_blocking_pids(pid))',
-        [blockerPid],
-      );
-
-      return rows.find(
-        (row) => row.waitEventType === 'Lock' && matchesRequest(row),
-      );
-    }, `a request blocked by PostgreSQL PID ${blockerPid}`);
-
-    barrier.pids.add(activity.pid);
-    return activity;
+    return concurrencyHarness.waitForBlockedActivity(
+      barrier,
+      blockerPid,
+      matchesRequest,
+    );
   }
 
-  async function readActivities(
+  function expectTaggedHolderStillBlocked(
     barrier: Barrier,
-    whereClause: string,
-    parameters: unknown[],
-  ): Promise<BackendActivity[]> {
-    return (await barrier.queryRunner.query(
-      `SELECT
-         pid,
-         query,
-         wait_event AS "waitEvent",
-         wait_event_type AS "waitEventType",
-         pg_blocking_pids(pid) AS blockers
-       FROM pg_stat_activity
-       ${whereClause}`,
-      parameters,
-    )) as BackendActivity[];
+    holderPid: number,
+  ): Promise<void> {
+    return concurrencyHarness.expectTaggedHolderStillBlocked(
+      barrier,
+      holderPid,
+    );
   }
 
-  async function pollDatabase<T>(
-    observe: () => Promise<T | undefined>,
-    description: string,
-  ): Promise<T> {
-    const deadline = Date.now() + DATABASE_POLL_DEADLINE_MS;
+  function unlockBarrier(barrier: Barrier): Promise<void> {
+    return concurrencyHarness.unlockBarrier(barrier);
+  }
 
-    while (Date.now() < deadline) {
-      const result = await observe();
-      if (result !== undefined) {
-        return result;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 25));
-    }
-
-    throw new Error(`Timed out waiting for ${description}`);
+  function cleanupBarrier(barrier: Barrier): Promise<void> {
+    return concurrencyHarness.cleanupBarrier(barrier);
   }
 
   function isAccountShareLockQuery(activity: BackendActivity): boolean {
@@ -990,98 +863,6 @@ describe('Financial active account concurrency (e2e)', () => {
       /select[\s\S]+from\s+"conta"/i.test(activity.query) &&
       /for share/i.test(activity.query)
     );
-  }
-
-  function expectBlockedBy(
-    activity: BackendActivity,
-    blockerPid: number,
-  ): void {
-    expect(activity.pid).not.toBe(blockerPid);
-    expect(activity.waitEventType).toBe('Lock');
-    expect(activity.waitEvent).toEqual(expect.any(String));
-    expect(activity.blockers).toContain(blockerPid);
-  }
-
-  async function unlockBarrier(barrier: Barrier): Promise<void> {
-    if (barrier.unlocked || barrier.queryRunner.isReleased) {
-      return;
-    }
-    await barrier.queryRunner.query(
-      'SELECT pg_advisory_unlock(hashtextextended($1, 0))',
-      [barrier.marker],
-    );
-    barrier.unlocked = true;
-  }
-
-  async function cleanupBarrier(barrier: Barrier): Promise<void> {
-    if (barrier.queryRunner.isReleased) {
-      activeBarriers.delete(barrier);
-      return;
-    }
-
-    await barrier.queryRunner.connect();
-    const discoveredPids = (await barrier.queryRunner
-      .query(
-        `WITH holders AS (
-           SELECT pid
-           FROM pg_stat_activity
-           WHERE application_name = $1
-         )
-         SELECT activity.pid
-         FROM pg_stat_activity activity
-         WHERE activity.application_name = $1
-            OR EXISTS (
-              SELECT 1
-              FROM holders
-              WHERE holders.pid = ANY(pg_blocking_pids(activity.pid))
-            )`,
-        [barrier.applicationName],
-      )
-      .catch(() => [])) as Array<{ pid: number }>;
-    for (const { pid } of discoveredPids) {
-      barrier.pids.add(pid);
-    }
-
-    await unlockBarrier(barrier);
-    await Promise.allSettled(
-      barrier.pendingRequests.map((pending) =>
-        withTimeout(pending, 'pending request cleanup', 1000),
-      ),
-    );
-
-    const pids = [...barrier.pids];
-    if (pids.length > 0) {
-      await barrier.queryRunner.query(
-        `SELECT pg_cancel_backend(pid)
-         FROM pg_stat_activity
-         WHERE pid = ANY($1::integer[]) AND state <> 'idle'`,
-        [pids],
-      );
-    }
-    const pendingResults = await Promise.allSettled(
-      barrier.pendingRequests.map((pending) =>
-        withTimeout(pending, 'cancelled request cleanup', 2000),
-      ),
-    );
-    const timedOutRequest = pendingResults.find(
-      (result) =>
-        result.status === 'rejected' &&
-        result.reason instanceof Error &&
-        result.reason.message.startsWith('Timed out waiting for'),
-    );
-    if (timedOutRequest !== undefined) {
-      throw new Error('Timed out cleaning up a pending HTTP request');
-    }
-
-    await barrier.queryRunner.query(
-      `DROP TRIGGER IF EXISTS ${quoteIdentifier(barrier.triggerName)}
-       ON ${quoteIdentifier(barrier.table)}`,
-    );
-    await barrier.queryRunner.query(
-      `DROP FUNCTION IF EXISTS ${quoteIdentifier(barrier.functionName)}()`,
-    );
-    await barrier.queryRunner.release();
-    activeBarriers.delete(barrier);
   }
 
   async function getAccount(
@@ -1253,36 +1034,7 @@ describe('Financial active account concurrency (e2e)', () => {
     expect(rows).toEqual([{ entity, entityId, event }]);
   }
 
-  function quoteIdentifier(identifier: string): string {
-    if (!/^[a-zA-Z0-9_]+$/.test(identifier)) {
-      throw new Error(`Invalid PostgreSQL identifier: ${identifier}`);
-    }
-    return `"${identifier}"`;
-  }
-
   function quoteLiteral(value: string): string {
     return `'${value.replaceAll("'", "''")}'`;
-  }
-
-  async function withTimeout<T>(
-    promise: Promise<T>,
-    description: string,
-    timeoutMs = REQUEST_DEADLINE_MS,
-  ): Promise<T> {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeout = setTimeout(
-        () => reject(new Error(`Timed out waiting for ${description}`)),
-        timeoutMs,
-      );
-    });
-
-    try {
-      return await Promise.race([promise, timeoutPromise]);
-    } finally {
-      if (timeout !== undefined) {
-        clearTimeout(timeout);
-      }
-    }
   }
 });

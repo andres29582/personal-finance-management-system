@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { EntityManager } from 'typeorm';
 import { ResourceNotFoundException } from '../common/exceptions';
 import {
   assertNonNegativeFinancialValue,
@@ -62,6 +63,23 @@ export class DividasService {
 
   async findOne(id: string, usuarioId: string): Promise<Divida> {
     const divida = await this.dividaRepository.findByIdAndUser(id, usuarioId);
+    return this.requireDebt(divida);
+  }
+
+  async findOneForWrite(
+    id: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Divida> {
+    const divida = await this.dividaRepository.findByIdAndUserForWrite(
+      id,
+      usuarioId,
+      manager,
+    );
+    return this.requireDebt(divida);
+  }
+
+  private requireDebt(divida: Divida | null): Divida {
     if (!divida) {
       throw new ResourceNotFoundException(
         'DIVIDA_NOT_FOUND',

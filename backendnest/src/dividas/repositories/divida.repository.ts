@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { BaseRepository } from '../../common/abstract/base.repository';
 import { Divida } from '../entities/divida.entity';
 
@@ -22,6 +22,17 @@ export class DividaRepository extends BaseRepository<Divida> {
 
   async findByIdAndUser(id: string, usuarioId: string): Promise<Divida | null> {
     return this.dividaRepository.findOneBy({ id, usuarioId });
+  }
+
+  async findByIdAndUserForWrite(
+    id: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Divida | null> {
+    return manager.getRepository(Divida).findOne({
+      where: { id, usuarioId },
+      lock: { mode: 'pessimistic_read' },
+    });
   }
 
   async updateByIdAndUser(

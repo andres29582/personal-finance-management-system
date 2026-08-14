@@ -33,16 +33,21 @@ export class PagosDividaService {
     dto: CreatePagoDividaDto,
   ): Promise<PagoDivida> {
     assertPositiveFinancialValue(dto.valor, 'Valor do pagamento');
-    const divida = await this.dividasService.findOne(dto.dividaId, usuarioId);
-
-    if (divida.ativa === false) {
-      throw new BusinessRuleException(
-        'PAGAMENTO_DIVIDA_INACTIVE_DEBT',
-        'Nao e possivel registrar pagamento para uma divida inativa.',
-      );
-    }
 
     const savedPayment = await this.dataSource.transaction(async (manager) => {
+      const divida = await this.dividasService.findOneForWrite(
+        dto.dividaId,
+        usuarioId,
+        manager,
+      );
+
+      if (divida.ativa === false) {
+        throw new BusinessRuleException(
+          'PAGAMENTO_DIVIDA_INACTIVE_DEBT',
+          'Nao e possivel registrar pagamento para uma divida inativa.',
+        );
+      }
+
       await this.contasService.findActiveForWrite(
         dto.contaId,
         usuarioId,
