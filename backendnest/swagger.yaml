@@ -2191,7 +2191,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     FinancialOperationBadRequest:
-      description: Payload, parametro ou query invalido, ou operacao financeira em conta inativa.
+      description: Payload, parametro ou query invalido, ou operacao financeira com conta ou categoria inativa.
       content:
         application/json:
           schema:
@@ -2204,6 +2204,15 @@ components:
                 error:
                   code: CONTA_INACTIVE
                   message: Não é possível realizar operações financeiras em uma conta inativa.
+                timestamp: '2026-08-03T12:00:00.000Z'
+                requestId: 123e4567-e89b-12d3-a456-426614174000
+            categoriaInativa:
+              summary: Categoria inativa para operacoes financeiras
+              value:
+                success: false
+                error:
+                  code: CATEGORIA_INACTIVE
+                  message: Não é possível realizar operações financeiras com uma categoria inativa.
                 timestamp: '2026-08-03T12:00:00.000Z'
                 requestId: 123e4567-e89b-12d3-a456-426614174000
     Unauthorized:

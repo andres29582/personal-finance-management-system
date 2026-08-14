@@ -53,9 +53,10 @@ export class PagosDividaService {
         usuarioId,
         manager,
       );
-      const categoria = await this.categoriasService.findOne(
+      const categoria = await this.categoriasService.findActiveForWrite(
         dto.categoriaId,
         usuarioId,
+        manager,
       );
 
       if (categoria.tipo !== TipoCategoria.DESPESA) {

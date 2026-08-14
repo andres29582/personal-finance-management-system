@@ -1,9 +1,13 @@
 import { CategoriasService } from './categorias.service';
+import { EntityManager } from 'typeorm';
 import { Categoria } from './entities/categoria.entity';
 import { DEFAULT_CATEGORIAS } from './default-categorias';
 import { TipoCategoria } from './enums/tipo-categoria.enum';
 import { LogsService } from '../logs/logs.service';
-import { ResourceNotFoundException } from '../common/exceptions';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { CategoriaRepository } from './repositories/categoria.repository';
 
 describe('CategoriasService', () => {
@@ -16,6 +20,7 @@ describe('CategoriasService', () => {
       | 'createMany'
       | 'findActiveByUser'
       | 'findByIdAndUser'
+      | 'findByIdAndUserForWrite'
       | 'updateByIdAndUser'
     >
   >;
@@ -28,6 +33,7 @@ describe('CategoriasService', () => {
       createMany: jest.fn(),
       findActiveByUser: jest.fn(),
       findByIdAndUser: jest.fn(),
+      findByIdAndUserForWrite: jest.fn(),
       updateByIdAndUser: jest.fn(),
     };
     logsService = {
@@ -136,5 +142,83 @@ describe('CategoriasService', () => {
       message: 'Categoria não encontrada',
       statusCode: 404,
     });
+  });
+
+  it('returns an active category for financial writes', async () => {
+    const manager = {} as EntityManager;
+    const categoria = {
+      ativa: true,
+      id: 'categoria-1',
+      tipo: TipoCategoria.DESPESA,
+      usuarioId: 'user-1',
+    } as Categoria;
+    repository.findByIdAndUserForWrite.mockResolvedValue(categoria);
+
+    await expect(
+      service.findActiveForWrite('categoria-1', 'user-1', manager),
+    ).resolves.toBe(categoria);
+    expect(repository.findByIdAndUserForWrite).toHaveBeenCalledWith(
+      'categoria-1',
+      'user-1',
+      manager,
+    );
+  });
+
+  it.each([
+    { description: 'missing', result: null },
+    { description: 'owned by another user', result: null },
+  ])(
+    'keeps an operational $description category private',
+    async ({ result }) => {
+      const manager = {} as EntityManager;
+      repository.findByIdAndUserForWrite.mockResolvedValue(result);
+
+      await expect(
+        service.findActiveForWrite('categoria-1', 'user-1', manager),
+      ).rejects.toMatchObject({
+        code: 'CATEGORIA_NOT_FOUND',
+        message: 'Categoria não encontrada',
+        statusCode: 404,
+      });
+    },
+  );
+
+  it('rejects an inactive category for financial writes', async () => {
+    const manager = {} as EntityManager;
+    repository.findByIdAndUserForWrite.mockResolvedValue({
+      ativa: false,
+      id: 'categoria-1',
+      tipo: TipoCategoria.DESPESA,
+      usuarioId: 'user-1',
+    } as Categoria);
+
+    const promise = service.findActiveForWrite(
+      'categoria-1',
+      'user-1',
+      manager,
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(BusinessRuleException);
+    await expect(promise).rejects.toMatchObject({
+      code: 'CATEGORIA_INACTIVE',
+      message:
+        'Não é possível realizar operações financeiras com uma categoria inativa.',
+      statusCode: 400,
+    });
+  });
+
+  it('continues returning an inactive category through historical findOne', async () => {
+    const categoria = {
+      ativa: false,
+      id: 'categoria-1',
+      tipo: TipoCategoria.DESPESA,
+      usuarioId: 'user-1',
+    } as Categoria;
+    repository.findByIdAndUser.mockResolvedValue(categoria);
+
+    await expect(service.findOne('categoria-1', 'user-1')).resolves.toBe(
+      categoria,
+    );
+    expect(repository.findByIdAndUserForWrite).not.toHaveBeenCalled();
   });
 });
