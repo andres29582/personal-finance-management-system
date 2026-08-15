@@ -309,6 +309,187 @@ describe('Financial flow (e2e)', () => {
     expect(unwrapSuccess<Identifiable[]>(transacoes)).toEqual([]);
   });
 
+  it('enforces active categories for financial writes while preserving history and reactivation', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '16899535009',
+      email: 'categoria.inativa.e2e@example.com',
+      nome: 'Categoria Inativa E2E',
+    });
+    const category = await createCategoria(
+      session.token,
+      makeCategoriaPayload({
+        nome: 'Categoria que sera desativada E2E',
+        tipo: TipoCategoria.DESPESA,
+      }),
+    );
+    const account = await createConta(
+      session.token,
+      makeContaPayload({
+        nome: 'Conta categoria inativa E2E',
+        saldoInicial: 1000,
+        tipo: TipoConta.BANCO,
+      }),
+    );
+    const debt = await createDivida(app, session, {
+      contaId: account.id,
+      montoTotal: 500,
+      nome: 'Divida categoria inativa E2E',
+    });
+    const historicalTransactionResponse = await withAuth(
+      request(app.getHttpServer()).post('/transacoes'),
+      session,
+    )
+      .send(
+        makeTransacaoPayload({
+          categoriaId: category.id,
+          contaId: account.id,
+          data: '2026-06-11',
+          descricao: 'Transacao historica categoria inativa E2E',
+          tipo: TipoTransacao.DESPESA,
+          valor: 100,
+        }),
+      )
+      .expect(201);
+    const historicalTransaction = unwrapSuccess<TransacaoResponse>(
+      historicalTransactionResponse,
+    );
+
+    await withAuth(
+      request(app.getHttpServer()).patch(
+        `/categorias/${category.id}/desativar`,
+      ),
+      session,
+    ).expect(200);
+
+    const historicalCategoryResponse = await withAuth(
+      request(app.getHttpServer()).get(`/categorias/${category.id}`),
+      session,
+    ).expect(200);
+    expect(
+      unwrapSuccess<{ ativa: boolean; id: string }>(historicalCategoryResponse),
+    ).toEqual(expect.objectContaining({ ativa: false, id: category.id }));
+    const activeCategoriesResponse = await withAuth(
+      request(app.getHttpServer()).get('/categorias'),
+      session,
+    ).expect(200);
+    expect(unwrapSuccess<Identifiable[]>(activeCategoriesResponse)).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: category.id })]),
+    );
+
+    const rowsBeforeRejections = await snapshotPersistedFinancialRows(
+      session.userId,
+    );
+    const auditsBeforeRejections = await countSuccessfulAuditEvents(
+      session.token,
+      ['TRANSACAO_CREATED', 'TRANSACAO_UPDATED', 'PAGAMENTO_DIVIDA_CREATED'],
+    );
+    expectSaldo(await listFinancialContas(app, session), account.id, 900);
+
+    const rejectedCreate = await withAuth(
+      request(app.getHttpServer()).post('/transacoes'),
+      session,
+    )
+      .send(
+        makeTransacaoPayload({
+          categoriaId: category.id,
+          contaId: account.id,
+          data: '2026-06-12',
+          descricao: 'Criacao rejeitada categoria inativa E2E',
+          tipo: TipoTransacao.DESPESA,
+          valor: 50,
+        }),
+      )
+      .expect(400);
+    expectApiError(
+      rejectedCreate,
+      'CATEGORIA_INACTIVE',
+      'Não é possível realizar operações financeiras com uma categoria inativa.',
+    );
+
+    const rejectedUpdate = await withAuth(
+      request(app.getHttpServer()).patch(
+        `/transacoes/${historicalTransaction.id}`,
+      ),
+      session,
+    )
+      .send({ descricao: 'Atualizacao rejeitada categoria inativa E2E' })
+      .expect(400);
+    expectApiError(
+      rejectedUpdate,
+      'CATEGORIA_INACTIVE',
+      'Não é possível realizar operações financeiras com uma categoria inativa.',
+    );
+
+    const rejectedPayment = await withAuth(
+      request(app.getHttpServer()).post('/pagos-divida'),
+      session,
+    )
+      .send(
+        makePagoDividaPayload({
+          categoriaId: category.id,
+          contaId: account.id,
+          data: '2026-06-13',
+          descricao: 'Pagamento rejeitado categoria inativa E2E',
+          dividaId: debt.id,
+          valor: 75,
+        }),
+      )
+      .expect(400);
+    expectApiError(
+      rejectedPayment,
+      'CATEGORIA_INACTIVE',
+      'Não é possível realizar operações financeiras com uma categoria inativa.',
+    );
+
+    await expect(
+      snapshotPersistedFinancialRows(session.userId),
+    ).resolves.toEqual(rowsBeforeRejections);
+    await expect(
+      countSuccessfulAuditEvents(session.token, [
+        'TRANSACAO_CREATED',
+        'TRANSACAO_UPDATED',
+        'PAGAMENTO_DIVIDA_CREATED',
+      ]),
+    ).resolves.toEqual(auditsBeforeRejections);
+    expectSaldo(await listFinancialContas(app, session), account.id, 900);
+    const unchangedTransactionResponse = await withAuth(
+      request(app.getHttpServer()).get(
+        `/transacoes/${historicalTransaction.id}`,
+      ),
+      session,
+    ).expect(200);
+    expect(
+      unwrapSuccess<{ descricao: string }>(unchangedTransactionResponse)
+        .descricao,
+    ).toBe('Transacao historica categoria inativa E2E');
+
+    const reactivatedCategoryResponse = await withAuth(
+      request(app.getHttpServer()).patch(`/categorias/${category.id}`),
+      session,
+    )
+      .send({ ativa: true })
+      .expect(200);
+    expect(
+      unwrapSuccess<{ ativa: boolean; id: string }>(
+        reactivatedCategoryResponse,
+      ),
+    ).toEqual(expect.objectContaining({ ativa: true, id: category.id }));
+
+    await withAuth(request(app.getHttpServer()).post('/transacoes'), session)
+      .send(
+        makeTransacaoPayload({
+          categoriaId: category.id,
+          contaId: account.id,
+          data: '2026-06-14',
+          descricao: 'Transacao apos reativacao E2E',
+          tipo: TipoTransacao.DESPESA,
+          valor: 25,
+        }),
+      )
+      .expect(201);
+    expectSaldo(await listFinancialContas(app, session), account.id, 875);
+  });
+
   it('enforces active accounts for financial writes while preserving history and reactivation', async () => {
     const session = await registerAndLoginTestUser(app, {
       cpf: '31415926590',

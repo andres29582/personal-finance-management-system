@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { EntityManager } from 'typeorm';
 import { Categoria } from './entities/categoria.entity';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
 import { UpdateCategoriaDto } from './dto/update-categoria.dto';
 import { DEFAULT_CATEGORIAS } from './default-categorias';
 import { TipoCategoria } from './enums/tipo-categoria.enum';
 import { LogsService } from '../logs/logs.service';
-import { ResourceNotFoundException } from '../common/exceptions';
+import {
+  BusinessRuleException,
+  ResourceNotFoundException,
+} from '../common/exceptions';
 import { CategoriaRepository } from './repositories/categoria.repository';
 
 @Injectable()
@@ -53,6 +57,31 @@ export class CategoriasService {
       throw new ResourceNotFoundException(
         'CATEGORIA_NOT_FOUND',
         'Categoria não encontrada',
+      );
+    }
+    return categoria;
+  }
+
+  async findActiveForWrite(
+    id: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Categoria> {
+    const categoria = await this.categoriaRepository.findByIdAndUserForWrite(
+      id,
+      usuarioId,
+      manager,
+    );
+    if (!categoria) {
+      throw new ResourceNotFoundException(
+        'CATEGORIA_NOT_FOUND',
+        'Categoria não encontrada',
+      );
+    }
+    if (categoria.ativa === false) {
+      throw new BusinessRuleException(
+        'CATEGORIA_INACTIVE',
+        'Não é possível realizar operações financeiras com uma categoria inativa.',
       );
     }
     return categoria;

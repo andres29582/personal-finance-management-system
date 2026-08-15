@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { BaseRepository } from '../../common/abstract/base.repository';
 import { Categoria } from '../entities/categoria.entity';
 import { TipoCategoria } from '../enums/tipo-categoria.enum';
@@ -29,6 +29,17 @@ export class CategoriaRepository extends BaseRepository<Categoria> {
     usuarioId: string,
   ): Promise<Categoria | null> {
     return this.categoriaRepository.findOneBy({ id, usuarioId });
+  }
+
+  async findByIdAndUserForWrite(
+    id: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<Categoria | null> {
+    return manager.getRepository(Categoria).findOne({
+      where: { id, usuarioId },
+      lock: { mode: 'pessimistic_read' },
+    });
   }
 
   async updateByIdAndUser(

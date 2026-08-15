@@ -30,7 +30,9 @@ describe('PagosDividaService', () => {
   let dividasService: jest.Mocked<
     Pick<DividasService, 'findOne' | 'findOneForWrite'>
   >;
-  let categoriasService: jest.Mocked<Pick<CategoriasService, 'findOne'>>;
+  let categoriasService: jest.Mocked<
+    Pick<CategoriasService, 'findActiveForWrite'>
+  >;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
 
@@ -47,7 +49,7 @@ describe('PagosDividaService', () => {
       findOneForWrite: jest.fn(),
     };
     categoriasService = {
-      findOne: jest.fn(),
+      findActiveForWrite: jest.fn(),
     };
     dataSource = {
       transaction: jest.fn(),
@@ -96,7 +98,8 @@ describe('PagosDividaService', () => {
       ativa: true,
       id: 'divida-1',
     } as never);
-    categoriasService.findOne.mockResolvedValue({
+    categoriasService.findActiveForWrite.mockResolvedValue({
+      ativa: true,
       id: 'categoria-1',
       tipo: TipoCategoria.DESPESA,
     } as never);
@@ -143,10 +146,20 @@ describe('PagosDividaService', () => {
       'user-1',
       manager,
     );
+    expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
+      'categoria-1',
+      'user-1',
+      manager,
+    );
     expect(
       dividasService.findOneForWrite.mock.invocationCallOrder[0],
     ).toBeLessThan(
       contasService.findActiveForWrite.mock.invocationCallOrder[0],
+    );
+    expect(
+      contasService.findActiveForWrite.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      categoriasService.findActiveForWrite.mock.invocationCallOrder[0],
     );
     expect(transacaoPayload.id).toBeDefined();
     expect(pagoDividaPayload.transacaoId).toBe(transacaoPayload.id);
@@ -161,6 +174,9 @@ describe('PagosDividaService', () => {
           transacaoId: transacaoPayload.id,
         }) as Record<string, unknown>,
       }),
+    );
+    expect(saveMock.mock.invocationCallOrder[1]).toBeLessThan(
+      logsService.logEntityEvent.mock.invocationCallOrder[0],
     );
   });
 
@@ -188,7 +204,8 @@ describe('PagosDividaService', () => {
       ativa: true,
       id: 'divida-1',
     } as never);
-    categoriasService.findOne.mockResolvedValue({
+    categoriasService.findActiveForWrite.mockResolvedValue({
+      ativa: true,
       id: 'categoria-1',
       tipo: TipoCategoria.DESPESA,
     } as never);
@@ -253,7 +270,7 @@ describe('PagosDividaService', () => {
     });
 
     expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
-    expect(categoriasService.findOne).not.toHaveBeenCalled();
+    expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
     expect(dividasService.findOneForWrite).toHaveBeenCalledWith(
       'divida-1',
@@ -301,7 +318,7 @@ describe('PagosDividaService', () => {
         manager,
       );
       expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
-      expect(categoriasService.findOne).not.toHaveBeenCalled();
+      expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
       expect(manager.create).not.toHaveBeenCalled();
       expect(manager.save).not.toHaveBeenCalled();
       expect(logsService.logEntityEvent).not.toHaveBeenCalled();
@@ -354,7 +371,68 @@ describe('PagosDividaService', () => {
         'user-1',
         manager,
       );
-      expect(categoriasService.findOne).not.toHaveBeenCalled();
+      expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
+      expect(manager.create).not.toHaveBeenCalled();
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    {
+      code: 'CATEGORIA_INACTIVE',
+      error: new BusinessRuleException(
+        'CATEGORIA_INACTIVE',
+        'Não é possível realizar operações financeiras com uma categoria inativa.',
+      ),
+      statusCode: 400,
+    },
+    {
+      code: 'CATEGORIA_NOT_FOUND',
+      error: new ResourceNotFoundException(
+        'CATEGORIA_NOT_FOUND',
+        'Categoria não encontrada',
+      ),
+      statusCode: 404,
+    },
+  ])(
+    'rejects debt payment with $code after debt and account validation',
+    async ({ code, error, statusCode }) => {
+      const manager = {
+        create: jest.fn(),
+        save: jest.fn(),
+      };
+      dividasService.findOneForWrite.mockResolvedValue({
+        ativa: true,
+        id: 'divida-1',
+      } as never);
+      contasService.findActiveForWrite.mockResolvedValue({
+        ativa: true,
+        id: 'conta-1',
+      } as never);
+      categoriasService.findActiveForWrite.mockRejectedValue(error);
+      mockTransaction(manager);
+
+      await expect(
+        service.create('user-1', {
+          categoriaId: 'categoria-1',
+          contaId: 'conta-1',
+          data: '2026-04-01',
+          dividaId: 'divida-1',
+          valor: 350,
+        }),
+      ).rejects.toMatchObject({ code, statusCode });
+
+      expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
+        'categoria-1',
+        'user-1',
+        manager,
+      );
+      expect(
+        contasService.findActiveForWrite.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        categoriasService.findActiveForWrite.mock.invocationCallOrder[0],
+      );
       expect(manager.create).not.toHaveBeenCalled();
       expect(manager.save).not.toHaveBeenCalled();
       expect(logsService.logEntityEvent).not.toHaveBeenCalled();
@@ -374,7 +452,8 @@ describe('PagosDividaService', () => {
       ativa: true,
       id: 'divida-1',
     } as never);
-    categoriasService.findOne.mockResolvedValue({
+    categoriasService.findActiveForWrite.mockResolvedValue({
+      ativa: true,
       id: 'categoria-1',
       tipo: TipoCategoria.RECEITA,
     } as never);
@@ -441,6 +520,7 @@ describe('PagosDividaService', () => {
       }),
     );
     expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
+    expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
   });
 
   it('propagates remove transaction failure and does not log deletion success', async () => {

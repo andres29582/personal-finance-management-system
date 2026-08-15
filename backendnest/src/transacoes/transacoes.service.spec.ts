@@ -32,7 +32,9 @@ describe('TransacoesService', () => {
   let contasService: jest.Mocked<
     Pick<ContasService, 'findActiveForWrite' | 'findActiveManyForWrite'>
   >;
-  let categoriasService: jest.Mocked<Pick<CategoriasService, 'findOne'>>;
+  let categoriasService: jest.Mocked<
+    Pick<CategoriasService, 'findActiveForWrite'>
+  >;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
   let manager: TestManager;
@@ -58,7 +60,7 @@ describe('TransacoesService', () => {
       findActiveManyForWrite: jest.fn(),
     };
     categoriasService = {
-      findOne: jest.fn(),
+      findActiveForWrite: jest.fn(),
     };
     manager = {
       create: jest.fn((_entity: unknown, payload: Transacao) => payload),
@@ -92,7 +94,8 @@ describe('TransacoesService', () => {
       id: 'conta-1',
       usuarioId: 'user-1',
     } as never);
-    categoriasService.findOne.mockResolvedValue({
+    categoriasService.findActiveForWrite.mockResolvedValue({
+      ativa: true,
       id: 'categoria-1',
       tipo: TipoCategoria.RECEITA,
     } as never);
@@ -104,6 +107,16 @@ describe('TransacoesService', () => {
       'conta-1',
       'user-1',
       manager,
+    );
+    expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
+      'categoria-1',
+      'user-1',
+      manager,
+    );
+    expect(
+      contasService.findActiveForWrite.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      categoriasService.findActiveForWrite.mock.invocationCallOrder[0],
     );
     expect(manager.create).toHaveBeenCalledWith(
       Transacao,
@@ -138,7 +151,7 @@ describe('TransacoesService', () => {
 
     expect(manager.create).not.toHaveBeenCalled();
     expect(manager.save).not.toHaveBeenCalled();
-    expect(categoriasService.findOne).not.toHaveBeenCalled();
+    expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(logsService.logEntityEvent).not.toHaveBeenCalled();
   });
 
@@ -157,11 +170,59 @@ describe('TransacoesService', () => {
     expect(logsService.logEntityEvent).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      code: 'CATEGORIA_INACTIVE',
+      error: new BusinessRuleException(
+        'CATEGORIA_INACTIVE',
+        'Não é possível realizar operações financeiras com uma categoria inativa.',
+      ),
+      statusCode: 400,
+    },
+    {
+      code: 'CATEGORIA_NOT_FOUND',
+      error: new ResourceNotFoundException(
+        'CATEGORIA_NOT_FOUND',
+        'Categoria não encontrada',
+      ),
+      statusCode: 404,
+    },
+  ])(
+    'rejects transaction creation with $code after validating the account',
+    async ({ code, error, statusCode }) => {
+      contasService.findActiveForWrite.mockResolvedValue({
+        ativa: true,
+        id: 'conta-1',
+      } as never);
+      categoriasService.findActiveForWrite.mockRejectedValue(error);
+
+      await expect(service.create('user-1', createDto)).rejects.toMatchObject({
+        code,
+        statusCode,
+      });
+
+      expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
+        'categoria-1',
+        'user-1',
+        manager,
+      );
+      expect(
+        contasService.findActiveForWrite.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        categoriasService.findActiveForWrite.mock.invocationCallOrder[0],
+      );
+      expect(manager.create).not.toHaveBeenCalled();
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects creation when category type does not match transaction type', async () => {
     contasService.findActiveForWrite.mockResolvedValue({
       ativa: true,
     } as never);
-    categoriasService.findOne.mockResolvedValue({
+    categoriasService.findActiveForWrite.mockResolvedValue({
+      ativa: true,
       id: 'categoria-1',
       tipo: TipoCategoria.DESPESA,
     } as never);
@@ -235,6 +296,37 @@ describe('TransacoesService', () => {
     expect(manager.update).not.toHaveBeenCalled();
   });
 
+  it('blocks PATCH when the effective category is inactive', async () => {
+    manager.findOne.mockResolvedValueOnce({
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      id: 'transacao-1',
+      tipo: TipoTransacao.DESPESA,
+      usuarioId: 'user-1',
+    } as Transacao);
+    contasService.findActiveManyForWrite.mockResolvedValue([
+      { ativa: true, id: 'conta-1' } as Conta,
+    ]);
+    categoriasService.findActiveForWrite.mockRejectedValue(
+      new BusinessRuleException(
+        'CATEGORIA_INACTIVE',
+        'Não é possível realizar operações financeiras com uma categoria inativa.',
+      ),
+    );
+
+    await expect(
+      service.update('transacao-1', 'user-1', { descricao: 'Ajuste' }),
+    ).rejects.toMatchObject({ code: 'CATEGORIA_INACTIVE', statusCode: 400 });
+
+    expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
+      'categoria-1',
+      'user-1',
+      manager,
+    );
+    expect(manager.update).not.toHaveBeenCalled();
+    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+
   it('updates a transaction with active accounts in the same transaction', async () => {
     const current = {
       categoriaId: 'categoria-1',
@@ -251,7 +343,8 @@ describe('TransacoesService', () => {
     contasService.findActiveManyForWrite.mockResolvedValue([
       { ativa: true, id: 'conta-1' } as Conta,
     ]);
-    categoriasService.findOne.mockResolvedValue({
+    categoriasService.findActiveForWrite.mockResolvedValue({
+      ativa: true,
       id: 'categoria-1',
       tipo: TipoCategoria.DESPESA,
     } as never);
@@ -263,6 +356,19 @@ describe('TransacoesService', () => {
     expect(manager.findOne).toHaveBeenCalledWith(
       Transacao,
       expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
+    );
+    expect(manager.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      contasService.findActiveManyForWrite.mock.invocationCallOrder[0],
+    );
+    expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
+      'categoria-1',
+      'user-1',
+      manager,
+    );
+    expect(
+      contasService.findActiveManyForWrite.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      categoriasService.findActiveForWrite.mock.invocationCallOrder[0],
     );
     expect(manager.update).toHaveBeenCalledWith(
       Transacao,
@@ -293,6 +399,7 @@ describe('TransacoesService', () => {
     );
     expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(contasService.findActiveManyForWrite).not.toHaveBeenCalled();
+    expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
