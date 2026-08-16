@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, IsNull } from 'typeorm';
 import {
   BusinessRuleException,
   ResourceNotFoundException,
@@ -15,6 +15,7 @@ import { CategoriasService } from '../categorias/categorias.service';
 import { LogsService } from '../logs/logs.service';
 import { TransacaoRepository } from './repositories/transacao.repository';
 import { notSoftDeleted } from '../common/soft-delete.query';
+import { PagoDivida } from '../pagos-divida/entities/pago-divida.entity';
 
 @Injectable()
 export class TransacoesService {
@@ -105,6 +106,7 @@ export class TransacoesService {
           usuarioId,
           manager,
         );
+        await this.assertNotLinkedToActiveDebtPayment(id, usuarioId, manager);
 
         if (dto.valor !== undefined) {
           assertPositiveFinancialValue(dto.valor, 'Valor da transacao');
@@ -157,8 +159,21 @@ export class TransacoesService {
   }
 
   async remove(id: string, usuarioId: string): Promise<void> {
-    const transaction = await this.findOne(id, usuarioId);
-    await this.transacaoRepository.softDeleteByIdAndUser(id, usuarioId);
+    const transaction = await this.dataSource.transaction(async (manager) => {
+      const currentTransaction = await this.findOneForWrite(
+        id,
+        usuarioId,
+        manager,
+      );
+      await this.assertNotLinkedToActiveDebtPayment(id, usuarioId, manager);
+      await manager.update(
+        Transacao,
+        { id, usuarioId, ...notSoftDeleted },
+        { excluidoEm: new Date() },
+      );
+      return currentTransaction;
+    });
+
     await this.logsService.logEntityEvent({
       event: 'TRANSACAO_SOFT_DELETED',
       module: 'transacoes',
@@ -174,6 +189,25 @@ export class TransacoesService {
         valor: transaction.valor,
       },
     });
+  }
+
+  private async assertNotLinkedToActiveDebtPayment(
+    transacaoId: string,
+    usuarioId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const isLinked = await manager.getRepository(PagoDivida).existsBy({
+      transacaoId,
+      usuarioId,
+      excluidoEm: IsNull(),
+    });
+
+    if (isLinked) {
+      throw new BusinessRuleException(
+        'TRANSACAO_LINKED_TO_DEBT_PAYMENT',
+        'Não é possível alterar ou excluir diretamente uma transação vinculada a um pagamento de dívida ativo.',
+      );
+    }
   }
 
   private ensureCategoryMatchesTransactionType(
