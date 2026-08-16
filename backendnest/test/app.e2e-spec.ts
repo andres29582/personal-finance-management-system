@@ -51,12 +51,19 @@ type LoginResponse = {
 type TransacaoResponse = Identifiable & {
   contaId: string;
   categoriaId: string;
+  data: string;
+  descricao: string;
   tipo: TipoTransacao;
   valor: number | string;
 };
 
 type PagamentoDividaResponse = Identifiable & {
+  contaId: string;
+  data: string;
+  descricao: string;
+  dividaId: string;
   transacaoId: string;
+  valor: number | string;
 };
 
 type ContaDetalheResponse = ContaResponse & {
@@ -201,6 +208,89 @@ describe('Financial flow (e2e)', () => {
 
     expect(pagamento.transacaoId).toEqual(expect.any(String));
 
+    contas = await listFinancialContas(app, session);
+    expectSaldo(contas, conta.id, 875);
+
+    const pagamentoAntes = unwrapSuccess<PagamentoDividaResponse>(
+      await withAuth(
+        request(app.getHttpServer()).get(`/pagos-divida/${pagamento.id}`),
+        session,
+      ).expect(200),
+    );
+    const transacaoAntes = unwrapSuccess<TransacaoResponse>(
+      await withAuth(
+        request(app.getHttpServer()).get(
+          `/transacoes/${pagamento.transacaoId}`,
+        ),
+        session,
+      ).expect(200),
+    );
+
+    const updateDireto = await withAuth(
+      request(app.getHttpServer()).patch(
+        `/transacoes/${pagamento.transacaoId}`,
+      ),
+      session,
+    )
+      .send({ valor: 250 })
+      .expect(400);
+    expectApiError(
+      updateDireto,
+      'TRANSACAO_LINKED_TO_DEBT_PAYMENT',
+      'Não é possível alterar ou excluir diretamente uma transação vinculada a um pagamento de dívida ativo.',
+    );
+
+    expect(
+      unwrapSuccess<PagamentoDividaResponse>(
+        await withAuth(
+          request(app.getHttpServer()).get(`/pagos-divida/${pagamento.id}`),
+          session,
+        ).expect(200),
+      ),
+    ).toEqual(pagamentoAntes);
+    expect(
+      unwrapSuccess<TransacaoResponse>(
+        await withAuth(
+          request(app.getHttpServer()).get(
+            `/transacoes/${pagamento.transacaoId}`,
+          ),
+          session,
+        ).expect(200),
+      ),
+    ).toEqual(transacaoAntes);
+    contas = await listFinancialContas(app, session);
+    expectSaldo(contas, conta.id, 875);
+
+    const deleteDireto = await withAuth(
+      request(app.getHttpServer()).delete(
+        `/transacoes/${pagamento.transacaoId}`,
+      ),
+      session,
+    ).expect(400);
+    expectApiError(
+      deleteDireto,
+      'TRANSACAO_LINKED_TO_DEBT_PAYMENT',
+      'Não é possível alterar ou excluir diretamente uma transação vinculada a um pagamento de dívida ativo.',
+    );
+
+    expect(
+      unwrapSuccess<PagamentoDividaResponse>(
+        await withAuth(
+          request(app.getHttpServer()).get(`/pagos-divida/${pagamento.id}`),
+          session,
+        ).expect(200),
+      ),
+    ).toEqual(pagamentoAntes);
+    expect(
+      unwrapSuccess<TransacaoResponse>(
+        await withAuth(
+          request(app.getHttpServer()).get(
+            `/transacoes/${pagamento.transacaoId}`,
+          ),
+          session,
+        ).expect(200),
+      ),
+    ).toEqual(transacaoAntes);
     contas = await listFinancialContas(app, session);
     expectSaldo(contas, conta.id, 875);
 

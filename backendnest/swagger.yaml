@@ -2215,6 +2215,15 @@ components:
                   message: Não é possível realizar operações financeiras com uma categoria inativa.
                 timestamp: '2026-08-03T12:00:00.000Z'
                 requestId: 123e4567-e89b-12d3-a456-426614174000
+            linkedDebtPayment:
+              summary: Transacao gerenciada por pagamento de divida
+              value:
+                success: false
+                error:
+                  code: TRANSACAO_LINKED_TO_DEBT_PAYMENT
+                  message: Não é possível alterar ou excluir diretamente uma transação vinculada a um pagamento de dívida ativo.
+                timestamp: '2026-08-16T12:00:00.000Z'
+                requestId: 123e4567-e89b-12d3-a456-426614174000
     Unauthorized:
       description: Token ausente, invalido, expirado ou sessao invalida.
       content:
@@ -2840,6 +2849,8 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/EmptyEnvelope'
+        '400':
+          $ref: '#/components/responses/FinancialOperationBadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

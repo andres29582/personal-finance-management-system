@@ -9,6 +9,7 @@ import {
 import { ContasService } from '../contas/contas.service';
 import { Conta } from '../contas/entities/conta.entity';
 import { LogsService } from '../logs/logs.service';
+import { PagoDivida } from '../pagos-divida/entities/pago-divida.entity';
 import { Transacao } from './entities/transacao.entity';
 import { TipoTransacao } from './enums/tipo-transacao.enum';
 import { TransacaoRepository } from './repositories/transacao.repository';
@@ -17,6 +18,7 @@ import { TransacoesService } from './transacoes.service';
 type TestManager = {
   create: jest.Mock;
   findOne: jest.Mock;
+  getRepository: jest.Mock;
   save: jest.Mock;
   update: jest.Mock;
 };
@@ -24,10 +26,7 @@ type TestManager = {
 describe('TransacoesService', () => {
   let service: TransacoesService;
   let repository: jest.Mocked<
-    Pick<
-      TransacaoRepository,
-      'findByIdAndUser' | 'findByUser' | 'softDeleteByIdAndUser'
-    >
+    Pick<TransacaoRepository, 'findByIdAndUser' | 'findByUser'>
   >;
   let contasService: jest.Mocked<
     Pick<ContasService, 'findActiveForWrite' | 'findActiveManyForWrite'>
@@ -38,6 +37,7 @@ describe('TransacoesService', () => {
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
   let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
   let manager: TestManager;
+  let pagoDividaRepository: { existsBy: jest.Mock };
 
   const createDto = {
     categoriaId: 'categoria-1',
@@ -53,7 +53,6 @@ describe('TransacoesService', () => {
     repository = {
       findByIdAndUser: jest.fn(),
       findByUser: jest.fn(),
-      softDeleteByIdAndUser: jest.fn(),
     };
     contasService = {
       findActiveForWrite: jest.fn(),
@@ -62,9 +61,13 @@ describe('TransacoesService', () => {
     categoriasService = {
       findActiveForWrite: jest.fn(),
     };
+    pagoDividaRepository = {
+      existsBy: jest.fn().mockResolvedValue(false),
+    };
     manager = {
       create: jest.fn((_entity: unknown, payload: Transacao) => payload),
       findOne: jest.fn(),
+      getRepository: jest.fn().mockReturnValue(pagoDividaRepository),
       save: jest.fn((entity: Transacao) => Promise.resolve(entity)),
       update: jest.fn(),
     };
@@ -358,7 +361,19 @@ describe('TransacoesService', () => {
       expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
     );
     expect(manager.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      pagoDividaRepository.existsBy.mock.invocationCallOrder[0],
+    );
+    expect(
+      pagoDividaRepository.existsBy.mock.invocationCallOrder[0],
+    ).toBeLessThan(
       contasService.findActiveManyForWrite.mock.invocationCallOrder[0],
+    );
+    expect(manager.getRepository).toHaveBeenCalledWith(PagoDivida);
+    expect(pagoDividaRepository.existsBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transacaoId: 'transacao-1',
+        usuarioId: 'user-1',
+      }),
     );
     expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
       'categoria-1',
@@ -381,8 +396,69 @@ describe('TransacoesService', () => {
     );
   });
 
-  it('continues allowing DELETE without active-account validation', async () => {
-    repository.findByIdAndUser.mockResolvedValue({
+  it('rejects PATCH for a transaction linked to an active debt payment without side effects', async () => {
+    manager.findOne.mockResolvedValueOnce({
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      id: 'transacao-1',
+      tipo: TipoTransacao.DESPESA,
+      usuarioId: 'user-1',
+      valor: 150,
+    } as Transacao);
+    pagoDividaRepository.existsBy.mockResolvedValue(true);
+
+    await expect(
+      service.update('transacao-1', 'user-1', { valor: 200 }),
+    ).rejects.toMatchObject({
+      code: 'TRANSACAO_LINKED_TO_DEBT_PAYMENT',
+      statusCode: 400,
+    });
+
+    expect(manager.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      pagoDividaRepository.existsBy.mock.invocationCallOrder[0],
+    );
+    expect(pagoDividaRepository.existsBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        excluidoEm: expect.objectContaining({ _type: 'isNull' }) as unknown,
+        transacaoId: 'transacao-1',
+        usuarioId: 'user-1',
+      }),
+    );
+    expect(contasService.findActiveManyForWrite).not.toHaveBeenCalled();
+    expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
+    expect(manager.save).not.toHaveBeenCalled();
+    expect(manager.update).not.toHaveBeenCalled();
+    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+
+  it('rejects DELETE for a transaction linked to an active debt payment without side effects', async () => {
+    manager.findOne.mockResolvedValueOnce({
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      id: 'transacao-1',
+      tipo: TipoTransacao.DESPESA,
+      usuarioId: 'user-1',
+      valor: 150,
+    } as Transacao);
+    pagoDividaRepository.existsBy.mockResolvedValue(true);
+
+    await expect(service.remove('transacao-1', 'user-1')).rejects.toMatchObject(
+      {
+        code: 'TRANSACAO_LINKED_TO_DEBT_PAYMENT',
+        statusCode: 400,
+      },
+    );
+
+    expect(manager.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      pagoDividaRepository.existsBy.mock.invocationCallOrder[0],
+    );
+    expect(manager.save).not.toHaveBeenCalled();
+    expect(manager.update).not.toHaveBeenCalled();
+    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+
+  it('continues allowing DELETE for a normal transaction without active-account validation', async () => {
+    manager.findOne.mockResolvedValueOnce({
       categoriaId: 'categoria-1',
       contaId: 'conta-inativa',
       id: 'transacao-1',
@@ -393,14 +469,22 @@ describe('TransacoesService', () => {
 
     await service.remove('transacao-1', 'user-1');
 
-    expect(repository.softDeleteByIdAndUser).toHaveBeenCalledWith(
-      'transacao-1',
-      'user-1',
+    expect(manager.update).toHaveBeenCalledWith(
+      Transacao,
+      expect.objectContaining({
+        id: 'transacao-1',
+        usuarioId: 'user-1',
+      }),
+      { excluidoEm: expect.any(Date) as Date },
     );
     expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(contasService.findActiveManyForWrite).not.toHaveBeenCalled();
     expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
-    expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(manager.getRepository).toHaveBeenCalledWith(PagoDivida);
+    expect(logsService.logEntityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'TRANSACAO_SOFT_DELETED' }),
+    );
   });
 
   it('lists only repository-visible transactions', async () => {
