@@ -7,6 +7,7 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { TipoMeta } from '../enums/tipo-meta.enum';
 
 export class CreateMetaDto {
@@ -18,6 +19,7 @@ export class CreateMetaDto {
   tipo: TipoMeta;
 
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   montoObjetivo: number;
 

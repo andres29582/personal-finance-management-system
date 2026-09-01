@@ -7,10 +7,12 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 
 export class UpdateTransferenciaDto {
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   valor?: number;
 
@@ -28,6 +30,7 @@ export class UpdateTransferenciaDto {
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @Min(0)
   comissao?: number;
 }

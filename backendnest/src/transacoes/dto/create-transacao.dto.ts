@@ -10,6 +10,7 @@ import {
   IsUUID,
   Matches,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { TipoTransacao } from '../enums/tipo-transacao.enum';
 
 export class CreateTransacaoDto {
@@ -23,6 +24,7 @@ export class CreateTransacaoDto {
   tipo: TipoTransacao;
 
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   valor: number;
 

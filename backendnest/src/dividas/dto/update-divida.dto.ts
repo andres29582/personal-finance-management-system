@@ -9,6 +9,7 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { Periodicidade } from '../enums/periodicidade.enum';
 
 export class UpdateDividaDto {
@@ -23,6 +24,7 @@ export class UpdateDividaDto {
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   cuotaMensual?: number;
 
