@@ -409,8 +409,10 @@ components:
           - cartao_credito
         saldoInicial:
           type: number
+          multipleOf: 0.01
         limiteCredito:
           type: number
+          multipleOf: 0.01
         dataCorte:
           type: integer
           minimum: 1
@@ -426,6 +428,7 @@ components:
           type: string
         limiteCredito:
           type: number
+          multipleOf: 0.01
         dataCorte:
           type: integer
           minimum: 1
@@ -491,6 +494,7 @@ components:
           - despesa
         valor:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         data:
@@ -517,6 +521,7 @@ components:
           description: Permitido pelo DTO atual; categoria e revalidada contra o tipo.
         valor:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         data:
@@ -540,6 +545,7 @@ components:
           format: uuid
         valor:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         data:
@@ -549,11 +555,13 @@ components:
           type: string
         comissao:
           type: number
+          multipleOf: 0.01
     UpdateTransferenciaRequest:
       type: object
       properties:
         valor:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         data:
@@ -563,6 +571,7 @@ components:
           type: string
         comissao:
           type: number
+          multipleOf: 0.01
     CreateDividaRequest:
       type: object
       required:
@@ -578,6 +587,7 @@ components:
           type: string
         montoTotal:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         tasaInteres:
@@ -585,6 +595,7 @@ components:
           minimum: 0
         cuotaMensual:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         fechaInicio:
@@ -613,6 +624,7 @@ components:
           minimum: 0
         cuotaMensual:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         fechaVencimiento:
@@ -650,6 +662,7 @@ components:
           format: uuid
         valor:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         data:
@@ -674,6 +687,7 @@ components:
           - reducao_divida
         montoObjetivo:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         fechaLimite:
@@ -691,10 +705,12 @@ components:
           type: string
         montoObjetivo:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         montoActual:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         fechaLimite:
@@ -739,6 +755,7 @@ components:
           pattern: ^\d{4}-\d{2}$
         valorPlanejado:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
     UpdateOrcamentoRequest:
@@ -746,6 +763,7 @@ components:
       properties:
         valorPlanejado:
           type: number
+          multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
     CreatePlanejamentoRequest:

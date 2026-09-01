@@ -5,6 +5,7 @@ import {
   IsPositive,
   IsString,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 
 export class UpdateMetaDto {
   @IsOptional()
@@ -13,11 +14,13 @@ export class UpdateMetaDto {
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   montoObjetivo?: number;
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   montoActual?: number;
 

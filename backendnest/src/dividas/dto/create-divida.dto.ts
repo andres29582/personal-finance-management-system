@@ -10,6 +10,7 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { Periodicidade } from '../enums/periodicidade.enum';
 
 export class CreateDividaDto {
@@ -22,6 +23,7 @@ export class CreateDividaDto {
   nome: string;
 
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   montoTotal: number;
 
@@ -32,6 +34,7 @@ export class CreateDividaDto {
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   cuotaMensual?: number;
 

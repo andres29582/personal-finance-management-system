@@ -8,6 +8,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { TipoConta } from '../enums/tipo-conta.enum';
 
 export class CreateContaDto {
@@ -19,10 +20,12 @@ export class CreateContaDto {
   tipo: TipoConta;
 
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   saldoInicial: number;
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   limiteCredito?: number;
 
   @IsOptional()

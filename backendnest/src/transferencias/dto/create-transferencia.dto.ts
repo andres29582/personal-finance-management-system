@@ -9,6 +9,7 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 
 export class CreateTransferenciaDto {
   @IsUUID()
@@ -18,6 +19,7 @@ export class CreateTransferenciaDto {
   contaDestinoId: string;
 
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   valor: number;
 
@@ -35,6 +37,7 @@ export class CreateTransferenciaDto {
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @Min(0)
   comissao?: number;
 }

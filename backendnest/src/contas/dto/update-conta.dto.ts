@@ -7,6 +7,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 
 export class UpdateContaDto {
   @IsOptional()
@@ -15,6 +16,7 @@ export class UpdateContaDto {
 
   @IsOptional()
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   limiteCredito?: number;
 
   @IsOptional()

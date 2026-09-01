@@ -8,6 +8,7 @@ import {
   IsUUID,
   Matches,
 } from 'class-validator';
+import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 
 export class CreatePagoDividaDto {
   @IsUUID()
@@ -20,6 +21,7 @@ export class CreatePagoDividaDto {
   categoriaId: string;
 
   @IsNumber()
+  @HasAtMostTwoDecimalPlaces()
   @IsPositive()
   valor: number;
 
