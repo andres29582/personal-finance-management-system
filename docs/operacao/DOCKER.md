@@ -3,8 +3,8 @@
 ## 1. Objetivo
 
 Estado atual: este documento registra a auditoria tecnica da containerizacao
-local do monorepo. A fase atual e somente de documentacao; nao existem
-Dockerfiles, Compose, scripts de inicializacao em container, migrations
+local do monorepo e a primeira implementacao das imagens isoladas de backend e
+ML. Ainda nao existem Compose, scripts de inicializacao em container, migrations
 automaticas ou seed automatico validados neste repositorio.
 
 Decisao recomendada: a primeira versao Docker local deve permitir subir
@@ -18,11 +18,13 @@ funcional ate que os arquivos Docker sejam criados e validados em PR futuro.
 
 Estado atual:
 
-- Backend em `backendnest`, com NestJS 11, TypeScript, TypeORM e PostgreSQL.
+- Backend em `backendnest`, com NestJS 11, TypeScript, TypeORM, PostgreSQL,
+  `backendnest/Dockerfile` e `backendnest/.dockerignore`.
 - Frontend em `frontend`, com Expo Router, React Native Web e export web
   estatico configurado em `frontend/app.json`.
-- ML em `ml-finance-tcc`, com FastAPI, Uvicorn, scikit-learn e artefatos de
-  inferencia versionados em `models/`.
+- ML em `ml-finance-tcc`, com FastAPI, Uvicorn, scikit-learn, artefatos de
+  inferencia versionados em `models/`, `ml-finance-tcc/Dockerfile` e
+  `ml-finance-tcc/.dockerignore`.
 - Migrations SQL versionadas em `backendnest/migrations`.
 - CI em `.github/workflows/ci.yml` para frontend, backend, backend E2E com
   PostgreSQL 16 e ML.
@@ -30,8 +32,9 @@ Estado atual:
 - Nao existem `docs/operacao/DEPLOY.md`, `docs/operacao/CI_CD.md` ou
   `docs/operacao/SEED.md` nesta auditoria.
 
-Validacao futura necessaria: criar e testar a stack Docker local em Linux antes
-de anunciar comandos operacionais de Compose como funcionais.
+Validacao futura necessaria: testar as imagens Docker em ambiente com Docker
+disponivel e criar a stack Docker local em Linux antes de anunciar comandos
+operacionais de Compose como funcionais.
 
 ## 3. Servicos do monorepo
 
@@ -171,15 +174,32 @@ Decisao recomendada para a primeira versao:
 
 - `postgres`: imagem `postgres:16`, volume persistente e health check com
   `pg_isready`.
-- `backend`: imagem Node 22, instalar com `npm ci`, compilar com
-  `npm run build` e iniciar com `npm run start:prod`.
-- `ml`: imagem Python 3.11 slim, instalar `requirements.txt` e iniciar Uvicorn
-  em `0.0.0.0:8000` carregando os artefatos existentes de `models/`.
+- `backend`: imagem implementada em `backendnest/Dockerfile` com
+  `node:22-bookworm-slim`, build multi-stage, `npm ci`, `npm run build`,
+  runtime com `npm ci --omit=dev`, usuario `node`, porta `3000`, health check
+  nativo via Node `fetch` e `npm run start:prod`.
+- `ml`: imagem implementada em `ml-finance-tcc/Dockerfile` com
+  `python:3.11-slim-bookworm`, instalacao de `requirements.txt`, usuario
+  `app`, porta `8000`, health check via `urllib.request` e Uvicorn em
+  `0.0.0.0:8000`.
 - `frontend`: build com Node 22 e `npm run export:web`; servir o resultado
   estatico com Nginx, Caddy ou outro servidor HTTP simples.
 
-Ainda nao implementado: imagens, `.dockerignore`, Compose, healthcheck de
-Compose, entrypoints e scripts auxiliares.
+Ainda nao implementado: Compose, PostgreSQL integrado, frontend Docker,
+healthcheck de Compose, entrypoints, scripts auxiliares, migrations automaticas
+e seed automatico.
+
+Comandos de build previstos para validacao em ambiente com Docker:
+
+```powershell
+docker build -t meu-sistema-financeiro-backend:local ./backendnest
+docker build -t meu-sistema-financeiro-ml:local ./ml-finance-tcc
+```
+
+Estado atual da validacao: `docker version` e `docker info` falharam neste
+ambiente porque o comando `docker` nao esta disponivel no PATH. Portanto, os
+builds das imagens, `GET /health`, `POST /predict`, inspecao de usuario,
+healthcheck e tamanho das imagens ainda nao foram validados nesta fase.
 
 ## 9. Estrategia de build por servico
 
@@ -190,10 +210,13 @@ Estado atual:
 - Instalacao: `npm ci` e a opcao mais reprodutivel porque existe
   `backendnest/package-lock.json`.
 - Build: `npm run build`, que executa `nest build`.
-- Diretorio final: `backendnest/dist`.
+- Diretorio final: `backendnest/dist`; validado localmente com `npm run build`,
+  que gerou `dist/main.js`.
 - Producao: `npm run start:prod`, que executa `node dist/main`.
 - O build exclui `node_modules`, `test`, `dist` e `**/*spec.ts` via
   `tsconfig.build.json`.
+- O Dockerfile remove do runtime `dist/scripts`, sourcemaps, declaracoes
+  TypeScript e `tsconfig.build.tsbuildinfo`.
 
 Risco Linux/container: `npm run start:dev` chama
 `scripts/start-dev-onedrive-safe.js` e escreve em `%LOCALAPPDATA%` ou no home do
@@ -229,6 +252,9 @@ Estado atual:
 - Inferencia: `POST /predict`.
 - Startup carrega modelo, pre-processador e manifesto em `models/`.
 - Startup nao executa treinamento.
+- O Dockerfile copia para a imagem apenas `api/`, `domain/`, `ml/`,
+  `persistence/`, `requirements.txt`, `models/modelo.pkl`,
+  `models/scaler.pkl` e `models/features.json`.
 
 Risco Linux/container: imports assumem o diretorio `ml-finance-tcc` no
 `PYTHONPATH` ou como working directory. O container deve usar esse diretorio como
@@ -357,9 +383,9 @@ decisoes de dados e URL embutida no bundle.
 
 Ainda nao implementado nesta fase:
 
-- Dockerfiles.
-- `.dockerignore`.
 - `compose.yml` ou `docker-compose.yml`.
+- Dockerfile do frontend.
+- `.dockerignore` do frontend.
 - Entry points.
 - Scripts shell ou PowerShell para container.
 - Migrations automaticas.
@@ -370,16 +396,23 @@ Ainda nao implementado nesta fase:
 
 ## 18. Limitacoes atuais
 
-Estado atual: a documentacao ainda nao valida uma execucao Docker real porque a
-implementacao nao existe. As recomendacoes acima foram derivadas dos manifests,
-CI, READMEs, env examples e codigo de runtime auditados.
+Estado atual: a documentacao registra Dockerfiles e `.dockerignore` para
+backend e ML, mas ainda nao valida uma execucao Docker real porque Docker nao
+esta disponivel no ambiente desta atualizacao. As recomendacoes acima foram
+derivadas dos manifests, CI, READMEs, env examples, codigo de runtime auditado
+e build local do backend.
 
 Validacao futura necessaria:
 
 - Confirmar build das imagens em Linux.
-- Confirmar `npm ci` em backend e frontend dentro de containers.
-- Confirmar `expo export --platform web` dentro de container Linux.
+- Confirmar `npm ci` no backend dentro de container.
+- Confirmar instalacao de `requirements.txt` no container ML.
 - Confirmar instalacao Python e import de `api.app` no container ML.
+- Confirmar `GET /health` do backend e do ML em containers isolados.
+- Confirmar `POST /predict` do ML em container isolado.
+- Confirmar usuario, healthcheck e tamanho aproximado das imagens.
+- Confirmar `expo export --platform web` dentro de container Linux em fase
+  futura do frontend.
 - Confirmar aplicacao das migrations em `postgres:16`.
 - Confirmar CORS entre frontend local e backend.
 - Confirmar que nenhum artefato gerado por Docker fica versionado por engano.
