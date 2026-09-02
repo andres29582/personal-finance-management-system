@@ -151,12 +151,18 @@ describe('Financial flow (e2e)', () => {
     expectSaldo(contas, contaOrigem.id, 785);
     expectSaldo(contas, contaDestino.id, 350);
 
-    await withAuth(
+    const deleteResponse = await withAuth(
       request(app.getHttpServer()).delete(
         `/transferencias/${transferencia.id}`,
       ),
       session,
     ).expect(200);
+    expect(deleteResponse.body).toEqual({
+      success: true,
+      data: null,
+      requestId: expect.any(String) as string,
+      timestamp: expect.any(String) as string,
+    });
     await withAuth(
       request(app.getHttpServer()).get(`/transferencias/${transferencia.id}`),
       session,

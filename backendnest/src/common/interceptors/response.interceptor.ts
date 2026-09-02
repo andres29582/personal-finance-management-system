@@ -30,7 +30,7 @@ export class ResponseInterceptor implements NestInterceptor<
       map((data) => {
         const response: SuccessResponse<unknown> = {
           success: true,
-          data,
+          data: data === undefined ? null : data,
           timestamp: new Date().toISOString(),
           requestId,
         };
