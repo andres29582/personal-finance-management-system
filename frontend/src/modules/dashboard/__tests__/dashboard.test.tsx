@@ -360,7 +360,7 @@ describe('DashboardScreen', () => {
   it('shows error message when data loading fails', async () => {
     mockGetUser.mockResolvedValue({ id: '1', nome: 'João Silva', email: 'joao@example.com' });
     mockGetDashboard.mockRejectedValue({
-      response: { status: 401, data: { message: 'Unauthorized' } },
+      response: { status: 401, data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } } },
     });
 
     await renderDashboard();

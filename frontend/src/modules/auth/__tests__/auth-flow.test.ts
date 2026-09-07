@@ -138,7 +138,7 @@ describe('Auth Flow - Login/Logout', () => {
       mockAuthService.login.mockRejectedValue({
         response: {
           status: 401,
-          data: { message: 'Invalid credentials' },
+          data: { error: { code: 'AUTH_INVALID_CREDENTIALS', message: 'E-mail ou senha invalidos' } },
         },
       });
 
@@ -150,7 +150,7 @@ describe('Auth Flow - Login/Logout', () => {
       ).rejects.toMatchObject({
         response: {
           status: 401,
-          data: { message: 'Invalid credentials' },
+          data: { error: { code: 'AUTH_INVALID_CREDENTIALS', message: 'E-mail ou senha invalidos' } },
         },
       });
 

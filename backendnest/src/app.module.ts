@@ -11,7 +11,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditLog } from './logs/entities/audit-log.entity';
-import { LogsExceptionFilter } from './logs/logs-exception.filter';
+import { GlobalExceptionFilter } from './logs/global-exception.filter';
 import { LogsModule } from './logs/logs.module';
 import { RequestContextMiddleware } from './logs/request-context.middleware';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
@@ -131,7 +131,7 @@ import { resolveThrottlerConfig } from './config/throttler.config';
     },
     {
       provide: APP_FILTER,
-      useClass: LogsExceptionFilter,
+      useClass: GlobalExceptionFilter,
     },
   ],
 })

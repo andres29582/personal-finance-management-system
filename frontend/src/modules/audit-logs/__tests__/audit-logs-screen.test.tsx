@@ -98,7 +98,7 @@ describe('AuditLogsScreen', () => {
 
   it('redirects to login when audit log request returns unauthorized', async () => {
     mockListMyAuditLogs.mockRejectedValue({
-      response: { status: 401, data: { message: 'Unauthorized' } },
+      response: { status: 401, data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } } },
     });
 
     render(<AuditLogsScreen />);

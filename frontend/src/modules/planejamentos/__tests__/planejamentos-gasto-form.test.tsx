@@ -698,7 +698,7 @@ describe('PlanejamentoGastoFormScreen', () => {
       }),
     );
     mockUpdateGastoPlanejamento.mockRejectedValueOnce({
-      response: { data: { message: 'Unauthorized' }, status: 401 },
+      response: { data: { error: { code: 'AUTH_INVALID_SESSION', message: 'Sessao invalida' } }, status: 401 },
     });
     await renderEditReady();
 
@@ -762,7 +762,7 @@ describe('PlanejamentoGastoFormScreen', () => {
 
   it('mostra erro quando criar gasto falha', async () => {
     mockCreateGastoPlanejamento.mockRejectedValue({
-      response: { status: 422, data: { message: 'Participantes invalidos.' } },
+      response: { status: 422, data: { error: { code: 'PLANEJAMENTO_PAGADOR_INVALIDO', message: 'O pagador precisa ser participante ativo do planejamento.' } } },
     });
     await renderReady();
 
@@ -772,7 +772,11 @@ describe('PlanejamentoGastoFormScreen', () => {
     fireEvent.press(screen.getByText('Salvar gasto'));
 
     await waitFor(() => {
-      expect(screen.getByText('Participantes invalidos.')).toBeTruthy();
+      expect(
+        screen.getByText(
+          'O pagador precisa ser participante ativo do planejamento.',
+        ),
+      ).toBeTruthy();
     });
   });
 
@@ -1290,7 +1294,7 @@ describe('PlanejamentoGastoFormScreen', () => {
 
     it('redireciona por unauthorized somente quando pertence a rota atual', async () => {
       mockGetPlanejamentoById.mockRejectedValue({
-        response: { data: { message: 'Unauthorized' }, status: 401 },
+        response: { data: { error: { code: 'AUTH_INVALID_SESSION', message: 'Sessao invalida' } }, status: 401 },
       });
 
       render(<PlanejamentoGastoFormScreen />);

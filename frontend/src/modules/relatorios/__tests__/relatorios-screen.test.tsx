@@ -119,7 +119,7 @@ describe('RelatoriosScreen', () => {
 
   it('redirects to login when report generation returns unauthorized', async () => {
     mockGetRelatorio.mockRejectedValue({
-      response: { status: 401, data: { message: 'Unauthorized' } },
+      response: { status: 401, data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } } },
     });
 
     render(<RelatoriosScreen />);

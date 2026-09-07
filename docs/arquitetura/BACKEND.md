@@ -227,8 +227,8 @@ dos controllers no formato:
 }
 ```
 
-Erros de dominio usam excecoes proprias em `common/exceptions` e sao
-padronizados por `AppExceptionFilter` no formato:
+Todo erro que alcanca a camada global de excecoes e padronizado pelo unico
+`GlobalExceptionFilter`, registrado via `APP_FILTER`, no formato:
 
 ```json
 {
@@ -242,9 +242,10 @@ padronizados por `AppExceptionFilter` no formato:
 }
 ```
 
-O `LogsExceptionFilter` tambem atua globalmente para registrar negacoes de
-acesso e erros internos. Para excecoes HTTP fora do modelo de dominio, ele
-normaliza o payload e preserva o status HTTP.
+O filtro preserva erros de dominio abaixo de 500, normaliza validacoes e erros
+HTTP nativos e sanitiza qualquer 5xx antes da resposta. JSON malformado e
+payloads acima do limite tambem recebem esse envelope. O `requestId` e o mesmo
+no corpo, no header `x-request-id` e nos metadados seguros de auditoria.
 
 ## Auditoria e logs
 
@@ -258,9 +259,11 @@ O contexto de requisicao e propagado por middlewares:
   quando disponivel.
 
 `LogsService` persiste `AuditLog` com tratamento defensivo: falhas ao salvar log
-nao devem derrubar o fluxo principal. Antes de persistir detalhes, o service
-sanitiza campos sensiveis como senha, password, token, access token, refresh
-token e authorization. Emails e CPFs sao mascarados.
+nao devem derrubar o fluxo principal. Negacoes 401/403 e falhas 5xx sao
+best-effort e nunca condicionam a resposta HTTP. Causas e stacks 5xx ficam no
+logger operacional; o `AuditLog` consultavel pelo usuario recebe apenas mensagem
+publica e metadados seguros. Campos sensiveis sao sanitizados, e emails/CPFs sao
+mascarados.
 
 Planejamentos possui uma excecao intencional ao caminho defensivo global. Suas
 mutacoes auditadas chamam `logEntityEventTransactional` com o mesmo

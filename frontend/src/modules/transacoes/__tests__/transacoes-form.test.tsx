@@ -216,7 +216,7 @@ describe('TransacaoFormScreen', () => {
     mockListContas.mockResolvedValue(mockContas);
     mockListCategorias.mockResolvedValue(mockCategorias);
     mockCreateTransacao.mockRejectedValue({
-      response: { status: 400, data: { message: 'Invalid data' } },
+      response: { status: 400, data: { error: { code: 'CATEGORIA_INACTIVE', message: 'Não é possível realizar operações financeiras com uma categoria inativa.' } } },
     });
 
     render(<TransacaoFormScreen />);
@@ -233,7 +233,11 @@ describe('TransacaoFormScreen', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Invalid data')).toBeTruthy();
+      expect(
+        screen.getByText(
+          'Não é possível realizar operações financeiras com uma categoria inativa.',
+        ),
+      ).toBeTruthy();
     });
   });
 });

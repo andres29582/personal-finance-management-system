@@ -862,27 +862,27 @@ describe('usePlanejamentoDetailMutations', () => {
   it('apresenta os erros retornados pela API no canal da operacao', async () => {
     mockedPlanejamentoService.payAcertoPlanejamento.mockRejectedValueOnce({
       response: {
-        data: { message: 'Sem permissao para pagar' },
+        data: { error: { code: 'PLANEJAMENTO_ACERTO_PAGAR_FORBIDDEN', message: 'Apenas o proprietario ou o participante devedor pode marcar o acerto como pago.' } },
         status: 403,
       },
     });
     mockedPlanejamentoService.cancelGastoPlanejamento.mockRejectedValueOnce({
       response: {
-        data: { message: 'Falha ao cancelar gasto.' },
+        data: { error: { code: 'PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO', message: 'Apenas gastos ativos podem ser cancelados.' } },
         status: 422,
       },
     });
     mockedPlanejamentoService.removeParticipantePlanejamento.mockRejectedValueOnce(
       {
         response: {
-          data: { message: 'Participante possui pendencias.' },
+          data: { error: { code: 'PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO', message: 'Somente participante ativo pode ser removido.' } },
           status: 422,
         },
       },
     );
     mockedPlanejamentoService.fecharPlanejamento.mockRejectedValueOnce({
       response: {
-        data: { message: 'Existe gasto pendente de revisao.' },
+        data: { error: { code: 'PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO', message: 'Planejamento com gasto pendente de revisao nao pode ser fechado.' } },
         status: 422,
       },
     });
@@ -891,21 +891,25 @@ describe('usePlanejamentoDetailMutations', () => {
     await runMutation(() =>
       result.current.handleAcertoAction(makeAcerto(), 'pay'),
     );
-    expect(result.current.acertosError).toBe('Sem permissao para pagar');
+    expect(result.current.acertosError).toBe(
+      'Apenas o proprietario ou o participante devedor pode marcar o acerto como pago.',
+    );
 
     await runMutation(() => result.current.handleCancelGasto(makeGasto()));
-    expect(result.current.gastosError).toBe('Falha ao cancelar gasto.');
+    expect(result.current.gastosError).toBe(
+      'Apenas gastos ativos podem ser cancelados.',
+    );
 
     await runMutation(() =>
       result.current.handleRemoveParticipante(makeParticipante()),
     );
     expect(result.current.participantesError).toBe(
-      'Participante possui pendencias.',
+      'Somente participante ativo pode ser removido.',
     );
 
     await runMutation(() => result.current.handleTransition('close'));
     expect(result.current.transitionError).toBe(
-      'Existe gasto pendente de revisao.',
+      'Planejamento com gasto pendente de revisao nao pode ser fechado.',
     );
     expect(result.current.aggregateMutationInProgress).toBe(false);
   });
@@ -913,7 +917,7 @@ describe('usePlanejamentoDetailMutations', () => {
   it('trata sessao expirada e delega o redirecionamento', async () => {
     mockedPlanejamentoService.syncAcertosPlanejamento.mockRejectedValueOnce({
       response: {
-        data: { message: 'Unauthorized' },
+        data: { error: { code: 'AUTH_INVALID_SESSION', message: 'Sessao invalida' } },
         status: 401,
       },
     });
@@ -1137,7 +1141,7 @@ describe('usePlanejamentoDetailMutations', () => {
     mockedPlanejamentoService.syncAcertosPlanejamento
       .mockRejectedValueOnce({
         response: {
-          data: { message: 'Calculo indisponivel' },
+          data: { error: { code: 'HTTP_ERROR', message: 'Calculo indisponivel' } },
           status: 400,
         },
       })
@@ -1512,7 +1516,7 @@ describe('usePlanejamentoDetailMutations', () => {
   it('limpa feedback e loading quando o planejamentoId muda', async () => {
     mockedPlanejamentoService.payAcertoPlanejamento.mockRejectedValueOnce({
       response: {
-        data: { message: 'Erro do planejamento A' },
+        data: { error: { code: 'HTTP_ERROR', message: 'Erro do planejamento A' } },
         status: 422,
       },
     });

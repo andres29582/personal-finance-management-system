@@ -476,7 +476,7 @@ describe('PlanejamentoParticipanteFormScreen', () => {
   it('mostra planejamento inexistente ou inacessivel sem expor formulario', async () => {
     mockGetPlanejamentoById.mockRejectedValue({
       response: {
-        data: { message: 'Planejamento nao encontrado.' },
+        data: { error: { code: 'PLANEJAMENTO_NOT_FOUND', message: 'Planejamento nao encontrado.' } },
         status: 404,
       },
     });

@@ -70,13 +70,14 @@ describe('Strict monetary write contract (e2e)', () => {
       )
       .expect(400);
 
-    expect(response.body).toEqual(
-      expect.objectContaining({
-        message: expect.arrayContaining([
-          'valor deve ter no maximo 2 casas decimais.',
-        ]) as string[],
-        statusCode: 400,
-      }),
+    const body = response.body as {
+      error: { code: string; details?: { messages: string[] } };
+      success: boolean;
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(body.error.details?.messages).toEqual(
+      expect.arrayContaining(['valor deve ter no maximo 2 casas decimais.']),
     );
     await expect(dataSource.getRepository(PagoDivida).count()).resolves.toBe(
       pagamentosAntes,

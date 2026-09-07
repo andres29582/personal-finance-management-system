@@ -28,7 +28,7 @@ Convencoes:
 
 ## Cobertura atual e limitacoes
 
-- Fase 0 estabilizou o E2E para usar o mesmo contrato global de producao: `ValidationPipe`, `ResponseInterceptor` e `AppExceptionFilter`.
+- Fase 0 estabilizou o E2E para usar o mesmo contrato global de producao: `ValidationPipe`, `ResponseInterceptor` e o filtro global registrado por `APP_FILTER`.
 - Fase 1 adicionou helpers/factories E2E em `backendnest/test/helpers` e `backendnest/test/factories`.
 - Fase 2 adicionou cobertura controller/DTO dos modulos prioritarios: contas, transacoes, transferencias, dividas, pagos-divida, dashboard, relatorios, previsoes e audit-logs.
 - Os unit tests cobrem regras financeiras criticas: valores positivos, comissao/taxa nao negativa, categoria `DESPESA` para pagamento de divida, isolamento por `usuarioId`, calculo de saldo, soft delete e agregacoes.

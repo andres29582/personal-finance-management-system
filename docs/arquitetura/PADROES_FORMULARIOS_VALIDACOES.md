@@ -108,6 +108,11 @@ Padrao recomendado:
 - mapear status especificos quando a mensagem padrao melhorar a UX;
 - preservar detalhes tecnicos fora da UI final.
 
+Quando o backend retornar `VALIDATION_ERROR`, a lista completa fica em
+`resolved.details.messages`, mas continua sendo erro geral. Nao inferir nomes
+de campos analisando textos como `email must be valid`; o mapeamento por campo
+so deve existir quando o contrato fornecer um campo estruturado.
+
 ## Feedback visual
 
 Formularios devem ter:

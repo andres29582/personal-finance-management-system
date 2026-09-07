@@ -1,9 +1,13 @@
 import { INestApplication, Provider, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import type { Server } from 'node:http';
 import { AppModule } from '../src/app.module';
-import { AppExceptionFilter } from '../src/common/filters/exception.filter';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
+import {
+  configureBodyParsers,
+  resolveHttpRuntimeConfig,
+} from '../src/config/http-runtime.config';
 
 export type E2eApplication = INestApplication<Server>;
 
@@ -28,7 +32,12 @@ export async function createE2eApp(
 
   const moduleFixture = await testingModuleBuilder.compile();
 
-  const app = moduleFixture.createNestApplication<E2eApplication>();
+  const app = moduleFixture.createNestApplication<E2eApplication>({
+    bodyParser: false,
+  });
+  const httpConfig = resolveHttpRuntimeConfig(app.get(ConfigService));
+
+  configureBodyParsers(app, httpConfig);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -39,7 +48,6 @@ export async function createE2eApp(
   );
 
   app.useGlobalInterceptors(new ResponseInterceptor());
-  app.useGlobalFilters(new AppExceptionFilter());
 
   await app.init();
 

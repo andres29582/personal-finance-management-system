@@ -336,7 +336,7 @@ describe('api', () => {
           message: 'Server Error',
           response: {
             config,
-            data: { message: 'Internal Server Error' },
+            data: { error: { code: 'HTTP_ERROR', message: 'Internal Server Error' } },
             headers: {},
             status: 500,
             statusText: 'Internal Server Error',

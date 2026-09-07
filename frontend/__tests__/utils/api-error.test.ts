@@ -25,6 +25,7 @@ describe('resolveApiError', () => {
               message: 'Historico insuficiente.',
               details: { requiredMonths: 3, availableMonths: 1 },
             },
+            requestId: 'request-1',
           },
         },
       },
@@ -35,6 +36,7 @@ describe('resolveApiError', () => {
       code: 'PREVISAO_INSUFFICIENT_HISTORY',
       details: { requiredMonths: 3, availableMonths: 1 },
       message: 'Historico insuficiente.',
+      requestId: 'request-1',
       unauthorized: false,
     });
   });
@@ -43,7 +45,11 @@ describe('resolveApiError', () => {
       {
         response: {
           data: {
-            message: 'E-mail ou senha invalidos',
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Nao autorizado.',
+            },
+            requestId: 'request-login',
           },
           status: 401,
         },
@@ -55,7 +61,10 @@ describe('resolveApiError', () => {
     );
 
     expect(result).toEqual({
+      code: 'UNAUTHORIZED',
+      details: undefined,
       message: 'E-mail ou senha invalidos.',
+      requestId: 'request-login',
       unauthorized: true,
     });
     expect(mockClearSession).toHaveBeenCalledTimes(1);
@@ -66,7 +75,11 @@ describe('resolveApiError', () => {
       {
         response: {
           data: {
-            message: 'Sessao invalida',
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Nao autorizado.',
+            },
+            requestId: 'request-session',
           },
           status: 401,
         },
@@ -75,7 +88,10 @@ describe('resolveApiError', () => {
     );
 
     expect(result).toEqual({
+      code: 'UNAUTHORIZED',
+      details: undefined,
       message: 'Sessao expirada. Faca login novamente.',
+      requestId: 'request-session',
       unauthorized: true,
     });
     expect(mockClearSession).toHaveBeenCalledTimes(1);
@@ -86,7 +102,11 @@ describe('resolveApiError', () => {
       {
         response: {
           data: {
-            message: 'E-mail ja cadastrado',
+            error: {
+              code: 'EMAIL_ALREADY_EXISTS',
+              message: 'E-mail ja cadastrado',
+            },
+            requestId: 'request-conflict',
           },
           status: 409,
         },
@@ -95,9 +115,87 @@ describe('resolveApiError', () => {
     );
 
     expect(result).toEqual({
+      code: 'EMAIL_ALREADY_EXISTS',
+      details: undefined,
       message: 'E-mail ja cadastrado',
+      requestId: 'request-conflict',
       unauthorized: false,
     });
     expect(mockClearSession).not.toHaveBeenCalled();
+  });
+
+  it('preserves the complete validation message list', async () => {
+    const result = await resolveApiError(
+      {
+        response: {
+          status: 400,
+          data: {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'nome must be a string',
+              details: {
+                messages: ['nome must be a string', 'valor must be positive'],
+              },
+            },
+            requestId: 'request-validation',
+          },
+        },
+      },
+      'Fallback',
+    );
+
+    expect(result).toEqual({
+      code: 'VALIDATION_ERROR',
+      details: {
+        messages: ['nome must be a string', 'valor must be positive'],
+      },
+      message: 'nome must be a string',
+      requestId: 'request-validation',
+      unauthorized: false,
+    });
+  });
+
+  it.each([
+    [404, 'NOT_FOUND', 'Recurso nao encontrado.'],
+    [413, 'PAYLOAD_TOO_LARGE', 'Payload excedido.'],
+    [429, 'TOO_MANY_REQUESTS', 'Muitas requisicoes.'],
+    [500, 'INTERNAL_SERVER_ERROR', 'Erro interno no servidor.'],
+    [503, 'SERVICE_UNAVAILABLE', 'Servico temporariamente indisponivel.'],
+  ])('resolves the unified envelope for HTTP %i', async (status, code, message) => {
+    const result = await resolveApiError(
+      {
+        response: {
+          status,
+          data: {
+            error: { code, message },
+            requestId: `request-${status}`,
+          },
+        },
+      },
+      'Fallback',
+    );
+
+    expect(result).toEqual({
+      code,
+      details: undefined,
+      message,
+      requestId: `request-${status}`,
+      unauthorized: false,
+    });
+  });
+
+  it('uses the caller fallback when no HTTP response exists', async () => {
+    const result = await resolveApiError(
+      { message: 'Network Error' },
+      'Nao foi possivel conectar.',
+    );
+
+    expect(result).toEqual({
+      code: undefined,
+      details: undefined,
+      message: 'Nao foi possivel conectar.',
+      requestId: undefined,
+      unauthorized: false,
+    });
   });
 });
