@@ -147,7 +147,7 @@ describe('TransferenciaFormScreen', () => {
   it('shows backend error when save fails', async () => {
     mockContas();
     mockCreateTransferencia.mockRejectedValue({
-      response: { status: 400, data: { message: 'Saldo insuficiente.' } },
+      response: { status: 400, data: { error: { code: 'CONTA_INACTIVE', message: 'Não é possível realizar operações financeiras em uma conta inativa.' } } },
     });
 
     render(<TransferenciaFormScreen />);
@@ -160,7 +160,11 @@ describe('TransferenciaFormScreen', () => {
     fireEvent.press(screen.getByText('Salvar transferencia'));
 
     await waitFor(() => {
-      expect(screen.getByText('Saldo insuficiente.')).toBeTruthy();
+      expect(
+        screen.getByText(
+          'Não é possível realizar operações financeiras em uma conta inativa.',
+        ),
+      ).toBeTruthy();
     });
   });
 });

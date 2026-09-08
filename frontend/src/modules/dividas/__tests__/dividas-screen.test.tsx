@@ -126,7 +126,7 @@ describe('DividasScreen', () => {
 
   it('redirects to login when loading fails with unauthorized error', async () => {
     mockListDividas.mockRejectedValue({
-      response: { status: 401, data: { message: 'Unauthorized' } },
+      response: { status: 401, data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } } },
     });
 
     render(<DividasScreen />);

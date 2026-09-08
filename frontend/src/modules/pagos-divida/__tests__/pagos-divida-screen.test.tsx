@@ -229,7 +229,7 @@ describe('PagosDividaScreen', () => {
   it('redirects to login when loading fails with unauthorized error', async () => {
     mockGetDividaById.mockResolvedValue(makeDivida({ id: 'divida1' }));
     mockListPagosByDivida.mockRejectedValue({
-      response: { status: 401, data: { message: 'Unauthorized' } },
+      response: { status: 401, data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } } },
     });
     mockListContas.mockResolvedValue([conta]);
     mockListCategorias.mockResolvedValue([categoria]);

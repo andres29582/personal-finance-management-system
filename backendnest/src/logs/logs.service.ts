@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
@@ -21,7 +20,6 @@ export class LogsService {
   constructor(
     private readonly auditLogRepository: AuditLogRepository,
     private readonly requestContextService: RequestContextService,
-    private readonly configService: ConfigService,
   ) {}
 
   async create(input: CreateAuditLogInput): Promise<void> {
@@ -163,6 +161,12 @@ export class LogsService {
   }
 
   async logInternalError(input: LogInternalErrorInput): Promise<void> {
+    const trace =
+      input.error instanceof Error
+        ? (input.error.stack ?? input.error.message)
+        : String(input.error);
+    this.logger.error(input.message ?? 'Erro interno no servidor.', trace);
+
     await this.create({
       level: 'error',
       event: 'INTERNAL_SERVER_ERROR',
@@ -171,13 +175,10 @@ export class LogsService {
       success: false,
       message: input.message ?? 'Erro interno no servidor.',
       userId: input.userId ?? null,
-      details: {
-        ...this.serializeError(input.error),
-        ...(input.details ?? {}),
-      },
+      details: input.details ?? null,
       context: {
         ...input.context,
-        statusCode: 500,
+        statusCode: input.context?.statusCode ?? 500,
       },
     });
   }
@@ -300,28 +301,6 @@ export class LogsService {
     }
 
     return `${digits.slice(0, 3)}***${digits.slice(-2)}`;
-  }
-
-  private serializeError(error: unknown): Record<string, unknown> {
-    if (error instanceof Error) {
-      const shouldIncludeStack =
-        this.configService.get<string>('NODE_ENV') === 'development';
-
-      return {
-        errorName: error.name,
-        errorMessage: this.truncate(error.message, 255),
-        ...(shouldIncludeStack
-          ? {
-              stack: this.truncate(error.stack ?? '', 2000),
-            }
-          : {}),
-      };
-    }
-
-    return {
-      errorName: 'UnknownError',
-      errorMessage: 'Erro desconhecido.',
-    };
   }
 
   private truncate(value: string | null, maxLength: number): string | null {

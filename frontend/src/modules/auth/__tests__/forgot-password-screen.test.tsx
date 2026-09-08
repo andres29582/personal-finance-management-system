@@ -124,7 +124,7 @@ describe('ForgotPasswordScreen', () => {
         resetToken: 'first-dev-reset-token',
       })
       .mockRejectedValueOnce({
-        response: { status: 500, data: { message: 'Erro interno' } },
+        response: { status: 500, data: { error: { code: 'HTTP_ERROR', message: 'Erro interno' } } },
       });
 
     render(<ForgotPasswordScreen />);

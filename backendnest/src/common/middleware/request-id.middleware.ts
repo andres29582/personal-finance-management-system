@@ -2,6 +2,36 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuid } from 'uuid';
 
+const MAX_REQUEST_ID_LENGTH = 128;
+
+function normalizeRequestId(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+
+  return normalized && normalized.length <= MAX_REQUEST_ID_LENGTH
+    ? normalized
+    : undefined;
+}
+
+export function resolveRequestId(req: Request): string {
+  return (
+    normalizeRequestId(req.id) ??
+    normalizeRequestId(req.headers['x-request-id']) ??
+    uuid()
+  );
+}
+
+export function applyRequestId(req: Request, res: Response): string {
+  const requestId = resolveRequestId(req);
+  req.id = requestId;
+  res.setHeader('x-request-id', requestId);
+
+  return requestId;
+}
+
 /**
  * Middleware que agrega un ID único a cada request
  * Usado para tracing y correlación de logs
@@ -9,13 +39,7 @@ import { v4 as uuid } from 'uuid';
 @Injectable()
 export class RequestIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    // Si ya existe request-id (ej: desde API Gateway), usarlo
-    // De lo contrario, generar uno nuevo
-    req.id = (req.headers['x-request-id'] as string) || uuid();
-
-    // Agregar al response header para que el cliente lo reciba
-    res.setHeader('x-request-id', req.id);
-
+    applyRequestId(req, res);
     next();
   }
 }

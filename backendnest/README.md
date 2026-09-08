@@ -326,7 +326,7 @@ Respostas de sucesso sao envolvidas pelo interceptor global:
 }
 ```
 
-Erros de dominio padronizados seguem:
+Todos os erros HTTP padronizados seguem:
 
 ```json
 {
@@ -339,6 +339,10 @@ Erros de dominio padronizados seguem:
   "requestId": "..."
 }
 ```
+
+O status HTTP e preservado, `requestId` coincide com o header `x-request-id` e
+erros 5xx nunca expõem mensagens, detalhes ou stacks internos. O contrato
+completo e seus codigos ficam em `backendnest/swagger.yaml`.
 
 ## Integracao com Machine Learning
 

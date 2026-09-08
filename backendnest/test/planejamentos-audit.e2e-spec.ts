@@ -188,7 +188,7 @@ describe('Planejamentos creation audit (e2e)', () => {
         FOR EACH ROW EXECUTE FUNCTION ${functionName}();
       `);
 
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post('/planejamentos')
         .set('Authorization', authorization(proprietarioRollback))
         .send({
@@ -196,6 +196,22 @@ describe('Planejamentos creation audit (e2e)', () => {
           tipo: PlanejamentoTipo.CASA,
         })
         .expect(500);
+      const responseBody = response.body as {
+        requestId: string;
+      };
+      expect(responseBody).toEqual({
+        success: false,
+        error: {
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Erro interno no servidor.',
+        },
+        timestamp: expect.any(String) as string,
+        requestId: expect.any(String) as string,
+      });
+      expect(response.headers['x-request-id']).toBe(responseBody.requestId);
+      expect(JSON.stringify(responseBody)).not.toContain(
+        'falha de auditoria induzida pelo teste',
+      );
     } finally {
       await removerTriggerAuditoria();
     }

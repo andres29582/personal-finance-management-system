@@ -7,8 +7,8 @@ import {
 import { Request } from 'express';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { v4 as uuid } from 'uuid';
 import { SuccessResponse } from '../dto/api-response.dto';
+import { resolveRequestId } from '../middleware/request-id.middleware';
 
 /**
  * Interceptor global que envuelve TODAS las respuestas exitosas
@@ -24,13 +24,14 @@ export class ResponseInterceptor implements NestInterceptor<
     next: CallHandler<unknown>,
   ): Observable<SuccessResponse<unknown>> {
     const request = context.switchToHttp().getRequest<Request>();
-    const requestId = request.id || uuid();
+    const requestId = resolveRequestId(request);
+    request.id = requestId;
 
     return next.handle().pipe(
       map((data) => {
         const response: SuccessResponse<unknown> = {
           success: true,
-          data,
+          data: data === undefined ? null : data,
           timestamp: new Date().toISOString(),
           requestId,
         };

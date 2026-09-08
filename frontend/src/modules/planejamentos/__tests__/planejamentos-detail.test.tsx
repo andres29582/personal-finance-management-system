@@ -1005,7 +1005,7 @@ describe('PlanejamentoDetailScreen', () => {
   it('trata erro de API durante a leitura do agregado', async () => {
     mockGetResumoPlanejamento.mockRejectedValueOnce({
       response: {
-        data: { message: 'Resumo financeiro indisponivel.' },
+        data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
         status: 500,
       },
     });
@@ -1013,7 +1013,7 @@ describe('PlanejamentoDetailScreen', () => {
     render(<PlanejamentoDetailScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('Resumo financeiro indisponivel.')).toBeTruthy();
+      expect(screen.getByText('Erro interno no servidor.')).toBeTruthy();
       expect(
         screen.getByText('Nao foi possivel carregar o planejamento'),
       ).toBeTruthy();

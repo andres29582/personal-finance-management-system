@@ -115,7 +115,7 @@ describe('RegisterScreen', () => {
 
   it('shows error message on register failure', async () => {
     mockRegister.mockRejectedValue({
-      response: { status: 400, data: { message: 'Email already exists' } },
+      response: { status: 409, data: { error: { code: 'AUTH_EMAIL_ALREADY_EXISTS', message: 'E-mail ja cadastrado' } } },
     });
 
     render(<RegisterScreen />);
@@ -138,7 +138,7 @@ describe('RegisterScreen', () => {
     fireEvent.press(registerButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Confira CPF, CEP e os demais dados informados.')).toBeTruthy();
+      expect(screen.getByText('Ja existe um usuario com este e-mail ou CPF.')).toBeTruthy();
     });
   });
 });

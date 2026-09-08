@@ -12,16 +12,28 @@ Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o c
 
 ## Resumo Executivo
 
-Estado geral: **coerente como contrato OpenAPI oficial, com pendencias documentais complementares menores**.
+Estado geral: **contrato HTTP unificado; verificacao mecanica registrada abaixo**.
 
 O backend possui **79 handlers HTTP reais** em controllers, e o `backendnest/swagger.yaml` documenta **79 operacoes**. A validacao mecanica confirmou a paridade entre controllers e Swagger.
 
-O Swagger agora cobre endpoints publicos e protegidos, payloads de entrada, query params conhecidos, status codes principais, `operationId` unico por operacao, envelope global de sucesso `{ success, data, timestamp, requestId }` e os dois formatos de erro observados no runtime:
+O Swagger cobre endpoints publicos e protegidos, payloads de entrada, query
+params conhecidos, status codes principais, `operationId` unico por operacao e
+os envelopes globais de sucesso e erro. O contrato de erro unico e
+`{ success:false, error, timestamp, requestId }`, com `requestId` igual ao header
+`x-request-id`.
 
-- erros de dominio envelopados com `{ success: false, error, timestamp, requestId }`;
-- erros HTTP/Nest comuns com `{ statusCode, message, error }`.
+### Auditoria do contrato global de erros - 2026-09-02
 
-As respostas 2xx usam schemas especificos de recurso onde aplicavel, como `ContaSuccess`, `TransacaoListSuccess`, `DashboardSuccess`, `RelatorioSuccess`, `PrevisaoDeficitSuccess`, `AuditLogsSuccess`, `PlanejamentoSuccess`, `GastoPlanejamentoSuccess` e `AcertoPlanejamentoSuccess`. Os responses genericos `OkObject` e `OkArray` continuam definidos apenas como fallback, mas nao sao referenciados pelas operacoes atuais.
+| ID | Evidencia inicial | Tratamento de fechamento |
+| --- | --- | --- |
+| ERR-01 | `AppExceptionFilter` e `LogsExceptionFilter` escreviam formatos concorrentes. | Uma unica autoridade catch-all via `APP_FILTER`. |
+| ERR-02 | JSON malformado chegava antes de `RequestIdMiddleware`. | Fallback defensivo sincroniza request, header, envelope e auditoria. |
+| ERR-03 | `PayloadTooLargeError` 413 nao e `HttpException` e era classificado como 500. | Status/statusCode de plataforma entre 400-599 e preservado; 413 usa `PAYLOAD_TOO_LARGE`. |
+| ERR-04 | Mensagens e detalhes 5xx podiam ser expostos conforme a classe. | Sanitizacao ocorre por status antes de confiar na excecao. |
+| ERR-05 | `logInternalError` persistia causa consultavel por `/audit-logs` e forcava status 500. | Causa fica no logger operacional; AuditLog recebe metadados seguros e status real. |
+| ERR-06 | Frontend compensava dois formatos de erro. | `resolveApiError` consome apenas `ErrorEnvelope` e expoe `requestId`. |
+
+As respostas 2xx usam schemas especificos de recurso onde aplicavel, como `ContaSuccess`, `TransacaoListSuccess`, `DashboardSuccess`, `RelatorioSuccess`, `PrevisaoDeficitSuccess`, `AuditLogsSuccess`, `PlanejamentoSuccess`, `GastoPlanejamentoSuccess` e `AcertoPlanejamentoSuccess`. Os responses genericos `OkObject` e `OkArray` foram removidos porque nao representam nenhuma operacao atual.
 
 Nao foi criada documentacao duplicada de endpoints. Este arquivo permanece como relatorio tecnico de auditoria; o contrato consumivel por clientes e ferramentas e o OpenAPI em `backendnest/swagger.yaml`.
 
@@ -48,8 +60,10 @@ Documentos revisados sobre fonte oficial:
 - Nao ha `setGlobalPrefix` em `backendnest/src/main.ts`; rotas reais saem da raiz (`/auth/login`, `/contas`, etc.).
 - `ValidationPipe` global usa `whitelist`, `forbidNonWhitelisted` e `transform`.
 - Respostas de sucesso sao envolvidas por `ResponseInterceptor` no formato `success/data/timestamp/requestId`.
-- Erros de dominio (`AppException`) sao padronizados por `AppExceptionFilter`.
-- Erros Nest/Passport/ValidationPipe podem sair no formato bruto `statusCode/message/error` pelo `LogsExceptionFilter`.
+- Todo erro HTTP alcancado pela camada global e padronizado pelo
+  `GlobalExceptionFilter` registrado via `APP_FILTER`.
+- Erros abaixo de 500 preservam apenas informacao publica definida; todo 5xx e
+  sanitizado antes da resposta.
 - Rotas protegidas usam `JwtAuthGuard`. Nao foi encontrado decorator de roles (`@Roles`) ou RBAC.
 - Status esperado por convencao NestJS: `GET/PATCH/DELETE` retornam 200; `POST` retorna 201, exceto endpoints com `@HttpCode(200)` em auth (`login`, `forgot-password`, `reset-password-token`, `refresh`, `logout`). `POST /auth/reset-password` hoje retorna 201.
 
@@ -83,7 +97,7 @@ Validacao mecanica executada:
 - `rg '^\s{4}(get|post|patch|delete|put):' backendnest/swagger.yaml`: 79 operacoes.
 - `rg '^\s+operationId:' backendnest/swagger.yaml`: 79 `operationId`, todos unicos.
 - Parse YAML com Python/PyYAML: OK.
-- Validacao interna de `$ref`: 467 referencias locais, 0 ausentes.
+- Validacao interna de `$ref`: 693 referencias locais, 0 ausentes.
 - Validacao de path params: 0 erros.
 - Validacao de seguranca OpenAPI: endpoints publicos sem `BearerAuth`; endpoints protegidos com `BearerAuth`.
 - Compatibilidade OpenAPI 3.0: `exclusiveMinimum` usa formato booleano com `minimum`; nao ha `exclusiveMinimum` numerico.
@@ -103,6 +117,7 @@ Validacao mecanica executada:
 | I-06 | Respostas 2xx ainda usavam `OkObject`/`OkArray` genericos em muitos endpoints. | Operacoes principais agora usam envelopes especificos por recurso/lista mantendo `{ success, data, timestamp, requestId }`. |
 | I-07 | Operacoes nao tinham `operationId`, prejudicando geracao de clientes/SDKs. | As 79 operacoes atuais possuem `operationId` unico e estavel. |
 | I-08 | Alguns schemas usavam `exclusiveMinimum: 0`, formato de JSON Schema/OpenAPI 3.1. | Corrigido para `minimum: 0` com `exclusiveMinimum: true`, compativel com OpenAPI 3.0. |
+| I-05 | O contrato de erro tinha dois formatos concorrentes. | Runtime, frontend e OpenAPI agora usam um unico `ErrorEnvelope`; testes nomeados cobrem validacao, auth, 404, JSON malformado, 413 e 500 real. |
 | P-01 | A remocao logica de participante implementada ainda aparecia como roadmap na spec conceitual. | `DELETE /planejamentos/:planejamentoId/participantes/:participanteId` foi movido para `Contrato atual implementado`. |
 | P-02 | O resumo financeiro de Planejamentos ainda aparecia como roadmap e sem contrato OpenAPI explicito. | `GET /planejamentos/:id/resumo` foi implementado como consulta pura e documentado com schemas explicitos. |
 
@@ -110,7 +125,6 @@ Validacao mecanica executada:
 
 | ID | Descricao | Evidencia | Impacto | Recomendacao |
 | --- | --- | --- | --- | --- |
-| I-05 | Contrato de erro tem dois formatos em runtime. | `AppExceptionFilter` e `LogsExceptionFilter` podem emitir envelopes diferentes. | Clientes precisam tratar ambos os formatos. | Manter ambos documentados no OpenAPI ou unificar filtros em etapa futura. |
 | M-01 | Colecao Postman ausente. | Nao ha `.postman`, `postman` nem `*.postman_collection.json`. | Nao ha artefato Postman para validacao manual. | Opcionalmente gerar colecao a partir do OpenAPI oficial, sem manter contrato paralelo. |
 | M-02 | Frontend tipa algumas operacoes destrutivas/desativacao como `Promise<void>`. | Services ignoram payload envelopado de sucesso. | Baixo; payload nao e usado. | Manter se intencional ou criar tipo `ApiEmptySuccess` no frontend. |
 | M-03 | `POST /auth/reset-password` retorna 201 por default NestJS. | Endpoint nao define `@HttpCode(200)`. | Pequena incoerencia com outros comandos de auth. | Avaliar `@HttpCode(200)` se a equipe quiser uniformizar comandos sem criacao de recurso. |
@@ -131,7 +145,7 @@ Validacao mecanica executada:
 | Audit logs | `GET /audit-logs` | Swagger documenta query params | Coerente |
 | Planejamentos | 19 handlers implementados | Swagger documenta os 19 handlers reais, incluindo fechamento, resumo financeiro, arquivamento e cancelamento; a spec conceitual classifica os quatro como implementados | Coerente no contrato oficial |
 | Respostas de sucesso | Envelope global | Swagger aplica schemas envelopados | Coerente |
-| Schemas de resposta | Recursos e agregados retornados pelos services | Swagger usa schemas especificos onde aplicavel; `OkObject`/`OkArray` ficam como fallback nao referenciado | Coerente |
+| Schemas de resposta | Recursos e agregados retornados pelos services | Swagger usa schemas especificos onde aplicavel; componentes genericos sem uso foram removidos | Coerente |
 
 ## Divergencias Backend x Frontend
 
@@ -163,7 +177,7 @@ as tabelas `planejamento`, `participante_planejamento`,
 | Cobertura | 79 operacoes para 79 handlers reais | N/A | Swagger completo frente aos controllers |
 | Envelope global | Aplicado nos schemas de sucesso | N/A | Coerente com runtime |
 | Schemas 2xx | Envelopes especificos por recurso/lista/agregado | N/A | Reduzido uso de genericos; `OkMessage` e `EmptyEnvelope` mantidos onde fazem sentido |
-| Formatos de erro | Dois formatos documentados | N/A | Coerente com runtime observado |
+| Formato de erro | `ErrorEnvelope` unico | N/A | Coerente com runtime e frontend |
 | Modulos recentes | Users, dashboard, relatorios, orcamentos, previsoes, audit logs, CEP, health e planejamentos documentados | N/A | Coberto no Swagger |
 
 ## Seguranca e Autorizacao
@@ -186,7 +200,11 @@ as tabelas `planejamento`, `participante_planejamento`,
 | Backend | `npm test -- --runInBand --config ./test/jest-e2e.json planejamentos-cancelar-lifecycle.e2e-spec.ts` | Passou: 1 suite, 7 tests | PostgreSQL real; cobre sucesso, historico, somente leitura, autorizacao, duas corridas e rollback da reconciliacao. |
 | Backend | `npm run build` | Passou | `nest build`. |
 | Backend | `npm run lint` | Passou | ESLint com a configuracao oficial do projeto. |
-| OpenAPI | Parse YAML, refs, path params, seguranca, contagem e compatibilidade 3.0 | Passou | 79 operacoes, 79 `operationId` unicos, 467 referencias locais resolvidas, 0 ausentes, paridade integral com 79 handlers; 19 handlers e 19 operacoes de Planejamentos. |
+| Backend | `npm test -- --runInBand` | Passou: 73 suites, 803 tests | Suite unitaria completa, incluindo filtro global, request ID e logging seguro. |
+| Backend | `npm run test:e2e` | Passou: 22 suites, 123 tests | PostgreSQL e fronteira HTTP reais; inclui 400, 401, 404, 413 e 500 sanitizado. |
+| Frontend | `npm test -- --runInBand` | Passou: 57 suites, 662 tests | Fixtures e consumidor compartilhado alinhados exclusivamente ao `ErrorEnvelope`. |
+| Frontend | `npm run lint` e `npm run typecheck` | Passou | ESLint/Expo e TypeScript sem emissao. |
+| OpenAPI | Parse YAML, refs, path params, seguranca, contagem e compatibilidade 3.0 | Passou | 79 operacoes, 79 `operationId` unicos, 693 referencias locais resolvidas, 0 ausentes; todas as operacoes documentam 429 e 500, e toda resposta 4xx/5xx referencia `ErrorEnvelope` com `x-request-id`. |
 
 ## Recomendacoes de Manutencao
 

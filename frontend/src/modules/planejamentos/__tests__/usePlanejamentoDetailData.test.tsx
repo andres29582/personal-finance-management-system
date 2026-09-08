@@ -343,7 +343,7 @@ describe('usePlanejamentoDetailData', () => {
   it('resolve o erro principal sem aplicar uma carga parcial', async () => {
     mockGetResumoPlanejamento.mockRejectedValueOnce({
       response: {
-        data: { message: 'Resumo financeiro indisponivel.' },
+        data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
         status: 500,
       },
     });
@@ -353,7 +353,7 @@ describe('usePlanejamentoDetailData', () => {
     await waitFor(() => {
       expect(result.current?.loading).toBe(false);
       expect(result.current?.message).toBe(
-        'Resumo financeiro indisponivel.',
+        'Erro interno no servidor.',
       );
     });
 
@@ -367,7 +367,7 @@ describe('usePlanejamentoDetailData', () => {
   it('chama onUnauthorized quando a carga principal retorna 401', async () => {
     mockGetPlanejamentoById.mockRejectedValueOnce({
       response: {
-        data: { message: 'Unauthorized' },
+        data: { error: { code: 'AUTH_INVALID_SESSION', message: 'Sessao invalida' } },
         status: 401,
       },
     });

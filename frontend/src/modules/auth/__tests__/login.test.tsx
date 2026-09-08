@@ -87,7 +87,7 @@ describe('LoginScreen', () => {
 
   it('shows error message on login failure', async () => {
     mockLogin.mockRejectedValue({
-      response: { status: 401, data: { message: 'Invalid credentials' } },
+      response: { status: 401, data: { error: { code: 'AUTH_INVALID_CREDENTIALS', message: 'E-mail ou senha invalidos' } } },
     });
 
     render(<LoginScreen />);

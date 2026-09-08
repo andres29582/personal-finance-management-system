@@ -98,7 +98,7 @@ describe('authService', () => {
       mockApi.post.mockRejectedValue({
         response: {
           status: 401,
-          data: { message: 'Invalid credentials' },
+          data: { error: { code: 'AUTH_INVALID_CREDENTIALS', message: 'E-mail ou senha invalidos' } },
         },
       });
 
@@ -110,7 +110,7 @@ describe('authService', () => {
       ).rejects.toMatchObject({
         response: {
           status: 401,
-          data: { message: 'Invalid credentials' },
+          data: { error: { code: 'AUTH_INVALID_CREDENTIALS', message: 'E-mail ou senha invalidos' } },
         },
       });
     });
@@ -119,7 +119,7 @@ describe('authService', () => {
       mockApi.post.mockRejectedValue({
         response: {
           status: 500,
-          data: { message: 'Server error' },
+          data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
         },
       });
 
@@ -131,7 +131,7 @@ describe('authService', () => {
       ).rejects.toMatchObject({
         response: {
           status: 500,
-          data: { message: 'Server error' },
+          data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
         },
       });
     });
@@ -190,7 +190,7 @@ describe('authService', () => {
       mockApi.post.mockRejectedValue({
         response: {
           status: 401,
-          data: { message: 'Invalid refresh token' },
+          data: { error: { code: 'AUTH_INVALID_REFRESH_TOKEN', message: 'Refresh token invalido' } },
         },
       });
 
@@ -201,7 +201,7 @@ describe('authService', () => {
       ).rejects.toMatchObject({
         response: {
           status: 401,
-          data: { message: 'Invalid refresh token' },
+          data: { error: { code: 'AUTH_INVALID_REFRESH_TOKEN', message: 'Refresh token invalido' } },
         },
       });
     });
@@ -225,14 +225,14 @@ describe('authService', () => {
       mockApi.post.mockRejectedValue({
         response: {
           status: 500,
-          data: { message: 'Logout failed' },
+          data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
         },
       });
 
       await expect(authService.logoutSession()).rejects.toMatchObject({
         response: {
           status: 500,
-          data: { message: 'Logout failed' },
+          data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
         },
       });
     });
@@ -260,7 +260,7 @@ describe('authService', () => {
       mockApi.post.mockRejectedValue({
         response: {
           status: 401,
-          data: { message: 'Unauthorized' },
+          data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
         },
       });
 
@@ -269,7 +269,7 @@ describe('authService', () => {
       ).rejects.toMatchObject({
         response: {
           status: 401,
-          data: { message: 'Unauthorized' },
+          data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } },
         },
       });
     });
@@ -318,7 +318,7 @@ describe('authService', () => {
       mockApi.post.mockRejectedValue({
         response: {
           status: 400,
-          data: { message: 'Invalid or expired token' },
+          data: { error: { code: 'AUTH_PASSWORD_RESET_TOKEN_INVALID', message: 'Token invalido ou expirado.' } },
         },
       });
 
@@ -330,7 +330,7 @@ describe('authService', () => {
       ).rejects.toMatchObject({
         response: {
           status: 400,
-          data: { message: 'Invalid or expired token' },
+          data: { error: { code: 'AUTH_PASSWORD_RESET_TOKEN_INVALID', message: 'Token invalido ou expirado.' } },
         },
       });
     });

@@ -19,9 +19,8 @@ info:
     Rotas protegidas usam `Authorization: Bearer <access_token>` e validacao de sessao ativa.
 
 
-    Todas as respostas bem-sucedidas sao envelopadas como `{ success, data, timestamp, requestId }`. Erros de dominio usam
-    `{ success:false, error, timestamp, requestId }`; erros NestJS/Passport/ValidationPipe podem usar `{ statusCode, message,
-    error }`.
+    Todas as respostas bem-sucedidas sao envelopadas como `{ success, data, timestamp, requestId }`. Toda resposta de erro
+    usa `{ success:false, error, timestamp, requestId }`. O `requestId` do corpo corresponde ao header `x-request-id`.
 
     '
 servers:
@@ -52,6 +51,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  headers:
+    RequestId:
+      description: Identificador de correlacao; corresponde ao `requestId` do envelope.
+      schema:
+        type: string
   parameters:
     IdParam:
       name: id
@@ -223,7 +227,7 @@ components:
         moedaPadrao:
           type: string
           nullable: true
-    DomainErrorEnvelope:
+    ErrorEnvelope:
       type: object
       required:
       - success
@@ -255,26 +259,17 @@ components:
           format: date-time
         requestId:
           type: string
-    HttpErrorEnvelope:
-      type: object
-      required:
-      - statusCode
-      - message
-      properties:
-        statusCode:
-          type: integer
-        message:
-          oneOf:
-          - type: string
-          - type: array
-            items:
-              type: string
+      example:
+        success: false
         error:
-          type: string
-    ErrorResponse:
-      oneOf:
-      - $ref: '#/components/schemas/DomainErrorEnvelope'
-      - $ref: '#/components/schemas/HttpErrorEnvelope'
+          code: VALIDATION_ERROR
+          message: nome must be a string
+          details:
+            messages:
+            - nome must be a string
+            - valor must be positive
+        timestamp: '2026-09-02T12:00:00.000Z'
+        requestId: 123e4567-e89b-12d3-a456-426614174000
     RegisterRequest:
       type: object
       required:
@@ -2178,18 +2173,6 @@ components:
             items:
               $ref: '#/components/schemas/AcertoPlanejamento'
   responses:
-    OkObject:
-      description: Operacao bem-sucedida.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/SuccessObject'
-    OkArray:
-      description: Lista retornada com sucesso.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/SuccessArray'
     OkMessage:
       description: Mensagem retornada com sucesso.
       content:
@@ -2204,16 +2187,22 @@ components:
             $ref: '#/components/schemas/SuccessAny'
     BadRequest:
       description: Payload, parametro ou query invalido.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     FinancialOperationBadRequest:
       description: Payload, parametro ou query invalido, ou operacao financeira com conta ou categoria inativa.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
           examples:
             contaInativa:
               summary: Conta inativa para operacoes financeiras
@@ -2243,35 +2232,86 @@ components:
                 timestamp: '2026-08-16T12:00:00.000Z'
                 requestId: 123e4567-e89b-12d3-a456-426614174000
     Unauthorized:
-      description: Token ausente, invalido, expirado ou sessao invalida.
+      description: Token de autenticacao ausente, invalido ou expirado; sessao, credenciais de login ou refresh token invalidos.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     Forbidden:
       description: Usuario sem permissao para a operacao.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     NotFound:
       description: Recurso inexistente ou nao acessivel ao usuario.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     Conflict:
       description: Conflito de regra ou recurso duplicado.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
     ServiceUnavailable:
-      description: Servico externo indisponivel ou resposta incompativel.
+      description: API de Machine Learning indisponivel ou com resposta incompativel; retorna `SERVICE_UNAVAILABLE` com mensagem publica sanitizada.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/ErrorEnvelope'
+    PayloadTooLarge:
+      description: Payload da requisicao excede o limite configurado; retorna `PAYLOAD_TOO_LARGE` com mensagem publica sanitizada.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    UnprocessableEntity:
+      description: Validacao semantica ou regra de dominio nao atendida; preserva o `error.code` de dominio.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    TooManyRequests:
+      description: Limite de requisicoes excedido; retorna `TOO_MANY_REQUESTS` com mensagem publica sanitizada.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    InternalServerError:
+      description: Erro interno; retorna `INTERNAL_SERVER_ERROR` com mensagem publica sanitizada.
+      headers:
+        x-request-id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
 paths:
   /:
     get:
@@ -2285,6 +2325,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessString'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getRootMessage
   /health:
     get:
@@ -2298,6 +2342,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponseSuccess'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getHealth
   /cep/{cep}:
     get:
@@ -2318,12 +2366,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CepResponseSuccess'
-        '422':
-          $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '502':
-          $ref: '#/components/responses/ServiceUnavailable'
+          description: Falha na consulta ao servico de CEP; retorna `CEP_LOOKUP_UNAVAILABLE` com mensagem publica sanitizada.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: lookupCep
   /auth/register:
     post:
@@ -2347,8 +2404,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: register
   /auth/login:
     post:
@@ -2372,6 +2433,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: login
   /auth/forgot-password:
     post:
@@ -2390,6 +2457,12 @@ paths:
           $ref: '#/components/responses/OkMessage'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: forgotPassword
   /auth/reset-password-token:
     post:
@@ -2407,6 +2480,12 @@ paths:
           $ref: '#/components/responses/OkMessage'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: resetPasswordWithToken
   /auth/refresh:
     post:
@@ -2430,6 +2509,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: refreshToken
   /auth/logout:
     post:
@@ -2443,6 +2528,10 @@ paths:
           $ref: '#/components/responses/OkMessage'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: logout
   /auth/reset-password:
     post:
@@ -2464,6 +2553,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: resetPassword
   /users/me:
     get:
@@ -2483,6 +2578,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getCurrentUser
     patch:
       tags:
@@ -2509,8 +2608,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateCurrentUser
   /contas:
     post:
@@ -2536,6 +2639,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createConta
     get:
       tags:
@@ -2552,6 +2661,10 @@ paths:
                 $ref: '#/components/schemas/ContaListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listContas
   /contas/{id}:
     get:
@@ -2573,6 +2686,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getContaById
     patch:
       tags:
@@ -2601,6 +2718,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateConta
   /contas/{id}/desativar:
     patch:
@@ -2618,6 +2741,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deactivateConta
   /categorias:
     post:
@@ -2643,6 +2770,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createCategoria
     get:
       tags:
@@ -2668,6 +2801,10 @@ paths:
                 $ref: '#/components/schemas/CategoriaListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listCategorias
   /categorias/{id}:
     get:
@@ -2689,6 +2826,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getCategoriaById
     patch:
       tags:
@@ -2717,6 +2858,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateCategoria
   /categorias/{id}/desativar:
     patch:
@@ -2734,6 +2881,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deactivateCategoria
   /transacoes:
     post:
@@ -2761,6 +2912,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createTransacao
     get:
       tags:
@@ -2806,6 +2963,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listTransacoes
   /transacoes/{id}:
     get:
@@ -2827,6 +2988,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getTransacaoById
     patch:
       tags:
@@ -2855,6 +3020,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateTransacao
     delete:
       tags:
@@ -2873,6 +3044,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deleteTransacao
   /transferencias:
     post:
@@ -2900,6 +3075,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createTransferencia
     get:
       tags:
@@ -2916,6 +3097,10 @@ paths:
                 $ref: '#/components/schemas/TransferenciaListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listTransferencias
   /transferencias/{id}:
     get:
@@ -2937,6 +3122,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getTransferenciaById
     patch:
       tags:
@@ -2965,6 +3154,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateTransferencia
     delete:
       tags:
@@ -2981,6 +3176,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deleteTransferencia
   /dividas:
     post:
@@ -3008,6 +3207,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createDivida
     get:
       tags:
@@ -3024,6 +3229,10 @@ paths:
                 $ref: '#/components/schemas/DividaListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listDividas
   /dividas/{id}:
     get:
@@ -3045,6 +3254,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getDividaById
     patch:
       tags:
@@ -3073,6 +3286,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateDivida
   /dividas/{id}/desativar:
     patch:
@@ -3090,6 +3309,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deactivateDivida
   /pagos-divida:
     post:
@@ -3117,6 +3340,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createPagoDivida
   /pagos-divida/divida/{dividaId}:
     get:
@@ -3138,6 +3367,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listPagosDividaByDivida
   /pagos-divida/{id}:
     get:
@@ -3159,6 +3392,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getPagoDividaById
     delete:
       tags:
@@ -3175,6 +3412,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deletePagoDivida
   /metas:
     post:
@@ -3202,6 +3443,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createMeta
     get:
       tags:
@@ -3218,6 +3465,10 @@ paths:
                 $ref: '#/components/schemas/MetaListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listMetas
   /metas/{id}:
     get:
@@ -3239,6 +3490,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getMetaById
     patch:
       tags:
@@ -3267,6 +3522,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateMeta
   /metas/{id}/desativar:
     patch:
@@ -3284,6 +3545,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deactivateMeta
   /alertas:
     post:
@@ -3309,6 +3574,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createAlerta
     get:
       tags:
@@ -3325,6 +3596,10 @@ paths:
                 $ref: '#/components/schemas/AlertaListSuccess'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listAlertas
   /alertas/{id}:
     get:
@@ -3346,6 +3621,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getAlertaById
     patch:
       tags:
@@ -3374,6 +3653,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateAlerta
   /alertas/{id}/desativar:
     patch:
@@ -3391,6 +3676,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: deactivateAlerta
   /alertas/{id}/notificar:
     patch:
@@ -3408,6 +3697,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: markAlertaNotificado
   /orcamentos:
     post:
@@ -3435,6 +3728,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createOrcamento
     get:
       tags:
@@ -3460,6 +3759,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listOrcamentos
   /orcamentos/{id}:
     get:
@@ -3481,6 +3784,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getOrcamentoById
     patch:
       tags:
@@ -3509,6 +3816,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateOrcamento
   /relatorios:
     get:
@@ -3593,7 +3906,11 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getRelatorio
   /dashboard:
     get:
@@ -3620,8 +3937,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '422':
-          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getDashboard
   /previsoes/deficit:
     get:
@@ -3649,9 +3968,13 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getPrevisaoDeficit
   /audit-logs:
     get:
@@ -3687,6 +4010,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listAuditLogs
   /planejamentos:
     post:
@@ -3713,7 +4040,13 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createPlanejamento
     get:
       tags:
@@ -3743,6 +4076,10 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listPlanejamentos
   /planejamentos/{id}:
     get:
@@ -3766,10 +4103,17 @@ paths:
           description: >-
             code: PLANEJAMENTO_NOT_FOUND; message: Planejamento nao encontrado.
             O mesmo erro oculta planejamento inexistente ou inacessivel.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getPlanejamentoById
   /planejamentos/{id}/resumo:
     get:
@@ -3795,10 +4139,17 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getPlanejamentoFinancialSummary
   /planejamentos/{id}/fechar:
     patch:
@@ -3825,25 +4176,38 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
             PLANEJAMENTO_FECHAR_STATUS_INVALIDO - planejamento nao esta ABERTO;
             ou PLANEJAMENTO_FECHAR_GASTO_PENDENTE_REVISAO - existe gasto com
             revisao pendente.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: closePlanejamento
   /planejamentos/{id}/arquivar:
     patch:
@@ -3874,25 +4238,38 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
             PLANEJAMENTO_ARQUIVAR_STATUS_INVALIDO - planejamento nao esta
             FECHADO; ou PLANEJAMENTO_ARQUIVAR_PENDENCIA_FINANCEIRA - o resumo
             financeiro derivado ainda possui obrigacao residual.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: archivePlanejamento
   /planejamentos/{id}/cancelar:
     patch:
@@ -3925,25 +4302,38 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: PLANEJAMENTO_NOT_FOUND - planejamento inacessivel ou inexistente.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
             PLANEJAMENTO_CANCELAR_STATUS_INVALIDO - planejamento nao esta
             ABERTO; ou PLANEJAMENTO_CANCELAR_PENDENCIA_FINANCEIRA - o resumo
             financeiro derivado ainda possui obrigacao residual.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: cancelPlanejamento
   /planejamentos/{id}/participantes:
     post:
@@ -3985,10 +4375,19 @@ paths:
           description: >-
             PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
             esta ABERTO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: addParticipantePlanejamento
   /planejamentos/{planejamentoId}/participantes/{participanteId}:
     delete:
@@ -4017,35 +4416,51 @@ paths:
                 $ref: '#/components/schemas/ParticipantePlanejamentoSuccess'
         '400':
           description: planejamentoId ou participanteId nao e um UUID valido.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: >-
             PLANEJAMENTO_NOT_FOUND ou PLANEJAMENTO_PARTICIPANTE_NOT_FOUND.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
             PLANEJAMENTO_PARTICIPANTE_REMOVER_STATUS_INVALIDO ou
             PLANEJAMENTO_PARTICIPANTE_PROPRIETARIO_NAO_REMOVIVEL; ou
             PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
             esta ABERTO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: removeParticipantePlanejamento
   /planejamentos/{planejamentoId}/gastos:
     post:
@@ -4084,13 +4499,24 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           description: >-
-            PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
-            esta ABERTO; ou outra regra de negocio de pagador, participante ou
-            divisao invalida.
+            Codigos de dominio possiveis:
+            PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO,
+            PLANEJAMENTO_PAGADOR_INVALIDO,
+            PLANEJAMENTO_DIVISAO_PARTICIPANTE_INVALIDO, PARTICIPANTE_DUPLICADO
+            ou VALOR_MENOR_QUE_PARTICIPANTES.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: createGastoPlanejamento
     get:
       tags:
@@ -4113,10 +4539,17 @@ paths:
           description: >-
             code: PLANEJAMENTO_NOT_FOUND; message: Planejamento nao encontrado.
             O mesmo erro oculta planejamento inexistente ou inacessivel.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listGastosPlanejamento
   /planejamentos/{planejamentoId}/gastos/{gastoId}:
     get:
@@ -4143,10 +4576,17 @@ paths:
             O mesmo erro oculta planejamento inexistente ou inacessivel. Quando
             o planejamento e acessivel, code: PLANEJAMENTO_GASTO_NOT_FOUND;
             message: Gasto do planejamento nao encontrado.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: getGastoPlanejamentoById
     patch:
       tags:
@@ -4186,17 +4626,23 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: >-
             PLANEJAMENTO_NOT_FOUND ou PLANEJAMENTO_GASTO_NOT_FOUND.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
             PLANEJAMENTO_GASTO_ATUALIZACAO_VAZIA,
@@ -4207,10 +4653,19 @@ paths:
             PARTICIPANTE_DUPLICADO, VALOR_MENOR_QUE_PARTICIPANTES ou
             PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento nao
             esta ABERTO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: updateGastoPlanejamento
   /planejamentos/{planejamentoId}/gastos/{gastoId}/cancelar:
     patch:
@@ -4239,26 +4694,39 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: PLANEJAMENTO_OWNER_REQUIRED - usuario nao e proprietario.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: >-
             PLANEJAMENTO_NOT_FOUND ou PLANEJAMENTO_GASTO_NOT_FOUND.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
             PLANEJAMENTO_GASTO_CANCELAR_STATUS_INVALIDO - gasto nao esta ATIVO;
             ou PLANEJAMENTO_MUTACAO_ESTRUTURAL_STATUS_INVALIDO - planejamento
             nao esta ABERTO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: cancelGastoPlanejamento
   /planejamentos/{planejamentoId}/acertos:
     get:
@@ -4287,10 +4755,17 @@ paths:
           description: >-
             code: PLANEJAMENTO_NOT_FOUND; message: Planejamento nao encontrado.
             O mesmo erro oculta planejamento inexistente ou inacessivel.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: listAcertosPlanejamento
   /planejamentos/{planejamentoId}/acertos/sincronizar:
     post:
@@ -4318,10 +4793,17 @@ paths:
           description: >-
             PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO - sincronizacao
             permitida somente em planejamento ABERTO ou FECHADO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: syncAcertosPlanejamento
   /planejamentos/{planejamentoId}/acertos/{acertoId}/pagar:
     patch:
@@ -4350,10 +4832,17 @@ paths:
           description: >-
             PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO ou
             PLANEJAMENTO_ACERTO_PAGAR_STATUS_INVALIDO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: payAcertoPlanejamento
   /planejamentos/{planejamentoId}/acertos/{acertoId}/cancelar:
     patch:
@@ -4382,10 +4871,17 @@ paths:
           description: >-
             PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO ou
             PLANEJAMENTO_ACERTO_CANCELAR_STATUS_INVALIDO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: cancelAcertoPlanejamento
   /planejamentos/{planejamentoId}/acertos/{acertoId}/reabrir:
     patch:
@@ -4419,8 +4915,15 @@ paths:
             PLANEJAMENTO_ACERTO_OPERACAO_STATUS_INVALIDO,
             PLANEJAMENTO_ACERTO_REABRIR_STATUS_INVALIDO ou
             PLANEJAMENTO_ACERTO_REABRIR_OBSOLETO.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
       operationId: reopenAcertoPlanejamento

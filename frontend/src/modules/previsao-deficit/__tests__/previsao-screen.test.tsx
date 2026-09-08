@@ -78,7 +78,7 @@ describe('PrevisaoDeficitScreen', () => {
 
   it('redirects to login when prediction returns unauthorized', async () => {
     mockGetPrevisaoDeficit.mockRejectedValue({
-      response: { status: 401, data: { message: 'Unauthorized' } },
+      response: { status: 401, data: { error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } } },
     });
 
     render(<PrevisaoDeficitScreen />);

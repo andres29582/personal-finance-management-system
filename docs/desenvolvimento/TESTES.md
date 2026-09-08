@@ -67,6 +67,18 @@ autenticacao e modulo raiz. Eles sao importantes quando a mudanca envolve:
 - composicao entre modulos financeiros;
 - previsao de deficit, que monta features no backend e chama o cliente ML.
 
+O contrato transversal de erro e protegido por:
+
+- `global-exception.filter.spec.ts`: classificacao, sanitizacao 5xx, 413, 429,
+  requestId e logging best-effort;
+- `logs.service.spec.ts`: causa interna ausente do `AuditLog` consultavel;
+- `http-error-contract.e2e-spec.ts`: 400 de validacao, JSON malformado, 401,
+  404 e 413 com `x-request-id` igual ao envelope;
+- `planejamentos-audit.e2e-spec.ts`: 500 real sem vazamento da causa.
+
+O 429 e unitario por desenho: o ambiente E2E eleva o limite global e uma
+tempestade de requests testaria o throttler, nao a serializacao do contrato.
+
 O E2E de previsao usa um cliente ML controlado para validar a montagem do
 payload V2 sem depender de uma API FastAPI real durante o teste do backend.
 

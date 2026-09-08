@@ -8,28 +8,39 @@ type ApiLikeError = {
         details?: Record<string, unknown>;
         message?: string;
       };
-      message?: string | string[];
+      requestId?: string;
     };
     status?: number;
   };
+};
+
+export type ResolvedApiError = {
+  code?: string;
+  details?: Record<string, unknown>;
+  message: string;
+  requestId?: string;
+  unauthorized: boolean;
 };
 
 export async function resolveApiError(
   error: unknown,
   fallbackMessage: string,
   messagesByStatus: Record<number, string> = {},
-) {
+): Promise<ResolvedApiError> {
   const status = (error as ApiLikeError)?.response?.status;
-  const backendMessage = (error as ApiLikeError)?.response?.data?.message;
-  const typedError = (error as ApiLikeError)?.response?.data?.error;
-  const resolvedBackendMessage = Array.isArray(backendMessage)
-    ? backendMessage[0]
-    : backendMessage;
+  const responseData = (error as ApiLikeError)?.response?.data;
+  const typedError = responseData?.error;
+  const contract = {
+    code: typedError?.code,
+    details: typedError?.details,
+    requestId: responseData?.requestId,
+  };
 
   if (status === 401) {
     await clearSession();
 
     return {
+      ...contract,
       message:
         messagesByStatus[status] ?? 'Sessao expirada. Faca login novamente.',
       unauthorized: true,
@@ -37,12 +48,10 @@ export async function resolveApiError(
   }
 
   return {
-    code: typedError?.code,
-    details: typedError?.details,
+    ...contract,
     message: status
       ? messagesByStatus[status] ??
         typedError?.message ??
-        resolvedBackendMessage ??
         fallbackMessage
       : fallbackMessage,
     unauthorized: false,

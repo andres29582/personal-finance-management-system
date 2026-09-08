@@ -145,42 +145,38 @@ frontend/utils/api-error.ts
 Telas, hooks de tela e fluxos de formulario devem usar `resolveApiError` para:
 
 - extrair mensagem do backend;
+- preservar `code`, `details` e `requestId` quando houver resposta HTTP;
 - tratar `401`;
 - limpar sessao quando necessario;
 - decidir redirecionamento para login;
 - aplicar fallback seguro quando o backend nao enviar mensagem.
 
-## Formatos possiveis de erro
+## Envelope unico de erro
 
-O backend pode emitir pelo menos dois formatos:
-
-Erro de dominio envelopado:
+Toda resposta HTTP de erro do backend usa:
 
 ```json
 {
   "success": false,
   "error": {
-    "code": "DOMAIN_ERROR",
+    "code": "VALIDATION_ERROR",
     "message": "Mensagem",
-    "details": {}
+    "details": {
+      "messages": ["Mensagem", "Outra validacao"]
+    }
   },
   "timestamp": "...",
   "requestId": "..."
 }
 ```
 
-Erro HTTP/Nest comum:
+`resolveApiError` retorna `message`, `code`, `details`, `requestId` e
+`unauthorized`. Em validacoes, `error.message` contem a primeira mensagem e
+`error.details.messages` preserva a lista completa. Erros de rede, timeout,
+DNS ou offline nao possuem envelope backend e usam o fallback do caller.
 
-```json
-{
-  "statusCode": 400,
-  "message": "Mensagem",
-  "error": "Bad Request"
-}
-```
-
-O frontend deve tratar ambos. Quando `message` vier como lista, a primeira
-mensagem pode ser usada como texto principal de UI.
+O interceptor Axios tenta renovar o token antes que um 401 protegido chegue a
+UI. Um 401 final limpa a sessao; telas nao exibem `requestId` nesta fase.
 
 ## Recomendacao futura
 

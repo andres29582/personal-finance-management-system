@@ -4,7 +4,6 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { AppExceptionFilter } from './common/filters/exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import {
   configureBodyParsers,
@@ -32,7 +31,6 @@ async function bootstrap() {
   );
 
   app.useGlobalInterceptors(new ResponseInterceptor());
-  app.useGlobalFilters(new AppExceptionFilter());
 
   await app.listen(httpConfig.port);
 }
