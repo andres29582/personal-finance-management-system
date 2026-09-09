@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { AuthSession } from './entities/auth-session.entity';
 import { AuthSessionRepository } from './repositories/auth-session.repository';
 
 @Injectable()
@@ -27,15 +26,24 @@ export class AuthSessionsService {
     return this.authSessionRepository.findActiveById(sessionId);
   }
 
-  async rotate(sessionId: string, refreshToken: string, expiresAt: Date) {
+  async rotateIfActiveWithMatchingToken(
+    sessionId: string,
+    currentRefreshToken: string,
+    nextRefreshToken: string,
+    expiresAt: Date,
+  ) {
     const now = new Date();
 
-    await this.authSessionRepository.rotate(sessionId, {
-      refreshTokenHash: this.hashToken(refreshToken),
-      expiresAt,
-      lastUsedAt: now,
-      updatedAt: now,
-    });
+    return this.authSessionRepository.rotateIfActiveWithMatchingToken(
+      sessionId,
+      this.hashToken(currentRefreshToken),
+      {
+        refreshTokenHash: this.hashToken(nextRefreshToken),
+        expiresAt,
+        lastUsedAt: now,
+        updatedAt: now,
+      },
+    );
   }
 
   async revoke(sessionId: string, userId: string) {
@@ -48,10 +56,6 @@ export class AuthSessionsService {
     const now = new Date();
 
     await this.authSessionRepository.revokeAllByUser(userId, now);
-  }
-
-  hasMatchingRefreshToken(session: AuthSession, refreshToken: string) {
-    return session.refreshTokenHash === this.hashToken(refreshToken);
   }
 
   private hashToken(token: string) {

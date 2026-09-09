@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import request from 'supertest';
 import type { App } from 'supertest/types';
+import { DataSource } from 'typeorm';
 import { createE2eApp, type E2eApplication } from './e2e-app';
 import { configureE2eEnvironment, prepareE2eDatabase } from './e2e-database';
 import {
@@ -8,21 +10,32 @@ import {
 } from './factories/auth.factory';
 import { unwrapSuccess } from './helpers/http.helper';
 
+type AuthTokensResponse = {
+  access_token: string;
+  refresh_token: string;
+};
+
 type ForgotPasswordResponse = {
   message: string;
   resetToken?: string;
+};
+
+type RegisterResponse = {
+  usuario: { id: string };
 };
 
 jest.setTimeout(60000);
 
 describe('Auth password reset (e2e)', () => {
   let app: E2eApplication;
+  let appDataSource: DataSource;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();
     await prepareE2eDatabase(databaseConfig);
 
     app = await createE2eApp();
+    appDataSource = app.get(DataSource);
   });
 
   afterAll(async () => {
@@ -86,5 +99,116 @@ describe('Auth password reset (e2e)', () => {
         token: resetToken,
       })
       .expect(400);
+  });
+
+  it('allows exactly one parallel reset-token consumption against Postgres', async () => {
+    const server = app.getHttpServer() as unknown as App;
+    const email = 'reset-token.parallel.e2e@example.com';
+    const registrationResponse = await request(server)
+      .post('/auth/register')
+      .send(
+        makeRegisterUserPayload({
+          cpf: '39053344705',
+          email,
+          nome: 'Parallel Reset Token E2E',
+        }),
+      )
+      .expect(201);
+    const registration = unwrapSuccess<RegisterResponse>(registrationResponse);
+    const forgotPasswordResponse = await request(server)
+      .post('/auth/forgot-password')
+      .send({ email })
+      .expect(200);
+    const { resetToken } = unwrapSuccess<ForgotPasswordResponse>(
+      forgotPasswordResponse,
+    );
+
+    if (!resetToken) {
+      throw new Error('Expected test reset token to be returned.');
+    }
+
+    const responses = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        request(server)
+          .post('/auth/reset-password-token')
+          .send({ novaSenha: 'SenhaNova123', token: resetToken }),
+      ),
+    );
+
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      200, 400,
+    ]);
+    const [{ used }] = await appDataSource.query<Array<{ used: number }>>(
+      `SELECT COUNT(*)::integer AS used
+       FROM password_reset_token
+       WHERE user_id = $1 AND used_at IS NOT NULL`,
+      [registration.usuario.id],
+    );
+    expect(used).toBe(1);
+  });
+
+  it('allows exactly one parallel refresh rotation against Postgres', async () => {
+    const server = app.getHttpServer() as unknown as App;
+    const email = 'refresh.parallel.e2e@example.com';
+    const registrationResponse = await request(server)
+      .post('/auth/register')
+      .send(
+        makeRegisterUserPayload({
+          cpf: '16899535009',
+          email,
+          nome: 'Parallel Refresh E2E',
+        }),
+      )
+      .expect(201);
+    const registration = unwrapSuccess<RegisterResponse>(registrationResponse);
+    const loginResponse = await request(server)
+      .post('/auth/login')
+      .send(makeLoginPayload({ email }))
+      .expect(200);
+    const login = unwrapSuccess<AuthTokensResponse>(loginResponse);
+
+    const responses = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        request(server)
+          .post('/auth/refresh')
+          .send({ refreshToken: login.refresh_token }),
+      ),
+    );
+
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      200, 401,
+    ]);
+    const successfulResponse = responses.find(
+      (response) => response.status === 200,
+    );
+    expect(successfulResponse).toBeDefined();
+    const rotated = unwrapSuccess<AuthTokensResponse>(successfulResponse!);
+    expect(rotated.refresh_token).not.toBe(login.refresh_token);
+
+    const [session] = await appDataSource.query<
+      Array<{ refreshTokenHash: string; revokedAt: Date | null }>
+    >(
+      `SELECT refresh_token_hash AS "refreshTokenHash", revoked_at AS "revokedAt"
+       FROM auth_session
+       WHERE usuario_id = $1`,
+      [registration.usuario.id],
+    );
+    expect(session).toEqual(
+      expect.objectContaining({
+        refreshTokenHash: createHash('sha256')
+          .update(rotated.refresh_token)
+          .digest('hex'),
+        revokedAt: null,
+      }),
+    );
+
+    await request(server)
+      .post('/auth/refresh')
+      .send({ refreshToken: login.refresh_token })
+      .expect(401);
+    await request(server)
+      .post('/auth/refresh')
+      .send({ refreshToken: rotated.refresh_token })
+      .expect(200);
   });
 });

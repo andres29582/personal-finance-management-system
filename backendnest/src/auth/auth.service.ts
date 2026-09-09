@@ -20,6 +20,7 @@ import { LogsService } from '../logs/logs.service';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import { AuthSessionsService } from './auth-sessions.service';
+import { PasswordResetDeliveryService } from './password-reset-delivery.service';
 import {
   AuthTokenConfig,
   resolveAuthTokenConfig,
@@ -53,6 +54,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
     private readonly passwordResetTokenRepository: PasswordResetTokenRepository,
+    private readonly passwordResetDeliveryService: PasswordResetDeliveryService,
   ) {
     this.tokenConfig = resolveAuthTokenConfig(configService);
     this.passwordResetConfig = resolvePasswordResetConfig(configService);
@@ -186,13 +188,8 @@ export class AuthService {
     if (
       !session ||
       session.userId !== payload.sub ||
-      session.expiresAt.getTime() <= Date.now() ||
-      !this.authSessionsService.hasMatchingRefreshToken(session, refreshToken)
+      session.expiresAt.getTime() <= Date.now()
     ) {
-      if (session) {
-        await this.authSessionsService.revoke(session.id, session.userId);
-      }
-
       throw new AppUnauthorizedException(
         'AUTH_INVALID_REFRESH_TOKEN',
         'Refresh token invalido',
@@ -209,18 +206,26 @@ export class AuthService {
     }
 
     const nextRefreshToken = await this.buildRefreshToken(user, session.id);
-    await this.authSessionsService.rotate(
-      session.id,
-      nextRefreshToken,
-      this.getTokenExpiration(nextRefreshToken),
-    );
+    const rotated =
+      await this.authSessionsService.rotateIfActiveWithMatchingToken(
+        session.id,
+        refreshToken,
+        nextRefreshToken,
+        this.getTokenExpiration(nextRefreshToken),
+      );
+
+    if (!rotated) {
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_REFRESH_TOKEN',
+        'Refresh token invalido',
+      );
+    }
 
     return {
       access_token: await this.buildAccessToken(user, session.id),
       refresh_token: nextRefreshToken,
     };
   }
-
   async logout(userId: string, sessionId?: string) {
     if (sessionId) {
       await this.authSessionsService.revoke(sessionId, userId);
@@ -292,8 +297,9 @@ export class AuthService {
 
     const plainToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(plainToken).digest('hex');
-    const ttlMinutes = this.passwordResetConfig.ttlMinutes;
-    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + this.passwordResetConfig.ttlMinutes * 60 * 1000,
+    );
 
     await this.passwordResetTokenRepository.createToken({
       id: randomUUID(),
@@ -302,7 +308,15 @@ export class AuthService {
       expiresAt,
       usedAt: null,
     });
-
+    void Promise.resolve()
+      .then(() =>
+        this.passwordResetDeliveryService.deliver({
+          email: user.email,
+          expiresAt,
+          resetToken: plainToken,
+        }),
+      )
+      .catch(() => undefined);
     await this.logsService.logAuthEvent({
       event: 'PASSWORD_RESET_REQUESTED',
       level: 'info',
@@ -318,17 +332,17 @@ export class AuthService {
         : {}),
     };
   }
-
   async resetPasswordWithToken(plainToken: string, novaSenha: string) {
     const tokenHash = createHash('sha256').update(plainToken).digest('hex');
-    const record =
-      await this.passwordResetTokenRepository.findLatestByHash(tokenHash);
+    const newPasswordHash = await bcrypt.hash(novaSenha, 10);
+    const userId =
+      await this.passwordResetTokenRepository.consumeAndResetPassword(
+        tokenHash,
+        newPasswordHash,
+        new Date(),
+      );
 
-    if (
-      !record ||
-      record.usedAt !== null ||
-      record.expiresAt.getTime() <= Date.now()
-    ) {
+    if (!userId) {
       await this.logsService.logAuthEvent({
         event: 'PASSWORD_RESET_TOKEN_INVALID',
         level: 'warn',
@@ -341,25 +355,11 @@ export class AuthService {
       );
     }
 
-    const user = await this.usersService.findById(record.userId);
-
-    if (!user) {
-      throw new BusinessRuleException(
-        'AUTH_PASSWORD_RESET_TOKEN_INVALID',
-        'Token invalido ou expirado.',
-      );
-    }
-
-    const newPasswordHash = await bcrypt.hash(novaSenha, 10);
-    await this.usersService.updatePassword(user.id, newPasswordHash);
-    await this.authSessionsService.revokeAllByUser(user.id);
-    await this.passwordResetTokenRepository.markUsed(record.id, new Date());
-
     await this.logsService.logAuthEvent({
       event: 'PASSWORD_RESET_TOKEN_SUCCESS',
       level: 'info',
       action: 'reset_password',
-      userId: user.id,
+      userId,
       message: 'Senha redefinida via token de recuperacao.',
     });
 
@@ -367,7 +367,6 @@ export class AuthService {
       message: 'Senha atualizada com sucesso. Faca login com a nova senha.',
     };
   }
-
   private async createTokensForUser(user: User): Promise<AuthTokens> {
     const sessionId = randomUUID();
     const refreshToken = await this.buildRefreshToken(user, sessionId);
@@ -405,6 +404,7 @@ export class AuthService {
       {
         sub: user.id,
         sid: sessionId,
+        jti: randomUUID(),
       },
       {
         secret: this.tokenConfig.refreshSecret,

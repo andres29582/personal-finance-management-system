@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
 import { AuthSessionsService } from './auth-sessions.service';
+import { PasswordResetDeliveryService } from './password-reset-delivery.service';
 import { AuthService } from './auth.service';
 import { AuthSession } from './entities/auth-session.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
@@ -41,6 +42,7 @@ import { resolveAuthTokenConfig } from './config/auth-token.config';
   providers: [
     AuthService,
     AuthSessionsService,
+    PasswordResetDeliveryService,
     JwtStrategy,
     JwtAuthGuard,
     AuthSessionRepository,

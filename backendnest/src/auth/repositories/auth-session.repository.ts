@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, MoreThan, Repository } from 'typeorm';
 import { BaseRepository } from '../../common/abstract/base.repository';
 import { AuthSession } from '../entities/auth-session.entity';
 
@@ -27,8 +27,25 @@ export class AuthSessionRepository extends BaseRepository<AuthSession> {
     });
   }
 
-  async rotate(sessionId: string, data: Partial<AuthSession>): Promise<void> {
-    await this.authSessionRepository.update(sessionId, data);
+  async rotateIfActiveWithMatchingToken(
+    sessionId: string,
+    currentRefreshTokenHash: string,
+    data: Pick<
+      AuthSession,
+      'expiresAt' | 'lastUsedAt' | 'refreshTokenHash' | 'updatedAt'
+    >,
+  ): Promise<boolean> {
+    const result = await this.authSessionRepository.update(
+      {
+        id: sessionId,
+        refreshTokenHash: currentRefreshTokenHash,
+        revokedAt: IsNull(),
+        expiresAt: MoreThan(data.updatedAt),
+      },
+      data,
+    );
+
+    return result.affected === 1;
   }
 
   async revoke(

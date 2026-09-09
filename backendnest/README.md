@@ -113,8 +113,10 @@ Para PostgreSQL local, mantenha `NODE_ENV=development` e
 | `ML_API_URL` | URL base da API de ML | `http://127.0.0.1:8000` |
 | `ML_API_TIMEOUT_MS` | Timeout de chamada ML | `5000` |
 | `ML_INTERNAL_API_KEY` | Chave interna enviada ao servico ML | obrigatoria fora de `development`/`test` |
+| `PASSWORD_RESET_DELIVERY_URL` | Endpoint HTTPS que entrega a instrucao de reset; obrigatorio fora de `development`/`test` | vazio localmente |
+| `PASSWORD_RESET_DELIVERY_API_KEY` | Credencial Bearer do endpoint de entrega; 32+ caracteres fora de `development`/`test` | vazio localmente |
 | `AUTH_RETURN_RESET_TOKEN` | Auxiliar local para retornar token de reset no JSON apenas em `development`/`test` | `false` |
-| `PASSWORD_RESET_TTL_MINUTES` | Validade do token de reset de senha | `60` |
+| `PASSWORD_RESET_TTL_MINUTES` | Validade do token de reset de senha (1 a 1440 minutos) | `60` |
 
 A configuracao do runtime HTTP falha no startup quando recebe valores
 invalidos. `PORT` deve ser um inteiro entre `1` e `65535` (padrao `3000`).
@@ -156,9 +158,12 @@ distintos e com pelo menos 32 caracteres em `production` e `demo`. O
 expostos. Os valores vazios do `.env.example` sao marcadores de configuracao e
 nao credenciais utilizaveis.
 
-`AUTH_RETURN_RESET_TOKEN=true` e bloqueado fora de `NODE_ENV=development` ou
-`NODE_ENV=test`, pois o token plano de recuperacao nao faz parte do contrato
-publico de producao.
+Fora de `development`/`test`, `PASSWORD_RESET_DELIVERY_URL` deve ser uma URL
+HTTPS sem credenciais embutidas e `PASSWORD_RESET_DELIVERY_API_KEY` precisa ter
+32 ou mais caracteres. O backend envia `email`, `resetToken` e `expiresAt` ao
+endpoint; esse token nunca deve ser registrado em logs. `AUTH_RETURN_RESET_TOKEN=true` e
+bloqueado fora de `NODE_ENV=development` ou `NODE_ENV=test`, pois o token plano de
+recuperacao nao faz parte do contrato publico de producao.
 
 `ML_INTERNAL_API_KEY` e opcional em `development`/`test`. Quando configurada, o
 backend envia o header `X-ML-Internal-Key` ao servico ML. Fora de
