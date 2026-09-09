@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { AuthSessionsService } from './auth-sessions.service';
+import { PasswordResetDeliveryService } from './password-reset-delivery.service';
 import { AuthService } from './auth.service';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 import { CategoriasService } from '../categorias/categorias.service';
@@ -37,10 +38,9 @@ describe('AuthService', () => {
       AuthSessionsService,
       | 'create'
       | 'findActiveById'
-      | 'hasMatchingRefreshToken'
       | 'revoke'
       | 'revokeAllByUser'
-      | 'rotate'
+      | 'rotateIfActiveWithMatchingToken'
     >
   >;
   let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
@@ -49,8 +49,11 @@ describe('AuthService', () => {
   let passwordResetTokenRepository: jest.Mocked<
     Pick<
       PasswordResetTokenRepository,
-      'createToken' | 'findLatestByHash' | 'markUsed'
+      'consumeAndResetPassword' | 'createToken'
     >
+  >;
+  let passwordResetDeliveryService: jest.Mocked<
+    Pick<PasswordResetDeliveryService, 'deliver'>
   >;
 
   beforeEach(() => {
@@ -72,10 +75,9 @@ describe('AuthService', () => {
     authSessionsService = {
       create: jest.fn(),
       findActiveById: jest.fn(),
-      hasMatchingRefreshToken: jest.fn(),
       revoke: jest.fn(),
       revokeAllByUser: jest.fn(),
-      rotate: jest.fn(),
+      rotateIfActiveWithMatchingToken: jest.fn(),
     };
     configValues = {
       AUTH_RETURN_RESET_TOKEN: 'false',
@@ -94,9 +96,11 @@ describe('AuthService', () => {
       logAuthEvent: jest.fn(),
     };
     passwordResetTokenRepository = {
+      consumeAndResetPassword: jest.fn(),
       createToken: jest.fn(),
-      findLatestByHash: jest.fn(),
-      markUsed: jest.fn(),
+    };
+    passwordResetDeliveryService = {
+      deliver: jest.fn(),
     };
 
     service = createService();
@@ -111,6 +115,7 @@ describe('AuthService', () => {
       configService as unknown as ConfigService,
       logsService as unknown as LogsService,
       passwordResetTokenRepository as unknown as PasswordResetTokenRepository,
+      passwordResetDeliveryService as unknown as PasswordResetDeliveryService,
     );
   }
 
@@ -463,7 +468,6 @@ describe('AuthService', () => {
       revokedAt: null,
       userId: 'user-1',
     } as never);
-    authSessionsService.hasMatchingRefreshToken.mockReturnValue(true);
     usersService.findById.mockResolvedValue({
       cep: '01001000',
       cidade: 'Sao Paulo',
@@ -482,11 +486,15 @@ describe('AuthService', () => {
     jwtService.decode.mockReturnValue({
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
+    authSessionsService.rotateIfActiveWithMatchingToken.mockResolvedValue(true);
 
     const result = await service.refreshSession('refresh-token-1');
 
-    expect(authSessionsService.rotate).toHaveBeenCalledWith(
+    expect(
+      authSessionsService.rotateIfActiveWithMatchingToken,
+    ).toHaveBeenCalledWith(
       'session-1',
+      'refresh-token-1',
       'refresh-token-2',
       expect.any(Date),
     );
@@ -668,13 +676,9 @@ describe('AuthService', () => {
 
   it('hashes a token-reset password exactly as received', async () => {
     const password = ' nova senha com espacos ';
-    passwordResetTokenRepository.findLatestByHash.mockResolvedValue({
-      id: 'reset-token-1',
-      userId: 'user-1',
-      usedAt: null,
-      expiresAt: new Date(Date.now() + 60_000),
-    } as never);
-    usersService.findById.mockResolvedValue({ id: 'user-1' } as never);
+    passwordResetTokenRepository.consumeAndResetPassword.mockResolvedValue(
+      'user-1',
+    );
     (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
 
     await service.resetPasswordWithToken('plain-token', password);
@@ -683,5 +687,111 @@ describe('AuthService', () => {
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.not.objectContaining({ password, senha: password }),
     );
+  });
+
+  it('does not wait for or expose password-reset delivery failures', async () => {
+    usersService.findByEmail.mockResolvedValue({
+      email: 'ana@example.com',
+      id: 'user-1',
+    } as never);
+    passwordResetDeliveryService.deliver.mockRejectedValue(
+      new Error('delivery failed'),
+    );
+
+    await expect(
+      service.requestPasswordReset('ana@example.com'),
+    ).resolves.toEqual({
+      message:
+        'Se o e-mail estiver cadastrado, enviaremos instrucoes de recuperacao em instantes.',
+    });
+    await Promise.resolve();
+  });
+
+  it('issues distinct refresh JWT IDs even in the same millisecond', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    jwtService.signAsync.mockImplementation((payload) =>
+      Promise.resolve(JSON.stringify(payload)),
+    );
+    const refreshTokenBuilder = service as unknown as {
+      buildRefreshToken(
+        user: { id: string },
+        sessionId: string,
+      ): Promise<string>;
+    };
+    const user = { id: 'user-1' };
+
+    const [first, second] = await Promise.all([
+      refreshTokenBuilder.buildRefreshToken(user, 'session-1'),
+      refreshTokenBuilder.buildRefreshToken(user, 'session-1'),
+    ]);
+    const firstPayload = JSON.parse(first) as { jti: string };
+    const secondPayload = JSON.parse(second) as { jti: string };
+
+    expect(firstPayload.jti).toEqual(expect.any(String));
+    expect(secondPayload.jti).toEqual(expect.any(String));
+    expect(firstPayload.jti).not.toBe(secondPayload.jti);
+  });
+
+  it('allows only one concurrent password-reset token consumption', async () => {
+    passwordResetTokenRepository.consumeAndResetPassword
+      .mockResolvedValueOnce('user-1')
+      .mockResolvedValueOnce(null);
+    (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+    const results = await Promise.allSettled([
+      service.resetPasswordWithToken('same-token', 'new-password'),
+      service.resetPasswordWithToken('same-token', 'new-password'),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    expect(
+      passwordResetTokenRepository.consumeAndResetPassword,
+    ).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows only one concurrent refresh rotation', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sid: 'session-1',
+      sub: 'user-1',
+    } as never);
+    authSessionsService.findActiveById.mockResolvedValue({
+      expiresAt: new Date(Date.now() + 60_000),
+      id: 'session-1',
+      userId: 'user-1',
+    } as never);
+    usersService.findById.mockResolvedValue({ id: 'user-1' } as never);
+    jwtService.signAsync.mockImplementation((_payload, options) =>
+      Promise.resolve(
+        options?.secret === 'refresh-secret'
+          ? 'next-refresh-token'
+          : 'next-access-token',
+      ),
+    );
+    jwtService.decode.mockReturnValue({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    authSessionsService.rotateIfActiveWithMatchingToken
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const results = await Promise.allSettled([
+      service.refreshSession('same-refresh-token'),
+      service.refreshSession('same-refresh-token'),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
+    expect(
+      authSessionsService.rotateIfActiveWithMatchingToken,
+    ).toHaveBeenCalledTimes(2);
   });
 });

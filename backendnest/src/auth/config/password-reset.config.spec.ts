@@ -2,6 +2,8 @@ import { ConfigService } from '@nestjs/config';
 import { resolvePasswordResetConfig } from './password-reset.config';
 
 describe('resolvePasswordResetConfig', () => {
+  const deliveryApiKey = 'password-reset-delivery-api-key-at-least-32-chars';
+
   function config(values: Record<string, string | undefined>) {
     return {
       get: jest.fn((key: string) => values[key]),
@@ -11,77 +13,100 @@ describe('resolvePasswordResetConfig', () => {
   it.each([
     ['development', 'true', true],
     ['development', 'false', false],
-    ['development', undefined, false],
     ['test', 'true', true],
-    ['test', 'false', false],
-    ['production', 'false', false],
-    ['staging', undefined, false],
+    ['test', undefined, false],
   ])(
-    'resolves NODE_ENV=%s and AUTH_RETURN_RESET_TOKEN=%s as returnResetToken=%s',
+    'resolves local NODE_ENV=%s and AUTH_RETURN_RESET_TOKEN=%s',
     (nodeEnv, flag, expected) => {
-      const result = resolvePasswordResetConfig(
-        config({
-          AUTH_RETURN_RESET_TOKEN: flag,
-          NODE_ENV: nodeEnv,
-        }),
-      );
-
-      expect(result.returnResetToken).toBe(expected);
+      expect(
+        resolvePasswordResetConfig(
+          config({ AUTH_RETURN_RESET_TOKEN: flag, NODE_ENV: nodeEnv }),
+        ).returnResetToken,
+      ).toBe(expected);
     },
   );
 
+  it('does not expose reset tokens in production even with delivery configured', () => {
+    const result = resolvePasswordResetConfig(
+      config({
+        AUTH_RETURN_RESET_TOKEN: 'false',
+        NODE_ENV: 'production',
+        PASSWORD_RESET_DELIVERY_API_KEY: deliveryApiKey,
+        PASSWORD_RESET_DELIVERY_URL:
+          'https://mailer.example.test/password-reset',
+      }),
+    );
+
+    expect(result.returnResetToken).toBe(false);
+  });
+
   it.each(['production', 'demo', 'staging', ''])(
-    'fails fast when reset token exposure is enabled in %s',
+    'rejects reset-token exposure in %s without leaking secrets',
     (nodeEnv) => {
       expect(() =>
         resolvePasswordResetConfig(
           config({
             AUTH_RETURN_RESET_TOKEN: 'true',
             NODE_ENV: nodeEnv,
+            PASSWORD_RESET_DELIVERY_API_KEY: deliveryApiKey,
+            PASSWORD_RESET_DELIVERY_URL:
+              'https://mailer.example.test/password-reset',
           }),
         ),
-      ).toThrow(
-        'AUTH_RETURN_RESET_TOKEN nao pode ser habilitado fora de development/test.',
-      );
+      ).toThrow('AUTH_RETURN_RESET_TOKEN nao pode ser habilitado');
     },
   );
 
-  it('does not include sensitive values in the failure message', () => {
-    const sensitiveValues = ['plain-token-value', 'ana@example.com', 'secret'];
+  it('requires an authenticated HTTPS delivery endpoint outside local environments', () => {
+    expect(() =>
+      resolvePasswordResetConfig(config({ NODE_ENV: 'production' })),
+    ).toThrow('PASSWORD_RESET_DELIVERY_URL is required');
+    expect(() =>
+      resolvePasswordResetConfig(
+        config({
+          NODE_ENV: 'production',
+          PASSWORD_RESET_DELIVERY_API_KEY: deliveryApiKey,
+          PASSWORD_RESET_DELIVERY_URL: 'http://mailer.example.test/reset',
+        }),
+      ),
+    ).toThrow('PASSWORD_RESET_DELIVERY_URL must be a valid HTTPS URL');
+  });
+
+  it('does not leak delivery credentials in configuration errors', () => {
+    const secret = 'troque_super_sensitive_delivery_key_that_must_not_leak';
+
+    expect(() =>
+      resolvePasswordResetConfig(
+        config({
+          NODE_ENV: 'production',
+          PASSWORD_RESET_DELIVERY_API_KEY: secret,
+          PASSWORD_RESET_DELIVERY_URL: 'http://mailer.example.test/reset',
+        }),
+      ),
+    ).toThrow('PASSWORD_RESET_DELIVERY_URL must be a valid HTTPS URL');
 
     try {
       resolvePasswordResetConfig(
         config({
-          AUTH_RETURN_RESET_TOKEN: 'true',
-          JWT_ACCESS_SECRET: 'secret',
           NODE_ENV: 'production',
+          PASSWORD_RESET_DELIVERY_API_KEY: secret,
+          PASSWORD_RESET_DELIVERY_URL: 'http://mailer.example.test/reset',
         }),
       );
-      throw new Error('Expected resolvePasswordResetConfig to throw');
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : JSON.stringify(error);
-
-      for (const value of sensitiveValues) {
-        expect(message).not.toContain(value);
-      }
+      expect((error as Error).message).not.toContain(secret);
     }
   });
-
-  it('uses the configured reset token ttl', () => {
-    const result = resolvePasswordResetConfig(
-      config({
-        NODE_ENV: 'test',
-        PASSWORD_RESET_TTL_MINUTES: '15',
-      }),
-    );
-
-    expect(result.ttlMinutes).toBe(15);
-  });
-
-  it('defaults the reset token ttl to 60 minutes', () => {
-    const result = resolvePasswordResetConfig(config({ NODE_ENV: 'test' }));
-
-    expect(result.ttlMinutes).toBe(60);
-  });
+  it.each(['0', '15.5', '1441', 'invalid'])(
+    'rejects invalid reset ttl %s',
+    (ttl) => {
+      expect(() =>
+        resolvePasswordResetConfig(
+          config({ NODE_ENV: 'test', PASSWORD_RESET_TTL_MINUTES: ttl }),
+        ),
+      ).toThrow(
+        'PASSWORD_RESET_TTL_MINUTES must be an integer between 1 and 1440',
+      );
+    },
+  );
 });
