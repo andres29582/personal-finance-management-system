@@ -687,6 +687,7 @@ components:
           exclusiveMinimum: true
         fechaLimite:
           type: string
+          format: date
         contaId:
           type: string
           format: uuid
@@ -707,13 +708,14 @@ components:
           type: number
           multipleOf: 0.01
           minimum: 0
-          exclusiveMinimum: true
         fechaLimite:
           type: string
+          format: date
         ativa:
           type: boolean
     CreateAlertaRequest:
       type: object
+      description: referenciaId deve existir, pertencer ao usuario e corresponder ao tipo (meta, divida ou orcamento).
       required:
       - tipo
       - referenciaId
