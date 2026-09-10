@@ -112,6 +112,18 @@ Padrao de nomes:
 Endpoints devem seguir os paths reais do Swagger. Evite criar paths em telas.
 Telas devem chamar services.
 
+### Contratos create-only de dividas, metas e alertas
+
+Os `PATCH` desses recursos sao parciais e preservam associacoes estruturais:
+
+- divida: `contaId`, `montoTotal` e `fechaInicio` sao somente de criacao;
+- meta: `tipo`, `contaId` e `dividaId` sao somente de criacao;
+- alerta: `tipo` e `referenciaId` sao somente de criacao.
+
+No create de alerta, `referenciaId` deve existir, pertencer ao usuario e ser do
+recurso indicado por `tipo`. A tela limpa a referencia quando o tipo muda; o
+backend continua sendo a autoridade final.
+
 ### Planejamentos
 
 O modulo `frontend/src/modules/planejamentos` consome os endpoints oficiais de

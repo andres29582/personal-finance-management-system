@@ -611,6 +611,7 @@ components:
           - anual
     UpdateDividaRequest:
       type: object
+      description: contaId, montoTotal e fechaInicio sao definidos na criacao e nao podem ser alterados.
       properties:
         nome:
           type: string
@@ -696,6 +697,7 @@ components:
           format: uuid
     UpdateMetaRequest:
       type: object
+      description: tipo, contaId e dividaId sao definidos na criacao e nao podem ser alterados.
       properties:
         nome:
           type: string
@@ -735,6 +737,7 @@ components:
           minimum: 1
     UpdateAlertaRequest:
       type: object
+      description: tipo e referenciaId sao definidos na criacao e nao podem ser alterados.
       properties:
         diasAnticipacion:
           type: integer
