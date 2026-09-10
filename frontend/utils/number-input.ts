@@ -1,7 +1,12 @@
 export function parseDecimalInput(rawValue: string): number {
   const trimmedValue = rawValue.trim();
 
-  if (!trimmedValue) {
+  if (
+    !trimmedValue ||
+    !/^-?(?:R\$\s*)?(?:(?:\d{1,3}(?:\.\d{3})*(?:,\d*)?)|(?:\d{1,3}(?:,\d{3})*(?:\.\d*)?)|\d+(?:[.,]\d*)?|[.,]\d+)$/i.test(
+      trimmedValue,
+    )
+  ) {
     return Number.NaN;
   }
 
