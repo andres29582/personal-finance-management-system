@@ -183,6 +183,7 @@ As migrations ficam em `migrations/` e devem ser executadas em ordem:
 0005_add_audit_log.sql
 0006_soft_delete_lgpd_password_reset.sql
 0007_create_planejamentos_compartilhados.sql
+0008_align_divida_monetary_precision.sql
 ```
 
 Exemplo de execucao com `psql`:
@@ -195,6 +196,7 @@ psql -h localhost -U postgres -d gestao_financeira -f migrations/0004_add_auth_s
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0005_add_audit_log.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0006_soft_delete_lgpd_password_reset.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0007_create_planejamentos_compartilhados.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0008_align_divida_monetary_precision.sql
 ```
 
 ### Atencao: Planejamentos Compartilhados
