@@ -181,14 +181,21 @@ export function DividasFormScreen() {
           </GlassField>
 
           <GlassField label="Conta vinculada">
-            <GlassOptionGroup
-              options={[
-                { label: 'Nenhuma', value: '' },
-                ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
-              ]}
-              value={contaId}
-              onChange={setContaId}
-            />
+            {dividaId ? (
+              <GlassTextInput
+                editable={false}
+                value={contas.find((conta) => conta.id === contaId)?.nome ?? 'Nenhuma'}
+              />
+            ) : (
+              <GlassOptionGroup
+                options={[
+                  { label: 'Nenhuma', value: '' },
+                  ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
+                ]}
+                value={contaId}
+                onChange={setContaId}
+              />
+            )}
           </GlassField>
 
           <GlassField label="Valor total" error={fieldErrors.montoTotal}>
@@ -196,6 +203,7 @@ export function DividasFormScreen() {
               keyboardType="decimal-pad"
               placeholder="Ex.: 15000,00"
               value={montoTotal}
+              editable={!dividaId}
               onChangeText={(value) => {
                 setMontoTotal(value);
                 clearFieldError('montoTotal');
@@ -231,6 +239,7 @@ export function DividasFormScreen() {
             <GlassTextInput
               placeholder="YYYY-MM-DD"
               value={fechaInicio}
+              editable={!dividaId}
               onChangeText={(value) => {
                 setFechaInicio(value);
                 clearFieldError('fechaInicio');
