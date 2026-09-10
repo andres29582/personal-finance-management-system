@@ -37,6 +37,32 @@ trust store do sistema. Falhas de certificado nao devem ser contornadas com
 `rejectUnauthorized=false`. Senhas e o conteudo da CA nao devem aparecer em
 logs ou commits.
 
+## Physical LAN smoke test
+
+Use this only on a trusted development LAN. A remote device cannot use
+`localhost` to reach the developer machine: on that device, `localhost` is the
+device itself.
+
+1. In `frontend/.env`, set the API host to the developer machine's reachable
+   LAN address:
+
+   ```text
+   EXPO_PUBLIC_API_URL=http://<HOST_LAN_IP>:3000
+   ```
+
+2. When the frontend is served to a browser from the LAN, add its exact origin
+   to `backendnest/.env`; do not use a wildcard:
+
+   ```text
+   CORS_ORIGINS=http://localhost:8081,http://localhost:19006,http://localhost:3000,http://<HOST_LAN_IP>:8081
+   ```
+
+3. Restart the backend and frontend so they load the changed environment
+   values. From a second device on the same LAN, open
+   `http://<HOST_LAN_IP>:8081`, sign in, load the dashboard, and create one
+   small transaction. Confirm that the dashboard updates and that no browser
+   CORS error appears.
+
 ## 2. Dados demo
 
 O caminho oficial para carregar dados demo e:
