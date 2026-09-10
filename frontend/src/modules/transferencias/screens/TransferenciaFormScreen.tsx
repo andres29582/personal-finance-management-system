@@ -101,19 +101,21 @@ export function TransferenciaFormScreen() {
       setSaving(true);
       setMessage('');
 
-      const payload = {
+      const updatePayload = {
         comissao: Number.isFinite(parsedComissao) ? parsedComissao : 0,
-        contaDestinoId,
-        contaOrigemId,
         data,
         descricao: descricao.trim() || undefined,
         valor: parsedValor,
       };
 
       if (transferenciaId) {
-        await updateTransferencia(transferenciaId, payload);
+        await updateTransferencia(transferenciaId, updatePayload);
       } else {
-        await createTransferencia(payload);
+        await createTransferencia({
+          ...updatePayload,
+          contaDestinoId,
+          contaOrigemId,
+        });
       }
 
       router.replace('/transferencias' as never);
@@ -158,6 +160,7 @@ export function TransferenciaFormScreen() {
         <GlassPanel>
           <GlassField label="Conta origem">
             <GlassOptionGroup
+              disabled={Boolean(transferenciaId)}
               options={contaOptions}
               value={contaOrigemId}
               onChange={setContaOrigemId}
@@ -166,6 +169,7 @@ export function TransferenciaFormScreen() {
 
           <GlassField label="Conta destino">
             <GlassOptionGroup
+              disabled={Boolean(transferenciaId)}
               options={contaOptions}
               value={contaDestinoId}
               onChange={setContaDestinoId}
