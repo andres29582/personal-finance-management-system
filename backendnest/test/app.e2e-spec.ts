@@ -89,12 +89,20 @@ jest.setTimeout(60000);
 
 describe('Financial flow (e2e)', () => {
   let app: E2eApplication;
+  let validationSession: Awaited<
+    ReturnType<typeof registerAndLoginTestUser>
+  >;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();
     await prepareE2eDatabase(databaseConfig);
 
     app = await createE2eApp();
+    validationSession = await registerAndLoginTestUser(app, {
+      cpf: '16899535004',
+      email: 'transaction.validation.e2e@example.com',
+      nome: 'Transaction Validation E2E',
+    });
   });
 
   afterAll(async () => {
@@ -108,6 +116,96 @@ describe('Financial flow (e2e)', () => {
       .get('/contas')
       .set('Authorization', 'Bearer invalid-token')
       .expect(401);
+  });
+
+  it('rejects invalid month references across transactions, dashboard and reports', async () => {
+    const session = validationSession;
+
+    const invalidTransactionMonth = await withAuth(
+      request(app.getHttpServer()).get('/transacoes'),
+      session,
+    )
+      .query({ mes: '2026-13' })
+      .expect(422);
+    expectApiError(
+      invalidTransactionMonth,
+      'INVALID_MONTH_REFERENCE',
+      'Mes de referencia invalido. Use o formato YYYY-MM.',
+    );
+
+    const invalidDashboardMonth = await withAuth(
+      request(app.getHttpServer()).get('/dashboard'),
+      session,
+    )
+      .query({ mes: '2026-13' })
+      .expect(422);
+    expectApiError(
+      invalidDashboardMonth,
+      'INVALID_MONTH_REFERENCE',
+      'Mes de referencia invalido. Use o formato YYYY-MM.',
+    );
+
+    const invalidReportMonth = await withAuth(
+      request(app.getHttpServer()).get('/relatorios'),
+      session,
+    )
+      .query({ mes: '2026-13', periodo: 'mensal' })
+      .expect(422);
+    expectApiError(
+      invalidReportMonth,
+      'INVALID_MONTH_REFERENCE',
+      'Mes de referencia invalido. Use o formato YYYY-MM.',
+    );
+  });
+
+  it('rejects an empty transaction PATCH without persisting a mutation', async () => {
+    const session = validationSession;
+    const conta = await createConta(
+      session.token,
+      makeContaPayload({ nome: 'Conta para patch vazio' }),
+    );
+    const categoria = await createCategoria(session.token, {
+      cor: '#dc2626',
+      icone: 'shopping-cart',
+      nome: 'Categoria para patch vazio',
+      tipo: TipoCategoria.DESPESA,
+    });
+    const transactionResponse = await withAuth(
+      request(app.getHttpServer()).post('/transacoes'),
+      session,
+    )
+      .send(
+        makeTransacaoPayload({
+          categoriaId: categoria.id,
+          contaId: conta.id,
+          data: '2026-05-01',
+          descricao: 'Transacao para patch vazio',
+          tipo: TipoTransacao.DESPESA,
+          valor: 100,
+        }),
+      )
+      .expect(201);
+    const transaction = unwrapSuccess<TransacaoResponse>(transactionResponse);
+
+    const emptyPatch = await withAuth(
+      request(app.getHttpServer()).patch(`/transacoes/${transaction.id}`),
+      session,
+    )
+      .send({})
+      .expect(422);
+    expectApiError(
+      emptyPatch,
+      'TRANSACAO_ATUALIZACAO_VAZIA',
+      'Informe ao menos um campo para atualizar a transacao.',
+    );
+
+    const persisted = unwrapSuccess<TransacaoResponse>(
+      await withAuth(
+        request(app.getHttpServer()).get(`/transacoes/${transaction.id}`),
+        session,
+      ).expect(200),
+    );
+    expect(persisted.descricao).toBe('Transacao para patch vazio');
   });
 
   it('reverts account balances when a transfer is soft-deleted', async () => {

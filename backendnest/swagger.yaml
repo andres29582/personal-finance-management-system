@@ -753,7 +753,7 @@ components:
       properties:
         mesReferencia:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
         valorPlanejado:
           type: number
           multipleOf: 0.01
@@ -2937,7 +2937,7 @@ paths:
         required: false
         schema:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
       - name: tipo
         in: query
         required: false
@@ -2967,6 +2967,15 @@ paths:
                 $ref: '#/components/schemas/TransacaoListSuccess'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '422':
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mes` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -3739,6 +3748,15 @@ paths:
                 $ref: '#/components/schemas/OrcamentoSuccess'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '422':
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mesReferencia` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -3860,7 +3878,7 @@ paths:
         required: false
         schema:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
       - name: ano
         in: query
         required: false
@@ -3921,7 +3939,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mes` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -3940,7 +3965,7 @@ paths:
         required: false
         schema:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
       responses:
         '200':
           description: Operacao realizada com sucesso.
@@ -3950,6 +3975,15 @@ paths:
                 $ref: '#/components/schemas/DashboardSuccess'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '422':
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mes` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':

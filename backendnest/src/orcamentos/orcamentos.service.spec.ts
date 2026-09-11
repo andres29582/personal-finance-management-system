@@ -76,6 +76,23 @@ describe('OrcamentosService', () => {
     expect(orcamentosRepository.create).not.toHaveBeenCalled();
   });
 
+  it('rejects an invalid budget month before querying or writing', async () => {
+    await expect(
+      service.create('user-1', {
+        mesReferencia: '2026-13',
+        valorPlanejado: 1000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_MONTH_REFERENCE',
+      field: 'mes',
+      message: 'Mes de referencia invalido. Use o formato YYYY-MM.',
+      statusCode: 422,
+    });
+
+    expect(orcamentosRepository.findByUserAndMonth).not.toHaveBeenCalled();
+    expect(orcamentosRepository.create).not.toHaveBeenCalled();
+  });
+
   it('rejects creation when a budget already exists for the month', async () => {
     orcamentosRepository.findByUserAndMonth.mockResolvedValue({
       id: 'orcamento-1',
