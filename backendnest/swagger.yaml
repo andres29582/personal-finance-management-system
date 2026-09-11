@@ -501,6 +501,7 @@ components:
           type: boolean
     UpdateTransacaoRequest:
       type: object
+      minProperties: 1
       properties:
         contaId:
           type: string
@@ -3021,6 +3022,15 @@ paths:
                 $ref: '#/components/schemas/TransacaoSuccess'
         '400':
           $ref: '#/components/responses/FinancialOperationBadRequest'
+        '422':
+          description: Corpo de atualizacao vazio; retorna `TRANSACAO_ATUALIZACAO_VAZIA` quando nenhum campo atualizavel for informado.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

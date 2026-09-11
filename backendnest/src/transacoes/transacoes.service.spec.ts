@@ -248,6 +248,20 @@ describe('TransacoesService', () => {
     expect(logsService.logEntityEvent).not.toHaveBeenCalled();
   });
 
+  it('rejects an effectively empty PATCH before opening a transaction', async () => {
+    await expect(
+      service.update('transacao-1', 'user-1', { descricao: undefined }),
+    ).rejects.toMatchObject({
+      code: 'TRANSACAO_ATUALIZACAO_VAZIA',
+      message: 'Informe ao menos um campo para atualizar a transacao.',
+      statusCode: 422,
+    });
+
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(manager.update).not.toHaveBeenCalled();
+    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+
   it('blocks PATCH when the currently linked account is inactive', async () => {
     const current = {
       categoriaId: 'categoria-1',
