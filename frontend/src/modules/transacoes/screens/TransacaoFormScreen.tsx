@@ -102,10 +102,10 @@ export function TransacaoFormScreen() {
   );
 
   useEffect(() => {
-    if (!categoriasFiltradas.find((categoria) => categoria.id === categoriaId)) {
+    if (!transacaoId && !categoriasFiltradas.find((categoria) => categoria.id === categoriaId)) {
       setCategoriaId(categoriasFiltradas[0]?.id ?? '');
     }
-  }, [categoriaId, categoriasFiltradas]);
+  }, [categoriaId, categoriasFiltradas, transacaoId]);
 
   async function handleSave() {
     const parsedValor = parseDecimalInput(valor);
