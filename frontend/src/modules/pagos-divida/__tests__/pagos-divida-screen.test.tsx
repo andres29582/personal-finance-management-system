@@ -13,6 +13,7 @@ import {
   makeDivida,
   makePagoDivida,
 } from '../../../shared/test/builders';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -141,7 +142,7 @@ describe('PagosDividaScreen', () => {
     const emptyInputs = screen.getAllByDisplayValue('');
     fireEvent.changeText(emptyInputs[0], '300,75');
     fireEvent.changeText(
-      screen.getByDisplayValue(new Date().toISOString().slice(0, 10)),
+      screen.getByDisplayValue(getLocalDateInputValue()),
       '01/05/2026',
     );
     fireEvent.press(screen.getByText('Registrar pagamento'));

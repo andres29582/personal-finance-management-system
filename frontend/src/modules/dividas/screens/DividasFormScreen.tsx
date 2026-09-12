@@ -15,6 +15,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import {
   buildDividaPayload,
   buildDividaUpdatePayload,
@@ -38,8 +39,8 @@ export function DividasFormScreen() {
   const [montoTotal, setMontoTotal] = useState('');
   const [tasaInteres, setTasaInteres] = useState('');
   const [cuotaMensual, setCuotaMensual] = useState('');
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
-  const [fechaVencimiento, setFechaVencimiento] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaInicio, setFechaInicio] = useState(getLocalDateInputValue());
+  const [fechaVencimiento, setFechaVencimiento] = useState(getLocalDateInputValue());
   const [proximoVencimiento, setProximoVencimiento] = useState('');
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>('mensal');
   const [loading, setLoading] = useState(true);
