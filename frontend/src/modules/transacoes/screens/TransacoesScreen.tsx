@@ -30,6 +30,10 @@ export function TransacoesScreen() {
   const [contas, setContas] = useState<Conta[]>([]);
   const [mes, setMes] = useState(getCurrentMonthReference());
   const [tipo, setTipo] = useState<string>('');
+  const [appliedFilters, setAppliedFilters] = useState({
+    mes: getCurrentMonthReference(),
+    tipo: '',
+  });
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -50,8 +54,8 @@ export function TransacoesScreen() {
         listContas(),
         listCategorias(),
         listTransacoes({
-          mes,
-          tipo: tipo ? (tipo as TipoTransacao) : undefined,
+          mes: appliedFilters.mes,
+          tipo: appliedFilters.tipo ? (appliedFilters.tipo as TipoTransacao) : undefined,
         }),
       ]);
       setContas(contasData);
@@ -70,7 +74,7 @@ export function TransacoesScreen() {
     } finally {
       setLoading(false);
     }
-  }, [mes, router, tipo]);
+  }, [appliedFilters, router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -139,7 +143,11 @@ export function TransacoesScreen() {
           />
         </GlassField>
 
-        <GlassButton label="Aplicar filtros" onPress={loadData} variant="ghost" />
+        <GlassButton
+          label="Aplicar filtros"
+          onPress={() => setAppliedFilters({ mes, tipo })}
+          variant="ghost"
+        />
       </GlassPanel>
 
       {message && transacoes.length ? <Text style={styles.errorMessage}>{message}</Text> : null}

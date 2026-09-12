@@ -80,7 +80,7 @@ describe('TransacoesScreen', () => {
     });
   });
 
-  it('applies selected type filter when user presses filter button', async () => {
+  it('only reloads after applying the draft filters', async () => {
     mockSuccessfulLoad();
 
     render(<TransacoesScreen />);
@@ -93,13 +93,18 @@ describe('TransacoesScreen', () => {
     });
 
     fireEvent.press(screen.getByText('Receitas'));
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-06');
+
+    expect(mockListTransacoes).toHaveBeenCalledTimes(1);
+
     fireEvent.press(screen.getByText('Aplicar filtros'));
 
     await waitFor(() => {
       expect(mockListTransacoes).toHaveBeenLastCalledWith({
-        mes: expect.any(String),
+        mes: '2026-06',
         tipo: 'receita',
       });
+      expect(mockListTransacoes).toHaveBeenCalledTimes(2);
     });
   });
 
