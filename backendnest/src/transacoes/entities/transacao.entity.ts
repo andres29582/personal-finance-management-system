@@ -24,7 +24,15 @@ export class Transacao {
   @Column({ type: 'varchar', length: 20 })
   tipo: TipoTransacao;
 
-  @Column({ type: 'decimal', precision: 14, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 14,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
   valor: number;
 
   @Column({ type: 'date' })
