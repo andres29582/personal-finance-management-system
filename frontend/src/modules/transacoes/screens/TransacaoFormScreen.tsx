@@ -149,15 +149,20 @@ export function TransacaoFormScreen() {
         contaId,
         categoriaId,
         data: normalizedData,
-        descricao: descricao.trim() || undefined,
         tipo,
         valor: parsedValor,
       };
 
       if (transacaoId) {
-        await updateTransacao(transacaoId, payload);
+        await updateTransacao(transacaoId, {
+          ...payload,
+          descricao: descricao.trim() || null,
+        });
       } else {
-        await createTransacao(payload);
+        await createTransacao({
+          ...payload,
+          descricao: descricao.trim() || undefined,
+        });
       }
 
       router.replace('/transacoes' as never);
