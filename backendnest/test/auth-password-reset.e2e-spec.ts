@@ -147,7 +147,7 @@ describe('Auth password reset (e2e)', () => {
     expect(used).toBe(1);
   });
 
-  it('allows exactly one parallel refresh rotation against Postgres', async () => {
+  it('revokes a session when a rotated refresh token is reused', async () => {
     const server = app.getHttpServer() as unknown as App;
     const email = 'refresh.parallel.e2e@example.com';
     const registrationResponse = await request(server)
@@ -198,7 +198,7 @@ describe('Auth password reset (e2e)', () => {
         refreshTokenHash: createHash('sha256')
           .update(rotated.refresh_token)
           .digest('hex'),
-        revokedAt: null,
+        revokedAt: expect.any(Date),
       }),
     );
 
@@ -209,6 +209,40 @@ describe('Auth password reset (e2e)', () => {
     await request(server)
       .post('/auth/refresh')
       .send({ refreshToken: rotated.refresh_token })
-      .expect(200);
+      .expect(401);
+  });
+
+  it('keeps at most five active sessions for a user', async () => {
+    const server = app.getHttpServer() as unknown as App;
+    const email = 'session.limit.e2e@example.com';
+    const registrationResponse = await request(server)
+      .post('/auth/register')
+      .send(
+        makeRegisterUserPayload({
+          cpf: '10535118007',
+          email,
+          nome: 'Session Limit E2E',
+        }),
+      )
+      .expect(201);
+    const registration = unwrapSuccess<RegisterResponse>(registrationResponse);
+
+    await Promise.all(
+      Array.from({ length: 6 }, () =>
+        request(server)
+          .post('/auth/login')
+          .send(makeLoginPayload({ email }))
+          .expect(200),
+      ),
+    );
+
+    const [{ active }] = await appDataSource.query<Array<{ active: number }>>(
+      `SELECT COUNT(*)::integer AS active
+       FROM auth_session
+       WHERE usuario_id = $1 AND revoked_at IS NULL AND expires_at > NOW()`,
+      [registration.usuario.id],
+    );
+
+    expect(active).toBe(5);
   });
 });

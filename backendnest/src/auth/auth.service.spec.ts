@@ -344,6 +344,24 @@ describe('AuthService', () => {
     );
     expect(result.access_token).toBe('access-token-1');
     expect(result.refresh_token).toBe('refresh-token-1');
+    expect(jwtService.signAsync).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ tokenType: 'refresh' }),
+      expect.objectContaining({
+        algorithm: 'HS256',
+        issuer: 'meu-sistema-financeiro',
+        secret: 'refresh-secret',
+      }),
+    );
+    expect(jwtService.signAsync).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ tokenType: 'access' }),
+      expect.objectContaining({
+        algorithm: 'HS256',
+        issuer: 'meu-sistema-financeiro',
+        secret: 'access-secret',
+      }),
+    );
     expect(result.usuario.email).toBe('ana@example.com');
     expect(result.usuario).not.toHaveProperty('senha');
     expect(result.usuario).not.toHaveProperty('senhaHash');
@@ -460,6 +478,7 @@ describe('AuthService', () => {
     jwtService.verifyAsync.mockResolvedValue({
       sid: 'session-1',
       sub: 'user-1',
+      tokenType: 'refresh',
     } as never);
     authSessionsService.findActiveById.mockResolvedValue({
       expiresAt: new Date(Date.now() + 3600_000),
@@ -502,6 +521,65 @@ describe('AuthService', () => {
       access_token: 'access-token-2',
       refresh_token: 'refresh-token-2',
     });
+    expect(jwtService.verifyAsync).toHaveBeenCalledWith(
+      'refresh-token-1',
+      expect.objectContaining({
+        algorithms: ['HS256'],
+        ignoreExpiration: false,
+        issuer: 'meu-sistema-financeiro',
+        secret: 'refresh-secret',
+      }),
+    );
+  });
+
+  it('revokes a session and records refresh-token reuse', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sid: 'session-1',
+      sub: 'user-1',
+      tokenType: 'refresh',
+    } as never);
+    authSessionsService.findActiveById.mockResolvedValue({
+      expiresAt: new Date(Date.now() + 3600_000),
+      id: 'session-1',
+      userId: 'user-1',
+    } as never);
+    usersService.findById.mockResolvedValue({ id: 'user-1' } as never);
+    jwtService.signAsync.mockResolvedValue('next-refresh-token');
+    jwtService.decode.mockReturnValue({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    authSessionsService.rotateIfActiveWithMatchingToken.mockResolvedValue(false);
+
+    await expect(service.refreshSession('reused-refresh-token')).rejects.toMatchObject({
+      code: 'AUTH_INVALID_REFRESH_TOKEN',
+      statusCode: 401,
+    });
+
+    expect(authSessionsService.revoke).toHaveBeenCalledWith('session-1', 'user-1');
+    expect(logsService.logAuthEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'REFRESH_TOKEN_REUSE_DETECTED',
+        success: false,
+        userId: 'user-1',
+      }),
+    );
+    expect(JSON.stringify(logsService.logAuthEvent.mock.calls)).not.toContain(
+      'reused-refresh-token',
+    );
+  });
+
+  it('rejects access tokens presented to the refresh endpoint', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sid: 'session-1',
+      sub: 'user-1',
+      tokenType: 'access',
+    } as never);
+
+    await expect(service.refreshSession('access-token')).rejects.toMatchObject({
+      code: 'AUTH_INVALID_REFRESH_TOKEN',
+      statusCode: 401,
+    });
+    expect(authSessionsService.findActiveById).not.toHaveBeenCalled();
   });
 
   it('does not expose password reset tokens by default', async () => {
@@ -684,6 +762,7 @@ describe('AuthService', () => {
     await service.resetPasswordWithToken('plain-token', password);
 
     expect(bcrypt.hash).toHaveBeenCalledWith(password, 10);
+    expect(authSessionsService.revokeAllByUser).toHaveBeenCalledWith('user-1');
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.not.objectContaining({ password, senha: password }),
     );
@@ -758,6 +837,7 @@ describe('AuthService', () => {
     jwtService.verifyAsync.mockResolvedValue({
       sid: 'session-1',
       sub: 'user-1',
+      tokenType: 'refresh',
     } as never);
     authSessionsService.findActiveById.mockResolvedValue({
       expiresAt: new Date(Date.now() + 60_000),
@@ -793,5 +873,9 @@ describe('AuthService', () => {
     expect(
       authSessionsService.rotateIfActiveWithMatchingToken,
     ).toHaveBeenCalledTimes(2);
+    expect(authSessionsService.revoke).toHaveBeenCalledWith(
+      'session-1',
+      'user-1',
+    );
   });
 });

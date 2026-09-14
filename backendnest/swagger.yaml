@@ -2497,7 +2497,7 @@ paths:
     post:
       tags:
       - Auth
-      summary: Rotacionar refresh token e emitir novo access token
+      summary: Rotacionar refresh token e emitir novo access token; reutilizacao revoga a sessao
       requestBody:
         required: true
         content:

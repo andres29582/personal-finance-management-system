@@ -215,6 +215,15 @@ export class AuthService {
       );
 
     if (!rotated) {
+      await this.authSessionsService.revoke(session.id, user.id);
+      await this.logsService.logAuthEvent({
+        event: 'REFRESH_TOKEN_REUSE_DETECTED',
+        level: 'warn',
+        success: false,
+        userId: user.id,
+        message: 'Reutilizacao de refresh token detectada; sessao revogada.',
+        details: { sessionId: session.id },
+      });
       throw new AppUnauthorizedException(
         'AUTH_INVALID_REFRESH_TOKEN',
         'Refresh token invalido',
@@ -355,6 +364,7 @@ export class AuthService {
       );
     }
 
+    await this.authSessionsService.revokeAllByUser(userId);
     await this.logsService.logAuthEvent({
       event: 'PASSWORD_RESET_TOKEN_SUCCESS',
       level: 'info',
@@ -376,6 +386,7 @@ export class AuthService {
       userId: user.id,
       refreshToken,
       expiresAt: this.getTokenExpiration(refreshToken),
+      maxActiveSessions: this.tokenConfig.maxActiveSessions,
     });
 
     return {
@@ -391,10 +402,13 @@ export class AuthService {
         email: user.email,
         nome: user.nome,
         sid: sessionId,
+        tokenType: 'access',
       },
       {
+        algorithm: this.tokenConfig.algorithm,
         secret: this.tokenConfig.accessSecret,
         expiresIn: this.tokenConfig.accessExpiresIn as never,
+        issuer: this.tokenConfig.issuer,
       },
     );
   }
@@ -405,22 +419,35 @@ export class AuthService {
         sub: user.id,
         sid: sessionId,
         jti: randomUUID(),
+        tokenType: 'refresh',
       },
       {
+        algorithm: this.tokenConfig.algorithm,
         secret: this.tokenConfig.refreshSecret,
         expiresIn: this.tokenConfig.refreshExpiresIn as never,
+        issuer: this.tokenConfig.issuer,
       },
     );
   }
 
   private async verifyRefreshToken(refreshToken: string) {
     try {
-      return await this.jwtService.verifyAsync<{
+      const payload = await this.jwtService.verifyAsync<{
         sid: string;
         sub: string;
+        tokenType?: string;
       }>(refreshToken, {
+        algorithms: [this.tokenConfig.algorithm],
+        ignoreExpiration: false,
+        issuer: this.tokenConfig.issuer,
         secret: this.tokenConfig.refreshSecret,
       });
+
+      if (!payload.sid || !payload.sub || payload.tokenType !== 'refresh') {
+        throw new Error('Invalid refresh token payload.');
+      }
+
+      return payload;
     } catch {
       throw new AppUnauthorizedException(
         'AUTH_INVALID_REFRESH_TOKEN',

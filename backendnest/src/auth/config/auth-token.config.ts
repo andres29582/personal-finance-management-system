@@ -5,6 +5,9 @@ export type AuthTokenConfig = {
   refreshSecret: string;
   accessExpiresIn: string;
   refreshExpiresIn: string;
+  issuer: string;
+  algorithm: 'HS256';
+  maxActiveSessions: number;
 };
 
 type ConfigReader = Pick<ConfigService, 'get'>;
@@ -40,7 +43,28 @@ export function resolveAuthTokenConfig(
       readConfig(configService, 'JWT_ACCESS_EXPIRES_IN')?.trim() ?? '15m',
     refreshExpiresIn:
       readConfig(configService, 'JWT_REFRESH_EXPIRES_IN')?.trim() ?? '30d',
+    issuer:
+      readConfig(configService, 'JWT_ISSUER')?.trim() ||
+      'meu-sistema-financeiro',
+    algorithm: 'HS256',
+    maxActiveSessions: resolveMaxActiveSessions(configService),
   };
+}
+
+function resolveMaxActiveSessions(configService: ConfigReader): number {
+  const value = readConfig(configService, 'AUTH_MAX_ACTIVE_SESSIONS')?.trim();
+
+  if (!value) {
+    return 5;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error('AUTH_MAX_ACTIVE_SESSIONS must be a positive integer.');
+  }
+
+  return parsed;
 }
 
 function resolveAccessSecret(

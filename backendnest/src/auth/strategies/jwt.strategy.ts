@@ -15,11 +15,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly authSessionsService: AuthSessionsService,
     private readonly requestContextService: RequestContextService,
   ) {
+    const tokenConfig = resolveAuthTokenConfig(configService);
+
     super({
       passReqToCallback: true,
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: resolveAuthTokenConfig(configService).accessSecret,
+      algorithms: [tokenConfig.algorithm],
+      issuer: tokenConfig.issuer,
+      secretOrKey: tokenConfig.accessSecret,
     });
   }
 
@@ -30,9 +34,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: string;
       nome: string;
       sid?: string;
+      tokenType?: string;
     },
   ) {
-    if (!payload.sid) {
+    if (!payload.sid || payload.tokenType !== 'access') {
       throw new AppUnauthorizedException(
         'AUTH_INVALID_SESSION',
         'Sessao invalida',
@@ -52,6 +57,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
 
+    await this.authSessionsService.touchIfActive(session.id);
     this.requestContextService.setUserId(payload.sub);
 
     return {
