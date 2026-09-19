@@ -42,6 +42,8 @@ export class TransacaoRepository extends BaseRepository<Transacao> {
     return this.transacaoRepository.find({
       where: { ...whereClause, ...notSoftDeleted },
       order: { data: 'DESC', createdAt: 'DESC' },
+      take: query.limit ?? 50,
+      skip: query.offset ?? 0,
     });
   }
 
