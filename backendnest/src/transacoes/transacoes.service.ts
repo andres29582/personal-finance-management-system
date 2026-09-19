@@ -51,25 +51,30 @@ export class TransacoesService {
           ...dto,
         });
 
-        return manager.save(transaction);
+        const savedTransaction = await manager.save(transaction);
+
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'TRANSACAO_CREATED',
+            module: 'transacoes',
+            action: 'create',
+            userId: usuarioId,
+            entity: 'transacao',
+            entityId: savedTransaction.id,
+            message: 'Transacao criada com sucesso.',
+            details: {
+              contaId: savedTransaction.contaId,
+              categoriaId: savedTransaction.categoriaId,
+              tipo: savedTransaction.tipo,
+              valor: savedTransaction.valor,
+            },
+          },
+          manager,
+        );
+
+        return savedTransaction;
       },
     );
-
-    await this.logsService.logEntityEvent({
-      event: 'TRANSACAO_CREATED',
-      module: 'transacoes',
-      action: 'create',
-      userId: usuarioId,
-      entity: 'transacao',
-      entityId: savedTransaction.id,
-      message: 'Transacao criada com sucesso.',
-      details: {
-        contaId: savedTransaction.contaId,
-        categoriaId: savedTransaction.categoriaId,
-        tipo: savedTransaction.tipo,
-        valor: savedTransaction.valor,
-      },
-    });
 
     return savedTransaction;
   }
@@ -146,22 +151,31 @@ export class TransacoesService {
           dto,
         );
 
-        return this.findOneForWrite(id, usuarioId, manager);
+        const updatedTransaction = await this.findOneForWrite(
+          id,
+          usuarioId,
+          manager,
+        );
+
+        await this.logsService.logEntityEventTransactional(
+          {
+            event: 'TRANSACAO_UPDATED',
+            module: 'transacoes',
+            action: 'update',
+            userId: usuarioId,
+            entity: 'transacao',
+            entityId: updatedTransaction.id,
+            message: 'Transacao atualizada com sucesso.',
+            details: {
+              changedFields: this.getChangedFields(dto),
+            },
+          },
+          manager,
+        );
+
+        return updatedTransaction;
       },
     );
-
-    await this.logsService.logEntityEvent({
-      event: 'TRANSACAO_UPDATED',
-      module: 'transacoes',
-      action: 'update',
-      userId: usuarioId,
-      entity: 'transacao',
-      entityId: updatedTransaction.id,
-      message: 'Transacao atualizada com sucesso.',
-      details: {
-        changedFields: this.getChangedFields(dto),
-      },
-    });
 
     return updatedTransaction;
   }
@@ -179,23 +193,24 @@ export class TransacoesService {
         { id, usuarioId, ...notSoftDeleted },
         { excluidoEm: new Date() },
       );
-      return currentTransaction;
-    });
-
-    await this.logsService.logEntityEvent({
-      event: 'TRANSACAO_SOFT_DELETED',
-      module: 'transacoes',
-      action: 'delete',
-      userId: usuarioId,
-      entity: 'transacao',
-      entityId: transaction.id,
-      message: 'Transacao excluida logicamente com sucesso.',
-      details: {
-        contaId: transaction.contaId,
-        categoriaId: transaction.categoriaId,
-        tipo: transaction.tipo,
-        valor: transaction.valor,
-      },
+      await this.logsService.logEntityEventTransactional(
+        {
+          event: 'TRANSACAO_SOFT_DELETED',
+          module: 'transacoes',
+          action: 'delete',
+          userId: usuarioId,
+          entity: 'transacao',
+          entityId: currentTransaction.id,
+          message: 'Transacao excluida logicamente com sucesso.',
+          details: {
+            contaId: currentTransaction.contaId,
+            categoriaId: currentTransaction.categoriaId,
+            tipo: currentTransaction.tipo,
+            valor: currentTransaction.valor,
+          },
+        },
+        manager,
+      );
     });
   }
 
