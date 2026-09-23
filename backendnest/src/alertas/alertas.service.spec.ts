@@ -84,6 +84,73 @@ describe('AlertasService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
+  it('accepts an owned enriched budget as a spending-limit reference', async () => {
+    const enrichedBudget = {
+      id: 'budget-1',
+      usuarioId: 'user-1',
+      valorPlanejado: 100,
+      gastoAtual: 80,
+      percentualUtilizado: 80,
+      restante: 20,
+      statusAlerta: 'alerta_80',
+      alocacoes: [
+        {
+          categoriaId: 'category-1',
+          valorPlanejado: 60,
+          gastoAtual: 48,
+          percentualUtilizado: 80,
+          restante: 12,
+          statusAlerta: 'alerta_80',
+        },
+      ],
+    };
+    orcamentosService.findOne.mockResolvedValue(enrichedBudget as never);
+    repository.create.mockResolvedValue({ id: 'alerta-1' } as Alerta);
+
+    await expect(
+      service.create('user-1', {
+        diasAnticipacion: 3,
+        referenciaId: 'budget-1',
+        tipo: TipoAlerta.LIMITE_GASTO,
+      }),
+    ).resolves.toMatchObject({ id: 'alerta-1' });
+
+    expect(orcamentosService.findOne).toHaveBeenCalledWith(
+      'budget-1',
+      'user-1',
+    );
+    expect(repository.create).toHaveBeenCalled();
+  });
+
+  it.each(['foreign-budget', 'missing-budget'])(
+    'rejects a foreign or nonexistent budget reference: %s',
+    async (referenciaId) => {
+      orcamentosService.findOne.mockRejectedValue(
+        new ResourceNotFoundException(
+          'ORCAMENTO_NOT_FOUND',
+          'Orcamento nao encontrado',
+        ),
+      );
+
+      await expect(
+        service.create('user-1', {
+          diasAnticipacion: 3,
+          referenciaId,
+          tipo: TipoAlerta.LIMITE_GASTO,
+        }),
+      ).rejects.toMatchObject({
+        code: 'ORCAMENTO_NOT_FOUND',
+        statusCode: 404,
+      });
+
+      expect(orcamentosService.findOne).toHaveBeenCalledWith(
+        referenciaId,
+        'user-1',
+      );
+      expect(repository.create).not.toHaveBeenCalled();
+    },
+  );
+
   it('does not accept a debt id as a meta reference', async () => {
     metasService.findOne.mockRejectedValue(
       new ResourceNotFoundException('META_NOT_FOUND', 'Meta nao encontrada'),
