@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { ResourceNotFoundException } from '../common/exceptions';
-import { assertPositiveFinancialValue } from '../common/financial-validation.util';
+import {
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
+import {
+  assertNonNegativeFinancialValue,
+  assertPositiveFinancialValue,
+} from '../common/financial-validation.util';
 import { Meta } from './entities/meta.entity';
 import { CreateMetaDto } from './dto/create-meta.dto';
 import { UpdateMetaDto } from './dto/update-meta.dto';
@@ -21,6 +27,7 @@ export class MetasService {
 
   async create(usuarioId: string, dto: CreateMetaDto): Promise<Meta> {
     assertPositiveFinancialValue(dto.montoObjetivo, 'Valor objetivo');
+    this.assertValidDate(dto.fechaLimite);
     if (dto.contaId) {
       await this.contasService.findOne(dto.contaId, usuarioId);
     }
@@ -71,7 +78,10 @@ export class MetasService {
       assertPositiveFinancialValue(dto.montoObjetivo, 'Valor objetivo');
     }
     if (dto.montoActual !== undefined) {
-      assertPositiveFinancialValue(dto.montoActual, 'Valor atual');
+      assertNonNegativeFinancialValue(dto.montoActual, 'Valor atual');
+    }
+    if (dto.fechaLimite !== undefined) {
+      this.assertValidDate(dto.fechaLimite);
     }
 
     await this.metaRepository.updateByIdAndUser(id, usuarioId, dto);
@@ -102,5 +112,21 @@ export class MetasService {
       entityId: id,
       message: 'Meta desativada.',
     });
+  }
+
+  private assertValidDate(value: string): void {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== value
+    ) {
+      throw new ValidationAppException(
+        'INVALID_META_DUE_DATE',
+        'Data limite deve ser uma data valida no formato YYYY-MM-DD.',
+        { field: 'fechaLimite' },
+      );
+    }
   }
 }

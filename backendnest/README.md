@@ -112,7 +112,8 @@ Para PostgreSQL local, mantenha `NODE_ENV=development` e
 | `JWT_REFRESH_EXPIRES_IN` | Duracao do refresh token | `30d` |
 | `ML_API_URL` | URL base da API de ML | `http://127.0.0.1:8000` |
 | `ML_API_TIMEOUT_MS` | Timeout de chamada ML | `5000` |
-| `ML_INTERNAL_API_KEY` | Chave interna enviada ao servico ML | obrigatoria fora de `development`/`test` |
+| `ML_ENV` | Ambiente efetivo para validacao da integracao ML; substitui `NODE_ENV` quando definido | usa `NODE_ENV` |
+| `ML_INTERNAL_API_KEY` | Chave interna enviada ao servico ML | obrigatoria quando `ML_ENV` efetivo nao for `development`/`test` |
 | `PASSWORD_RESET_DELIVERY_URL` | Endpoint HTTPS que entrega a instrucao de reset; obrigatorio fora de `development`/`test` | vazio localmente |
 | `PASSWORD_RESET_DELIVERY_API_KEY` | Credencial Bearer do endpoint de entrega; 32+ caracteres fora de `development`/`test` | vazio localmente |
 | `AUTH_RETURN_RESET_TOKEN` | Auxiliar local para retornar token de reset no JSON apenas em `development`/`test` | `false` |
@@ -165,11 +166,12 @@ endpoint; esse token nunca deve ser registrado em logs. `AUTH_RETURN_RESET_TOKEN
 bloqueado fora de `NODE_ENV=development` ou `NODE_ENV=test`, pois o token plano de
 recuperacao nao faz parte do contrato publico de producao.
 
-`ML_INTERNAL_API_KEY` e opcional em `development`/`test`. Quando configurada, o
-backend envia o header `X-ML-Internal-Key` ao servico ML. Fora de
-`development`/`test`, ela e obrigatoria, deve ter pelo menos 32 caracteres, nao
-deve usar placeholders previsiveis e deve coincidir com a configuracao do
-servico ML.
+`ML_ENV` define o ambiente efetivo da integracao ML e, quando ausente, usa
+`NODE_ENV`. `ML_INTERNAL_API_KEY` e opcional somente quando esse ambiente
+efetivo for `development` ou `test`. Quando configurada, o backend envia o
+header `X-ML-Internal-Key` ao servico ML. Nos demais ambientes, ela e
+obrigatoria, deve ter pelo menos 32 caracteres, nao deve usar placeholders
+previsiveis e deve coincidir com a configuracao do servico ML.
 
 ## Banco de dados e migrations
 
@@ -183,6 +185,9 @@ As migrations ficam em `migrations/` e devem ser executadas em ordem:
 0005_add_audit_log.sql
 0006_soft_delete_lgpd_password_reset.sql
 0007_create_planejamentos_compartilhados.sql
+0008_align_divida_monetary_precision.sql
+0009_align_transacao_schema.sql
+0010_harden_auth_session_lookup.sql
 ```
 
 Exemplo de execucao com `psql`:
@@ -195,6 +200,9 @@ psql -h localhost -U postgres -d gestao_financeira -f migrations/0004_add_auth_s
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0005_add_audit_log.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0006_soft_delete_lgpd_password_reset.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0007_create_planejamentos_compartilhados.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0008_align_divida_monetary_precision.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0009_align_transacao_schema.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0010_harden_auth_session_lookup.sql
 ```
 
 ### Atencao: Planejamentos Compartilhados

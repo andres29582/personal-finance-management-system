@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { validate } from 'class-validator';
 import { CreateTransacaoDto } from './create-transacao.dto';
 import { FindTransacoesDto } from './find-transacoes.dto';
@@ -70,6 +71,8 @@ describe('Transacao DTO validation', () => {
 
   it('accepts valid transaction filters', async () => {
     const dto = Object.assign(new FindTransacoesDto(), {
+      limit: 50,
+      offset: 0,
       mes: '2026-05',
       tipo: TipoTransacao.DESPESA,
       contaId,
@@ -77,6 +80,19 @@ describe('Transacao DTO validation', () => {
     });
 
     await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('rejects unbounded transaction pagination values', async () => {
+    const dto = Object.assign(new FindTransacoesDto(), {
+      limit: 101,
+      offset: -1,
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map((error) => error.property)).toEqual(
+      expect.arrayContaining(['limit', 'offset']),
+    );
   });
 
   it('rejects malformed month filters', async () => {

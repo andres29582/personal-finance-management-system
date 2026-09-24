@@ -15,6 +15,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import {
   createTransferencia,
@@ -32,7 +33,7 @@ export function TransferenciaFormScreen() {
   const [contaDestinoId, setContaDestinoId] = useState('');
   const [valor, setValor] = useState('');
   const [comissao, setComissao] = useState('');
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(getLocalDateInputValue());
   const [descricao, setDescricao] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -101,19 +102,21 @@ export function TransferenciaFormScreen() {
       setSaving(true);
       setMessage('');
 
-      const payload = {
+      const updatePayload = {
         comissao: Number.isFinite(parsedComissao) ? parsedComissao : 0,
-        contaDestinoId,
-        contaOrigemId,
         data,
         descricao: descricao.trim() || undefined,
         valor: parsedValor,
       };
 
       if (transferenciaId) {
-        await updateTransferencia(transferenciaId, payload);
+        await updateTransferencia(transferenciaId, updatePayload);
       } else {
-        await createTransferencia(payload);
+        await createTransferencia({
+          ...updatePayload,
+          contaDestinoId,
+          contaOrigemId,
+        });
       }
 
       router.replace('/transferencias' as never);
@@ -158,6 +161,7 @@ export function TransferenciaFormScreen() {
         <GlassPanel>
           <GlassField label="Conta origem">
             <GlassOptionGroup
+              disabled={Boolean(transferenciaId)}
               options={contaOptions}
               value={contaOrigemId}
               onChange={setContaOrigemId}
@@ -166,6 +170,7 @@ export function TransferenciaFormScreen() {
 
           <GlassField label="Conta destino">
             <GlassOptionGroup
+              disabled={Boolean(transferenciaId)}
               options={contaOptions}
               value={contaDestinoId}
               onChange={setContaDestinoId}

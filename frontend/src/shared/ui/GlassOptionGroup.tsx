@@ -7,12 +7,14 @@ type GlassOption<T extends string> = {
 };
 
 type GlassOptionGroupProps<T extends string> = {
+  disabled?: boolean;
   onChange: (value: T) => void;
   options: GlassOption<T>[];
   value: T;
 };
 
 export function GlassOptionGroup<T extends string>({
+  disabled = false,
   onChange,
   options,
   value,
@@ -26,12 +28,14 @@ export function GlassOptionGroup<T extends string>({
           <Pressable
             key={option.value}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
-            onPress={() => onChange(option.value)}
+            accessibilityState={{ disabled, selected }}
+            disabled={disabled}
+            onPress={disabled ? undefined : () => onChange(option.value)}
             style={({ pressed }) => [
               styles.option,
+              disabled ? styles.disabled : null,
               selected ? styles.selected : null,
-              pressed ? styles.pressed : null,
+              pressed && !disabled ? styles.pressed : null,
             ]}
           >
             <Text style={[styles.label, selected ? styles.selectedLabel : null]}>
@@ -62,6 +66,9 @@ const styles = StyleSheet.create({
     borderWidth: FinanceTheme.borderWidth.hairline,
     paddingHorizontal: FinanceTheme.spacing.sm,
     paddingVertical: FinanceTheme.spacing.xs,
+  },
+  disabled: {
+    opacity: FinanceTheme.opacity.disabled,
   },
   pressed: {
     opacity: FinanceTheme.opacity.pressed,

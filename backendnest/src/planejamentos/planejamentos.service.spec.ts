@@ -1835,7 +1835,7 @@ describe('PlanejamentosService', () => {
     repositoryTransacional.buscarAcessivelComParticipantes
       .mockResolvedValueOnce(planejamento)
       .mockResolvedValueOnce({
-        ...planejamento,
+        ...(planejamento as object),
         usuarioCriadorId: 'owner-alterado',
       } as never);
 
@@ -2119,7 +2119,7 @@ describe('PlanejamentosService', () => {
     );
     repositoryTransacional.salvarAcertos.mockResolvedValue([]);
     repository.buscarGastoPorIdEPlanejamento.mockResolvedValue({
-      ...gastoCancelado,
+      ...(gastoCancelado as object),
       divisoes: [
         { ...divisaoAtiva, status: DivisaoStatus.CANCELADA },
         divisaoCancelada,
@@ -6709,7 +6709,7 @@ describe('PlanejamentosService', () => {
       usuarioId: 'user-2',
     } as never;
     const participanteRemovido = {
-      ...participanteAtivo,
+      ...(participanteAtivo as object),
       status: ParticipanteStatus.REMOVIDO,
     } as never;
     repository.buscarAcessivelComParticipantes.mockResolvedValue(planejamento);
@@ -6993,7 +6993,7 @@ describe('PlanejamentosService', () => {
       participanteAtivo,
     );
     const participanteRemovido = {
-      ...participanteAtivo,
+      ...(participanteAtivo as object),
       status: ParticipanteStatus.REMOVIDO,
     } as never;
     repository.salvarParticipante.mockResolvedValue(participanteRemovido);

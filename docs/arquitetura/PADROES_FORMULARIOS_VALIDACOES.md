@@ -71,6 +71,16 @@ Antes de chamar o service, normalize os dados:
 Normalizacao deve ficar em funcao pequena e testavel quando a regra for
 complexa.
 
+## Campos estruturais em edicao
+
+Quando um contrato `PATCH` nao aceita uma associacao estrutural, a tela deve
+mostra-la somente para leitura. Nao envie campos que o backend ignora e nao os
+apresente como editaveis.
+
+No fluxo financeiro atual, conta, valor total e data de inicio da divida; tipo,
+conta e divida vinculada da meta; e tipo e referencia da alerta sao definidos
+na criacao. Para alterar uma dessas relacoes, crie um novo registro.
+
 ## Validacao client-side
 
 Validar no frontend quando:

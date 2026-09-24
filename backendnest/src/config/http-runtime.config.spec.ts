@@ -2,7 +2,11 @@ import { ConfigService } from '@nestjs/config';
 import { resolveHttpRuntimeConfig } from './http-runtime.config';
 
 function resolve(values: Record<string, unknown>) {
-  return resolveHttpRuntimeConfig(new ConfigService(values));
+  return resolveHttpRuntimeConfig(
+    new ConfigService(values) as unknown as Parameters<
+      typeof resolveHttpRuntimeConfig
+    >[0],
+  );
 }
 
 describe('resolveHttpRuntimeConfig', () => {

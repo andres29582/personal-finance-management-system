@@ -24,7 +24,10 @@ export type CreateTransacaoRequestDto = {
   valor: number;
 };
 
-export type UpdateTransacaoRequestDto = Partial<CreateTransacaoRequestDto>;
+export type UpdateTransacaoRequestDto =
+  Partial<Omit<CreateTransacaoRequestDto, 'descricao'>> & {
+    descricao?: string | null;
+  };
 
 export type FindTransacoesParams = {
   categoriaId?: string;

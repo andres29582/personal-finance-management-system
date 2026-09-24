@@ -73,6 +73,31 @@ describe('DividasService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a due date before the start date on create and update', async () => {
+    await expect(
+      service.create('user-1', {
+        fechaInicio: '2026-12-01',
+        fechaVencimiento: '2026-11-30',
+        montoTotal: 1000,
+        nome: 'Cartao',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_DEBT_DATE_ORDER' });
+
+    repository.findByIdAndUser.mockResolvedValue({
+      fechaInicio: '2026-12-01',
+      fechaVencimiento: '2027-01-01',
+      id: 'divida-1',
+      usuarioId: 'user-1',
+    } as Divida);
+    await expect(
+      service.update('divida-1', 'user-1', {
+        fechaVencimiento: '2026-11-30',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_DEBT_DATE_ORDER' });
+
+    expect(repository.updateByIdAndUser).not.toHaveBeenCalled();
+  });
+
   it('updates a debt using id and user criteria', async () => {
     repository.findByIdAndUser.mockResolvedValue({
       id: 'divida-1',

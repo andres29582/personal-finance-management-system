@@ -1,6 +1,7 @@
-import { INestApplication, Provider, ValidationPipe } from '@nestjs/common';
+import { Provider, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import type { Server } from 'node:http';
 import { AppModule } from '../src/app.module';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
@@ -9,7 +10,7 @@ import {
   resolveHttpRuntimeConfig,
 } from '../src/config/http-runtime.config';
 
-export type E2eApplication = INestApplication<Server>;
+export type E2eApplication = NestExpressApplication<Server>;
 
 type CreateE2eAppOptions = {
   overrideProviders?: Provider[];

@@ -44,12 +44,30 @@ describe('resolveMlApiConfig', () => {
     expect(result.timeoutMs).toBe(5000);
   });
 
-  it('accepts a valid key in production', () => {
+  it('requires a key when ML_ENV is production despite development NODE_ENV', () => {
+    expect(() =>
+      resolveMlApiConfig(
+        config({ NODE_ENV: 'development', ML_ENV: 'production' }),
+      ),
+    ).toThrow('ML_INTERNAL_API_KEY is required');
+  });
+
+  it('accepts a valid shared key when ML_ENV is production', () => {
     const result = resolveMlApiConfig(
-      config({ NODE_ENV: 'production', ML_INTERNAL_API_KEY: strongKey }),
+      config({
+        NODE_ENV: 'development',
+        ML_ENV: 'production',
+        ML_INTERNAL_API_KEY: strongKey,
+      }),
     );
 
     expect(result.internalApiKey).toBe(strongKey);
+  });
+
+  it('falls back to NODE_ENV when ML_ENV is absent', () => {
+    expect(() =>
+      resolveMlApiConfig(config({ NODE_ENV: 'production' })),
+    ).toThrow('ML_INTERNAL_API_KEY is required');
   });
 
   it.each(['production', 'demo', 'staging'])(

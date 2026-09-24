@@ -116,5 +116,9 @@ describe('DividasFormScreen', () => {
       });
       expect(mockReplace).toHaveBeenCalledWith('/dividas');
     });
+
+    expect(screen.getByDisplayValue('Conta Corrente').props.editable).toBe(false);
+    expect(screen.getByDisplayValue('5000').props.editable).toBe(false);
+    expect(screen.getByDisplayValue('2026-05-01').props.editable).toBe(false);
   });
 });

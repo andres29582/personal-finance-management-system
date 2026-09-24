@@ -66,14 +66,20 @@ export function validateDividaForm({
       'A data de vencimento deve ser igual ou posterior a data de inicio.';
   }
 
-  if (tasaInteres.trim() && !Number.isFinite(interest)) {
+  if (
+    tasaInteres.trim() &&
+    (!Number.isFinite(interest) || interest < 0)
+  ) {
     nextFieldErrors.tasaInteres =
-      'Informe uma taxa de interesse valida. Ex.: 2,5';
+      'Informe uma taxa de interesse valida maior ou igual a zero. Ex.: 2,5';
   }
 
-  if (cuotaMensual.trim() && !Number.isFinite(monthlyPayment)) {
+  if (
+    cuotaMensual.trim() &&
+    (!Number.isFinite(monthlyPayment) || monthlyPayment <= 0)
+  ) {
     nextFieldErrors.cuotaMensual =
-      'Informe uma cuota mensal valida. Ex.: 450,00';
+      'Informe uma cuota mensal valida maior que zero. Ex.: 450,00';
   }
 
   if (

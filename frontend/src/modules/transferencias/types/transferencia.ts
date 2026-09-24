@@ -21,4 +21,6 @@ export type CreateTransferenciaRequestDto = {
   valor: number;
 };
 
-export type UpdateTransferenciaRequestDto = Partial<CreateTransferenciaRequestDto>;
+export type UpdateTransferenciaRequestDto = Partial<
+  Pick<CreateTransferenciaRequestDto, 'comissao' | 'data' | 'descricao' | 'valor'>
+>;

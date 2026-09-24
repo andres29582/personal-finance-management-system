@@ -104,7 +104,12 @@ describe('TransacoesController', () => {
       excluidoEm: new Date('2026-05-02T00:00:00.000Z'),
     } as never);
 
-    const result = await controller.remove('transacao-1', request);
+    const result = (await controller.remove(
+      'transacao-1',
+      request,
+    )) as unknown as {
+      id: string;
+    };
 
     expect(transacoesService.remove).toHaveBeenCalledWith(
       'transacao-1',

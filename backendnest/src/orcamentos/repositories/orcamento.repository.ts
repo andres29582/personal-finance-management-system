@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
-import { notSoftDeleted } from '../../common/soft-delete.query';
 import { BaseRepository } from '../../common/abstract/base.repository';
 import { Transacao } from '../../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../../transacoes/enums/tipo-transacao.enum';
@@ -29,12 +28,16 @@ export class OrcamentoRepository extends BaseRepository<Orcamento> {
     id: string,
     usuarioId: string,
   ): Promise<Orcamento | null> {
-    return this.orcamentoRepository.findOneBy({ id, usuarioId });
+    return this.orcamentoRepository.findOne({
+      where: { id, usuarioId },
+      relations: { alocacoes: { categoria: true } },
+    });
   }
 
   async findByUser(usuarioId: string): Promise<Orcamento[]> {
     return this.orcamentoRepository.find({
       where: { usuarioId },
+      relations: { alocacoes: { categoria: true } },
       order: { mesReferencia: 'ASC' },
     });
   }
@@ -48,6 +51,7 @@ export class OrcamentoRepository extends BaseRepository<Orcamento> {
         usuarioId,
         mesReferencia: Between(`${ano}-01`, `${ano}-12`),
       },
+      relations: { alocacoes: { categoria: true } },
       order: { mesReferencia: 'ASC' },
     });
   }
@@ -60,18 +64,33 @@ export class OrcamentoRepository extends BaseRepository<Orcamento> {
     await this.orcamentoRepository.update({ id, usuarioId }, data);
   }
 
-  async findExpenseTransactionsByPeriod(
+  async findExpenseTotalsByMonths(
     usuarioId: string,
-    startDate: string,
-    endDate: string,
-  ): Promise<Transacao[]> {
-    return this.transacaoRepository.find({
-      where: {
-        usuarioId,
-        tipo: TipoTransacao.DESPESA,
-        data: Between(startDate, endDate),
-        ...notSoftDeleted,
-      },
-    });
+    mesReferencias: string[],
+  ): Promise<
+    Array<{ mesReferencia: string; categoriaId: string; gastoAtual: string }>
+  > {
+    if (mesReferencias.length === 0) {
+      return [];
+    }
+
+    return this.transacaoRepository
+      .createQueryBuilder('transaction')
+      .select("TO_CHAR(transaction.data, 'YYYY-MM')", 'mesReferencia')
+      .addSelect('transaction.categoriaId', 'categoriaId')
+      .addSelect('SUM(transaction.valor)', 'gastoAtual')
+      .where('transaction.usuarioId = :usuarioId', { usuarioId })
+      .andWhere('transaction.tipo = :tipo', { tipo: TipoTransacao.DESPESA })
+      .andWhere('transaction.ehAjuste = :ehAjuste', { ehAjuste: false })
+      .andWhere('transaction.excluidoEm IS NULL')
+      .andWhere(
+        "TO_CHAR(transaction.data, 'YYYY-MM') IN (:...mesReferencias)",
+        {
+          mesReferencias,
+        },
+      )
+      .groupBy("TO_CHAR(transaction.data, 'YYYY-MM')")
+      .addGroupBy('transaction.categoriaId')
+      .getRawMany();
   }
 }

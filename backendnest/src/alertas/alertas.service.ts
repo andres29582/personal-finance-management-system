@@ -6,15 +6,23 @@ import { UpdateAlertaDto } from './dto/update-alerta.dto';
 import { LogsService } from '../logs/logs.service';
 import { ResourceNotFoundException } from '../common/exceptions';
 import { AlertaRepository } from './repositories/alerta.repository';
+import { DividasService } from '../dividas/dividas.service';
+import { MetasService } from '../metas/metas.service';
+import { OrcamentosService } from '../orcamentos/orcamentos.service';
+import { TipoAlerta } from './enums/tipo-alerta.enum';
 
 @Injectable()
 export class AlertasService {
   constructor(
     private readonly alertaRepository: AlertaRepository,
     private readonly logsService: LogsService,
+    private readonly dividasService: DividasService,
+    private readonly metasService: MetasService,
+    private readonly orcamentosService: OrcamentosService,
   ) {}
 
   async create(usuarioId: string, dto: CreateAlertaDto): Promise<Alerta> {
+    await this.assertReferenceOwnership(usuarioId, dto.tipo, dto.referenciaId);
     const saved = await this.alertaRepository.create({
       id: randomUUID(),
       usuarioId,
@@ -97,5 +105,23 @@ export class AlertasService {
       entityId: id,
       message: 'Alerta marcado como notificado.',
     });
+  }
+
+  private async assertReferenceOwnership(
+    usuarioId: string,
+    tipo: TipoAlerta,
+    referenciaId: string,
+  ): Promise<void> {
+    switch (tipo) {
+      case TipoAlerta.VENCIMENTO_META:
+        await this.metasService.findOne(referenciaId, usuarioId);
+        return;
+      case TipoAlerta.VENCIMENTO_DIVIDA:
+        await this.dividasService.findOne(referenciaId, usuarioId);
+        return;
+      case TipoAlerta.LIMITE_GASTO:
+        await this.orcamentosService.findOne(referenciaId, usuarioId);
+        return;
+    }
   }
 }

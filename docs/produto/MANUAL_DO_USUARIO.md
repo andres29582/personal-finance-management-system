@@ -44,6 +44,15 @@
 - O sistema não cria automaticamente transações pessoais a partir de gastos ou
   pagamentos de acerto.
 
+## Dividas, metas e alertas
+
+- Os vinculos definidos na criacao de uma divida, meta ou alerta permanecem
+  fixos durante a edicao. Para trocar conta, tipo ou recurso vinculado, crie
+  um novo registro e desative o anterior quando nao for mais necessario.
+- Alertas so podem referenciar uma meta, divida ou orcamento existente da sua
+  propria conta. Uma referencia historica indisponivel continua visivel para
+  permitir editar outros campos ou desativar o alerta.
+
 ## Regras importantes
 
 - Uma categoria de `receita` só pode ser usada com uma transação de `receita`.

@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { EntityManager } from 'typeorm';
-import { ResourceNotFoundException } from '../common/exceptions';
+import {
+  ResourceNotFoundException,
+  ValidationAppException,
+} from '../common/exceptions';
 import {
   assertNonNegativeFinancialValue,
   assertPositiveFinancialValue,
@@ -29,6 +32,7 @@ export class DividasService {
     if (dto.tasaInteres !== undefined) {
       assertNonNegativeFinancialValue(dto.tasaInteres, 'Taxa de juros');
     }
+    this.assertDateOrder(dto.fechaInicio, dto.fechaVencimiento);
 
     if (dto.contaId) {
       await this.contasService.findOne(dto.contaId, usuarioId);
@@ -94,7 +98,7 @@ export class DividasService {
     usuarioId: string,
     dto: UpdateDividaDto,
   ): Promise<Divida> {
-    await this.findOne(id, usuarioId);
+    const debt = await this.findOne(id, usuarioId);
 
     if (dto.cuotaMensual !== undefined) {
       assertPositiveFinancialValue(dto.cuotaMensual, 'Parcela mensal');
@@ -102,6 +106,10 @@ export class DividasService {
     if (dto.tasaInteres !== undefined) {
       assertNonNegativeFinancialValue(dto.tasaInteres, 'Taxa de juros');
     }
+    this.assertDateOrder(
+      debt.fechaInicio,
+      dto.fechaVencimiento ?? debt.fechaVencimiento,
+    );
 
     await this.dividaRepository.updateByIdAndUser(id, usuarioId, dto);
     const updatedDebt = await this.findOne(id, usuarioId);
@@ -145,5 +153,15 @@ export class DividasService {
     return Object.entries(dto)
       .filter(([, value]) => value !== undefined)
       .map(([key]) => key);
+  }
+
+  private assertDateOrder(fechaInicio: string, fechaVencimiento: string): void {
+    if (fechaVencimiento < fechaInicio) {
+      throw new ValidationAppException(
+        'INVALID_DEBT_DATE_ORDER',
+        'Data de vencimento deve ser igual ou posterior a data de inicio.',
+        { field: 'fechaVencimiento' },
+      );
+    }
   }
 }

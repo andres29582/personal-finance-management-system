@@ -25,6 +25,9 @@ describe('resolveAuthTokenConfig', () => {
       refreshSecret: strongRefreshSecret,
       accessExpiresIn: '15m',
       refreshExpiresIn: '30d',
+      algorithm: 'HS256',
+      issuer: 'meu-sistema-financeiro',
+      maxActiveSessions: 5,
     });
   });
 
@@ -214,5 +217,36 @@ describe('resolveAuthTokenConfig', () => {
 
     expect(result.accessExpiresIn).toBe('15m');
     expect(result.refreshExpiresIn).toBe('30d');
+  });
+
+  it('uses a fixed algorithm, issuer and positive session limit', () => {
+    const result = resolveAuthTokenConfig(
+      config({
+        NODE_ENV: 'development',
+        JWT_ACCESS_SECRET: 'access-secret',
+        JWT_REFRESH_SECRET: 'refresh-secret',
+        JWT_ISSUER: 'finance-api',
+        AUTH_MAX_ACTIVE_SESSIONS: '3',
+      }),
+    );
+
+    expect(result).toMatchObject({
+      algorithm: 'HS256',
+      issuer: 'finance-api',
+      maxActiveSessions: 3,
+    });
+  });
+
+  it('rejects an invalid active session limit', () => {
+    expect(() =>
+      resolveAuthTokenConfig(
+        config({
+          NODE_ENV: 'development',
+          JWT_ACCESS_SECRET: 'access-secret',
+          JWT_REFRESH_SECRET: 'refresh-secret',
+          AUTH_MAX_ACTIVE_SESSIONS: '0',
+        }),
+      ),
+    ).toThrow('AUTH_MAX_ACTIVE_SESSIONS must be a positive integer');
   });
 });

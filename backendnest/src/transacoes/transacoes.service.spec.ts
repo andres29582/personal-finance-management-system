@@ -35,7 +35,9 @@ describe('TransacoesService', () => {
     Pick<CategoriasService, 'findActiveForWrite'>
   >;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
-  let logsService: jest.Mocked<Pick<LogsService, 'logEntityEvent'>>;
+  let logsService: jest.Mocked<
+    Pick<LogsService, 'logEntityEventTransactional'>
+  >;
   let manager: TestManager;
   let pagoDividaRepository: { existsBy: jest.Mock };
 
@@ -79,7 +81,7 @@ describe('TransacoesService', () => {
         callback(manager as unknown as EntityManager),
     );
     logsService = {
-      logEntityEvent: jest.fn(),
+      logEntityEventTransactional: jest.fn(),
     };
 
     service = new TransacoesService(
@@ -132,14 +134,15 @@ describe('TransacoesService', () => {
     );
     expect(manager.save).toHaveBeenCalledTimes(1);
     expect(result.contaId).toBe('conta-1');
-    expect(logsService.logEntityEvent).toHaveBeenCalledWith(
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'TRANSACAO_CREATED',
         userId: 'user-1',
       }),
+      manager,
     );
     expect(manager.save.mock.invocationCallOrder[0]).toBeLessThan(
-      logsService.logEntityEvent.mock.invocationCallOrder[0],
+      logsService.logEntityEventTransactional.mock.invocationCallOrder[0],
     );
   });
 
@@ -155,7 +158,7 @@ describe('TransacoesService', () => {
     expect(manager.create).not.toHaveBeenCalled();
     expect(manager.save).not.toHaveBeenCalled();
     expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('preserves CONTA_NOT_FOUND for an absent or foreign account', async () => {
@@ -170,7 +173,7 @@ describe('TransacoesService', () => {
       statusCode: 404,
     });
     expect(manager.save).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -216,7 +219,7 @@ describe('TransacoesService', () => {
       );
       expect(manager.create).not.toHaveBeenCalled();
       expect(manager.save).not.toHaveBeenCalled();
-      expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+      expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
     },
   );
 
@@ -235,7 +238,7 @@ describe('TransacoesService', () => {
       statusCode: 400,
     });
     expect(manager.save).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects creation with a non-positive amount before account validation', async () => {
@@ -245,7 +248,21 @@ describe('TransacoesService', () => {
 
     expect(contasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(manager.save).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
+  });
+
+  it('rejects an effectively empty PATCH before opening a transaction', async () => {
+    await expect(
+      service.update('transacao-1', 'user-1', { descricao: undefined }),
+    ).rejects.toMatchObject({
+      code: 'TRANSACAO_ATUALIZACAO_VAZIA',
+      message: 'Informe ao menos um campo para atualizar a transacao.',
+      statusCode: 422,
+    });
+
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+    expect(manager.update).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('blocks PATCH when the currently linked account is inactive', async () => {
@@ -272,7 +289,7 @@ describe('TransacoesService', () => {
       manager,
     );
     expect(manager.update).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('blocks PATCH when moving a transaction to an inactive account', async () => {
@@ -327,7 +344,7 @@ describe('TransacoesService', () => {
       manager,
     );
     expect(manager.update).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('updates a transaction with active accounts in the same transaction', async () => {
@@ -391,8 +408,9 @@ describe('TransacoesService', () => {
       { descricao: 'Mercado atualizado' },
     );
     expect(result).toBe(updated);
-    expect(logsService.logEntityEvent).toHaveBeenCalledWith(
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'TRANSACAO_UPDATED' }),
+      manager,
     );
   });
 
@@ -428,7 +446,7 @@ describe('TransacoesService', () => {
     expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(manager.save).not.toHaveBeenCalled();
     expect(manager.update).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('rejects DELETE for a transaction linked to an active debt payment without side effects', async () => {
@@ -454,7 +472,7 @@ describe('TransacoesService', () => {
     );
     expect(manager.save).not.toHaveBeenCalled();
     expect(manager.update).not.toHaveBeenCalled();
-    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+    expect(logsService.logEntityEventTransactional).not.toHaveBeenCalled();
   });
 
   it('continues allowing DELETE for a normal transaction without active-account validation', async () => {
@@ -482,8 +500,9 @@ describe('TransacoesService', () => {
     expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
     expect(manager.getRepository).toHaveBeenCalledWith(PagoDivida);
-    expect(logsService.logEntityEvent).toHaveBeenCalledWith(
+    expect(logsService.logEntityEventTransactional).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'TRANSACAO_SOFT_DELETED' }),
+      manager,
     );
   });
 

@@ -4,6 +4,7 @@ import { TransferenciaFormScreen } from '../screens/TransferenciaFormScreen';
 import * as contaService from '../../contas/services/contaService';
 import * as transferenciaService from '../services/transferenciaService';
 import { makeConta, makeTransferencia } from '../../../shared/test/builders';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -65,6 +66,22 @@ describe('TransferenciaFormScreen', () => {
     });
   });
 
+  it('defaults the transfer date from the local calendar', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date('2026-04-07T02:30:00.000Z'));
+      mockContas();
+
+      render(<TransferenciaFormScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('2026-04-06')).toBeTruthy();
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('blocks save when source and destination accounts are the same', async () => {
     mockListContas.mockResolvedValue([contaOrigem]);
 
@@ -94,7 +111,7 @@ describe('TransferenciaFormScreen', () => {
 
     fireEvent.changeText(screen.getAllByDisplayValue('')[0], '100');
     fireEvent.changeText(
-      screen.getByDisplayValue(new Date().toISOString().slice(0, 10)),
+      screen.getByDisplayValue(getLocalDateInputValue()),
       '2026-99-99',
     );
     fireEvent.press(screen.getByText('Salvar transferencia'));
@@ -128,18 +145,26 @@ describe('TransferenciaFormScreen', () => {
       expect(screen.getByDisplayValue('Reserva mensal')).toBeTruthy();
     });
 
+    for (const option of [
+      ...screen.getAllByRole('button', { name: 'Conta Corrente' }),
+      ...screen.getAllByRole('button', { name: 'Poupanca' }),
+    ]) {
+      expect(option.props.accessibilityState.disabled).toBe(true);
+    }
+
     fireEvent.changeText(screen.getByDisplayValue('200'), '250');
     fireEvent.press(screen.getByText('Salvar transferencia'));
 
     await waitFor(() => {
       expect(mockUpdateTransferencia).toHaveBeenCalledWith('transferencia1', {
         comissao: 2,
-        contaDestinoId: 'conta2',
-        contaOrigemId: 'conta1',
         data: '2026-05-01',
         descricao: 'Reserva mensal',
         valor: 250,
       });
+      const [, updatePayload] = mockUpdateTransferencia.mock.calls[0];
+      expect(updatePayload).not.toHaveProperty('contaOrigemId');
+      expect(updatePayload).not.toHaveProperty('contaDestinoId');
       expect(mockReplace).toHaveBeenCalledWith('/transferencias');
     });
   });

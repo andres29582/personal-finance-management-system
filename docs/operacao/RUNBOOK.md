@@ -37,6 +37,72 @@ trust store do sistema. Falhas de certificado nao devem ser contornadas com
 `rejectUnauthorized=false`. Senhas e o conteudo da CA nao devem aparecer em
 logs ou commits.
 
+## Teste fisico com Expo Go na LAN
+
+Use somente uma rede de desenvolvimento confiavel. Em outro dispositivo,
+`localhost` aponta para o proprio telefone, nao para o computador.
+
+### Caminho rapido
+
+1. Descubra o IPv4 da rede Wi-Fi do computador:
+
+   ```powershell
+   ipconfig
+   ```
+
+2. Em `frontend/.env`, aponte a API para esse IPv4. Este arquivo e local e
+   ignorado pelo Git:
+
+   ```text
+   EXPO_PUBLIC_API_URL=http://<HOST_LAN_IP>:3000
+   ```
+
+3. Confirme que PostgreSQL esta ativo e inicie o backend:
+
+   ```powershell
+   cd backendnest
+   npm run start:dev
+   ```
+
+4. No telefone, conectado a mesma Wi-Fi, abra no navegador:
+
+   ```text
+   http://<HOST_LAN_IP>:3000/health
+   ```
+
+   A resposta deve conter `"status":"ok"`. Se nao responder, confirme que a
+   rede do Windows esta marcada como **Privada** e permita Node.js/Nest e Expo
+   no Firewall do Windows para redes privadas.
+
+5. Em outro terminal, inicie o Expo em LAN:
+
+   ```powershell
+   cd frontend
+   npm run start:standard -- --lan
+   ```
+
+   O script `npm run start` e otimizado para uso offline e nao pode combinar
+   `--offline` com `--lan`; use `start:standard` apenas neste smoke test.
+
+6. Abra Expo Go no telefone e escaneie o QR exibido pelo Expo. A confirmacao
+   do QR, login e navegacao sao passos manuais no dispositivo e nao podem ser
+   confirmados apenas pelo computador.
+
+### Limite do smoke test
+
+Valide login, dashboard, criacao de uma transacao pequena e retorno a lista.
+Nao use dados financeiros reais, nem exponha o computador fora da rede local.
+
+### Navegador no telefone (opcional)
+
+Expo Go nativo nao envia `Origin`, portanto nao precisa de CORS adicional. Se
+o frontend for aberto como site no navegador do telefone, inclua a origem LAN
+exata em `backendnest/.env`, sem wildcard, e reinicie o backend:
+
+```text
+CORS_ORIGINS=http://localhost:8081,http://localhost:19006,http://localhost:3000,http://<HOST_LAN_IP>:8081
+```
+
 ## 2. Dados demo
 
 O caminho oficial para carregar dados demo e:

@@ -20,6 +20,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import { getUser } from '../../../../storage/authStorage';
 import {
@@ -156,9 +157,7 @@ export function PlanejamentoGastoFormScreen() {
   const currentRoute = routeContextRef.current;
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
-  const [dataGasto, setDataGasto] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
+  const [dataGasto, setDataGasto] = useState(getLocalDateInputValue());
   const [comportamento, setComportamento] =
     useState<GastoPlanejamentoComportamento>('EVENTUAL');
   const [pagoPorParticipanteId, setPagoPorParticipanteId] = useState('');
@@ -243,7 +242,7 @@ export function PlanejamentoGastoFormScreen() {
     setParticipantesDivisaoDisponiveis([]);
     setDescricao('');
     setValor('');
-    setDataGasto(new Date().toISOString().slice(0, 10));
+    setDataGasto(getLocalDateInputValue());
     setComportamento('EVENTUAL');
     setPagoPorParticipanteId('');
     setParticipantesIds([]);
