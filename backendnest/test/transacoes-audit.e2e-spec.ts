@@ -84,7 +84,8 @@ describe('Transacoes audit atomicity (e2e)', () => {
     descricao: string,
     fixture?: { categoriaId: string; contaId: string },
   ) {
-    const resolvedFixture = fixture ?? (await createFinancialFixture(descricao));
+    const resolvedFixture =
+      fixture ?? (await createFinancialFixture(descricao));
 
     return unwrapSuccess<TransacaoResponse>(
       await withAuth(request(app.getHttpServer()).post('/transacoes'), session)
@@ -142,7 +143,9 @@ describe('Transacoes audit atomicity (e2e)', () => {
       .expect(500);
 
     await expect(
-      dataSource.getRepository(Transacao).countBy({ usuarioId: session.userId }),
+      dataSource
+        .getRepository(Transacao)
+        .countBy({ usuarioId: session.userId }),
     ).resolves.toBe(before);
   });
 
@@ -158,8 +161,12 @@ describe('Transacoes audit atomicity (e2e)', () => {
       .expect(500);
 
     await expect(
-      dataSource.getRepository(Transacao).findOneByOrFail({ id: transaction.id }),
-    ).resolves.toEqual(expect.objectContaining({ descricao: transaction.descricao }));
+      dataSource
+        .getRepository(Transacao)
+        .findOneByOrFail({ id: transaction.id }),
+    ).resolves.toEqual(
+      expect.objectContaining({ descricao: transaction.descricao }),
+    );
   });
 
   it('rolls back remove when its audit insert fails', async () => {
@@ -172,7 +179,9 @@ describe('Transacoes audit atomicity (e2e)', () => {
     ).expect(500);
 
     await expect(
-      dataSource.getRepository(Transacao).findOneByOrFail({ id: transaction.id }),
+      dataSource
+        .getRepository(Transacao)
+        .findOneByOrFail({ id: transaction.id }),
     ).resolves.toEqual(expect.objectContaining({ excluidoEm: null }));
   });
 });

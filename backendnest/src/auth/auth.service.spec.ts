@@ -548,14 +548,21 @@ describe('AuthService', () => {
     jwtService.decode.mockReturnValue({
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
-    authSessionsService.rotateIfActiveWithMatchingToken.mockResolvedValue(false);
+    authSessionsService.rotateIfActiveWithMatchingToken.mockResolvedValue(
+      false,
+    );
 
-    await expect(service.refreshSession('reused-refresh-token')).rejects.toMatchObject({
+    await expect(
+      service.refreshSession('reused-refresh-token'),
+    ).rejects.toMatchObject({
       code: 'AUTH_INVALID_REFRESH_TOKEN',
       statusCode: 401,
     });
 
-    expect(authSessionsService.revoke).toHaveBeenCalledWith('session-1', 'user-1');
+    expect(authSessionsService.revoke).toHaveBeenCalledWith(
+      'session-1',
+      'user-1',
+    );
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'REFRESH_TOKEN_REUSE_DETECTED',

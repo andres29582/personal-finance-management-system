@@ -54,7 +54,7 @@ describe('OrcamentosService', () => {
     };
     categoriasService = { findActiveForWrite: jest.fn() };
     manager = {
-      create: jest.fn((_entity, data) => data),
+      create: jest.fn((_entity, data: Orcamento) => data),
       findOne: jest.fn(),
       getRepository: jest.fn(() => ({
         createQueryBuilder: () => ({
@@ -70,7 +70,10 @@ describe('OrcamentosService', () => {
       update: jest.fn(),
     };
     dataSource = {
-      transaction: jest.fn((callback) => callback(manager)),
+      transaction: jest.fn(
+        (callback: (transactionManager: typeof manager) => Promise<unknown>) =>
+          callback(manager),
+      ),
     };
 
     service = new OrcamentosService(

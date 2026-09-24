@@ -35,7 +35,9 @@ describe('TransacoesService', () => {
     Pick<CategoriasService, 'findActiveForWrite'>
   >;
   let dataSource: jest.Mocked<Pick<DataSource, 'transaction'>>;
-  let logsService: jest.Mocked<Pick<LogsService, 'logEntityEventTransactional'>>;
+  let logsService: jest.Mocked<
+    Pick<LogsService, 'logEntityEventTransactional'>
+  >;
   let manager: TestManager;
   let pagoDividaRepository: { existsBy: jest.Mock };
 

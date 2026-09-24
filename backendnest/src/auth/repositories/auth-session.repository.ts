@@ -54,7 +54,8 @@ export class AuthSessionRepository extends BaseRepository<AuthSession> {
         );
       }
 
-      const { maxActiveSessions: _maxActiveSessions, ...entityData } = session;
+      const { maxActiveSessions, ...entityData } = session;
+      void maxActiveSessions;
       return manager.save(AuthSession, manager.create(AuthSession, entityData));
     });
   }

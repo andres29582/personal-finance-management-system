@@ -2,7 +2,11 @@ import { ConfigService } from '@nestjs/config';
 import { resolveThrottlerConfig } from './throttler.config';
 
 function resolve(values: Record<string, unknown> = {}) {
-  return resolveThrottlerConfig(new ConfigService(values));
+  return resolveThrottlerConfig(
+    new ConfigService(values) as unknown as Parameters<
+      typeof resolveThrottlerConfig
+    >[0],
+  );
 }
 
 describe('resolveThrottlerConfig', () => {

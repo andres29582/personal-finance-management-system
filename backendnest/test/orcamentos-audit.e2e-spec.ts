@@ -212,7 +212,9 @@ describe('Orcamentos audit atomicity (e2e)', () => {
     const conflict = first.status === 409 ? first : second;
     expect(conflict.body).toEqual(
       expect.objectContaining({
-        error: expect.objectContaining({ code: 'ORCAMENTO_ALREADY_EXISTS' }),
+        error: expect.objectContaining({
+          code: 'ORCAMENTO_ALREADY_EXISTS',
+        }) as { code: string },
       }),
     );
   });

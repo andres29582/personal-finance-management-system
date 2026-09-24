@@ -181,7 +181,7 @@ export class TransacoesService {
   }
 
   async remove(id: string, usuarioId: string): Promise<void> {
-    const transaction = await this.dataSource.transaction(async (manager) => {
+    await this.dataSource.transaction(async (manager) => {
       const currentTransaction = await this.findOneForWrite(
         id,
         usuarioId,

@@ -198,7 +198,7 @@ describe('Auth password reset (e2e)', () => {
         refreshTokenHash: createHash('sha256')
           .update(rotated.refresh_token)
           .digest('hex'),
-        revokedAt: expect.any(Date),
+        revokedAt: expect.any(Date) as Date,
       }),
     );
 
