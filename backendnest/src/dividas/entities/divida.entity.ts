@@ -15,7 +15,7 @@ export class Divida {
   @Column({ type: 'varchar', length: 150 })
   nome: string;
 
-  @Column({ name: 'valor_total', type: 'decimal', precision: 12, scale: 2 })
+  @Column({ name: 'valor_total', type: 'decimal', precision: 14, scale: 2 })
   montoTotal: number;
 
   @Column({
@@ -30,7 +30,7 @@ export class Divida {
   @Column({
     name: 'parcela_mensal',
     type: 'decimal',
-    precision: 12,
+    precision: 14,
     scale: 2,
     nullable: true,
   })

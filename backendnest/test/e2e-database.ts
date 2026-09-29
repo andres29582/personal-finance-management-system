@@ -27,6 +27,8 @@ export function configureE2eEnvironment(): E2eDatabaseConfig {
   process.env.JWT_REFRESH_SECRET = 'e2e_refresh_secret';
   process.env.JWT_ACCESS_EXPIRES_IN = '15m';
   process.env.JWT_REFRESH_EXPIRES_IN = '30d';
+  process.env.JWT_ISSUER = 'meu-sistema-financeiro';
+  process.env.AUTH_MAX_ACTIVE_SESSIONS = '5';
   process.env.THROTTLE_LIMIT = '1000';
   process.env.THROTTLE_TTL_MS = '60000';
   process.env.AUTH_RETURN_RESET_TOKEN = 'true';

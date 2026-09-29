@@ -21,7 +21,11 @@ import {
 } from '../../../shared/ui';
 import { confirmAction } from '../../../../utils/confirm-action';
 import { resolveApiError } from '../../../../utils/api-error';
-import { formatCurrency, formatDate } from '../../../../utils/formatters';
+import {
+  formatCurrency,
+  formatDate,
+  getLocalDateInputValue,
+} from '../../../../utils/formatters';
 import { buildPagoDividaPayload } from '../mappers/pagoDividaPayloadMapper';
 import {
   createPagoDivida,
@@ -42,7 +46,7 @@ export function PagosDividaScreen() {
   const [contaId, setContaId] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
   const [valor, setValor] = useState('');
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(getLocalDateInputValue());
   const [descricao, setDescricao] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

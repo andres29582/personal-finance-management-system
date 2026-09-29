@@ -501,6 +501,7 @@ components:
           type: boolean
     UpdateTransacaoRequest:
       type: object
+      minProperties: 1
       properties:
         contaId:
           type: string
@@ -611,6 +612,7 @@ components:
           - anual
     UpdateDividaRequest:
       type: object
+      description: contaId, montoTotal e fechaInicio sao definidos na criacao e nao podem ser alterados.
       properties:
         nome:
           type: string
@@ -687,6 +689,7 @@ components:
           exclusiveMinimum: true
         fechaLimite:
           type: string
+          format: date
         contaId:
           type: string
           format: uuid
@@ -695,6 +698,7 @@ components:
           format: uuid
     UpdateMetaRequest:
       type: object
+      description: tipo, contaId e dividaId sao definidos na criacao e nao podem ser alterados.
       properties:
         nome:
           type: string
@@ -707,13 +711,14 @@ components:
           type: number
           multipleOf: 0.01
           minimum: 0
-          exclusiveMinimum: true
         fechaLimite:
           type: string
+          format: date
         ativa:
           type: boolean
     CreateAlertaRequest:
       type: object
+      description: referenciaId deve existir, pertencer ao usuario e corresponder ao tipo (meta, divida ou orcamento).
       required:
       - tipo
       - referenciaId
@@ -733,6 +738,7 @@ components:
           minimum: 1
     UpdateAlertaRequest:
       type: object
+      description: tipo e referenciaId sao definidos na criacao e nao podem ser alterados.
       properties:
         diasAnticipacion:
           type: integer
@@ -747,7 +753,7 @@ components:
       properties:
         mesReferencia:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
         valorPlanejado:
           type: number
           multipleOf: 0.01
@@ -2491,7 +2497,7 @@ paths:
     post:
       tags:
       - Auth
-      summary: Rotacionar refresh token e emitir novo access token
+      summary: Rotacionar refresh token e emitir novo access token; reutilizacao revoga a sessao
       requestBody:
         required: true
         content:
@@ -2931,7 +2937,7 @@ paths:
         required: false
         schema:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
       - name: tipo
         in: query
         required: false
@@ -2961,6 +2967,15 @@ paths:
                 $ref: '#/components/schemas/TransacaoListSuccess'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '422':
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mes` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -3016,6 +3031,15 @@ paths:
                 $ref: '#/components/schemas/TransacaoSuccess'
         '400':
           $ref: '#/components/responses/FinancialOperationBadRequest'
+        '422':
+          description: Corpo de atualizacao vazio; retorna `TRANSACAO_ATUALIZACAO_VAZIA` quando nenhum campo atualizavel for informado.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -3724,6 +3748,15 @@ paths:
                 $ref: '#/components/schemas/OrcamentoSuccess'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '422':
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mesReferencia` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -3845,7 +3878,7 @@ paths:
         required: false
         schema:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
       - name: ano
         in: query
         required: false
@@ -3906,7 +3939,14 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mes` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -3925,7 +3965,7 @@ paths:
         required: false
         schema:
           type: string
-          pattern: ^\d{4}-\d{2}$
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
       responses:
         '200':
           description: Operacao realizada com sucesso.
@@ -3935,6 +3975,15 @@ paths:
                 $ref: '#/components/schemas/DashboardSuccess'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '422':
+          description: Referencia mensal invalida; retorna `INVALID_MONTH_REFERENCE` quando `mes` nao estiver entre 01 e 12 no formato YYYY-MM.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':

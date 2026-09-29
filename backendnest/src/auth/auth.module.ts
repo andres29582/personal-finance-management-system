@@ -32,7 +32,9 @@ import { resolveAuthTokenConfig } from './config/auth-token.config';
         return {
           secret: tokenConfig.accessSecret,
           signOptions: {
+            algorithm: tokenConfig.algorithm,
             expiresIn: tokenConfig.accessExpiresIn as never,
+            issuer: tokenConfig.issuer,
           },
         };
       },

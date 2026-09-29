@@ -5,7 +5,7 @@ describe('resolveRequestId', () => {
   it('preserves a trimmed upstream request ID', () => {
     const request = {
       headers: { 'x-request-id': '  gateway-request-1  ' },
-    } as Request;
+    } as unknown as Request;
 
     expect(resolveRequestId(request)).toBe('gateway-request-1');
   });

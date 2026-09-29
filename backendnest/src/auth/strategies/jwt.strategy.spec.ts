@@ -7,7 +7,7 @@ import { RequestContextService } from '../../logs/request-context.service';
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
   let authSessionsService: jest.Mocked<
-    Pick<AuthSessionsService, 'findActiveById'>
+    Pick<AuthSessionsService, 'findActiveById' | 'touchIfActive'>
   >;
   let requestContextService: jest.Mocked<
     Pick<RequestContextService, 'setUserId'>
@@ -22,6 +22,7 @@ describe('JwtStrategy', () => {
     };
     authSessionsService = {
       findActiveById: jest.fn(),
+      touchIfActive: jest.fn(),
     };
     requestContextService = {
       setUserId: jest.fn(),
@@ -60,6 +61,7 @@ describe('JwtStrategy', () => {
         nome: 'Ana',
         sid: 'session-1',
         sub: 'user-1',
+        tokenType: 'access',
       }),
     ).rejects.toBeInstanceOf(AppUnauthorizedException);
   });
@@ -77,6 +79,7 @@ describe('JwtStrategy', () => {
         nome: 'Ana',
         sid: 'session-1',
         sub: 'user-1',
+        tokenType: 'access',
       }),
     ).rejects.toBeInstanceOf(AppUnauthorizedException);
   });
@@ -94,6 +97,7 @@ describe('JwtStrategy', () => {
         nome: 'Ana',
         sid: 'session-1',
         sub: 'user-1',
+        tokenType: 'access',
       }),
     ).rejects.toBeInstanceOf(AppUnauthorizedException);
   });
@@ -110,6 +114,7 @@ describe('JwtStrategy', () => {
       nome: 'Ana',
       sid: 'session-1',
       sub: 'user-1',
+      tokenType: 'access',
     });
 
     expect(result).toEqual({
@@ -119,5 +124,23 @@ describe('JwtStrategy', () => {
       sid: 'session-1',
     });
     expect(requestContextService.setUserId).toHaveBeenCalledWith('user-1');
+    expect(authSessionsService.touchIfActive).toHaveBeenCalledWith('session-1');
+  });
+
+  it('rejects refresh tokens presented as bearer access tokens', async () => {
+    const promise = strategy.validate({} as never, {
+      email: 'ana@example.com',
+      nome: 'Ana',
+      sid: 'session-1',
+      sub: 'user-1',
+      tokenType: 'refresh',
+    });
+
+    await expect(promise).rejects.toMatchObject({
+      code: 'AUTH_INVALID_SESSION',
+      statusCode: 401,
+    });
+    expect(authSessionsService.findActiveById).not.toHaveBeenCalled();
+    expect(authSessionsService.touchIfActive).not.toHaveBeenCalled();
   });
 });

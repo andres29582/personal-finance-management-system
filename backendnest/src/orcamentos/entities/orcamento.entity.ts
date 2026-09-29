@@ -2,9 +2,11 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { OrcamentoCategoria } from './orcamento-categoria.entity';
 
 @Entity('orcamento')
 export class Orcamento {
@@ -25,4 +27,7 @@ export class Orcamento {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @OneToMany(() => OrcamentoCategoria, (alocacao) => alocacao.orcamento)
+  alocacoes: OrcamentoCategoria[];
 }

@@ -1,4 +1,4 @@
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, ObjectLiteral, Repository } from 'typeorm';
 import { AcertoPlanejamento } from './entities/acerto-planejamento.entity';
 import { DivisaoGasto } from './entities/divisao-gasto.entity';
 import { GastoPlanejamento } from './entities/gasto-planejamento.entity';
@@ -99,10 +99,9 @@ describe('PlanejamentosRepository', () => {
         return comoRepositoryTypeOrm(managerAcertoRepository);
       }),
     };
-    dataSource.transaction.mockImplementation(
-      (callback: (entityManager: typeof manager) => Promise<Planejamento>) =>
-        callback(manager),
-    );
+    dataSource.transaction.mockImplementation(((
+      callback: (entityManager: typeof manager) => Promise<Planejamento>,
+    ) => callback(manager)) as never);
     managerPlanejamentoRepository.save.mockResolvedValue({
       id: 'planejamento-transacao',
     } as Planejamento);
@@ -140,13 +139,9 @@ describe('PlanejamentosRepository', () => {
     const planejamento = Object.assign(new Planejamento(), {
       id: 'planejamento-transacao',
     });
-    dataSource.transaction.mockImplementation(
-      (
-        callback: (
-          entityManager: typeof manager,
-        ) => Promise<Planejamento | null>,
-      ) => callback(manager),
-    );
+    dataSource.transaction.mockImplementation(((
+      callback: (entityManager: typeof manager) => Promise<Planejamento | null>,
+    ) => callback(manager)) as never);
     managerPlanejamentoRepository.findOne.mockResolvedValue(planejamento);
 
     const result = await repository.executarEmTransacao((transacional) =>
@@ -183,13 +178,9 @@ describe('PlanejamentosRepository', () => {
       id: 'planejamento-transacao',
       participantes,
     } as Planejamento;
-    dataSource.transaction.mockImplementation(
-      (
-        callback: (
-          entityManager: typeof manager,
-        ) => Promise<Planejamento | null>,
-      ) => callback(manager),
-    );
+    dataSource.transaction.mockImplementation(((
+      callback: (entityManager: typeof manager) => Promise<Planejamento | null>,
+    ) => callback(manager)) as never);
     managerPlanejamentoRepository.queryBuilder.getOne.mockResolvedValue(
       planejamento,
     );
@@ -680,11 +671,14 @@ describe('PlanejamentosRepository', () => {
     await expect(repository.salvarAcerto(acertos[0])).resolves.toBe(acertos[0]);
   });
 
-  function criarRepositoryMock<T>(): RepositoryMock<T> {
+  function criarRepositoryMock<T extends ObjectLiteral>(): RepositoryMock<T> {
     const queryBuilder = criarSelectQueryBuilderMock<T>();
 
     return {
-      createQueryBuilder: jest.fn(() => queryBuilder),
+      createQueryBuilder: jest.fn((alias: string) => {
+        void alias;
+        return queryBuilder;
+      }),
       findOne: criarFindOneMock<T>(),
       find: criarFindMock<T>(),
       queryBuilder,
@@ -692,7 +686,9 @@ describe('PlanejamentosRepository', () => {
     };
   }
 
-  function criarSelectQueryBuilderMock<T>(): SelectQueryBuilderMock<T> {
+  function criarSelectQueryBuilderMock<
+    T extends ObjectLiteral,
+  >(): SelectQueryBuilderMock<T> {
     const queryBuilder = {} as SelectQueryBuilderMock<T>;
     const retornarQueryBuilder = () => queryBuilder;
 
@@ -724,7 +720,7 @@ describe('PlanejamentosRepository', () => {
     return jest.fn() as unknown as RepositoryMock<T>['save'];
   }
 
-  function comoRepositoryTypeOrm<T>(
+  function comoRepositoryTypeOrm<T extends ObjectLiteral>(
     repositoryMock: RepositoryMock<T>,
   ): Repository<T> {
     return repositoryMock as unknown as Repository<T>;

@@ -42,13 +42,13 @@ Status usado:
 | Divida formulario (`app/dividas-form.tsx`) | `dividaService`, `contaService` | `GET /contas`, `GET /dividas/:id`, `POST /dividas`, `PATCH /dividas/:id` | Datas invalidas, valor total/parcela invalido, conta associada errada | `src/modules/dividas/__tests__/dividas-form.test.tsx`, `dividaService.test.ts` | Coberto |
 | Pagamentos de divida (`app/pagos-divida.tsx`) | `pagoDividaService`, `dividaService`, `contaService`, `categoriaService` | `GET /pagos-divida/divida/:id`, `POST /pagos-divida`, `DELETE /pagos-divida/:id` | Pagamento sem categoria despesa, saldo nao atualizado, divida errada | `src/modules/pagos-divida/__tests__/pagos-divida-screen.test.tsx`, `pagoDividaService.test.ts` | Coberto |
 | Metas lista (`app/metas.tsx`) | `metaService` | `GET /metas`, `PATCH /metas/:id/desativar` | Meta inativa exibida, progresso incorreto, 401 sem redirect | `src/modules/metas/__tests__/metaService.test.ts` | Parcial |
-| Meta formulario (`app/metas-form.tsx`) | `metaService`, `contaService`, `dividaService` | `GET /metas/:id`, `POST /metas`, `PATCH /metas/:id` | Vinculo conta/divida errado, valor alvo invalido, tipo meta incorreto | `src/modules/metas/__tests__/metaService.test.ts` | Parcial |
+| Meta formulario (`app/metas-form.tsx`) | `metaService`, `contaService`, `dividaService` | `GET /metas/:id`, `POST /metas`, `PATCH /metas/:id` | Vinculo conta/divida imutavel, data invalida, valor atual negativo e erro de backend | `src/modules/metas/__tests__/metas-form.test.tsx`, `metaService.test.ts` | Coberto |
 | Orcamentos lista (`app/orcamentos.tsx`) | `orcamentoService` | `GET /orcamentos?ano=` | Ano/filtro incorreto, total planejado errado, status mal interpretado | `src/modules/orcamentos/__tests__/orcamentoService.test.ts` | Parcial |
 | Orcamento formulario (`app/orcamentos-form.tsx`) | `orcamentoService` | `GET /orcamentos/:id`, `POST /orcamentos`, `PATCH /orcamentos/:id` | Mes duplicado, valor planejado invalido, edicao de mes bloqueada incorretamente | `src/modules/orcamentos/__tests__/orcamentoService.test.ts` | Parcial |
 | Relatorios (`app/relatorios.tsx`) | `relatorioService` | `GET /relatorios` com periodo/filtros | Periodo incorreto, totais divergentes, filtros ignorados | `src/modules/relatorios/__tests__/relatorios-screen.test.tsx`, `relatorioService.test.ts` | Coberto |
 | Previsao deficit (`app/previsao-deficit.tsx`) | `previsaoService` | `GET /previsoes/deficit?mes=` | Mes invalido, falha ML sem feedback, interpretacao errada do risco | `src/modules/previsao-deficit/__tests__/previsao-screen.test.tsx`, `previsaoService.test.ts` | Coberto |
 | Alertas lista (`app/alertas.tsx`) | `alertaService` | `GET /alertas`, `PATCH /alertas/:id/desativar`, `PATCH /alertas/:id/notificar` | Alerta inativo exibido, referencia financeira invalida, notificacao duplicada | `src/modules/alertas/__tests__/alertaService.test.ts` | Parcial |
-| Alerta formulario (`app/alertas-form.tsx`) | `alertaService`, `metaService`, `orcamentoService`, `dividaService` | `GET/POST/PATCH /alertas`, carregar referencias | Referencia de meta/orcamento/divida errada, regra de disparo invalida | `src/modules/alertas/__tests__/alertaService.test.ts` | Parcial |
+| Alerta formulario (`app/alertas-form.tsx`) | `alertaService`, `metaService`, `orcamentoService`, `dividaService` | `GET/POST/PATCH /alertas`, carregar referencias | Referencia incompativel com o tipo, limpeza ao trocar tipo, tipo/referencia imutaveis em edicao e erro de backend | `src/modules/alertas/__tests__/alertas-form.test.tsx`, `alertaService.test.ts` | Coberto |
 | Audit logs (`app/audit-logs.tsx`) | `auditLogService` | `GET /audit-logs?limit=&offset=` | Vazamento de dados sensiveis, paginacao quebrada, 401 sem redirect | `src/modules/audit-logs/__tests__/audit-logs-screen.test.tsx`, `auditLogService.test.ts` | Coberto |
 | Usuario perfil (`app/usuario.tsx`) | `userService`, `authStorage`, `cepService` | `GET /users/me`, `PATCH /users/me`, lookup `GET /cep/:cep` | Perfil local divergente do backend, update parcial invalido, CEP incorreto | `src/modules/usuario/__tests__/userService.test.ts` | Parcial |
 | Privacidade (`app/privacidade.tsx`) | N/A | Tela informativa LGPD | Texto desatualizado ou link de aceite inconsistente | Cobertura indireta via cadastro | Parcial |
@@ -69,10 +69,11 @@ da suite completa e:
 | `npm run typecheck` | Ausente antes desta etapa | deve apontar para `tsc --noEmit` |
 | `npm run build` | Ausente antes desta etapa | em Expo, preferir comando explicito de export web |
 | `npm run export:web` | Adicionado nesta etapa | valida export Expo Web e gera `dist/` ignorado pelo Git |
+| `npm test -- --runInBand src/modules/metas/__tests__/metas-form.test.tsx src/modules/alertas/__tests__/alertas-form.test.tsx` | Passando | 2 suites / 8 testes de tela |
 
 ## Principais lacunas para proximas fases
 
-1. Criar testes de tela para formularios e listas ainda cobertos apenas por service: categorias, metas, orcamentos, alertas e usuario.
+1. Criar testes de tela para categorias, listas de metas/alertas, orcamentos e usuario, ainda cobertos apenas por service.
 2. Adicionar teste dedicado para `src/shared/services/cepService.ts`, hoje coberto indiretamente por cadastro/perfil.
 3. Expandir os fluxos financeiros ja cobertos para estados vazios, erros de remocao/salvamento e casos `401` adicionais nos formularios.
 4. Manter builders tipados em `src/shared/test/builders/` como fonte unica de fixtures para evitar mocks desatualizados.

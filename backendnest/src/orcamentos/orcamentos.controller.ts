@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -15,6 +16,8 @@ import type { AuthenticatedRequest } from '../common/authenticated-request';
 import { CreateOrcamentoDto } from './dto/create-orcamento.dto';
 import { FindOrcamentosDto } from './dto/find-orcamentos.dto';
 import { UpdateOrcamentoDto } from './dto/update-orcamento.dto';
+import { CreateOrcamentoCategoriaDto } from './dto/create-orcamento-categoria.dto';
+import { UpdateOrcamentoCategoriaDto } from './dto/update-orcamento-categoria.dto';
 import { OrcamentosService } from './orcamentos.service';
 
 @UseGuards(JwtAuthGuard)
@@ -53,5 +56,42 @@ export class OrcamentosController {
     @Body() dto: UpdateOrcamentoDto,
   ) {
     return this.orcamentosService.update(id, req.user.id, dto);
+  }
+
+  @Post(':id/categorias')
+  createAllocation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: CreateOrcamentoCategoriaDto,
+  ) {
+    return this.orcamentosService.createAllocation(id, req.user.id, dto);
+  }
+
+  @Patch(':id/categorias/:allocationId')
+  updateAllocation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('allocationId', ParseUUIDPipe) allocationId: string,
+    @Request() req: AuthenticatedRequest,
+    @Body() dto: UpdateOrcamentoCategoriaDto,
+  ) {
+    return this.orcamentosService.updateAllocation(
+      id,
+      allocationId,
+      req.user.id,
+      dto,
+    );
+  }
+
+  @Delete(':id/categorias/:allocationId')
+  removeAllocation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('allocationId', ParseUUIDPipe) allocationId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.orcamentosService.removeAllocation(
+      id,
+      allocationId,
+      req.user.id,
+    );
   }
 }

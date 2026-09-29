@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { EntityManager, Repository } from 'typeorm';
 import { AuditLog } from '../logs/entities/audit-log.entity';
 import { LogsService } from '../logs/logs.service';
@@ -12,12 +11,11 @@ describe('LogsService security', () => {
     Pick<AuditLogRepository, 'createAuditLog' | 'saveAuditLog'>
   >;
   let requestContextService: jest.Mocked<Pick<RequestContextService, 'get'>>;
-  let configService: jest.Mocked<Pick<ConfigService, 'get'>>;
   let managerRepository: {
     create: jest.Mock<AuditLog, [Partial<AuditLog>]>;
     save: jest.Mock<Promise<AuditLog>, [AuditLog]>;
   };
-  let manager: jest.Mocked<Pick<EntityManager, 'getRepository'>>;
+  let manager: { getRepository: jest.Mock };
 
   beforeEach(() => {
     repository = {
@@ -34,9 +32,6 @@ describe('LogsService security', () => {
         userAgent: 'jest',
       })),
     };
-    configService = {
-      get: jest.fn(() => 'test'),
-    };
     managerRepository = {
       create: jest.fn((entity) => entity as AuditLog),
       save: jest.fn((entity) => Promise.resolve(entity)),
@@ -50,7 +45,6 @@ describe('LogsService security', () => {
     service = new LogsService(
       repository as unknown as AuditLogRepository,
       requestContextService as unknown as RequestContextService,
-      configService as unknown as ConfigService,
     );
   });
 

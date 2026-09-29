@@ -163,6 +163,57 @@ describe('TransacaoFormScreen', () => {
     });
   });
 
+  it('clears the description when editing with blank text', async () => {
+    const mockContas = makeFormContas();
+    const mockCategorias = makeFormCategorias();
+    const mockTransacao = makeFormTransacao();
+
+    mockListContas.mockResolvedValue(mockContas);
+    mockListCategorias.mockResolvedValue(mockCategorias);
+    mockGetTransacaoById.mockResolvedValue(mockTransacao);
+    mockUpdateTransacao.mockResolvedValue({ ...mockTransacao, descricao: null });
+    mockLocalSearchParams = { id: '1' };
+
+    render(<TransacaoFormScreen />);
+
+    await waitFor(() => {
+      fireEvent.changeText(screen.getByDisplayValue('Compra mercado'), '   ');
+      fireEvent.press(screen.getByText('Salvar transacao'));
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateTransacao).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({ descricao: null }),
+      );
+    });
+  });
+
+  it('preserves an inactive category when editing a transaction', async () => {
+    const mockContas = makeFormContas();
+    const activeCategory = makeCategoria({ id: 'active', nome: 'AlimentaÃ§Ã£o', tipo: 'despesa' });
+    const mockTransacao = { ...makeFormTransacao(), categoriaId: 'inactive' };
+
+    mockListContas.mockResolvedValue(mockContas);
+    mockListCategorias.mockResolvedValue([activeCategory]);
+    mockGetTransacaoById.mockResolvedValue(mockTransacao);
+    mockUpdateTransacao.mockResolvedValue(mockTransacao);
+    mockLocalSearchParams = { id: '1' };
+
+    render(<TransacaoFormScreen />);
+
+    await waitFor(() => {
+      fireEvent.press(screen.getByText('Salvar transacao'));
+    });
+
+    await waitFor(() => {
+      expect(mockUpdateTransacao).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({ categoriaId: 'inactive' }),
+      );
+    });
+  });
+
   it('shows validation errors for required fields', async () => {
     const mockContas = makeFormContas();
     const mockCategorias = makeFormCategorias();

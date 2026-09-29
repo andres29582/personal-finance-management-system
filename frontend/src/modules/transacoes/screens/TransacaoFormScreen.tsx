@@ -17,6 +17,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import {
   createTransacao,
@@ -49,7 +50,7 @@ export function TransacaoFormScreen() {
   const [contaId, setContaId] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
   const [valor, setValor] = useState('');
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(getLocalDateInputValue());
   const [descricao, setDescricao] = useState('');
   const [contas, setContas] = useState<Conta[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -102,10 +103,10 @@ export function TransacaoFormScreen() {
   );
 
   useEffect(() => {
-    if (!categoriasFiltradas.find((categoria) => categoria.id === categoriaId)) {
+    if (!transacaoId && !categoriasFiltradas.find((categoria) => categoria.id === categoriaId)) {
       setCategoriaId(categoriasFiltradas[0]?.id ?? '');
     }
-  }, [categoriaId, categoriasFiltradas]);
+  }, [categoriaId, categoriasFiltradas, transacaoId]);
 
   async function handleSave() {
     const parsedValor = parseDecimalInput(valor);
@@ -149,15 +150,20 @@ export function TransacaoFormScreen() {
         contaId,
         categoriaId,
         data: normalizedData,
-        descricao: descricao.trim() || undefined,
         tipo,
         valor: parsedValor,
       };
 
       if (transacaoId) {
-        await updateTransacao(transacaoId, payload);
+        await updateTransacao(transacaoId, {
+          ...payload,
+          descricao: descricao.trim() || null,
+        });
       } else {
-        await createTransacao(payload);
+        await createTransacao({
+          ...payload,
+          descricao: descricao.trim() || undefined,
+        });
       }
 
       router.replace('/transacoes' as never);

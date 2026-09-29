@@ -34,7 +34,9 @@ jest.mock('../../../../storage/authStorage');
 jest.mock('../../../../utils/confirm-action');
 
 const mockListContas = contaService.listContas as jest.MockedFunction<typeof contaService.listContas>;
+const mockGetContaById = contaService.getContaById as jest.MockedFunction<typeof contaService.getContaById>;
 const mockListCategorias = categoriaService.listCategorias as jest.MockedFunction<typeof categoriaService.listCategorias>;
+const mockGetCategoriaById = categoriaService.getCategoriaById as jest.MockedFunction<typeof categoriaService.getCategoriaById>;
 const mockListTransacoes = transacaoService.listTransacoes as jest.MockedFunction<typeof transacaoService.listTransacoes>;
 const mockRemoveTransacao = transacaoService.removeTransacao as jest.MockedFunction<typeof transacaoService.removeTransacao>;
 const mockClearSession = authStorage.clearSession as jest.MockedFunction<typeof authStorage.clearSession>;
@@ -80,7 +82,7 @@ describe('TransacoesScreen', () => {
     });
   });
 
-  it('applies selected type filter when user presses filter button', async () => {
+  it('only reloads after applying the draft filters', async () => {
     mockSuccessfulLoad();
 
     render(<TransacoesScreen />);
@@ -93,13 +95,55 @@ describe('TransacoesScreen', () => {
     });
 
     fireEvent.press(screen.getByText('Receitas'));
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-06');
+
+    expect(mockListTransacoes).toHaveBeenCalledTimes(1);
+
     fireEvent.press(screen.getByText('Aplicar filtros'));
 
     await waitFor(() => {
       expect(mockListTransacoes).toHaveBeenLastCalledWith({
-        mes: expect.any(String),
+        mes: '2026-06',
         tipo: 'receita',
       });
+      expect(mockListTransacoes).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('renders inactive historical account and category labels without duplicate lookups', async () => {
+    const contaHistorica = makeConta({ ativa: false, id: 'conta-historica', nome: 'Conta encerrada' });
+    const categoriaHistorica = makeCategoria({
+      ativa: false,
+      id: 'categoria-historica',
+      nome: 'Categoria arquivada',
+      tipo: 'despesa',
+    });
+    const transacaoHistorica = makeTransacao({
+      categoriaId: categoriaHistorica.id,
+      contaId: contaHistorica.id,
+      data: '2026-05-01',
+      descricao: null,
+      id: 'transacao-historica-1',
+    });
+
+    mockListContas.mockResolvedValue([conta]);
+    mockListCategorias.mockResolvedValue([categoria]);
+    mockListTransacoes.mockResolvedValue([
+      transacaoHistorica,
+      { ...transacaoHistorica, id: 'transacao-historica-2' },
+    ]);
+    mockGetContaById.mockResolvedValue(contaHistorica);
+    mockGetCategoriaById.mockResolvedValue(categoriaHistorica);
+
+    render(<TransacoesScreen />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Categoria arquivada')).toHaveLength(2);
+      expect(screen.getAllByText('Conta: Conta encerrada')).toHaveLength(2);
+      expect(mockGetContaById).toHaveBeenCalledTimes(1);
+      expect(mockGetContaById).toHaveBeenCalledWith('conta-historica');
+      expect(mockGetCategoriaById).toHaveBeenCalledTimes(1);
+      expect(mockGetCategoriaById).toHaveBeenCalledWith('categoria-historica');
     });
   });
 

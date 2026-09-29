@@ -15,6 +15,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import {
   buildDividaPayload,
   buildDividaUpdatePayload,
@@ -38,8 +39,8 @@ export function DividasFormScreen() {
   const [montoTotal, setMontoTotal] = useState('');
   const [tasaInteres, setTasaInteres] = useState('');
   const [cuotaMensual, setCuotaMensual] = useState('');
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().slice(0, 10));
-  const [fechaVencimiento, setFechaVencimiento] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaInicio, setFechaInicio] = useState(getLocalDateInputValue());
+  const [fechaVencimiento, setFechaVencimiento] = useState(getLocalDateInputValue());
   const [proximoVencimiento, setProximoVencimiento] = useState('');
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>('mensal');
   const [loading, setLoading] = useState(true);
@@ -181,14 +182,21 @@ export function DividasFormScreen() {
           </GlassField>
 
           <GlassField label="Conta vinculada">
-            <GlassOptionGroup
-              options={[
-                { label: 'Nenhuma', value: '' },
-                ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
-              ]}
-              value={contaId}
-              onChange={setContaId}
-            />
+            {dividaId ? (
+              <GlassTextInput
+                editable={false}
+                value={contas.find((conta) => conta.id === contaId)?.nome ?? 'Nenhuma'}
+              />
+            ) : (
+              <GlassOptionGroup
+                options={[
+                  { label: 'Nenhuma', value: '' },
+                  ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
+                ]}
+                value={contaId}
+                onChange={setContaId}
+              />
+            )}
           </GlassField>
 
           <GlassField label="Valor total" error={fieldErrors.montoTotal}>
@@ -196,6 +204,7 @@ export function DividasFormScreen() {
               keyboardType="decimal-pad"
               placeholder="Ex.: 15000,00"
               value={montoTotal}
+              editable={!dividaId}
               onChangeText={(value) => {
                 setMontoTotal(value);
                 clearFieldError('montoTotal');
@@ -231,6 +240,7 @@ export function DividasFormScreen() {
             <GlassTextInput
               placeholder="YYYY-MM-DD"
               value={fechaInicio}
+              editable={!dividaId}
               onChangeText={(value) => {
                 setFechaInicio(value);
                 clearFieldError('fechaInicio');

@@ -9,21 +9,29 @@ export class AuthSessionsService {
   async create(session: {
     expiresAt: Date;
     id: string;
+    maxActiveSessions: number;
     refreshToken: string;
     userId: string;
   }) {
+    const now = new Date();
+
     return this.authSessionRepository.createSession({
       id: session.id,
       userId: session.userId,
       refreshTokenHash: this.hashToken(session.refreshToken),
       expiresAt: session.expiresAt,
+      maxActiveSessions: session.maxActiveSessions,
       revokedAt: null,
-      lastUsedAt: null,
+      lastUsedAt: now,
     });
   }
 
   async findActiveById(sessionId: string) {
     return this.authSessionRepository.findActiveById(sessionId);
+  }
+
+  async touchIfActive(sessionId: string) {
+    await this.authSessionRepository.touchIfActive(sessionId, new Date());
   }
 
   async rotateIfActiveWithMatchingToken(
