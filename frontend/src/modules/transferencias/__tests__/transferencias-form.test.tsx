@@ -128,18 +128,26 @@ describe('TransferenciaFormScreen', () => {
       expect(screen.getByDisplayValue('Reserva mensal')).toBeTruthy();
     });
 
+    for (const option of [
+      ...screen.getAllByRole('button', { name: 'Conta Corrente' }),
+      ...screen.getAllByRole('button', { name: 'Poupanca' }),
+    ]) {
+      expect(option.props.accessibilityState.disabled).toBe(true);
+    }
+
     fireEvent.changeText(screen.getByDisplayValue('200'), '250');
     fireEvent.press(screen.getByText('Salvar transferencia'));
 
     await waitFor(() => {
       expect(mockUpdateTransferencia).toHaveBeenCalledWith('transferencia1', {
         comissao: 2,
-        contaDestinoId: 'conta2',
-        contaOrigemId: 'conta1',
         data: '2026-05-01',
         descricao: 'Reserva mensal',
         valor: 250,
       });
+      const [, updatePayload] = mockUpdateTransferencia.mock.calls[0];
+      expect(updatePayload).not.toHaveProperty('contaOrigemId');
+      expect(updatePayload).not.toHaveProperty('contaDestinoId');
       expect(mockReplace).toHaveBeenCalledWith('/transferencias');
     });
   });
