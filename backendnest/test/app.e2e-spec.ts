@@ -89,12 +89,18 @@ jest.setTimeout(60000);
 
 describe('Financial flow (e2e)', () => {
   let app: E2eApplication;
+  let sharedSession: Awaited<ReturnType<typeof registerAndLoginTestUser>>;
 
   beforeAll(async () => {
     const databaseConfig = configureE2eEnvironment();
     await prepareE2eDatabase(databaseConfig);
 
     app = await createE2eApp();
+    sharedSession = await registerAndLoginTestUser(app, {
+      cpf: '16899535004',
+      email: 'transaction.monetary-response.e2e@example.com',
+      nome: 'Transaction Monetary Response E2E',
+    });
   });
 
   afterAll(async () => {
@@ -111,11 +117,7 @@ describe('Financial flow (e2e)', () => {
   });
 
   it('rejects invalid month references at API and database boundaries', async () => {
-    const session = await registerAndLoginTestUser(app, {
-      cpf: '12345678909',
-      email: 'month.reference.validation.e2e@example.com',
-      nome: 'Month Reference Validation E2E',
-    });
+    const session = sharedSession;
 
     const invalidTransactionMonth = await withAuth(
       request(app.getHttpServer()).get('/transacoes'),
@@ -179,11 +181,7 @@ describe('Financial flow (e2e)', () => {
   });
 
   it('returns persisted transaction amounts as numbers for GET, list, and update', async () => {
-    const session = await registerAndLoginTestUser(app, {
-      cpf: '16899535004',
-      email: 'transaction.monetary-response.e2e@example.com',
-      nome: 'Transaction Monetary Response E2E',
-    });
+    const session = sharedSession;
     const conta = await createConta(
       session.token,
       makeContaPayload({ nome: 'Conta para valores numericos' }),
