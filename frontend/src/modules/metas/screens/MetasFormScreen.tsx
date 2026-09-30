@@ -1,9 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { listContas } from '../../contas/services/contaService';
+import { getContaById, listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
-import { listDividas } from '../../dividas/services/dividaService';
+import { getDividaById, listDividas } from '../../dividas/services/dividaService';
 import { Divida } from '../../dividas/types/divida';
 import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
@@ -46,11 +46,18 @@ export function MetasFormScreen() {
           listContas(),
           listDividas(),
         ]);
-        setContas(contasData);
-        setDividas(dividasData);
-
         if (metaId) {
           const meta = await getMetaById(metaId);
+          const [conta, divida] = await Promise.all([
+            meta.contaId && !contasData.some(({ id }) => id === meta.contaId)
+              ? getContaById(meta.contaId)
+              : undefined,
+            meta.dividaId && !dividasData.some(({ id }) => id === meta.dividaId)
+              ? getDividaById(meta.dividaId)
+              : undefined,
+          ]);
+          setContas(conta ? [...contasData, conta] : contasData);
+          setDividas(divida ? [...dividasData, divida] : dividasData);
           setNome(meta.nome);
           setTipo(meta.tipo);
           setMontoObjetivo(String(meta.montoObjetivo));
@@ -58,6 +65,9 @@ export function MetasFormScreen() {
           setFechaLimite(meta.fechaLimite);
           setContaId(meta.contaId || '');
           setDividaId(meta.dividaId || '');
+        } else {
+          setContas(contasData);
+          setDividas(dividasData);
         }
       } catch (error) {
         const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar a meta.');
@@ -77,13 +87,24 @@ export function MetasFormScreen() {
     const objetivo = parseDecimalInput(montoObjetivo);
     const actual = parseDecimalInput(montoActual);
 
-    if (!nome.trim() || !Number.isFinite(objetivo) || !fechaLimite) {
+    const parsedDueDate = new Date(`${fechaLimite}T00:00:00.000Z`);
+    const validDueDate =
+      /^\d{4}-\d{2}-\d{2}$/.test(fechaLimite) &&
+      !Number.isNaN(parsedDueDate.getTime()) &&
+      parsedDueDate.toISOString().slice(0, 10) === fechaLimite;
+
+    if (!nome.trim() || !Number.isFinite(objetivo) || !validDueDate) {
       setMessage('Preencha nome, objetivo e data limite.');
       return;
     }
 
     if (objetivo <= 0) {
       setMessage('O objetivo deve ser maior que zero.');
+      return;
+    }
+
+    if (metaId && (!Number.isFinite(actual) || actual < 0)) {
+      setMessage('O valor atual deve ser maior ou igual a zero.');
       return;
     }
 
@@ -149,14 +170,21 @@ export function MetasFormScreen() {
           </GlassField>
 
           <GlassField label="Tipo">
-            <GlassOptionGroup
-              options={[
-                { label: 'Economia', value: 'economia' },
-                { label: 'Reducao divida', value: 'reducao_divida' },
-              ]}
-              value={tipo}
-              onChange={(value) => setTipo(value as TipoMeta)}
-            />
+            {metaId ? (
+              <GlassTextInput
+                editable={false}
+                value={tipo === 'economia' ? 'Economia' : 'Reducao divida'}
+              />
+            ) : (
+              <GlassOptionGroup
+                options={[
+                  { label: 'Economia', value: 'economia' },
+                  { label: 'Reducao divida', value: 'reducao_divida' },
+                ]}
+                value={tipo}
+                onChange={(value) => setTipo(value as TipoMeta)}
+              />
+            )}
           </GlassField>
 
           <GlassField label="Valor objetivo">
@@ -186,25 +214,39 @@ export function MetasFormScreen() {
           </GlassField>
 
           <GlassField label="Conta vinculada">
-            <GlassOptionGroup
-              options={[
-                { label: 'Nenhuma', value: '' },
-                ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
-              ]}
-              value={contaId}
-              onChange={setContaId}
-            />
+            {metaId ? (
+              <GlassTextInput
+                editable={false}
+                value={contas.find((conta) => conta.id === contaId)?.nome ?? 'Nenhuma'}
+              />
+            ) : (
+              <GlassOptionGroup
+                options={[
+                  { label: 'Nenhuma', value: '' },
+                  ...contas.map((conta) => ({ label: conta.nome, value: conta.id })),
+                ]}
+                value={contaId}
+                onChange={setContaId}
+              />
+            )}
           </GlassField>
 
           <GlassField label="Divida vinculada">
-            <GlassOptionGroup
-              options={[
-                { label: 'Nenhuma', value: '' },
-                ...dividas.map((divida) => ({ label: divida.nome, value: divida.id })),
-              ]}
-              value={dividaId}
-              onChange={setDividaId}
-            />
+            {metaId ? (
+              <GlassTextInput
+                editable={false}
+                value={dividas.find((divida) => divida.id === dividaId)?.nome ?? 'Nenhuma'}
+              />
+            ) : (
+              <GlassOptionGroup
+                options={[
+                  { label: 'Nenhuma', value: '' },
+                  ...dividas.map((divida) => ({ label: divida.nome, value: divida.id })),
+                ]}
+                value={dividaId}
+                onChange={setDividaId}
+              />
+            )}
           </GlassField>
 
           {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
