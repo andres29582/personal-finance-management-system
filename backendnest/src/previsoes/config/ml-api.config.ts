@@ -16,7 +16,8 @@ const PLACEHOLDER_PREFIXES = ['troque_', 'change_me', 'replace_me'];
 
 export function resolveMlApiConfig(configService: ConfigReader): MlApiConfig {
   const environment = normalizeEnvironment(
-    readConfig(configService, 'NODE_ENV'),
+    readConfig(configService, 'ML_ENV') ??
+      readConfig(configService, 'NODE_ENV'),
   );
   const localEnvironment = LOCAL_ENVIRONMENTS.has(environment);
   const internalApiKey = normalizeOptionalSecret(
