@@ -4,6 +4,7 @@ import { DataSource, EntityManager, IsNull } from 'typeorm';
 import {
   BusinessRuleException,
   ResourceNotFoundException,
+  ValidationAppException,
 } from '../common/exceptions';
 import { assertPositiveFinancialValue } from '../common/financial-validation.util';
 import { Transacao } from './entities/transacao.entity';
@@ -99,6 +100,13 @@ export class TransacoesService {
     usuarioId: string,
     dto: UpdateTransacaoDto,
   ): Promise<Transacao> {
+    if (Object.values(dto).every((value) => value === undefined)) {
+      throw new ValidationAppException(
+        'TRANSACAO_ATUALIZACAO_VAZIA',
+        'Informe ao menos um campo para atualizar a transacao.',
+      );
+    }
+
     const updatedTransaction = await this.dataSource.transaction(
       async (manager) => {
         const currentTransaction = await this.findOneForWrite(
