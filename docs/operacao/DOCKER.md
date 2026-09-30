@@ -108,6 +108,8 @@ local.
 | `JWT_REFRESH_EXPIRES_IN` | recomendada | `30d` |
 | `ML_API_URL` | sim para previsoes | `http://ml:8000` |
 | `ML_API_TIMEOUT_MS` | recomendada | `5000` |
+| `ML_ENV` | recomendada; usa `NODE_ENV` se omitida | `production` |
+| `ML_INTERNAL_API_KEY` | sim fora de `ML_ENV=development`/`test` | segredo compartilhado com `ml` |
 | `AUTH_RETURN_RESET_TOKEN` | recomendada | `false` |
 | `PASSWORD_RESET_TTL_MINUTES` | recomendada | `60` |
 
@@ -131,9 +133,15 @@ sem rebuild, sera preciso criar uma estrategia futura de configuracao runtime.
 
 ### ML
 
-Estado atual: o servico ML nao le variaveis obrigatorias proprias. O comando de
-Uvicorn deve informar `--host 0.0.0.0 --port 8000` para aceitar conexoes de
-outros containers.
+O backend resolve o ambiente do cliente ML por `ML_ENV`, com fallback para
+`NODE_ENV` quando `ML_ENV` nao existe; as demais semanticas de `NODE_ENV` do
+backend permanecem inalteradas. O servico ML le `ML_ENV` e
+`ML_INTERNAL_API_KEY`. Fora de `development`/`test`, a chave precisa ter pelo
+menos 32 caracteres, nao pode usar placeholder previsivel e deve ser exatamente
+o mesmo valor montado/injetado nos containers `backend` e `ml`. O backend envia a chave
+no header `X-ML-Internal-Key`; nunca registre `ML_INTERNAL_API_KEY` em logs.
+O comando de Uvicorn deve informar `--host 0.0.0.0 --port 8000` para aceitar
+conexoes de outros containers.
 
 ### PostgreSQL
 
