@@ -84,10 +84,18 @@ export function AlertasFormScreen() {
     }));
   }, [dividas, metas, orcamentos, tipo]);
 
+  const selectedReferenceLabel =
+    referenciaOptions.find((option) => option.value === referenciaId)?.label ??
+    'Referência indisponível';
+
   async function handleSave() {
     const parsedDays = Number(diasAnticipacion);
 
-    if (!referenciaId || !Number.isInteger(parsedDays) || parsedDays < 1) {
+    if (
+      (!alertaId && !referenciaOptions.some((option) => option.value === referenciaId)) ||
+      !Number.isInteger(parsedDays) ||
+      parsedDays < 1
+    ) {
       setMessage('Informe uma referencia e dias de antecipacao validos.');
       return;
     }
@@ -142,23 +150,43 @@ export function AlertasFormScreen() {
       ) : (
         <GlassPanel>
           <GlassField label="Tipo">
-            <GlassOptionGroup
-              options={[
-                { label: 'Meta', value: 'vencimento_meta' },
-                { label: 'Divida', value: 'vencimento_divida' },
-                { label: 'Limite gasto', value: 'limite_gasto' },
-              ]}
-              value={tipo}
-              onChange={(value) => setTipo(value as TipoAlerta)}
-            />
+            {alertaId ? (
+              <GlassTextInput
+                editable={false}
+                value={
+                  tipo === 'vencimento_meta'
+                    ? 'Meta'
+                    : tipo === 'vencimento_divida'
+                      ? 'Divida'
+                      : 'Limite gasto'
+                }
+              />
+            ) : (
+              <GlassOptionGroup
+                options={[
+                  { label: 'Meta', value: 'vencimento_meta' },
+                  { label: 'Divida', value: 'vencimento_divida' },
+                  { label: 'Limite gasto', value: 'limite_gasto' },
+                ]}
+                value={tipo}
+                onChange={(value) => {
+                  setTipo(value as TipoAlerta);
+                  setReferenciaId('');
+                }}
+              />
+            )}
           </GlassField>
 
           <GlassField label="Referencia">
-            <GlassOptionGroup
-              options={referenciaOptions}
-              value={referenciaId}
-              onChange={setReferenciaId}
-            />
+            {alertaId ? (
+              <GlassTextInput editable={false} value={selectedReferenceLabel} />
+            ) : (
+              <GlassOptionGroup
+                options={referenciaOptions}
+                value={referenciaId}
+                onChange={setReferenciaId}
+              />
+            )}
           </GlassField>
 
           <GlassField label="Dias de antecipacao">
