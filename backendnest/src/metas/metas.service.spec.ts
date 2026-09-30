@@ -60,17 +60,44 @@ describe('MetasService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('rejects update with a non-positive current amount', async () => {
+  it('accepts a zero current amount and rejects a negative one', async () => {
     repository.findByIdAndUser.mockResolvedValue({
       id: 'meta-1',
       usuarioId: 'user-1',
     } as Meta);
 
+    await service.update('meta-1', 'user-1', { montoActual: 0 });
+
+    expect(repository.updateByIdAndUser).toHaveBeenCalledWith(
+      'meta-1',
+      'user-1',
+      { montoActual: 0 },
+    );
+
     await expect(
       service.update('meta-1', 'user-1', {
-        montoActual: 0,
+        montoActual: -1,
       }),
     ).rejects.toBeInstanceOf(ValidationAppException);
+  });
+
+  it('rejects invalid due dates in service calls', async () => {
+    await expect(
+      service.create('user-1', {
+        fechaLimite: '2026-02-30',
+        montoObjetivo: 100,
+        nome: 'Reserva',
+        tipo: TipoMeta.ECONOMIA,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_META_DUE_DATE' });
+
+    repository.findByIdAndUser.mockResolvedValue({
+      id: 'meta-1',
+      usuarioId: 'user-1',
+    } as Meta);
+    await expect(
+      service.update('meta-1', 'user-1', { fechaLimite: '2026-02-30' }),
+    ).rejects.toMatchObject({ code: 'INVALID_META_DUE_DATE' });
 
     expect(repository.updateByIdAndUser).not.toHaveBeenCalled();
   });
