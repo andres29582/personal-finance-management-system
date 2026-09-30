@@ -6,7 +6,7 @@ export type DateRange = {
   startDate: string;
 };
 
-const MONTH_REFERENCE_PATTERN = /^\d{4}-\d{2}$/;
+const MONTH_REFERENCE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 function formatIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);

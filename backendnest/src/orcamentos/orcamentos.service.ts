@@ -5,7 +5,10 @@ import {
   ResourceNotFoundException,
 } from '../common/exceptions';
 import { assertPositiveFinancialValue } from '../common/financial-validation.util';
-import { resolveMonthRange } from '../common/date-range.util';
+import {
+  normalizeMonthReference,
+  resolveMonthRange,
+} from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
 import { CreateOrcamentoDto } from './dto/create-orcamento.dto';
 import { FindOrcamentosDto } from './dto/find-orcamentos.dto';
@@ -23,6 +26,7 @@ export class OrcamentosService {
 
   async create(usuarioId: string, dto: CreateOrcamentoDto) {
     assertPositiveFinancialValue(dto.valorPlanejado, 'Valor planejado');
+    normalizeMonthReference(dto.mesReferencia);
     const existingBudget = await this.orcamentoRepository.findByUserAndMonth(
       usuarioId,
       dto.mesReferencia,

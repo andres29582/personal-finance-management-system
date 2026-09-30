@@ -110,6 +110,81 @@ describe('Financial flow (e2e)', () => {
       .expect(401);
   });
 
+  it('rejects invalid month references across transactions, dashboard and reports', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '12345678909',
+      email: 'month.reference.validation.e2e@example.com',
+      nome: 'Month Reference Validation E2E',
+    });
+
+    const invalidTransactionMonth = await withAuth(
+      request(app.getHttpServer()).get('/transacoes'),
+      session,
+    )
+      .query({ mes: '2026-13' })
+      .expect(422);
+    expectApiError(
+      invalidTransactionMonth,
+      'INVALID_MONTH_REFERENCE',
+      'Mes de referencia invalido. Use o formato YYYY-MM.',
+    );
+
+    const invalidDashboardMonth = await withAuth(
+      request(app.getHttpServer()).get('/dashboard'),
+      session,
+    )
+      .query({ mes: '2026-13' })
+      .expect(422);
+    expectApiError(
+      invalidDashboardMonth,
+      'INVALID_MONTH_REFERENCE',
+      'Mes de referencia invalido. Use o formato YYYY-MM.',
+    );
+
+    const invalidReportMonth = await withAuth(
+      request(app.getHttpServer()).get('/relatorios'),
+      session,
+    )
+      .query({ mes: '2026-13', periodo: 'mensal' })
+      .expect(422);
+    expectApiError(
+      invalidReportMonth,
+      'INVALID_MONTH_REFERENCE',
+      'Mes de referencia invalido. Use o formato YYYY-MM.',
+    );
+  });
+
+  it('enforces semantic budget months at the database boundary', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '98765432100',
+      email: 'budget.month.constraint.e2e@example.com',
+      nome: 'Budget Month Constraint E2E',
+    });
+    const queryRunner = app.get(DataSource).createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.query(
+        'INSERT INTO public.orcamento (id, usuario_id, mes_referencia, valor_planejado) VALUES (gen_random_uuid(), $1, $2, 1)',
+        [session.userId, '2026-12'],
+      );
+
+      await expect(
+        queryRunner.query(
+          'INSERT INTO public.orcamento (id, usuario_id, mes_referencia, valor_planejado) VALUES (gen_random_uuid(), $1, $2, 1)',
+          [session.userId, '2026-13'],
+        ),
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint: 'chk_orcamento_mes_referencia',
+      });
+    } finally {
+      await queryRunner.rollbackTransaction();
+      await queryRunner.release();
+    }
+  });
+
   it('returns persisted transaction amounts as numbers for GET, list, and update', async () => {
     const session = await registerAndLoginTestUser(app, {
       cpf: '16899535004',
