@@ -37,6 +37,22 @@ describe('date range utils', () => {
     });
   });
 
+  it.each(['2026-00', '2026-13', '2026-99'])(
+    'rejects semantically invalid month reference %s',
+    (monthReference) => {
+      const error = captureValidationException(() =>
+        normalizeMonthReference(monthReference),
+      );
+
+      expect(error).toMatchObject({
+        code: 'INVALID_MONTH_REFERENCE',
+        field: 'mes',
+        message: 'Mes de referencia invalido. Use o formato YYYY-MM.',
+        statusCode: 422,
+      });
+    },
+  );
+
   it('throws a typed error for invalid quarters', () => {
     const error = captureValidationException(() =>
       resolveQuarterRange(2026, 5),
