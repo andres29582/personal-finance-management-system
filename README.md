@@ -241,6 +241,11 @@ Frontend esperado:
 http://localhost:8081
 ```
 
+Para um teste opcional com Expo Go em telefone na mesma Wi-Fi, configure
+`EXPO_PUBLIC_API_URL` com o IPv4 LAN do computador e execute
+`npm run start:standard -- --lan`. O passo a passo de Firewall, healthcheck e
+QR esta no [Runbook Operacional Local](docs/operacao/RUNBOOK.md).
+
 ### 3. Machine Learning
 
 O serviço ML é necessário apenas para validar a previsão de déficit com a API
