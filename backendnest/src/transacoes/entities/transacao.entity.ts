@@ -24,13 +24,13 @@ export class Transacao {
   @Column({ type: 'varchar', length: 20 })
   tipo: TipoTransacao;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 14, scale: 2 })
   valor: number;
 
   @Column({ type: 'date' })
   data: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'text', nullable: true })
   descricao: string | null;
 
   @Column({ name: 'eh_ajuste', type: 'boolean', default: false })
