@@ -58,7 +58,7 @@ describe('validateDividaForm', () => {
     });
   });
 
-  it('validates optional numeric fields only when filled', () => {
+  it('validates optional numeric fields only when filled and within their bounds', () => {
     expect(
       validateDividaForm({
         ...validValues,
@@ -66,8 +66,21 @@ describe('validateDividaForm', () => {
         tasaInteres: 'abc',
       }),
     ).toEqual({
-      cuotaMensual: 'Informe uma cuota mensal valida. Ex.: 450,00',
-      tasaInteres: 'Informe uma taxa de interesse valida. Ex.: 2,5',
+      cuotaMensual: 'Informe uma cuota mensal valida maior que zero. Ex.: 450,00',
+      tasaInteres:
+        'Informe uma taxa de interesse valida maior ou igual a zero. Ex.: 2,5',
+    });
+
+    expect(
+      validateDividaForm({
+        ...validValues,
+        cuotaMensual: '0',
+        tasaInteres: '-1',
+      }),
+    ).toEqual({
+      cuotaMensual: 'Informe uma cuota mensal valida maior que zero. Ex.: 450,00',
+      tasaInteres:
+        'Informe uma taxa de interesse valida maior ou igual a zero. Ex.: 2,5',
     });
   });
 });
