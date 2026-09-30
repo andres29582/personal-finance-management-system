@@ -54,7 +54,7 @@ type TransacaoResponse = Identifiable & {
   data: string;
   descricao: string;
   tipo: TipoTransacao;
-  valor: number | string;
+  valor: number;
 };
 
 type PagamentoDividaResponse = Identifiable & {
@@ -108,6 +108,69 @@ describe('Financial flow (e2e)', () => {
       .get('/contas')
       .set('Authorization', 'Bearer invalid-token')
       .expect(401);
+  });
+
+  it('returns persisted transaction amounts as numbers for GET, list, and update', async () => {
+    const session = await registerAndLoginTestUser(app, {
+      cpf: '16899535004',
+      email: 'transaction.monetary-response.e2e@example.com',
+      nome: 'Transaction Monetary Response E2E',
+    });
+    const conta = await createConta(
+      session.token,
+      makeContaPayload({ nome: 'Conta para valores numericos' }),
+    );
+    const categoria = await createCategoria(session.token, {
+      cor: '#dc2626',
+      icone: 'shopping-cart',
+      nome: 'Categoria para valores numericos',
+      tipo: TipoCategoria.DESPESA,
+    });
+    const created = unwrapSuccess<TransacaoResponse>(
+      await withAuth(request(app.getHttpServer()).post('/transacoes'), session)
+        .send(
+          makeTransacaoPayload({
+            categoriaId: categoria.id,
+            contaId: conta.id,
+            data: '2026-05-02',
+            descricao: 'Transacao com valor numerico',
+            tipo: TipoTransacao.DESPESA,
+            valor: 123.45,
+          }),
+        )
+        .expect(201),
+    );
+
+    const persisted = unwrapSuccess<TransacaoResponse>(
+      await withAuth(
+        request(app.getHttpServer()).get(`/transacoes/${created.id}`),
+        session,
+      ).expect(200),
+    );
+    expect(persisted.valor).toBe(123.45);
+    expect(typeof persisted.valor).toBe('number');
+
+    const listed = unwrapSuccess<TransacaoResponse[]>(
+      await withAuth(
+        request(app.getHttpServer()).get('/transacoes'),
+        session,
+      ).expect(200),
+    );
+    expect(listed.find((item) => item.id === created.id)?.valor).toBe(123.45);
+    expect(typeof listed.find((item) => item.id === created.id)?.valor).toBe(
+      'number',
+    );
+
+    const updated = unwrapSuccess<TransacaoResponse>(
+      await withAuth(
+        request(app.getHttpServer()).patch(`/transacoes/${created.id}`),
+        session,
+      )
+        .send({ valor: 456.78 })
+        .expect(200),
+    );
+    expect(updated.valor).toBe(456.78);
+    expect(typeof updated.valor).toBe('number');
   });
 
   it('reverts account balances when a transfer is soft-deleted', async () => {
