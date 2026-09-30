@@ -1,5 +1,6 @@
 import {
   IsEnum,
+  IsDateString,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -25,6 +26,10 @@ export class CreateMetaDto {
 
   @IsString()
   @IsNotEmpty()
+  @IsDateString(
+    { strict: true },
+    { message: 'fechaLimite deve ser uma data valida.' },
+  )
   fechaLimite: string;
 
   @IsOptional()
