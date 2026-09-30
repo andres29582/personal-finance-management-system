@@ -2957,6 +2957,20 @@ paths:
         schema:
           type: string
           format: uuid
+      - name: limit
+        in: query
+        required: false
+        description: Limits results only when provided; omitted requests return all matches.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
       responses:
         '200':
           description: Operacao realizada com sucesso.
