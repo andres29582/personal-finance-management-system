@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { QueryFailedError } from 'typeorm';
 import {
   AppConflictException,
   ResourceNotFoundException,
+  ValidationAppException,
 } from '../common/exceptions';
 import { assertPositiveFinancialValue } from '../common/financial-validation.util';
 import {
@@ -39,11 +41,27 @@ export class OrcamentosService {
       );
     }
 
-    const budget = await this.orcamentoRepository.create({
-      id: randomUUID(),
-      usuarioId,
-      ...dto,
-    });
+    let budget: Orcamento;
+    try {
+      budget = await this.orcamentoRepository.create({
+        id: randomUUID(),
+        usuarioId,
+        ...dto,
+      });
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        (error.driverError as { code?: string }).code === '23505' &&
+        (error.driverError as { constraint?: string }).constraint ===
+          'uq_orcamento_usuario_mes'
+      ) {
+        throw new AppConflictException(
+          'ORCAMENTO_ALREADY_EXISTS',
+          'Ja existe um orcamento cadastrado para este mes.',
+        );
+      }
+      throw error;
+    }
 
     const created = await this.findOne(budget.id, usuarioId);
     await this.logsService.logEntityEvent({
@@ -87,9 +105,13 @@ export class OrcamentosService {
 
   async update(id: string, usuarioId: string, dto: UpdateOrcamentoDto) {
     await this.findOne(id, usuarioId);
-    if (dto.valorPlanejado !== undefined) {
-      assertPositiveFinancialValue(dto.valorPlanejado, 'Valor planejado');
+    if (dto.valorPlanejado === undefined) {
+      throw new ValidationAppException(
+        'ORCAMENTO_ATUALIZACAO_VAZIA',
+        'Informe o valor planejado para atualizar o orcamento.',
+      );
     }
+    assertPositiveFinancialValue(dto.valorPlanejado, 'Valor planejado');
     await this.orcamentoRepository.updateByIdAndUser(id, usuarioId, dto);
     const updated = await this.findOne(id, usuarioId);
     await this.logsService.logEntityEvent({
