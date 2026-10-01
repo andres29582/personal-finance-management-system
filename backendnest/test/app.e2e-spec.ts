@@ -52,7 +52,7 @@ type TransacaoResponse = Identifiable & {
   contaId: string;
   categoriaId: string;
   data: string;
-  descricao: string;
+  descricao: string | null;
   tipo: TipoTransacao;
   valor: number;
 };
@@ -237,6 +237,48 @@ describe('Financial flow (e2e)', () => {
     );
     expect(updated.valor).toBe(456.78);
     expect(typeof updated.valor).toBe('number');
+  });
+
+  it('persists a cleared transaction description as null', async () => {
+    const session = sharedSession;
+    const conta = await createConta(
+      session.token,
+      makeContaPayload({ nome: 'Conta para limpar descricao' }),
+    );
+    const categoria = await createCategoria(session.token, {
+      cor: '#dc2626',
+      icone: 'shopping-cart',
+      nome: 'Categoria para limpar descricao',
+      tipo: TipoCategoria.DESPESA,
+    });
+    const created = unwrapSuccess<TransacaoResponse>(
+      await withAuth(request(app.getHttpServer()).post('/transacoes'), session)
+        .send(
+          makeTransacaoPayload({
+            categoriaId: categoria.id,
+            contaId: conta.id,
+            descricao: 'Descricao inicial',
+            tipo: TipoTransacao.DESPESA,
+          }),
+        )
+        .expect(201),
+    );
+
+    const updated = unwrapSuccess<TransacaoResponse>(
+      await withAuth(
+        request(app.getHttpServer()).patch(`/transacoes/${created.id}`),
+        session,
+      )
+        .send({ descricao: null })
+        .expect(200),
+    );
+    expect(updated.descricao).toBeNull();
+
+    const persisted = await app
+      .get(DataSource)
+      .getRepository(Transacao)
+      .findOneByOrFail({ id: created.id, usuarioId: session.userId });
+    expect(persisted.descricao).toBeNull();
   });
 
   it('reverts account balances when a transfer is soft-deleted', async () => {

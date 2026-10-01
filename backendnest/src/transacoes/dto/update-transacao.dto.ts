@@ -40,5 +40,5 @@ export class UpdateTransacaoDto {
 
   @IsOptional()
   @IsString()
-  descricao?: string;
+  descricao?: string | null;
 }
