@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { listCategorias } from '../../categorias/services/categoriaService';
+import { getCategoriaById, listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
@@ -53,6 +53,7 @@ export function TransacaoFormScreen() {
   const [descricao, setDescricao] = useState('');
   const [contas, setContas] = useState<Conta[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [originalCategory, setOriginalCategory] = useState<{ id: string; tipo: TipoTransacao } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -66,10 +67,17 @@ export function TransacaoFormScreen() {
           listCategorias(),
         ]);
         setContas(contasData);
-        setCategorias(categoriasData);
 
         if (transacaoId) {
           const transacao = await getTransacaoById(transacaoId);
+          const currentCategory = categoriasData.find(
+            (categoria) => categoria.id === transacao.categoriaId,
+          );
+          const historicalCategory = currentCategory
+            ? null
+            : await getCategoriaById(transacao.categoriaId);
+          setCategorias(historicalCategory ? [...categoriasData, historicalCategory] : categoriasData);
+          setOriginalCategory({ id: transacao.categoriaId, tipo: transacao.tipo });
           setTipo(transacao.tipo);
           setContaId(transacao.contaId);
           setCategoriaId(transacao.categoriaId);
@@ -77,7 +85,10 @@ export function TransacaoFormScreen() {
           setData(transacao.data);
           setDescricao(transacao.descricao || '');
         } else if (contasData[0]) {
+          setCategorias(categoriasData);
           setContaId(contasData[0].id);
+        } else {
+          setCategorias(categoriasData);
         }
       } catch (error) {
         const resolvedError = await resolveApiError(
@@ -97,15 +108,17 @@ export function TransacaoFormScreen() {
   }, [replace, transacaoId]);
 
   const categoriasFiltradas = useMemo(
-    () => categorias.filter((categoria) => categoria.tipo === tipo),
-    [categorias, tipo],
+    () => categorias.filter((categoria) =>
+      (categoria.ativa && categoria.tipo === tipo) ||
+      (categoria.id === originalCategory?.id && tipo === originalCategory.tipo)),
+    [categorias, originalCategory, tipo],
   );
 
   useEffect(() => {
-    if (!categoriasFiltradas.find((categoria) => categoria.id === categoriaId)) {
+    if (!loading && !categoriasFiltradas.find((categoria) => categoria.id === categoriaId)) {
       setCategoriaId(categoriasFiltradas[0]?.id ?? '');
     }
-  }, [categoriaId, categoriasFiltradas]);
+  }, [categoriaId, categoriasFiltradas, loading]);
 
   async function handleSave() {
     const parsedValor = parseDecimalInput(valor);
@@ -220,7 +233,7 @@ export function TransacaoFormScreen() {
           <GlassField label="Categoria">
             <GlassOptionGroup
               options={categoriasFiltradas.map((categoria) => ({
-                label: categoria.nome,
+                label: categoria.ativa ? categoria.nome : `${categoria.nome} (inativa)`,
                 value: categoria.id,
               }))}
               value={categoriaId}

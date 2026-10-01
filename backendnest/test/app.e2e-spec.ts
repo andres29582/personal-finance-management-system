@@ -601,14 +601,16 @@ describe('Financial flow (e2e)', () => {
       expect.arrayContaining([expect.objectContaining({ id: category.id })]),
     );
 
-    const rowsBeforeRejections = await snapshotPersistedFinancialRows(
+    expectSaldo(await listFinancialContas(app, session), account.id, 900);
+
+    const rowsBeforeCreate = await snapshotPersistedFinancialRows(
       session.userId,
     );
-    const auditsBeforeRejections = await countSuccessfulAuditEvents(
-      session.token,
-      ['TRANSACAO_CREATED', 'TRANSACAO_UPDATED', 'PAGAMENTO_DIVIDA_CREATED'],
-    );
-    expectSaldo(await listFinancialContas(app, session), account.id, 900);
+    const auditsBeforeCreate = await countSuccessfulAuditEvents(session.token, [
+      'TRANSACAO_CREATED',
+      'TRANSACAO_UPDATED',
+      'PAGAMENTO_DIVIDA_CREATED',
+    ]);
 
     const rejectedCreate = await withAuth(
       request(app.getHttpServer()).post('/transacoes'),
@@ -630,6 +632,44 @@ describe('Financial flow (e2e)', () => {
       'CATEGORIA_INACTIVE',
       'Não é possível realizar operações financeiras com uma categoria inativa.',
     );
+    await expect(
+      snapshotPersistedFinancialRows(session.userId),
+    ).resolves.toEqual(rowsBeforeCreate);
+    await expect(
+      countSuccessfulAuditEvents(session.token, [
+        'TRANSACAO_CREATED',
+        'TRANSACAO_UPDATED',
+        'PAGAMENTO_DIVIDA_CREATED',
+      ]),
+    ).resolves.toEqual(auditsBeforeCreate);
+
+    const acceptedUpdate = await withAuth(
+      request(app.getHttpServer()).patch(
+        `/transacoes/${historicalTransaction.id}`,
+      ),
+      session,
+    )
+      .send({
+        categoriaId: category.id,
+        descricao: 'Atualizacao permitida categoria inativa E2E',
+        tipo: TipoTransacao.DESPESA,
+      })
+      .expect(200);
+    expect(unwrapSuccess<TransacaoResponse>(acceptedUpdate)).toEqual(
+      expect.objectContaining({
+        categoriaId: category.id,
+        descricao: 'Atualizacao permitida categoria inativa E2E',
+        tipo: TipoTransacao.DESPESA,
+      }),
+    );
+
+    const rowsBeforeRejections = await snapshotPersistedFinancialRows(
+      session.userId,
+    );
+    const auditsBeforeRejections = await countSuccessfulAuditEvents(
+      session.token,
+      ['TRANSACAO_CREATED', 'TRANSACAO_UPDATED', 'PAGAMENTO_DIVIDA_CREATED'],
+    );
 
     const rejectedUpdate = await withAuth(
       request(app.getHttpServer()).patch(
@@ -637,7 +677,7 @@ describe('Financial flow (e2e)', () => {
       ),
       session,
     )
-      .send({ descricao: 'Atualizacao rejeitada categoria inativa E2E' })
+      .send({ tipo: TipoTransacao.RECEITA })
       .expect(400);
     expectApiError(
       rejectedUpdate,
@@ -677,16 +717,21 @@ describe('Financial flow (e2e)', () => {
       ]),
     ).resolves.toEqual(auditsBeforeRejections);
     expectSaldo(await listFinancialContas(app, session), account.id, 900);
-    const unchangedTransactionResponse = await withAuth(
+    const preservedTransactionResponse = await withAuth(
       request(app.getHttpServer()).get(
         `/transacoes/${historicalTransaction.id}`,
       ),
       session,
     ).expect(200);
     expect(
-      unwrapSuccess<{ descricao: string }>(unchangedTransactionResponse)
-        .descricao,
-    ).toBe('Transacao historica categoria inativa E2E');
+      unwrapSuccess<TransacaoResponse>(preservedTransactionResponse),
+    ).toEqual(
+      expect.objectContaining({
+        categoriaId: category.id,
+        descricao: 'Atualizacao permitida categoria inativa E2E',
+        tipo: TipoTransacao.DESPESA,
+      }),
+    );
 
     const reactivatedCategoryResponse = await withAuth(
       request(app.getHttpServer()).patch(`/categorias/${category.id}`),

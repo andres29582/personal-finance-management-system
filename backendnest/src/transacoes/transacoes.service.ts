@@ -132,13 +132,20 @@ export class TransacoesService {
         const updatedCategoryId =
           dto.categoriaId ?? currentTransaction.categoriaId;
         const updatedType = dto.tipo ?? currentTransaction.tipo;
-        const categoria = await this.categoriasService.findActiveForWrite(
-          updatedCategoryId,
-          usuarioId,
-          manager,
-        );
-
-        this.ensureCategoryMatchesTransactionType(categoria.tipo, updatedType);
+        if (
+          updatedCategoryId !== currentTransaction.categoriaId ||
+          updatedType !== currentTransaction.tipo
+        ) {
+          const categoria = await this.categoriasService.findActiveForWrite(
+            updatedCategoryId,
+            usuarioId,
+            manager,
+          );
+          this.ensureCategoryMatchesTransactionType(
+            categoria.tipo,
+            updatedType,
+          );
+        }
 
         await manager.update(
           Transacao,
