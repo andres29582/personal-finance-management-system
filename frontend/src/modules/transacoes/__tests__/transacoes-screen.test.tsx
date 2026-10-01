@@ -70,6 +70,22 @@ describe('TransacoesScreen', () => {
     mockConfirmAction.mockResolvedValue(true);
   });
 
+  it('uses the local month for the initial API query at a UTC year boundary', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date('2027-01-01T02:30:00.000Z'));
+      mockSuccessfulLoad();
+      render(<TransacoesScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('2026-12')).toBeTruthy();
+        expect(mockListTransacoes).toHaveBeenCalledWith({ mes: '2026-12', tipo: undefined });
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('renders transactions with category, account and formatted amount', async () => {
     mockSuccessfulLoad();
 

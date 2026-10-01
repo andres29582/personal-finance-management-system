@@ -49,6 +49,18 @@ export function formatDate(date: string | null | undefined) {
   return `${day}/${month}/${year}`;
 }
 
+export function getLocalDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+export function getLocalMonthReference(date = new Date()) {
+  return getLocalDateInputValue(date).slice(0, 7);
+}
+
 export function getCurrentMonthReference() {
-  return new Date().toISOString().slice(0, 7);
+  return getLocalMonthReference();
 }

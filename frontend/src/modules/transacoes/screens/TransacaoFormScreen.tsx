@@ -17,6 +17,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import {
   createTransacao,
@@ -49,7 +50,7 @@ export function TransacaoFormScreen() {
   const [contaId, setContaId] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
   const [valor, setValor] = useState('');
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(getLocalDateInputValue());
   const [descricao, setDescricao] = useState('');
   const [contas, setContas] = useState<Conta[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
