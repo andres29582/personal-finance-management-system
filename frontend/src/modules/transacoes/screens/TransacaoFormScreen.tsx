@@ -123,6 +123,7 @@ export function TransacaoFormScreen() {
   async function handleSave() {
     const parsedValor = parseDecimalInput(valor);
     const normalizedData = data.trim();
+    const normalizedDescription = descricao.trim();
 
     if (!contaId) {
       setMessage('Selecione uma conta para continuar.');
@@ -162,15 +163,20 @@ export function TransacaoFormScreen() {
         contaId,
         categoriaId,
         data: normalizedData,
-        descricao: descricao.trim() || undefined,
         tipo,
         valor: parsedValor,
       };
 
       if (transacaoId) {
-        await updateTransacao(transacaoId, payload);
+        await updateTransacao(transacaoId, {
+          ...payload,
+          descricao: normalizedDescription || null,
+        });
       } else {
-        await createTransacao(payload);
+        await createTransacao({
+          ...payload,
+          ...(normalizedDescription && { descricao: normalizedDescription }),
+        });
       }
 
       router.replace('/transacoes' as never);

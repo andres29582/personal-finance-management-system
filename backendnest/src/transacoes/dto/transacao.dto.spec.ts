@@ -114,6 +114,12 @@ describe('Transacao DTO validation', () => {
     await expect(validate(dto)).resolves.toHaveLength(0);
   });
 
+  it('accepts null to clear a transaction description', async () => {
+    const dto = Object.assign(new UpdateTransacaoDto(), { descricao: null });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
   it('rejects invalid date in partial transaction updates', async () => {
     const dto = Object.assign(new UpdateTransacaoDto(), {
       data: '01/05/2026',

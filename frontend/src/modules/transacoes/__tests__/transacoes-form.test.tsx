@@ -130,6 +130,21 @@ describe('TransacaoFormScreen', () => {
     });
   });
 
+  it('omits a blank description when creating a transaction', async () => {
+    mockListContas.mockResolvedValue(makeFormContas());
+    mockListCategorias.mockResolvedValue(makeFormCategorias());
+    mockCreateTransacao.mockResolvedValue(makeFormTransacao());
+
+    render(<TransacaoFormScreen />);
+
+    await waitFor(() => expect(screen.getByText('Salvar transacao')).toBeTruthy());
+    fireEvent.changeText(screen.getByPlaceholderText('0,00'), '50,00');
+    fireEvent.press(screen.getByText('Salvar transacao'));
+
+    await waitFor(() => expect(mockCreateTransacao).toHaveBeenCalledTimes(1));
+    expect(mockCreateTransacao.mock.calls[0][0]).not.toHaveProperty('descricao');
+  });
+
   it('updates existing transaction successfully', async () => {
     const mockContas = makeFormContas();
     const mockCategorias = makeFormCategorias();
@@ -162,6 +177,28 @@ describe('TransacaoFormScreen', () => {
         descricao: 'Compra mercado atualizada',
       });
       expect(mockReplace).toHaveBeenCalledWith('/transacoes');
+    });
+  });
+
+  it('clears the description when editing with blank text', async () => {
+    const mockTransacao = makeFormTransacao();
+    mockListContas.mockResolvedValue(makeFormContas());
+    mockListCategorias.mockResolvedValue(makeFormCategorias());
+    mockGetTransacaoById.mockResolvedValue(mockTransacao);
+    mockUpdateTransacao.mockResolvedValue({ ...mockTransacao, descricao: null });
+    mockLocalSearchParams = { id: '1' };
+
+    render(<TransacaoFormScreen />);
+
+    await waitFor(() => expect(screen.getByDisplayValue('Compra mercado')).toBeTruthy());
+    fireEvent.changeText(screen.getByDisplayValue('Compra mercado'), '   ');
+    fireEvent.press(screen.getByText('Salvar transacao'));
+
+    await waitFor(() => {
+      expect(mockUpdateTransacao).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({ descricao: null }),
+      );
     });
   });
 

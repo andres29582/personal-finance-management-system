@@ -262,6 +262,32 @@ describe('TransacoesService', () => {
     expect(logsService.logEntityEvent).not.toHaveBeenCalled();
   });
 
+  it('passes a null description through to persistence', async () => {
+    const current = {
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      descricao: 'Descricao inicial',
+      id: 'transacao-1',
+      tipo: TipoTransacao.DESPESA,
+      usuarioId: 'user-1',
+    } as Transacao;
+    manager.findOne.mockResolvedValueOnce(current).mockResolvedValueOnce({
+      ...current,
+      descricao: null,
+    });
+
+    const updated = await service.update('transacao-1', 'user-1', {
+      descricao: null,
+    });
+
+    expect(manager.update).toHaveBeenCalledWith(
+      Transacao,
+      expect.objectContaining({ id: 'transacao-1', usuarioId: 'user-1' }),
+      { descricao: null },
+    );
+    expect(updated.descricao).toBeNull();
+  });
+
   it('blocks PATCH when the currently linked account is inactive', async () => {
     const current = {
       categoriaId: 'categoria-1',
