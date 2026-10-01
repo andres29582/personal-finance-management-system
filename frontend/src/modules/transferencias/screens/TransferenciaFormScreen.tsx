@@ -15,6 +15,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import {
   createTransferencia,
@@ -32,7 +33,7 @@ export function TransferenciaFormScreen() {
   const [contaDestinoId, setContaDestinoId] = useState('');
   const [valor, setValor] = useState('');
   const [comissao, setComissao] = useState('');
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(getLocalDateInputValue());
   const [descricao, setDescricao] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

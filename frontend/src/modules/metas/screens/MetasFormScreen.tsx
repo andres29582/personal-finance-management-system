@@ -17,6 +17,7 @@ import {
   GlassTextInput,
 } from '../../../shared/ui';
 import { resolveApiError } from '../../../../utils/api-error';
+import { getLocalDateInputValue } from '../../../../utils/formatters';
 import { parseDecimalInput } from '../../../../utils/number-input';
 import { createMeta, getMetaById, updateMeta } from '../services/metaService';
 import { TipoMeta } from '../types/meta';
@@ -29,7 +30,7 @@ export function MetasFormScreen() {
   const [tipo, setTipo] = useState<TipoMeta>('economia');
   const [montoObjetivo, setMontoObjetivo] = useState('');
   const [montoActual, setMontoActual] = useState('');
-  const [fechaLimite, setFechaLimite] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaLimite, setFechaLimite] = useState(getLocalDateInputValue());
   const [contaId, setContaId] = useState('');
   const [dividaId, setDividaId] = useState('');
   const [contas, setContas] = useState<Conta[]>([]);

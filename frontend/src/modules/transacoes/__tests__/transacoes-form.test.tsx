@@ -60,6 +60,31 @@ describe('TransacaoFormScreen', () => {
     mockLocalSearchParams = {};
   });
 
+  it('submits the local default date without converting the civil API date', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date('2027-01-01T02:30:00.000Z'));
+      mockListContas.mockResolvedValue(makeFormContas());
+      mockListCategorias.mockResolvedValue(makeFormCategorias());
+      mockCreateTransacao.mockResolvedValue(makeFormTransacao());
+
+      render(<TransacaoFormScreen />);
+      await waitFor(() => expect(screen.getByDisplayValue('2026-12-31')).toBeTruthy());
+      fireEvent.changeText(screen.getByPlaceholderText('0,00'), '50,00');
+      fireEvent.press(screen.getByText('Salvar transacao'));
+
+      await waitFor(() => expect(mockCreateTransacao).toHaveBeenCalledWith({
+        tipo: 'despesa',
+        contaId: '1',
+        categoriaId: '1',
+        valor: 50,
+        data: '2026-12-31',
+      }));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('renders form for creating new transaction', async () => {
     const mockContas = makeFormContas();
     const mockCategorias = makeFormCategorias();
