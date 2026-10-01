@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import { TransacoesScreen } from '../screens/TransacoesScreen';
 import * as categoriaService from '../../categorias/services/categoriaService';
 import * as contaService from '../../contas/services/contaService';
 import * as transacaoService from '../services/transacaoService';
+import { Transacao } from '../types/transacao';
 import * as authStorage from '../../../../storage/authStorage';
 import { confirmAction } from '../../../../utils/confirm-action';
 import {
@@ -15,12 +16,14 @@ import {
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockRouter = { push: mockPush, replace: mockReplace };
+let mockFocusCallback: (() => void) | undefined;
 
 jest.mock('expo-router', () => {
   const React = jest.requireActual<typeof import('react')>('react');
 
   return {
     useFocusEffect: (callback: () => void) => {
+      mockFocusCallback = callback;
       React.useEffect(callback, [callback]);
     },
     useRouter: () => mockRouter,
@@ -80,7 +83,7 @@ describe('TransacoesScreen', () => {
     });
   });
 
-  it('applies selected type filter when user presses filter button', async () => {
+  it('fetches only applied filters, including after focus refresh', async () => {
     mockSuccessfulLoad();
 
     render(<TransacoesScreen />);
@@ -93,14 +96,60 @@ describe('TransacoesScreen', () => {
     });
 
     fireEvent.press(screen.getByText('Receitas'));
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-06');
+    expect(mockListTransacoes).toHaveBeenCalledTimes(1);
+
+    act(() => mockFocusCallback?.());
+    await waitFor(() => expect(mockListTransacoes).toHaveBeenCalledTimes(2));
+    expect(mockListTransacoes).toHaveBeenLastCalledWith({
+      mes: expect.any(String),
+      tipo: undefined,
+    });
+
     fireEvent.press(screen.getByText('Aplicar filtros'));
 
     await waitFor(() => {
       expect(mockListTransacoes).toHaveBeenLastCalledWith({
-        mes: expect.any(String),
+        mes: '2026-06',
         tipo: 'receita',
       });
+      expect(mockListTransacoes).toHaveBeenCalledTimes(3);
     });
+
+    fireEvent.press(screen.getByText('Aplicar filtros'));
+    expect(mockListTransacoes).toHaveBeenCalledTimes(3);
+
+    fireEvent.press(screen.getByText('Despesas'));
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-07');
+    act(() => mockFocusCallback?.());
+    await waitFor(() => expect(mockListTransacoes).toHaveBeenCalledTimes(4));
+    expect(mockListTransacoes).toHaveBeenLastCalledWith({ mes: '2026-06', tipo: 'receita' });
+  });
+
+  it('keeps newer filter results when an older request finishes last', async () => {
+    mockSuccessfulLoad();
+    render(<TransacoesScreen />);
+    await waitFor(() => expect(mockListTransacoes).toHaveBeenCalledTimes(1));
+
+    let resolveSlow!: (transactions: Transacao[]) => void;
+    mockListTransacoes.mockReturnValueOnce(new Promise((resolve) => { resolveSlow = resolve; }));
+    mockListTransacoes.mockResolvedValueOnce([
+      makeTransacao({ ...transacao, id: 'newer', descricao: 'Newer transaction' }),
+    ]);
+
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-06');
+    fireEvent.press(screen.getByText('Aplicar filtros'));
+    await waitFor(() => expect(mockListTransacoes).toHaveBeenCalledTimes(2));
+
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-07');
+    fireEvent.press(screen.getByText('Aplicar filtros'));
+    await waitFor(() => expect(screen.getByText('Newer transaction')).toBeTruthy());
+
+    await act(async () => {
+      resolveSlow([makeTransacao({ ...transacao, id: 'older', descricao: 'Stale transaction' })]);
+    });
+    expect(screen.getByText('Newer transaction')).toBeTruthy();
+    expect(screen.queryByText('Stale transaction')).toBeNull();
   });
 
   it('navigates to create and edit transaction screens', async () => {
@@ -132,6 +181,13 @@ describe('TransacoesScreen', () => {
       expect(screen.getByText('Excluir')).toBeTruthy();
     });
 
+    fireEvent.press(screen.getByText('Receitas'));
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-06');
+    fireEvent.press(screen.getByText('Aplicar filtros'));
+    await waitFor(() => expect(mockListTransacoes).toHaveBeenCalledTimes(2));
+    fireEvent.press(screen.getByText('Despesas'));
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-07');
+
     fireEvent.press(screen.getByText('Excluir'));
 
     await waitFor(() => {
@@ -140,8 +196,33 @@ describe('TransacoesScreen', () => {
         'Deseja remover esta transacao?',
       );
       expect(mockRemoveTransacao).toHaveBeenCalledWith('transacao1');
-      expect(mockListTransacoes).toHaveBeenCalledTimes(2);
+      expect(mockListTransacoes).toHaveBeenCalledTimes(3);
+      expect(mockListTransacoes).toHaveBeenLastCalledWith({
+        mes: '2026-06',
+        tipo: 'receita',
+      });
     });
+  });
+
+  it('reloads current filters when an in-flight deletion finishes after Apply', async () => {
+    mockSuccessfulLoad();
+    let resolveDelete!: () => void;
+    mockRemoveTransacao.mockReturnValue(new Promise<void>((resolve) => { resolveDelete = resolve; }));
+
+    render(<TransacoesScreen />);
+    await waitFor(() => expect(screen.getByText('Excluir')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Excluir'));
+    await waitFor(() => expect(mockRemoveTransacao).toHaveBeenCalledWith('transacao1'));
+
+    fireEvent.press(screen.getByText('Receitas'));
+    fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-06');
+    fireEvent.press(screen.getByText('Aplicar filtros'));
+    await waitFor(() => expect(mockListTransacoes).toHaveBeenCalledTimes(2));
+
+    await act(async () => resolveDelete());
+    await waitFor(() => expect(mockListTransacoes).toHaveBeenCalledTimes(3));
+    expect(mockListTransacoes).toHaveBeenLastCalledWith({ mes: '2026-06', tipo: 'receita' });
   });
 
   it('redirects to login when loading fails with unauthorized error', async () => {
