@@ -31,6 +31,7 @@ jest.mock('../services/transacaoService');
 
 const mockListContas = contaService.listContas as jest.MockedFunction<typeof contaService.listContas>;
 const mockListCategorias = categoriaService.listCategorias as jest.MockedFunction<typeof categoriaService.listCategorias>;
+const mockGetCategoriaById = categoriaService.getCategoriaById as jest.MockedFunction<typeof categoriaService.getCategoriaById>;
 const mockCreateTransacao = transacaoService.createTransacao as jest.MockedFunction<typeof transacaoService.createTransacao>;
 const mockUpdateTransacao = transacaoService.updateTransacao as jest.MockedFunction<typeof transacaoService.updateTransacao>;
 const mockGetTransacaoById = transacaoService.getTransacaoById as jest.MockedFunction<typeof transacaoService.getTransacaoById>;
@@ -55,6 +56,7 @@ const makeFormTransacao = () =>
 describe('TransacaoFormScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetCategoriaById.mockReset();
     mockLocalSearchParams = {};
   });
 
@@ -160,6 +162,73 @@ describe('TransacaoFormScreen', () => {
         descricao: 'Compra mercado atualizada',
       });
       expect(mockReplace).toHaveBeenCalledWith('/transacoes');
+    });
+  });
+
+  it('preserves an inactive category when editing a transaction', async () => {
+    const mockTransacao = { ...makeFormTransacao(), categoriaId: 'inactive' };
+    const historicalCategory = makeCategoria({
+      ativa: false,
+      id: 'inactive',
+      nome: 'Historica',
+      tipo: 'despesa',
+    });
+
+    mockListContas.mockResolvedValue(makeFormContas());
+    mockListCategorias.mockResolvedValue(makeFormCategorias());
+    mockGetCategoriaById.mockResolvedValue(historicalCategory);
+    mockGetTransacaoById.mockResolvedValue(mockTransacao);
+    mockUpdateTransacao.mockResolvedValue(mockTransacao);
+    mockLocalSearchParams = { id: '1' };
+
+    render(<TransacaoFormScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Historica (inativa)')).toBeTruthy();
+    });
+    expect(screen.getByRole('button', { name: 'Historica (inativa)' }).props.accessibilityState).toEqual({
+      disabled: false,
+      selected: true,
+    });
+    expect(mockGetCategoriaById).toHaveBeenCalledWith('inactive');
+    fireEvent.press(screen.getByText('Salvar transacao'));
+
+    await waitFor(() => {
+      expect(mockUpdateTransacao).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({ categoriaId: 'inactive' }),
+      );
+    });
+  });
+
+  it('selects an active compatible category when changing type in edit mode', async () => {
+    const mockTransacao = { ...makeFormTransacao(), categoriaId: 'inactive' };
+    mockListContas.mockResolvedValue(makeFormContas());
+    mockListCategorias.mockResolvedValue([
+      ...makeFormCategorias(),
+      makeCategoria({ id: 'income', nome: 'Salario', tipo: 'receita' }),
+    ]);
+    mockGetCategoriaById.mockResolvedValue(
+      makeCategoria({ ativa: false, id: 'inactive', nome: 'Historica', tipo: 'despesa' }),
+    );
+    mockGetTransacaoById.mockResolvedValue(mockTransacao);
+    mockUpdateTransacao.mockResolvedValue(mockTransacao);
+    mockLocalSearchParams = { id: '1' };
+
+    render(<TransacaoFormScreen />);
+
+    await waitFor(() => expect(screen.getByText('Historica (inativa)')).toBeTruthy());
+    fireEvent.press(screen.getByText('Receita'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Salario' }).props.accessibilityState.selected).toBe(true);
+    });
+    fireEvent.press(screen.getByText('Salvar transacao'));
+
+    await waitFor(() => {
+      expect(mockUpdateTransacao).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({ categoriaId: 'income', tipo: 'receita' }),
+      );
     });
   });
 

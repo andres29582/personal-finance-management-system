@@ -313,7 +313,7 @@ describe('TransacoesService', () => {
     expect(manager.update).not.toHaveBeenCalled();
   });
 
-  it('blocks PATCH when the effective category is inactive', async () => {
+  it('blocks PATCH when selecting a different inactive category', async () => {
     manager.findOne.mockResolvedValueOnce({
       categoriaId: 'categoria-1',
       contaId: 'conta-1',
@@ -332,16 +332,68 @@ describe('TransacoesService', () => {
     );
 
     await expect(
-      service.update('transacao-1', 'user-1', { descricao: 'Ajuste' }),
+      service.update('transacao-1', 'user-1', { categoriaId: 'categoria-2' }),
     ).rejects.toMatchObject({ code: 'CATEGORIA_INACTIVE', statusCode: 400 });
 
     expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
-      'categoria-1',
+      'categoria-2',
       'user-1',
       manager,
     );
     expect(manager.update).not.toHaveBeenCalled();
     expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+
+  it('preserves the current inactive category when editing other fields', async () => {
+    const current = {
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      id: 'transacao-1',
+      tipo: TipoTransacao.DESPESA,
+      usuarioId: 'user-1',
+    } as Transacao;
+    const updated = { ...current, descricao: 'Ajuste' } as Transacao;
+    manager.findOne
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(updated);
+
+    await expect(
+      service.update('transacao-1', 'user-1', {
+        categoriaId: 'categoria-1',
+        descricao: 'Ajuste',
+        tipo: TipoTransacao.DESPESA,
+      }),
+    ).resolves.toBe(updated);
+
+    expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
+    expect(manager.update).toHaveBeenCalledWith(
+      Transacao,
+      expect.objectContaining({ id: 'transacao-1', usuarioId: 'user-1' }),
+      {
+        categoriaId: 'categoria-1',
+        descricao: 'Ajuste',
+        tipo: TipoTransacao.DESPESA,
+      },
+    );
+  });
+
+  it('rejects changing type while retaining an inactive category', async () => {
+    manager.findOne.mockResolvedValueOnce({
+      categoriaId: 'categoria-1',
+      contaId: 'conta-1',
+      id: 'transacao-1',
+      tipo: TipoTransacao.DESPESA,
+      usuarioId: 'user-1',
+    } as Transacao);
+    categoriasService.findActiveForWrite.mockRejectedValue(
+      new BusinessRuleException('CATEGORIA_INACTIVE', 'Categoria inativa'),
+    );
+
+    await expect(
+      service.update('transacao-1', 'user-1', { tipo: TipoTransacao.RECEITA }),
+    ).rejects.toMatchObject({ code: 'CATEGORIA_INACTIVE' });
+
+    expect(manager.update).not.toHaveBeenCalled();
   });
 
   it('updates a transaction with active accounts in the same transaction', async () => {
@@ -389,16 +441,7 @@ describe('TransacoesService', () => {
         usuarioId: 'user-1',
       }),
     );
-    expect(categoriasService.findActiveForWrite).toHaveBeenCalledWith(
-      'categoria-1',
-      'user-1',
-      manager,
-    );
-    expect(
-      contasService.findActiveManyForWrite.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      categoriasService.findActiveForWrite.mock.invocationCallOrder[0],
-    );
+    expect(categoriasService.findActiveForWrite).not.toHaveBeenCalled();
     expect(manager.update).toHaveBeenCalledWith(
       Transacao,
       expect.objectContaining({ id: 'transacao-1', usuarioId: 'user-1' }),
