@@ -760,6 +760,9 @@ components:
           exclusiveMinimum: true
     UpdateOrcamentoRequest:
       type: object
+      description: Informe valorPlanejado; atualizacoes vazias sao rejeitadas com 422.
+      required:
+      - valorPlanejado
       properties:
         valorPlanejado:
           type: number
@@ -3773,7 +3776,11 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: ORCAMENTO_ALREADY_EXISTS quando ja existe um orcamento para o usuario e mes, inclusive em criacoes concorrentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -3862,6 +3869,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          description: ORCAMENTO_ATUALIZACAO_VAZIA quando valorPlanejado nao foi informado; nenhum dado ou evento de sucesso e alterado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
