@@ -29,6 +29,10 @@ autenticados para:
 - logs de auditoria consultaveis pelo usuario;
 - previsao de deficit via API ML V2.
 
+Criacao, edicao e exclusao logica de transacoes gravam a operacao financeira
+e sua auditoria de sucesso na mesma transacao SQL. Se a auditoria falhar,
+a operacao inteira e revertida; logs de diagnostico continuam independentes.
+
 ## Stack
 
 - NestJS 11
