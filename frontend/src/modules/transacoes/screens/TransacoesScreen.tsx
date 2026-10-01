@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
   FinanceAppHeader,
@@ -30,8 +30,10 @@ export function TransacoesScreen() {
   const [contas, setContas] = useState<Conta[]>([]);
   const [mes, setMes] = useState(getCurrentMonthReference());
   const [tipo, setTipo] = useState<string>('');
+  const [appliedFilters, setAppliedFilters] = useState({ mes, tipo });
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const latestLoad = useRef(0);
 
   const categoriaMap = useMemo(
     () => new Map(categorias.map((categoria) => [categoria.id, categoria])),
@@ -43,6 +45,7 @@ export function TransacoesScreen() {
   );
 
   const loadData = useCallback(async () => {
+    const load = ++latestLoad.current;
     try {
       setLoading(true);
       setMessage('');
@@ -50,27 +53,30 @@ export function TransacoesScreen() {
         listContas(),
         listCategorias(),
         listTransacoes({
-          mes,
-          tipo: tipo ? (tipo as TipoTransacao) : undefined,
+          mes: appliedFilters.mes,
+          tipo: appliedFilters.tipo ? (appliedFilters.tipo as TipoTransacao) : undefined,
         }),
       ]);
+      if (load !== latestLoad.current) return;
       setContas(contasData);
       setCategorias(categoriasData);
       setTransacoes(transacoesData);
     } catch (error) {
+      if (load !== latestLoad.current) return;
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel carregar as transacoes.',
       );
+      if (load !== latestLoad.current) return;
       setMessage(resolvedError.message);
 
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setLoading(false);
+      if (load === latestLoad.current) setLoading(false);
     }
-  }, [mes, router, tipo]);
+  }, [appliedFilters, router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -90,7 +96,7 @@ export function TransacoesScreen() {
 
     try {
       await removeTransacao(id);
-      await loadData();
+      setAppliedFilters((filters) => ({ ...filters }));
     } catch (error) {
       const resolvedError = await resolveApiError(
         error,
@@ -139,7 +145,13 @@ export function TransacoesScreen() {
           />
         </GlassField>
 
-        <GlassButton label="Aplicar filtros" onPress={loadData} variant="ghost" />
+        <GlassButton
+          label="Aplicar filtros"
+          onPress={() => setAppliedFilters((current) =>
+            current.mes === mes && current.tipo === tipo ? current : { mes, tipo }
+          )}
+          variant="ghost"
+        />
       </GlassPanel>
 
       {message && transacoes.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
