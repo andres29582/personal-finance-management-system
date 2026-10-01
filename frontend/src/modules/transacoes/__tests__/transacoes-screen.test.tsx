@@ -37,7 +37,9 @@ jest.mock('../../../../storage/authStorage');
 jest.mock('../../../../utils/confirm-action');
 
 const mockListContas = contaService.listContas as jest.MockedFunction<typeof contaService.listContas>;
+const mockGetContaById = contaService.getContaById as jest.MockedFunction<typeof contaService.getContaById>;
 const mockListCategorias = categoriaService.listCategorias as jest.MockedFunction<typeof categoriaService.listCategorias>;
+const mockGetCategoriaById = categoriaService.getCategoriaById as jest.MockedFunction<typeof categoriaService.getCategoriaById>;
 const mockListTransacoes = transacaoService.listTransacoes as jest.MockedFunction<typeof transacaoService.listTransacoes>;
 const mockRemoveTransacao = transacaoService.removeTransacao as jest.MockedFunction<typeof transacaoService.removeTransacao>;
 const mockClearSession = authStorage.clearSession as jest.MockedFunction<typeof authStorage.clearSession>;
@@ -80,6 +82,72 @@ describe('TransacoesScreen', () => {
       expect(screen.getByText('Conta: Conta Corrente')).toBeTruthy();
       expect(screen.getByText('R$ 50,00')).toBeTruthy();
       expect(screen.getByText('Despesa')).toBeTruthy();
+    });
+  });
+
+  it('loads inactive historical labels once per missing reference', async () => {
+    const oldAccount = makeConta({ ativa: false, id: 'old-account', nome: 'Conta encerrada' });
+    const oldCategory = makeCategoria({ ativa: false, id: 'old-category', nome: 'Categoria arquivada' });
+    const oldTransaction = makeTransacao({
+      categoriaId: oldCategory.id,
+      contaId: oldAccount.id,
+      descricao: null,
+      id: 'old-transaction-1',
+    });
+    mockListContas.mockResolvedValue([conta]);
+    mockListCategorias.mockResolvedValue([categoria]);
+    mockListTransacoes.mockResolvedValue([
+      oldTransaction,
+      { ...oldTransaction, id: 'old-transaction-2' },
+    ]);
+    mockGetContaById.mockResolvedValue(oldAccount);
+    mockGetCategoriaById.mockResolvedValue(oldCategory);
+
+    render(<TransacoesScreen />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Categoria arquivada')).toHaveLength(2);
+      expect(screen.getAllByText('Conta: Conta encerrada')).toHaveLength(2);
+    });
+    expect(mockGetContaById).toHaveBeenCalledTimes(1);
+    expect(mockGetContaById).toHaveBeenCalledWith(oldAccount.id);
+    expect(mockGetCategoriaById).toHaveBeenCalledTimes(1);
+    expect(mockGetCategoriaById).toHaveBeenCalledWith(oldCategory.id);
+  });
+
+  it('keeps transactions and fallback labels when historical lookups fail', async () => {
+    const oldTransaction = makeTransacao({
+      categoriaId: 'missing-category',
+      contaId: 'missing-account',
+      descricao: null,
+      id: 'old-transaction',
+    });
+    mockListContas.mockResolvedValue([conta]);
+    mockListCategorias.mockResolvedValue([categoria]);
+    mockListTransacoes.mockResolvedValue([oldTransaction]);
+    mockGetContaById.mockRejectedValue(new Error('Account not found'));
+    mockGetCategoriaById.mockRejectedValue(new Error('Category not found'));
+
+    render(<TransacoesScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Conta: -')).toBeTruthy();
+      expect(screen.getByText('Transacao')).toBeTruthy();
+      expect(screen.getByText(/Categoria$/)).toBeTruthy();
+      expect(screen.queryByText('Nao foi possivel carregar as transacoes')).toBeNull();
+    });
+  });
+
+  it('still surfaces a failed transaction-list request', async () => {
+    mockListContas.mockResolvedValue([conta]);
+    mockListCategorias.mockResolvedValue([categoria]);
+    mockListTransacoes.mockRejectedValue(new Error('List failed'));
+
+    render(<TransacoesScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nao foi possivel carregar as transacoes')).toBeTruthy();
+      expect(screen.getByText('Nao foi possivel carregar as transacoes.')).toBeTruthy();
     });
   });
 

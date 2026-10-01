@@ -13,9 +13,9 @@ import {
 } from '../../../shared/ui';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
-import { listCategorias } from '../../categorias/services/categoriaService';
+import { getCategoriaById, listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
-import { listContas } from '../../contas/services/contaService';
+import { getContaById, listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
 import { listTransacoes, removeTransacao } from '../services/transacaoService';
 import { TipoTransacao, Transacao } from '../types/transacao';
@@ -58,8 +58,17 @@ export function TransacoesScreen() {
         }),
       ]);
       if (load !== latestLoad.current) return;
-      setContas(contasData);
-      setCategorias(categoriasData);
+      const contaIds = [...new Set(transacoesData.map(({ contaId }) => contaId))]
+        .filter((id) => !contasData.some((conta) => conta.id === id));
+      const categoriaIds = [...new Set(transacoesData.map(({ categoriaId }) => categoriaId))]
+        .filter((id) => !categoriasData.some((categoria) => categoria.id === id));
+      const [contasHistoricas, categoriasHistoricas] = await Promise.all([
+        Promise.all(contaIds.map((id) => getContaById(id).catch(() => null))),
+        Promise.all(categoriaIds.map((id) => getCategoriaById(id).catch(() => null))),
+      ]);
+      if (load !== latestLoad.current) return;
+      setContas([...contasData, ...contasHistoricas.filter((conta): conta is Conta => conta !== null)]);
+      setCategorias([...categoriasData, ...categoriasHistoricas.filter((categoria): categoria is Categoria => categoria !== null)]);
       setTransacoes(transacoesData);
     } catch (error) {
       if (load !== latestLoad.current) return;
