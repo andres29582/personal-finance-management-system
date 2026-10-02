@@ -194,20 +194,28 @@ As migrations ficam em `migrations/` e devem ser executadas em ordem:
 0010_validate_orcamento_month_reference.sql
 ```
 
-Exemplo de execucao com `psql`:
+Nao ha ledger automatico de migrations. Em uma base existente, revise o esquema
+e execute apenas cada arquivo pendente confirmado; nunca reaplique toda a lista.
 
-```powershell
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0001_mvp_baseline.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0002_align_schema_and_create_orcamento.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0003_add_usuario_cadastro_fields.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0004_add_auth_session.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0005_add_audit_log.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0006_soft_delete_lgpd_password_reset.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0007_create_planejamentos_compartilhados.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0008_align_divida_monetary_precision.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0009_align_transacao_schema.sql
-psql -h localhost -U postgres -d gestao_financeira -f migrations/0010_validate_orcamento_month_reference.sql
-```
+~~~powershell
+psql -X -v ON_ERROR_STOP=1 -h localhost -U postgres -d BASE_AUTORIZADA -f migrations/ARQUIVO_PENDENTE_REVISADO.sql
+if ($LASTEXITCODE -ne 0) { throw "Migration failed" }
+~~~
+
+Nao envolva o lote em outra transacao; os arquivos tem fronteiras diferentes.
+### Diagnostico de dados (somente leitura)
+
+`npm run data:check -- --database BASE_AUTORIZADA` exige conexao explicita via
+`DATA_CHECK_HOST`, `DATA_CHECK_USER`, `DATA_CHECK_PASSWORD`, `DATA_CHECK_SSL_MODE`
+(`disable` local ou `verify-full`) e `DATA_CHECK_PORT` (padrao 5432). Nao carrega
+`.env` nem usa o destino da aplicacao implicitamente. Nunca versione credenciais.
+
+O JSON tem somente problemas e contagem de importes invalidos (com excluidos).
+Saida 0: requisitos verificados; 1: bloqueios; 2: falha de configuracao/consulta.
+Usa snapshot READ ONLY e timeouts; confere tipos, PKs, FKs e CHECKs validados em
+usuario/conta/categoria/transacao/orcamento, nao todo o banco nem historico SQL.
+CHECK desconhecido exige revisao; protecao SQL de valores de transacoes pendente.
+Nao corrige dados nem autoriza sincronizacao.
 
 ### Atencao: Planejamentos Compartilhados
 
@@ -426,7 +434,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1
 
 - `ECONNREFUSED` ou erro TypeORM ao iniciar: confirme PostgreSQL ativo,
   credenciais em `.env` e banco criado.
-- Tabelas ou colunas ausentes: reaplique as migrations em ordem na base correta.
+- Tabelas ou colunas ausentes: inspecione o esquema e aplique somente migrations pendentes revisadas.
 - `POST /planejamentos` retornando erro interno localmente: confirme se
   `0007_create_planejamentos_compartilhados.sql` foi aplicada e se as tabelas
   `planejamento`, `participante_planejamento`, `gasto_planejamento`,
