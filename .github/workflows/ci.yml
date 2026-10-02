@@ -172,7 +172,10 @@ jobs:
       - name: Executar testes E2E do backend
         # O helper E2E cria o banco de teste, recria o schema public
         # e aplica as migrations SQL versionadas antes das suites.
-        run: npm run test:e2e
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-16
+          PG_TOOLS_DIRECTORY=/usr/lib/postgresql/16/bin npm run test:e2e
 
   ml:
     name: Machine Learning
