@@ -2,6 +2,41 @@
 
 Checklist para preparar uma entrega local confiavel do sistema financeiro.
 
+## Ensaio de recuperacao antes da sincronizacao
+
+O teste `backendnest/test/backup-restore.e2e-spec.ts` cria bases exclusivas com
+nomes aleatorios e dados ficticios. Nao le nem copia a base da aplicacao.
+Execute `npm run test:e2e -- --testPathPatterns=backup-restore` no backend com
+`E2E_DB_HOST`, `E2E_DB_PORT`, `E2E_DB_USERNAME`, `E2E_DB_PASSWORD` e, se necessario,
+`E2E_DB_ADMIN_DATABASE`. A role de setup cria/remove somente bases e uma role
+de login aleatorias do ensaio; a role ficticia usa senha ASCII temporaria,
+permissoes SELECT na origem e ownership do destino, sem superuser/CREATEDB.
+Defina `PG_TOOLS_DIRECTORY` como o diretorio de `pg_dump` e `pg_restore` quando
+nao estiverem no PATH. O ensaio exige clientes da mesma versao principal do
+servidor; ferramentas ausentes/incompativeis falham, nao ignoram o teste.
+
+O arquivo custom e escrito diretamente por `pg_dump --format=custom --file`,
+fora do repositorio. Nao redirecione binarios com PowerShell. O restore usa
+`--exit-on-error --single-transaction --no-owner --no-privileges` somente para
+mapear ownership/permissoes para a role ficticia. Constraints nao sao desativadas.
+Compara esquema, constraints validadas, todas as linhas, valores exatos e saldos
+com ajustes, comissao, pagamento de divida e registros excluidos logicamente.
+Tambem verifica que um arquivo truncado falha. Remove apenas recursos criados
+pelo proprio teste. Nunca execute o helper que recria `public` sobre um restore.
+
+Uma recuperacao de dados reais exige autorizacao separada com origem e destino
+nomeados. Use um backup confiavel: restore pode executar codigo da origem.
+Armazene-o fora do Git, com acesso privado, criptografia e retencao definidos;
+senhas, hashes, tokens e dados financeiros tambem fazem parte do backup.
+Verifique versoes e extensoes antes: cliente antigo nao exporta servidor mais
+novo; restore em servidor mais antigo nao e garantido. `pg_dump` copia uma base,
+nao roles/globais: documente a politica de ownership e permissoes reais.
+Restaure numa base nova, vazia e identificada; nao use `--clean` nem a base local
+em uso. Compare schema, constraints, contagens, somas exatas e saldos esperados
+numa janela sem escritas, para nao comparar snapshots de momentos diferentes.
+Um arquivo criado ou `pg_restore --list` nao comprova recuperacao. O diagnostico
+`data:check` deve ser repetido no clone; gaps conhecidos permanecem bloqueios.
+
 ## 1. Variaveis e base de dados
 
 1. Copiar `backendnest/.env.example` para `backendnest/.env` se ainda nao existir.
