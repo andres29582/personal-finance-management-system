@@ -2,35 +2,57 @@
 
 ## Visao geral
 
-O sistema esta dividido em duas aplicacoes:
+O sistema combina tres aplicacoes e um banco relacional:
 
-- `frontend`: Expo Router, React Native Web, TypeScript, axios e armazenamento local para sessao.
-- `backendnest`: NestJS, TypeORM e PostgreSQL.
+| Componente | Responsabilidade e comunicacao |
+| --- | --- |
+| `frontend` | Expo Router, React Native Web e TypeScript; envia requisicoes HTTP autenticadas para a API NestJS. |
+| `backendnest` | API REST NestJS; aplica regras financeiras, autenticacao e autorizacao, persiste via TypeORM e prepara features para o ML. |
+| `ml-finance-tcc` | Servico FastAPI separado e pipeline de classificacao; recebe features da API em `POST /predict` e devolve previsao/probabilidade no contrato V2. |
+| PostgreSQL | Persistencia de usuarios, sessoes, dados financeiros e auditoria do backend. |
+
+A integracao ML passa pela API NestJS, nao por acesso direto do frontend ao
+modelo. Esta descricao registra componentes integrados no codigo; nao comprova
+execucao de containers, deploy ou estado de uma base real. Detalhes ficam em
+[BACKEND.md](BACKEND.md) e no [README do ML](../../ml-finance-tcc/README.md).
 
 ## Fluxo principal
 
 1. O usuario se cadastra ou faz login pelo frontend.
-2. O backend devolve `access_token` e os dados basicos do usuario.
-3. O frontend salva a sessao e envia o token em cada requisicao autenticada.
-4. A API valida o JWT e resolve dados financeiros por dominio.
+2. O login cria uma sessao e devolve `access_token`, `refresh_token` e dados do usuario.
+3. O frontend envia o access token em requisicoes autenticadas.
+4. A API valida o JWT e sua sessao ativa antes de resolver dados por dominio.
+5. O refresh valida a sessao e rotaciona o refresh token; logout revoga a sessao,
+   e reset de senha revoga as sessoes existentes.
+
+O backend guarda apenas o hash do refresh token. Consulte o fluxo e os limites
+de compatibilidade em [BACKEND.md](BACKEND.md), sem interpretar a existencia
+desses mecanismos como certificacao de seguranca ou operacao real.
 
 ## Dominios do backend
 
-- `auth`: cadastro, login e alteracao de senha.
+- `auth`: cadastro, login, refresh, sessoes, logout e reset de senha.
 - `contas`: contas com `saldoAtual` calculado na leitura.
 - `categorias`: catalogo editavel com seed padrao para novos usuarios.
 - `transacoes`: receitas e despesas.
 - `dashboard`: resumo mensal consolidado.
-- `orcamentos`: orcamento mensal por usuario.
+- `orcamentos`: orcamento mensal global por usuario; alocacoes por categoria permanecem no backlog.
 - `relatorios`: leitura agregada por periodo.
+- `previsoes`: features historicas e integracao com o servico ML.
+- `planejamentos`: planejamentos compartilhados, participantes, gastos e acertos.
 - `metas`, `alertas`, `transferencias`, `dividas`, `pagos-divida`: modulos complementares do MVP.
 
 ## Decisoes-chave
 
-- `transacoes` e a fonte para receitas e despesas.
+- `transacoes` e a fonte para receitas e despesas; seu CRUD audita a mutacao na mesma transacao SQL.
 - `transferencias` afetam o saldo das contas, mas nao entram em relatorios de receitas e despesas.
 - `pagos-divida` cria e exclui sua `transacao` associada dentro de uma transacao de banco de dados.
 - `saldoAtual` nao e persistido na tabela `conta`; ele e calculado a partir do saldo inicial, transacoes e transferencias.
+
+As decisoes historicas de Planejamentos estao no
+[ADR do modulo](../specs/planejamentos-compartilhados/adr-decisoes-implementacao.md).
+Ele preserva contexto e clarificacoes posteriores; nao substitui o contrato HTTP.
+Os limites de auditoria por modulo ficam em [BACKEND.md](BACKEND.md).
 
 ## Frontend
 

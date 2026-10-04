@@ -148,16 +148,44 @@ acerto de Planejamentos.
 Como `synchronize` esta desativado, migrations SQL sao parte do contrato de
 evolucao do schema. Hoje elas ficam em `backendnest/migrations/`:
 
-- `0001_mvp_baseline.sql`;
-- `0002_align_schema_and_create_orcamento.sql`;
-- `0003_add_usuario_cadastro_fields.sql`;
-- `0004_add_auth_session.sql`;
-- `0005_add_audit_log.sql`;
-- `0006_soft_delete_lgpd_password_reset.sql`;
-- `0007_create_planejamentos_compartilhados.sql`.
+| Migration versionada | Papel na evolucao do schema |
+| --- | --- |
+| [0001_mvp_baseline.sql](../../backendnest/migrations/0001_mvp_baseline.sql) | Baseline das tabelas financeiras do MVP. |
+| [0002_align_schema_and_create_orcamento.sql](../../backendnest/migrations/0002_align_schema_and_create_orcamento.sql) | Alinha nomes legados e estrutura/restricoes de orcamento. |
+| [0003_add_usuario_cadastro_fields.sql](../../backendnest/migrations/0003_add_usuario_cadastro_fields.sql) | Campos e restricoes de CPF/CEP do cadastro. |
+| [0004_add_auth_session.sql](../../backendnest/migrations/0004_add_auth_session.sql) | Sessoes e hash de refresh token. |
+| [0005_add_audit_log.sql](../../backendnest/migrations/0005_add_audit_log.sql) | Eventos de auditoria e indices de consulta. |
+| [0006_soft_delete_lgpd_password_reset.sql](../../backendnest/migrations/0006_soft_delete_lgpd_password_reset.sql) | Exclusao logica, consentimento e tokens de reset. |
+| [0007_create_planejamentos_compartilhados.sql](../../backendnest/migrations/0007_create_planejamentos_compartilhados.sql) | Agregado de Planejamentos, participantes, gastos, divisoes e acertos. |
+| [0008_align_divida_monetary_precision.sql](../../backendnest/migrations/0008_align_divida_monetary_precision.sql) | Alinha valores monetarios de divida para `numeric(14,2)`. |
+| [0009_align_transacao_schema.sql](../../backendnest/migrations/0009_align_transacao_schema.sql) | Alinha valor da transacao para `numeric(14,2)` e descricao para `text`. |
+| [0010_validate_orcamento_month_reference.sql](../../backendnest/migrations/0010_validate_orcamento_month_reference.sql) | Restringe meses de orcamento ao formato `YYYY-MM` com mes `01` a `12`. |
+| [0011_validate_transacao_positive_amount.sql](../../backendnest/migrations/0011_validate_transacao_positive_amount.sql) | Rejeita valor zero, negativo ou `NaN` com CHECK plenamente validado. |
 
 `synchronize: false` permanece obrigatorio, e as migrations continuam sendo
-aplicadas manualmente.
+aplicadas manualmente. Nao existe ledger automatico de aplicacao: um arquivo
+versionado nao demonstra que uma base especifica o recebeu, nem autoriza
+reaplicar todos os arquivos em uma base existente.
+
+A migration `0011` verifica tambem linhas excluidas logicamente, interrompe a
+operacao se encontrar valores invalidos e nao corrige historico silenciosamente.
+O CHECK valida todas as linhas sob o bloqueio DDL. Essa garantia descreve o SQL
+versionado; sua aplicacao na base real ainda exige evidencia do alvo autorizado.
+
+Fluxo de evolucao do schema:
+
+1. Identificar explicitamente o banco autorizado e revisar esquema/dados com o
+   [diagnostico somente leitura](../../backendnest/scripts/data-readiness.cjs).
+2. Classificar divergencias e migrations realmente pendentes; assinaturas
+   desconhecidas exigem revisao, nao equivalencia presumida nem reparo automatico.
+3. Antes de escrita, confirmar autorizacao, backup e restauracao adequados ao
+   alvo; aplicar apenas migrations revisadas com interrupcao em erro.
+4. Verificar o estado resultante e registrar alvo, revisao, data e ambiente.
+   Ensaios em fixtures nao comprovam seguranca da atualizacao da base real.
+
+Os comandos e criterios operacionais ficam no
+[README do backend](../../backendnest/README.md) e no
+[runbook](../operacao/RUNBOOK.md); este fluxo nao executa nem autoriza migracoes.
 
 Ao alterar entidades, DTOs persistidos ou repositories, a manutencao deve
 considerar:
@@ -258,20 +286,44 @@ O contexto de requisicao e propagado por middlewares:
 - `RequestContextMiddleware` guarda metodo, rota, IP, user-agent e usuario
   quando disponivel.
 
-`LogsService` persiste `AuditLog` com tratamento defensivo: falhas ao salvar log
-nao devem derrubar o fluxo principal. Negacoes 401/403 e falhas 5xx sao
-best-effort e nunca condicionam a resposta HTTP. Causas e stacks 5xx ficam no
-logger operacional; o `AuditLog` consultavel pelo usuario recebe apenas mensagem
-publica e metadados seguros. Campos sensiveis sao sanitizados, e emails/CPFs sao
-mascarados.
+Existem dois caminhos de persistencia em
+[LogsService](../../backendnest/src/logs/logs.service.ts), com garantias diferentes:
 
-Planejamentos possui uma excecao intencional ao caminho defensivo global. Suas
-mutacoes auditadas chamam `logEntityEventTransactional` com o mesmo
-`EntityManager` da transacao do agregado. Nesses fluxos, a auditoria e a ultima
-escrita logica e uma falha ao inserir `audit_log` deve provocar rollback da
-mutacao e dos efeitos derivados. Os payloads registram IDs, status e dados
-operacionais minimos, sem nomes, emails, observacoes, DTOs ou entidades
-completas.
+| Caminho | Garantia e limite |
+| --- | --- |
+| Tecnico/defensivo (`create`, `logEntityEvent`) | Persistencia best-effort; falha no log nao reverte uma mutacao financeira ja confirmada nem condiciona a resposta de negacoes 401/403 e erros 5xx. |
+| Auditoria de negocio transacional (`logEntityEventTransactional`) | Usa o `EntityManager` recebido, sem suprimir a falha de persistencia; quando chamado dentro da transacao da mutacao, ambos confirmam ou revertem juntos. |
+
+Causas e stacks 5xx ficam no logger operacional; o `AuditLog` consultavel pelo
+usuario recebe apenas mensagem publica e metadados seguros. Campos sensiveis
+sao sanitizados, e emails/CPFs sao mascarados. O tratamento defensivo de logs
+tecnicos nao deve ser confundido com a garantia de auditoria de negocio.
+
+As mutacoes auditadas de Planejamentos e o CRUD de
+[TransacoesService](../../backendnest/src/transacoes/transacoes.service.ts) usam o
+mesmo manager para dados e auditoria. Em Transacoes, o fluxo e:
+
+1. Validar propriedade e regras da operacao dentro da transacao SQL; atualizacao
+   e exclusao leem a transacao com bloqueio de escrita.
+2. Persistir criacao, atualizacao ou exclusao logica.
+3. Inserir o evento de negocio com `logEntityEventTransactional` no mesmo manager.
+4. Confirmar ambos; falha na insercao do evento reverte a mutacao financeira.
+
+A [suite E2E de auditoria atomica](../../backendnest/test/transacoes-atomic-audit.e2e-spec.ts)
+contem cenarios de sucesso e de falha forcada de auditoria para essas operacoes.
+Sua existencia e evidencia de cobertura implementada, nao de execucao atual.
+Planejamentos tambem reverte a mutacao e seus efeitos derivados quando a
+insercao da auditoria transacional falha; seus payloads registram dados minimos,
+sem DTOs ou entidades completas.
+
+Essa garantia nao e global: em
+[Transferencias](../../backendnest/src/transferencias/transferencias.service.ts),
+criacao/atualizacao confirmam a transacao financeira antes do log de negocio, e
+exclusao grava o soft delete antes do log. Em
+[Pagamentos de divida](../../backendnest/src/pagos-divida/pagos-divida.service.ts),
+pagamento e transacao associada sao escritos/excluidos juntos, mas sua auditoria
+ocorre depois. Atomicidade financeira nesses fluxos nao equivale a auditoria
+atomica; a evolucao desses modulos permanece um trabalho separado.
 
 A consulta de auditoria fica em `GET /audit-logs`, protegida por JWT e limitada
 ao usuario autenticado.
@@ -321,6 +373,14 @@ promover mudancas de schema, conferir:
 - queries de repositories;
 - contratos de DTOs e OpenAPI;
 - dados historicos usados pela previsao de deficit.
+
+## Decisoes registradas
+
+O [ADR de Planejamentos Compartilhados](../specs/planejamentos-compartilhados/adr-decisoes-implementacao.md)
+registra decisoes aceitas e clarificacoes posteriores do modulo. Seu contexto e
+historico permanecem no documento original; nao representam novas decisoes
+aceitas nesta atualizacao. O [indice documental](../README.md) distingue esse
+ADR existente do diretorio central reservado para futuros registros.
 
 ## Relacao com outros documentos
 
