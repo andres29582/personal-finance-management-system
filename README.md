@@ -300,9 +300,14 @@ Mais detalhes no [Runbook Operacional Local](docs/operacao/RUNBOOK.md).
 
 ## Documentação técnica
 
-A documentação principal fica em `docs/`:
+A entrada principal é o [índice da documentação](docs/README.md): ele organiza
+rotas para produto, desenvolvimento e operação, identifica as referências de
+cada tema e explica os estados de implementação, verificação e operação.
+Consulte ali também as regras de manutenção e os limites dos relatórios
+históricos; o índice não certifica que todo o conteúdo esteja atualizado.
 
-- [Índice da documentação](docs/README.md)
+Atalhos para as referências principais:
+
 - [Arquitetura do Sistema](docs/arquitetura/ARQUITETURA.md)
 - [Arquitetura do Backend](docs/arquitetura/BACKEND.md)
 - [Arquitetura do Frontend](docs/arquitetura/FRONTEND.md)
