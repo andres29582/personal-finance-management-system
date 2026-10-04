@@ -57,7 +57,7 @@ src/
   dividas/          # cadastro e ciclo de dividas
   pagos-divida/     # pagamentos atomicos com transacao associada
   dashboard/        # resumo financeiro mensal
-  orcamentos/       # orcamento mensal por categoria
+  orcamentos/       # orcamento global mensal por usuario; categorias pendentes
   relatorios/       # agregacoes por periodo
   previsoes/        # deficit features e cliente ML
   logs/             # auditoria, request context e filtros de log
