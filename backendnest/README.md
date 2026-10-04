@@ -413,6 +413,8 @@ previsao de deficit deve retornar indisponibilidade.
 | `npm run build` | compila TypeScript/Nest |
 | `npm run format` | aplica Prettier em `src` e `test` |
 | `npm run lint` | executa ESLint com fix |
+| `npm run lint:check` | verifica lint do codigo de runtime sem autofix, como na CI |
+| `npm run typecheck` | verifica tipos de producao sem emitir arquivos ou cache incremental |
 | `npm test` | roda testes unitarios |
 | `npm run test:e2e` | roda testes e2e em serie |
 | `npm run test:cov` | gera cobertura |
@@ -423,10 +425,20 @@ previsao de deficit deve retornar indisponibilidade.
 Dentro de `backendnest`:
 
 ```powershell
+npm run lint:check
+npm run typecheck
 npm test -- --runInBand
 npm run test:e2e
 npm run build
 ```
+
+`lint:check` e `typecheck` sao os mesmos comandos usados na CI do backend.
+O lint verifica `src/**/*.ts`, exclui specs e preserva a politica atual de
+warnings; warnings nao bloqueiam a execucao. O typecheck usa
+`tsconfig.build.json`, que exclui specs, E2E e `dist`, e desativa o cache
+incremental somente nesse comando. Testes continuam sendo verificados pelo Jest.
+Esses dois comandos nao corrigem arquivos. `lint` e `format` modificam codigo;
+`build` continua emitindo a compilacao normalmente.
 
 Da raiz do monorepo, o runbook recomenda:
 
