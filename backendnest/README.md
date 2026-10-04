@@ -192,6 +192,7 @@ As migrations ficam em `migrations/` e devem ser executadas em ordem:
 0008_align_divida_monetary_precision.sql
 0009_align_transacao_schema.sql
 0010_validate_orcamento_month_reference.sql
+0011_validate_transacao_positive_amount.sql
 ```
 
 Nao ha ledger automatico de migrations. Em uma base existente, revise o esquema
@@ -203,6 +204,15 @@ if ($LASTEXITCODE -ne 0) { throw "Migration failed" }
 ~~~
 
 Nao envolva o lote em outra transacao; os arquivos tem fronteiras diferentes.
+
+A migration `0011` exige importes positivos, exclui `NaN` e valida tambem
+transacoes excluidas. Valores legados invalidos interrompem tudo com contagens,
+sem reescrever dados; a correcao exige uma decisao financeira explicita.
+A validacao varre a tabela e exige lock exclusivo: avalie volume e janela antes
+da execucao autorizada. Timeouts locais: lock 5s, statement 60s; falha exige
+investigacao, nao repeticao cega. Testes usam apenas fixtures descartaveis;
+implementacao no repositorio nao significa migration aplicada na base real.
+
 ### Diagnostico de dados (somente leitura)
 
 `npm run data:check -- --database BASE_AUTORIZADA` exige conexao explicita via
@@ -214,7 +224,7 @@ O JSON tem somente problemas e contagem de importes invalidos (com excluidos).
 Saida 0: requisitos verificados; 1: bloqueios; 2: falha de configuracao/consulta.
 Usa snapshot READ ONLY e timeouts; confere tipos, PKs, FKs e CHECKs validados em
 usuario/conta/categoria/transacao/orcamento, nao todo o banco nem historico SQL.
-CHECK desconhecido exige revisao; protecao SQL de valores de transacoes pendente.
+CHECK desconhecido exige revisao; a protecao de transacoes requer `0011` aplicada.
 Nao corrige dados nem autoriza sincronizacao.
 
 ### Atencao: Planejamentos Compartilhados
