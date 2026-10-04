@@ -2,11 +2,18 @@
 
 Esta pasta reúne a documentação oficial, histórica, acadêmica e operacional do projeto. A documentação viva deve refletir o estado atual do sistema; documentos em `arquivo/` são históricos e não representam necessariamente a arquitetura, decisões ou processos atuais.
 
+Este índice orienta a leitura; não certifica que todos os documentos estejam
+atualizados. A revisão de requisitos e backlog, arquitetura, procedimentos e
+OpenAPI continua nas próximas fases da atualização documental.
+
 ## Fonte oficial de contrato da API
 
-O contrato oficial da API e `backendnest/swagger.yaml`.
+O contrato HTTP declarado está em [backendnest/swagger.yaml](../backendnest/swagger.yaml).
 
-Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o contrato OpenAPI.
+Documentos em `docs/validacao/` são relatórios de auditoria e não substituem o
+contrato OpenAPI. Divergências entre contrato, implementação e documentação
+devem ser registradas e corrigidas: nenhuma fonte prevalece silenciosamente
+para justificar um comportamento incompatível.
 
 ## Documentos principais
 
@@ -15,6 +22,46 @@ Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o c
 - [Manual do Usuário](produto/MANUAL_DO_USUARIO.md)
 - [Arquitetura do Sistema](arquitetura/ARQUITETURA.md)
 - [Runbook Operacional Local](operacao/RUNBOOK.md)
+
+### Rotas de leitura
+
+| Necessidade | Começar por | Continuar em |
+| --- | --- | --- |
+| Produto: entender capacidades e pendências | [Requisitos](produto/REQUISITOS.md) | [Manual do Usuário](produto/MANUAL_DO_USUARIO.md) e [Roadmap](produto/ROADMAP_PROFISSIONALIZACAO.md) |
+| Desenvolvimento: entender e verificar o sistema | [Arquitetura](arquitetura/ARQUITETURA.md) | [Contrato HTTP](../backendnest/swagger.yaml), [testes](desenvolvimento/TESTES.md) e README do módulo |
+| Operação: preparar e recuperar um ambiente | [Runbook](operacao/RUNBOOK.md) | [Guia do backend](../backendnest/README.md) e [Docker](operacao/DOCKER.md) |
+
+### Onde consultar cada informação
+
+Cada tema tem uma referência principal; os demais documentos devem referenciá-la,
+não manter cópias paralelas. A finalidade da fonte delimita o que ela demonstra.
+
+| Informação | Referência principal | Papel e limite |
+| --- | --- | --- |
+| Regras e capacidades pretendidas | [Requisitos](produto/REQUISITOS.md) | Define o esperado; o estado de entrega exige evidência própria. |
+| Organização e fluxos técnicos | [Arquitetura](arquitetura/ARQUITETURA.md) e guias de módulo | Explica o sistema; deve distinguir implementação atual de propostas. |
+| Contrato HTTP declarado | [Swagger/OpenAPI](../backendnest/swagger.yaml) | Referência contratual; discrepâncias com o comportamento precisam de correção. |
+| Alterações versionadas de esquema | [Migrações SQL](../backendnest/migrations) e [guia do backend](../backendnest/README.md) | Descreve alterações e aplicação; não comprova o esquema aplicado a uma base. |
+| Comandos de verificação | Scripts dos módulos, como [backend](../backendnest/package.json), e [CI](../.github/workflows/ci.yml) | Define comandos executáveis; não comprova que passaram em uma execução. |
+| Estratégia de testes | [Testes](desenvolvimento/TESTES.md) | Explica cobertura e escopo; resultados precisam de contexto identificável. |
+| Procedimentos operacionais | [Runbook](operacao/RUNBOOK.md) | Define passos, cuidados e limites; não comprova execução em um ambiente real. |
+| Evidência de uma revisão | [Relatórios de validação](validacao/) | Registra resultados vinculados a data, revisão e ambiente, não aprovação permanente. |
+| Trabalho futuro | [Roadmap](produto/ROADMAP_PROFISSIONALIZACAO.md) | Organiza propostas e pendências; não prova funcionalidade entregue. |
+
+### Como interpretar o estado
+
+Registrar separadamente as três dimensões abaixo, quando aplicáveis. Evitar
+um rótulo único como “concluído” quando os limites forem diferentes.
+
+| Dimensão | Estados e evidência |
+| --- | --- |
+| Implementação | Planejada, parcial ou integrada; identificar a revisão ou PR correspondente. |
+| Verificação | Não executada ou resultado documentado, com data, commit, ambiente e escopo. |
+| Operação | Não comprovada, comprovada em fixtures ou comprovada em um destino explicitamente identificado, sem dados sensíveis. |
+
+Uma suíte existente não prova execução bem-sucedida; uma migração versionada
+não prova aplicação. Verificações em fixtures não validam dados reais, e um
+resultado antigo não valida automaticamente a revisão atual.
 
 ## Produto
 
@@ -45,7 +92,7 @@ A pasta `arquitetura/` descreve a organização técnica do sistema, seus módul
 A pasta `operacao/` deve reunir instruções para preparar ambientes, executar o sistema, operar demos, Docker, deploy, CI/CD e seed.
 
 - Ambiente e variáveis: em construção
-- Docker: em construção
+- [Docker](operacao/DOCKER.md): auditoria e documentação existentes; execução real e deploy não são comprovados pela presença deste arquivo.
 - Deploy: em construção
 - CI/CD: em construção
 - Seed demo: em construção
@@ -59,7 +106,7 @@ A pasta `desenvolvimento/` deve reunir práticas de desenvolvimento, testes, pad
 - [Testes e Rastreabilidade do Frontend](desenvolvimento/TESTES_FRONTEND.md): fonte atual de testes frontend.
 - Padrões de código: em construção
 - Contribuição: em construção
-- ADRs: em construção em `desenvolvimento/ADR/`
+- Catálogo central de ADRs: em construção em `desenvolvimento/ADR/`; já existem [decisões por módulo](specs/planejamentos-compartilhados/adr-decisoes-implementacao.md).
 
 ## Validação
 
@@ -70,7 +117,8 @@ A pasta `desenvolvimento/` deve reunir práticas de desenvolvimento, testes, pad
 ## Specs
 
 Specs documentam requisitos e decisões de módulos específicos. Elas são
-complementares à documentação de arquitetura e ao Swagger.
+complementares à documentação de arquitetura e ao Swagger. Consultar o estado
+e a evidência de cada spec: estar nesta pasta não significa estar integrada.
 
 - [Planejamentos Compartilhados - Requisitos](specs/planejamentos-compartilhados/requisitos.md)
 - [Planejamentos Compartilhados - Regras de Negócio](specs/planejamentos-compartilhados/regras-de-negocio.md)
@@ -105,9 +153,14 @@ A pasta `pesquisa/` deve reunir estudos e avaliações futuras que ainda não fa
 ## Governança documental
 
 - Documentação viva deve refletir o estado atual do sistema.
+- A documentação afetada deve ser atualizada no mesmo PR do código; o autor e o revisor conferem coerência, referências e limites.
+- Referenciar a fonte principal em vez de copiar contratos, comandos ou regras para múltiplos documentos.
 - Documentos históricos ficam em `docs/arquivo/` e não devem ser usados como fonte atual sem validação.
+- Relatórios e contagens históricas mantêm data, commit e ambiente originais; novas verificações não devem reescrever a evidência anterior como se fosse atual.
 - Specs futuras ou exploratórias devem ser identificadas como roadmap, pesquisa ou futuro.
+- Documentação viva, relatórios datados, arquivo histórico e propostas têm papéis distintos; localização ou existência do arquivo não prova entrega.
 - `backendnest/swagger.yaml` é a referência oficial para contrato HTTP do backend.
+- Divergências devem indicar as fontes envolvidas e a correção pendente; informações sem comprovação devem ser identificadas como não verificadas ou desatualizadas.
 - Documentos de arquitetura devem ser revisados quando houver mudança estrutural.
 - Documentos de testes devem ser atualizados quando números, estratégia ou cobertura mudarem.
 - Não criar documento novo se já existir documento equivalente; revisar, fundir ou arquivar o existente.
