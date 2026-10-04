@@ -2,7 +2,14 @@
 
 ## 1. Objetivo da fase de profissionalização
 
-Este roadmap consolida a fase de profissionalização anteriormente tratada como Opção D durante o planejamento inicial.
+Este roadmap conserva o planejamento de profissionalização anteriormente
+tratado como Opção D. Essa denominação e a Fase 2 de profissionalização abaixo
+são históricas: não equivalem à fase D do backend nem à fase documental 2.
+
+Referência desta revisão: `main` em `31d5566`. O backlog ativo está na seção 4;
+os sprints preservam a intenção original, com situação atual explícita.
+[Requisitos](REQUISITOS.md) registra capacidades e limites das entregas A-D;
+o [índice documental](../README.md) define como interpretar evidências.
 
 A fase de profissionalização define a Fase 2 de profissionalização do sistema financeiro com foco em converter o MVP atual em um projeto reproduzível, pronto para deploy, testável e apresentável como solução profissional.
 
@@ -32,7 +39,7 @@ O repositório já contém uma base técnica avançada para um MVP acadêmico/pr
 - Logs de auditoria consultáveis pelo usuário.
 - Seed demo existente para carga de dados de apresentação.
 - Testes unitários e de integração em backend, frontend e ML.
-- Workflow inicial de GitHub Actions para frontend e backend.
+- Workflow de GitHub Actions para frontend, backend, E2E com PostgreSQL e ML.
 - Documentação de arquitetura, demo, manual de usuário e estabilização local.
 
 A Fase 1 arquitetônica já deixou implementados padrões importantes como Repository Pattern, exceções tipificadas e response wrapper. Por isso, a fase de profissionalização se apoia nessa base e muda o foco para operações, reprodutibilidade e entrega profissional.
@@ -50,29 +57,41 @@ A Fase 1 arquitetônica já deixou implementados padrões importantes como Repos
 - Cliente Axios com unwrap do response wrapper e refresh automático de token.
 - ML com contrato V2 estrito, validação de schema, manifesto de features e testes HTTP.
 - Seed demo documentado em `docs/operacao/RUNBOOK.md`.
-- CI inicial existente em `.github/workflows/ci.yml`.
+- CI existente em `.github/workflows/ci.yml`, incluindo ML e PostgreSQL E2E.
 - Documentação reutilizável para arquitetura, demo, frontend e fechamento da Fase 1.
 
 ## 4. Brechas técnicas principais
 
-As brechas principais não são de funcionalidade de negócio, mas de preparação operacional:
+O backlog distingue entrega versionada de validação operacional. Esta revisão
+é leitura documental e de código: não executou testes, contêineres, deploy,
+migrações ou acesso à base real. Não comprova publicação, proteção de branches
+nem conclusão de todos os critérios dos sprints.
 
-- Não existe Dockerfile nem `docker-compose` para levantar o sistema completo de forma reproduzível.
-- A CI atual não cobre o módulo ML nem uma execução E2E completa com PostgreSQL.
-- Não existe uma estratégia formal de deploy demo.
-- As migrações SQL existem, mas não há um fluxo único documentado e automatizável para aplicá-las em ambientes novos.
-- O seed demo existe, mas precisa de contrato operacional: quando usar, onde, com quais variáveis e quais garantias oferece.
-- `.gitignore` é mínimo e não protege suficientemente arquivos locais como `.env`, builds, caches ou artefatos temporários.
-- Os `.env.example` existem, mas falta uma matriz formal de variáveis por ambiente e serviço.
-- FastAPI ML permite CORS aberto, aceitável em local, mas não em um ambiente demo público.
-- Swagger atual é estático e pode ficar dessincronizado do backend real.
-- README de backend ainda conserva conteúdo genérico do starter de NestJS.
-- Falta documentação operativa: runbook, rollback, troubleshooting, health checks e checklist pré-demo.
-- Não há modelo formal de segurança base para segredos, CORS, logs, tokens, dependências e exposição pública.
+| Tema | Entregue ou parcial | Pendência real |
+| --- | --- | --- |
+| Docker | `backendnest/Dockerfile` e `ml-finance-tcc/Dockerfile` existentes; [auditoria Docker](../operacao/DOCKER.md) delimita o alcance | Compose do stack, estratégia frontend e execução real das imagens/integração ainda não comprovados. Dockerfiles não equivalem a deploy. |
+| CI e checks locais | `.github/workflows/ci.yml` inclui frontend, backend, pytest ML e E2E com PostgreSQL 16; backend compartilha `lint:check` e `typecheck` desde D (PR #126) | Publicação de artefatos de diagnóstico e checks obrigatórios de merge não comprovados nesta revisão. Workflow existente não é resultado de execução. |
+| Configuração | `.gitignore` protege envs reais, dependências, builds, caches e chaves; exemplos e guias existentes | Verificar coerência por ambiente e serviço no destino escolhido, sem presumir segredos reais seguros pela existência do gitignore. |
+| Migrações e dados | SQL versionado, procedimento no [README backend](../../backendnest/README.md), diagnóstico read-only e ensaio sintético de recuperação (C) | Verificar esquema/migrações realmente aplicados; comprovar backup e restore reais em destino autorizado; validar importações antes da sincronização. Ensaio sintético não certifica a base da aplicação. |
+| Seed demo | Contrato e cuidados documentados no [runbook](../operacao/RUNBOOK.md) e README backend | Integração e validação no futuro stack Docker/demo; não confundir dados de apresentação com dados reais. |
+| Documentação | README específico do backend, runbook local e navegação/governança documental (PR #127) existentes | Atualizar arquitetura, procedimentos e OpenAPI nas fases documentais posteriores; validar instruções de demo no ambiente escolhido. |
+| Segurança e publicação | JWT, refresh com rotação/revogação, sanitização e validações existentes | Revisar exposição pública, CORS por serviço/ambiente, segredos, tokens web e dependências antes de publicar; não reimplementar autenticação como se faltasse. |
+| Deploy demo | Planejamento e critérios históricos abaixo | Hosting, configuração, smoke test, recuperação e URLs públicas não comprovados. |
+
+Pendências funcionais independentes da profissionalização: alocações de orçamento
+por categoria e auditoria atômica dos demais domínios financeiros. A entrega A
+cobre Transações, não todos os módulos. Não ampliar regras de negócio ou tocar
+frontend/dados reais como parte desta atualização documental.
 
 ## 5. Roadmap dividido em sprints
 
+Os títulos, prioridades e critérios abaixo preservam o planejamento original.
+Não constituem um cronograma novo nem aprovação de execução. A situação de cada
+sprint indica o que manter e o que ainda validar; não há certificação integral.
+
 ### Sprint 1: Configuração, gitignore, env examples e documentação de ambientes
+
+Situação atual: Parcial: gitignore, env examples e guias já existem. Revisar coerência por ambiente, sem recriar a base entregue.
 
 Prioridade: Alta.
 
@@ -97,14 +116,16 @@ Critérios de aceitação:
 
 ### Sprint 2: Docker local com PostgreSQL, backend, ML API e frontend
 
+Situação atual: Parcial: Dockerfiles backend/ML existem. Compose, frontend no stack e validação real dos contêineres continuam pendentes.
+
 Prioridade: Alta.
 
 Objetivo: permitir levantar o sistema completo com um fluxo local reproduzível.
 
 Alcance:
 
-- Definir Dockerfile para backend.
-- Definir Dockerfile para ML API.
+- Manter e validar o Dockerfile existente para backend.
+- Manter e validar o Dockerfile existente para ML API.
 - Definir estratégia para frontend web em modo desenvolvimento ou build estático, conforme necessidade.
 - Criar `docker-compose` local com PostgreSQL, backend, ML API e frontend.
 - Configurar healthchecks basicos.
@@ -121,6 +142,8 @@ Critérios de aceitação:
 - O fluxo não exige instalar PostgreSQL local fora do Docker.
 
 ### Sprint 3: Migrações e seed demo reproduzível
+
+Situação atual: Parcial: procedimentos, diagnóstico e ensaio sintético de recuperação existem. Integração Docker e aplicação/recuperação em destino real autorizado não estão comprovadas.
 
 Prioridade: Alta.
 
@@ -146,6 +169,8 @@ Critérios de aceitação:
 
 ### Sprint 4: CI/CD completo com backend, frontend, ML e E2E
 
+Situação atual: Parcial: jobs backend/frontend/ML e PostgreSQL E2E existem; checks backend são compartilhados com o uso local. Artefatos e proteção de merge não estão comprovados.
+
 Prioridade: Alta.
 
 Objetivo: converter a validação automática em uma barreira confiável de qualidade.
@@ -154,8 +179,8 @@ Alcance:
 
 - Manter lint, typecheck, testes e build de backend.
 - Manter lint, typecheck e testes de frontend.
-- Adicionar testes do módulo ML com `pytest`.
-- Adicionar job de backend E2E com serviço PostgreSQL em CI.
+- Manter testes do módulo ML com `pytest` já incluídos na CI.
+- Manter o job backend E2E com PostgreSQL já incluído na CI.
 - Separar jobs por responsabilidade e cachear dependências.
 - Publicar artefatos úteis quando houver falha: logs, coverage ou relatórios básicos.
 - Definir checks obligatorios para merge.
@@ -169,6 +194,8 @@ Critérios de aceitação:
 - Os comandos de CI estão documentados e podem ser reproduzidos localmente.
 
 ### Sprint 5: Segurança base
+
+Situação atual: Parcial: proteções de autenticação/API existentes. A revisão para exposição pública permanece uma atividade própria, não prova de ausência dessas proteções.
 
 Prioridade: Alta.
 
@@ -195,6 +222,8 @@ Critérios de aceitação:
 - Existe checklist de segurança base antes de demo.
 
 ### Sprint 6: Deploy demo
+
+Situação atual: Pendente de comprovação operacional: esta revisão não identificou evidência de deploy demo validado.
 
 Prioridade: Média-Alta.
 
@@ -223,18 +252,20 @@ Critérios de aceitação:
 
 ### Sprint 7: Documentação operacional
 
+Situação atual: Parcial: runbook local e README específico já existem; navegação/governança foi integrada. Coerência das demais fontes e execução de demo continuam pendentes.
+
 Prioridade: Média.
 
 Objetivo: deixar o projeto compreensível, manutenível e demonstrável sem depender de memória informal.
 
 Alcance:
 
-- Criar runbook local.
+- Manter e validar o runbook local existente.
 - Criar runbook de demo.
 - Criar guia de troubleshooting.
 - Criar checklist pre-demo.
 - Atualizar README raiz.
-- Substituir conteúdo genérico do README de backend por conteúdo específico do projeto.
+- Manter o README de backend específico do projeto e atualizar referências divergentes.
 - Consolidar referencias a docs existentes.
 - Documentar arquitectura final de Fase 2.
 
@@ -247,6 +278,8 @@ Critérios de aceitação:
 - README de backend deixa de depender do texto genérico do starter.
 
 ### Sprint 8: Avaliação futura de Open Finance
+
+Situação atual: Exploratório: avaliação futura, sem integração real nesta atualização documental.
 
 Prioridade: Média-Baixa.
 
@@ -320,22 +353,19 @@ Esses temas podem ser avaliados em fases posteriores, quando a base operacional 
 - Migrações SQL manuais podem falhar em bancos parcialmente inicializados se não for definido um runner e um estado esperado.
 - E2E em CI pode ser sensível a tempos de inicialização do PostgreSQL.
 - ML usa artefatos `pickle/joblib`; isso exige controle estrito da origem dos modelos carregados.
-- CORS aberto em ML não deve chegar à demo pública.
+- A política CORS dos serviços deve ser verificada para o ambiente demo, sem inferir configuração a partir deste plano histórico.
 - Tokens em `localStorage` são uma superfície de risco para frontend web se houver XSS.
 - O seed demo imprime credenciais; deve se limitar a ambientes controlados.
 - Swagger estático pode ficar desatualizado em relação à API real.
 - O deploy demo pode introduzir diferenças entre Windows local e Linux remoto.
-- Adicionar CI completo pode revelar dívida de testes intermitentes ou dependências implícitas.
+- Manter e ampliar a CI pode revelar testes intermitentes ou dependências implícitas.
 
 ## 10. Próximos passos recomendados
 
-1. Aprovar a fase de profissionalização como alcance oficial da Fase 2.
-2. Criar issues por sprint com critérios de aceitação concretos.
-3. Executar Sprint 1 antes de qualquer Docker ou CI novo.
-4. Definir quem será owner de configuração, Docker, CI, segurança e documentação.
-5. Manter mudanças pequenas e revisáveis por sprint.
-6. Evitar misturar refactors de negócio com infraestrutura.
-7. Registrar decisões importantes como ADRs.
-8. Validar cada sprint com uma demo técnica curta.
-9. Somente depois do Sprint 6 avaliar se convém retomar CQRS, Redis ou observabilidade avançada.
-10. Manter Open Finance como investigação documentada até que existam requisitos legais, técnicos e de segurança suficientes.
+1. Usar o backlog da seção 4 para distinguir pendências reais de entregas já integradas; não reiniciar Dockerfiles, CI ML/E2E ou runbook como se faltassem.
+2. Concluir as próximas fases documentais: arquitetura, procedimentos e OpenAPI, mantendo evidência de revisão e limites explícitos.
+3. Antes de sincronizar dados, obter autorização para origem/destino e comprovar diagnóstico, migrações aplicadas, recuperação e validação de importações sobre os dados relevantes.
+4. Planejar Compose e a validação real do stack como mudança separada; não executar deploy ou alterar regras de negócio nesta revisão.
+5. Manter unidades pequenas e revisáveis com critérios próprios; registrar decisões significativas sem inventar responsáveis, datas ou novas prioridades.
+6. Revisar segurança do ambiente antes da exposição pública, aproveitando as proteções já presentes.
+7. Manter Open Finance como investigação documentada até existirem requisitos técnicos, legais e de segurança suficientes.
