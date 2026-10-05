@@ -497,6 +497,8 @@ components:
           pattern: ^\d{4}-\d{2}-\d{2}$
         descricao:
           type: string
+          nullable: true
+          description: Opcional; aceita texto, string vazia ou null, sem normalizacao.
         ehAjuste:
           type: boolean
     UpdateTransacaoRequest:
@@ -525,6 +527,8 @@ components:
           pattern: ^\d{4}-\d{2}-\d{2}$
         descricao:
           type: string
+          nullable: true
+          description: Omitir preserva o valor atual; null remove a descricao. String vazia permanece vazia.
     CreateTransferenciaRequest:
       type: object
       required:

@@ -3,8 +3,12 @@
 Esta pasta reúne a documentação oficial, histórica, acadêmica e operacional do projeto. A documentação viva deve refletir o estado atual do sistema; documentos em `arquivo/` são históricos e não representam necessariamente a arquitetura, decisões ou processos atuais.
 
 Este índice orienta a leitura; não certifica que todos os documentos estejam
-atualizados. A revisão de requisitos e backlog, arquitetura, procedimentos e
-OpenAPI continua nas próximas fases da atualização documental.
+atualizados. A revisão de requisitos e backlog, arquitetura e procedimentos
+(fases 2–4) está integrada. A fase 5 alinha a descrição de Transações no OpenAPI
+e verifica a coerência dos documentos centrais; a evidência e os limites estão
+no [relatório de validação](validacao/VALIDACAO_ENDPOINTS_APIS.md#atualizacao-documental-fase-5).
+Isso não certifica todos os endpoints, o frontend em desenvolvimento ou operações
+na base real.
 
 ## Fonte oficial de contrato da API
 
