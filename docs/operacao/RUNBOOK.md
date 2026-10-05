@@ -6,6 +6,8 @@ Checklist para preparar uma entrega local confiavel do sistema financeiro.
 
 O teste `backendnest/test/backup-restore.e2e-spec.ts` cria bases exclusivas com
 nomes aleatorios e dados ficticios. Nao le nem copia a base da aplicacao.
+Antes do comando, confirme servidor, porta e role autorizados para criar/remover
+recursos temporarios; pare se esse destino ou permissao nao estiver confirmado.
 Execute `npm run test:e2e -- --testPathPatterns=backup-restore` no backend com
 `E2E_DB_HOST`, `E2E_DB_PORT`, `E2E_DB_USERNAME`, `E2E_DB_PASSWORD` e, se necessario,
 `E2E_DB_ADMIN_DATABASE`. A role de setup cria/remove somente bases e uma role
@@ -140,14 +142,26 @@ CORS_ORIGINS=http://localhost:8081,http://localhost:19006,http://localhost:3000,
 
 ## 2. Dados demo
 
-O caminho oficial para carregar dados demo e:
+Antes de executar, confirme host, porta, role e `DB_NAME` efetivamente usados
+pelo backend, incluindo ambiente do processo e `.env`. Use somente base local
+de demonstracao autorizada, sem dados reais. O
+[seed](../../backendnest/src/scripts/seed-demo-profile.ts) **exclui o usuario
+`demo.financeiro@exemplo.com` existente e recria seu perfil e dados**.
+Ele nao visa outros usuarios, mas isso nao torna a operacao somente leitura.
+Pare se houver dados demo a preservar ou destino desconhecido; nao use E2E
+para tentar recuperar o seed. Os passos nao garantem rollback global em falha.
+
+Depois dessas confirmacoes, o caminho para carregar dados demo e:
 
 ```powershell
 cd backendnest
 npm run seed:demo
 ```
 
-O seed recria o usuario demo se ele ja existir, por isso nao e destrutivo para outros usuarios.
+Resultado esperado: seed encerra com codigo zero e o perfil demo permite o
+smoke manual abaixo. Se falhar, pare, registre a etapa sem credenciais e
+investigue dados parciais antes de repetir. Uma nova execucao pode recriar o
+perfil novamente; nao e recuperacao de dados anteriores.
 
 Credenciales demo:
 
@@ -160,7 +174,11 @@ O seed deixa dados para dashboard, contas, transacoes, categorias, orcamentos, r
 
 ## 3. Checks antes de subir localhost
 
-O comando principal a partir da raiz executa testes do backend, build do backend e testes do frontend:
+Pre-requisitos: dependencias instaladas, diretorio correto e permissao para
+gerar build/cache locais. O [script](../../scripts/verify-all.ps1), a partir da
+raiz, executa unitarios do backend, build do backend e testes do frontend.
+Nao executa lint, typecheck, E2E ou ML e nao substitui toda a CI.
+`-SkipLocalhost` omite somente HTTP; nao torna a execucao sem escrita:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1 -SkipLocalhost
@@ -170,6 +188,8 @@ Tambem e possivel executar passo a passo:
 
 ```powershell
 cd backendnest
+npm run lint:check
+npm run typecheck
 npm test -- --runInBand
 npm run build
 
@@ -177,7 +197,42 @@ cd ..\frontend
 npm test -- --runInBand
 ```
 
+Resultado esperado: cada comando termina com codigo zero; o script imprime
+`Verification completed.` apenas ao concluir suas etapas. Em execucao manual,
+pare na primeira falha. Os checks de lint/tipos nao aplicam autofix; build
+escreve compilacao. Para alcance e warnings, consultar
+[TESTES.md](../desenvolvimento/TESTES.md) e
+[comandos do backend](../../backendnest/README.md).
+
 Se `npm run build` falhar com `EPERM` ao tentar apagar arquivos em `backendnest/dist`, feche processos locais de Node/Nest que possam estar usando o build anterior e repita o comando. O fluxo oficial deste checklist usa o build padrao.
+
+### E2E, migrations e recuperacao: limites de autorizacao
+
+- E2E comuns exigem destino PostgreSQL descartavel confirmado por host, porta,
+  role e base, separado da aplicacao e de clones de restore. Defina os seis
+  `E2E_DB_*` indicados em [TESTES.md](../desenvolvimento/TESTES.md); o helper pode
+  herdar credenciais de `DB_*`/`.env`. Nome contendo `test` nao prova isolamento.
+- O [helper E2E](../../backendnest/test/e2e-database.ts) pode criar a base e
+  executa `DROP SCHEMA public CASCADE`, recria o esquema e aplica migrations.
+  Pare antes do comando se nao houver autorizacao para descartar todo o esquema.
+  Sucesso significa suites selecionadas aprovadas nesse destino, nao base real
+  atualizada nem seguro upgrade de dados existentes.
+- O ensaio de backup/restore acima cria recursos proprios. Exige permissao
+  explicita para criar/remover bases e a role temporaria no servidor indicado.
+  Seu sucesso com dados ficticios nao certifica backup, restore ou sincronizacao
+  de dados reais; uma falha exige investigar, nao apontar para a base da aplicacao.
+- Para esquema existente, seguir os procedimentos de
+  [migrations e diagnostico](../../backendnest/README.md): confirmar destino e
+  arquivos realmente pendentes, sem reaplicar toda a lista. `ON_ERROR_STOP=1`
+  interrompe comandos seguintes; nao reverte SQL ja confirmado. Nao adicionar
+  uma transacao global sobre scripts com fronteiras proprias.
+- Diagnostico somente leitura nao autoriza correcao, restore ou sincronizacao.
+  Em falha operacional, interromper escritas e decidir recuperacao separadamente,
+  com origem/destino identificados; nunca usar o reset E2E como reparo.
+
+Registrar comando, revisao, data, ambiente/destino autorizado e resultado.
+Nao incluir senhas, tokens, dumps ou dados financeiros na evidencia versionada.
+Nao ha comprovacao de operacao real por existirem comandos ou testes neste guia.
 
 ## 4. Orden recomendado para demo
 
@@ -232,7 +287,10 @@ Para validar somente os endpoints HTTP:
 powershell.exe -ExecutionPolicy Bypass -File scripts\verify-localhost.ps1
 ```
 
-Deve reportar HTTP 200 em `GET /health` do backend e no frontend.
+O script consulta apenas `GET /health` do backend e a pagina do frontend;
+aceita status 200 a 399 e reporta cada resposta. Em falha, interrompe com codigo
+nao zero: investigar URL/servico antes de prosseguir. Nao verifica login,
+persistencia nem ML; HTTP acessivel nao equivale a smoke funcional aprovado.
 
 ## 7. Smoke manual minimo
 

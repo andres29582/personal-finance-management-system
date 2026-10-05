@@ -12,7 +12,9 @@ PostgreSQL, backend NestJS, servico FastAPI/ML e frontend web com configuracao
 versionada, previsivel e reproduzivel em Linux.
 
 Ainda nao implementado: nenhum comando `docker compose up` deve ser tratado como
-funcional ate que os arquivos Docker sejam criados e validados em PR futuro.
+funcional ate que o Compose e a stack sejam implementados e validados em PR
+futuro. Os Dockerfiles isolados ja existem; sua presenca nao comprova execucao
+dos containers nem integracao da stack.
 
 ## 2. Estado atual
 
