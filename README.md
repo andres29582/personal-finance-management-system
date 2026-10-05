@@ -166,10 +166,17 @@ Comandos principais:
 
 ```powershell
 cd backendnest
+npm run lint:check
+npm run typecheck
 npm test -- --runInBand
-npm run test:e2e
 npm run build
 ```
+
+Lint e tipos usam o escopo do backend compartilhado com a CI, sem autofix;
+build gera arquivos. Para `npm run test:e2e`, confirme antes um destino PostgreSQL
+explicitamente descartavel: o helper recria `public` e pode herdar credenciais
+da aplicacao. Consulte [comandos e limites](docs/desenvolvimento/TESTES.md)
+e o [runbook](docs/operacao/RUNBOOK.md); nao execute contra a base real.
 
 ```powershell
 cd frontend

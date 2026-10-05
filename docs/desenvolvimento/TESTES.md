@@ -272,20 +272,51 @@ Execute os comandos a partir do diretorio do modulo indicado.
 
 ```powershell
 cd backendnest
+npm run lint:check
+npm run typecheck
 npm test -- --runInBand
-npm run test:e2e
-npm run build
 ```
 
-Comandos complementares:
+`lint:check` e `typecheck` sao os comandos compartilhados com a
+[CI](../../.github/workflows/ci.yml). O lint verifica codigo de runtime em
+`src/**/*.ts`, exclui specs e permite os warnings atuais. O typecheck usa
+`tsconfig.build.json`, exclui specs/E2E e desativa o cache incremental somente
+nesse comando; nao emite arquivos. Nenhum dos dois aplica correcoes.
+
+| Comando no backend | Efeito e limite |
+| --- | --- |
+| `npm run lint:check` / `npm run typecheck` | Checagens sem autofix; nao substituem testes nem cobrem todo o repositorio. |
+| `npm test -- --runInBand` | Executa suites unitarias/controllers descobertas pelo Jest; nao equivale aos E2E. |
+| `npm run lint` / `npm run format` | Alteram codigo com ESLint `--fix` / Prettier `--write`; revisar o diff antes das checagens finais. |
+| `npm run build` / `npm run test:cov` | Geram compilacao / cobertura; nao sao verificacoes sem escrita de arquivos. |
+| `npm run test:e2e` | Escreve dados e recria o esquema da base de teste selecionada; exige destino descartavel confirmado. |
+
+Antes de E2E, confirmar host, porta, role e base descartaveis e autorizados,
+separados da aplicacao e de clones de recuperacao. Definir explicitamente
+`E2E_DB_HOST`, `E2E_DB_PORT`, `E2E_DB_USERNAME`, `E2E_DB_PASSWORD`, `E2E_DB_NAME`
+e `E2E_DB_ADMIN_DATABASE` no ambiente local, sem versionar credenciais.
+O helper pode herdar host/credenciais de `DB_*` ou `.env`; a exigencia de
+`test` no nome nao comprova isolamento. Ele pode criar a base ausente e executa
+`DROP SCHEMA public CASCADE`, recria `public` e aplica migrations.
+**Pare se o destino nao estiver confirmado; nao use a base real.**
+Consultar os [limites operacionais](../operacao/RUNBOOK.md) antes de executar:
 
 ```powershell
-npm run test:cov
-npm run lint
+# Dentro de backendnest, somente com destino E2E descartavel confirmado.
+npm run test:e2e
 ```
 
-Observacao: o script `npm run lint` do backend aplica `--fix`. Use com atencao
-quando a intencao for apenas inspecionar problemas.
+Build e cobertura sao opcionais conforme o escopo, com escrita de artefatos:
+
+```powershell
+npm run build
+npm run test:cov
+```
+
+Resultado esperado: comando termina com codigo zero e relatorio correspondente
+ao seu escopo. Falha ou warning exige leitura do diagnostico; nao registre uma
+suite existente como executada. Evidencia deve indicar comando, revisao, data,
+ambiente/destino e resultado, sem senhas ou dados financeiros.
 
 ### Frontend
 
@@ -323,14 +354,23 @@ python -m uvicorn api.app:app --host 0.0.0.0 --port 8000
 
 ### Verificacao integrada local
 
-O backend documenta o script de verificacao geral do monorepo:
+Da raiz do repositorio, [verify-all.ps1](../../scripts/verify-all.ps1) executa
+unitarios do backend, build do backend e testes do frontend, nessa ordem.
+Nao inclui lint, typecheck, E2E ou testes ML; nao equivale a toda a CI.
+O build escreve artefatos e uma falha interrompe as etapas seguintes:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1 -SkipLocalhost
 ```
 
-Com servicos locais ativos, o mesmo script pode ser executado sem
-`-SkipLocalhost` para incluir verificacoes contra localhost.
+`-SkipLocalhost` omite apenas as verificacoes HTTP, nao o build nem os testes.
+Com servicos ativos, omitir a flag inclui
+[verify-localhost.ps1](../../scripts/verify-localhost.ps1): consulta `/health`
+do backend e a pagina do frontend, aceitando status 200 a 399. Nao comprova
+login, persistencia, funcionamento do ML ou demais fluxos de negocio.
+Resultado esperado do script integrado: `Verification completed.` apos todas
+as etapas previstas. Em falha, parar e investigar a etapa indicada; nao tratar
+execucao parcial como sucesso.
 
 ## Relacao com documentos existentes
 
@@ -353,9 +393,11 @@ Com servicos locais ativos, o mesmo script pode ser executado sem
 
 Antes de commit ou push, escolha a validacao pelo escopo da mudanca:
 
-- documentacao apenas: revisar links, caminhos e `git diff --stat`;
-- backend: rodar unitarios afetados, E2E quando houver fluxo HTTP/persistencia
-  e `npm run build`;
+- documentacao apenas: revisar links, caminhos e `git diff --check`; em
+  instrucoes operacionais, conferir destino, argumentos e efeitos contra scripts;
+- backend: normalizar antes, se necessario, e revisar o diff; depois executar
+  `lint:check`, `typecheck`, unitarios afetados e build. E2E para mudancas de
+  HTTP/persistencia somente com destino descartavel confirmado;
 - frontend: rodar a suite afetada, `npm run lint` e `npx tsc --noEmit`;
 - ML: rodar pytest e, para mudancas de pipeline/modelo, treinar novamente de
   forma consciente;
