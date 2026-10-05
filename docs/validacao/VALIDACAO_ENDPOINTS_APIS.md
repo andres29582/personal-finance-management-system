@@ -1,5 +1,9 @@
 # Validacao de Endpoints e APIs
 
+As secoes originais abaixo preservam a auditoria historica e seus resultados.
+A verificacao focalizada atual esta em [Atualizacao documental — fase 5](#atualizacao-documental-fase-5);
+ela nao reexecuta nem recertifica toda a auditoria anterior.
+
 ## Definicao de Fonte Oficial
 
 - Contrato oficial da API: `backendnest/swagger.yaml`
@@ -217,3 +221,48 @@ as tabelas `planejamento`, `participante_planejamento`,
 ## Conclusao
 
 A API esta funcionalmente coerente entre backend, frontend e testes automatizados para os fluxos usados hoje pela aplicacao. O contrato oficial agora esta formalizado em `backendnest/swagger.yaml`, e os README apontam para essa fonte. Este relatorio permanece como auditoria tecnica e nao substitui o contrato OpenAPI.
+
+## Atualizacao documental fase 5
+
+**Referencia:** 2026-10-04 (America/Sao_Paulo), candidato local da branch
+`docs/openapi-coherence`, baseado em `main` `2658c8e`.
+Ambiente local: Windows, Node 24.14.0, npm 11.9.0 e PostgreSQL 18.3 descartavel.
+Esta evidencia nao demonstra integracao, resultado da CI ou estado da base real.
+
+### Contrato e regressao
+
+- OpenAPI permanece em **3.0.0**, estatico: nao foi introduzido gerador.
+- `CreateTransacaoRequest.descricao` e `UpdateTransacaoRequest.descricao`
+  declaram `type: string` e `nullable: true`, sem exigir o campo.
+- No PATCH, omissao conserva a descricao e `null` a remove; `""` nao e convertido
+  em `null`. Nao foram alteradas regras de negocio ou codigo de producao.
+- O [guard de contrato](../../backendnest/src/transacoes/openapi-contract.spec.ts)
+  usa `js-yaml` e seus tipos como dependencias **diretas de desenvolvimento**.
+  Verifica schemas associados as rotas, nullabilidade, IDs unicos e referencias
+  locais. **Parse YAML e essas verificacoes nao sao validacao completa de OpenAPI.**
+- A regressao falhou antes da correcao: **2 falhas** por `nullable` ausente e
+  **10 casos aprovados**. Nao se tratou de falha de instalacao ou compilacao.
+
+### Evidencia executada e limites
+
+| Verificacao | Resultado e alcance |
+| --- | --- |
+| `npm test -- --runInBand openapi-contract.spec.ts transacao.dto.spec.ts transacoes.service.spec.ts` | 3 suites, 47 testes aprovados: contrato focalizado, validacao DTO e service. |
+| [E2E de descricao](../../backendnest/test/transacao-description-contract.e2e-spec.ts) | 5 testes aprovados: criacao com omissao/null/vazio/texto, persistencia e leitura HTTP; PATCH por omissao/null. |
+| `npm run test:e2e -- app.e2e-spec.ts --testNamePattern=transaction` | 3 testes existentes aprovados; 7 ignorados pelo filtro. Nao equivale a suite E2E completa. |
+| `npm run lint:check`, `npm run typecheck`, `npm run build` | Aprovados no escopo definido pelos scripts; build gera arquivos ignorados. |
+| Prettier `--check` dos dois novos testes | Aprovado; nao foi executado autofix no codigo existente. |
+| Leitura estrutural de controllers/OpenAPI | 18 controllers, 79 operacoes correspondentes e 703 referencias locais resolvidas; nao prova comportamento dos 79 endpoints. |
+
+O E2E usou um cluster criado para esta verificacao, com host loopback, porta,
+usuario, banco e diretorio proprios explicitamente conferidos antes de recriar
+`public`. Todas as variaveis de destino E2E foram definidas; nenhuma conexao da
+aplicacao foi herdada. O cluster foi desligado ao final.
+O primeiro ensaio da nova suite excedeu o timeout padrao de 5 segundos na
+preparacao; foi adotado o limite de 60 segundos das suites existentes.
+
+Requisitos/backlog, arquitetura e procedimentos das fases 2–4 foram relidos em
+conjunto com o indice e o contrato, sem substituir os resultados historicos.
+Migracoes aplicadas, restauracao/sincronizacao real, frontend em desenvolvimento,
+validacao semantica completa de OpenAPI e execucao integral das suites **nao foram
+certificados por esta verificacao**.
