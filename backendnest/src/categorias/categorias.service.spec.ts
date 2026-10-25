@@ -1,4 +1,6 @@
 import { CategoriasService } from './categorias.service';
+import { plainToInstance } from 'class-transformer';
+import { UpdateCategoriaDto } from './dto/update-categoria.dto';
 import { EntityManager } from 'typeorm';
 import { Categoria } from './entities/categoria.entity';
 import { DEFAULT_CATEGORIAS } from './default-categorias';
@@ -220,5 +222,82 @@ describe('CategoriasService', () => {
       categoria,
     );
     expect(repository.findByIdAndUserForWrite).not.toHaveBeenCalled();
+  });
+
+  it('rejects category reclassification before writing or auditing', async () => {
+    repository.findByIdAndUser.mockResolvedValue({
+      tipo: TipoCategoria.DESPESA,
+    } as Categoria);
+    await expect(
+      service.update(
+        'category',
+        'owner',
+        plainToInstance(UpdateCategoriaDto, { tipo: TipoCategoria.RECEITA }),
+      ),
+    ).rejects.toMatchObject({
+      code: 'CATEGORIA_TYPE_IMMUTABLE',
+      field: 'tipo',
+      statusCode: 400,
+    });
+    expect(repository.updateByIdAndUser).not.toHaveBeenCalled();
+    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+
+  it('accepts a legacy unchanged type without writing it back', async () => {
+    repository.findByIdAndUser.mockResolvedValue({
+      tipo: TipoCategoria.DESPESA,
+    } as Categoria);
+    await service.update('category', 'owner', {
+      nome: 'Food',
+      tipo: TipoCategoria.DESPESA,
+    });
+    expect(repository.updateByIdAndUser).toHaveBeenCalledWith(
+      'category',
+      'owner',
+      { nome: 'Food' },
+    );
+  });
+
+  it('keeps inaccessible category errors before checking type', async () => {
+    repository.findByIdAndUser.mockResolvedValue(null);
+    await expect(
+      service.update('foreign', 'owner', { tipo: TipoCategoria.RECEITA }),
+    ).rejects.toMatchObject({ code: 'CATEGORIA_NOT_FOUND' });
+    expect(repository.updateByIdAndUser).not.toHaveBeenCalled();
+  });
+  it('treats a materialized type-only identical echo as a no-op', async () => {
+    const category = { tipo: TipoCategoria.DESPESA } as Categoria;
+    repository.findByIdAndUser.mockResolvedValue(category);
+    await expect(
+      service.update(
+        'category',
+        'owner',
+        plainToInstance(UpdateCategoriaDto, { tipo: TipoCategoria.DESPESA }),
+      ),
+    ).resolves.toBe(category);
+    expect(repository.updateByIdAndUser).not.toHaveBeenCalled();
+    expect(logsService.logEntityEvent).not.toHaveBeenCalled();
+  });
+  it('updates a materialized name without rewriting its unchanged nature', async () => {
+    repository.findByIdAndUser.mockResolvedValue({
+      tipo: TipoCategoria.DESPESA,
+    } as Categoria);
+    await service.update(
+      'category',
+      'owner',
+      plainToInstance(UpdateCategoriaDto, {
+        tipo: TipoCategoria.DESPESA,
+        nome: 'Food',
+      }),
+    );
+    expect(repository.updateByIdAndUser).toHaveBeenCalledWith(
+      'category',
+      'owner',
+      expect.objectContaining({ nome: 'Food' }),
+    );
+    expect(repository.updateByIdAndUser.mock.calls[0][2]).not.toHaveProperty(
+      'tipo',
+    );
+    expect(logsService.logEntityEvent).toHaveBeenCalledTimes(1);
   });
 });

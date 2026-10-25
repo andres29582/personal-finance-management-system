@@ -92,8 +92,22 @@ export class CategoriasService {
     usuarioId: string,
     dto: UpdateCategoriaDto,
   ): Promise<Categoria> {
-    await this.findOne(id, usuarioId);
-    await this.categoriaRepository.updateByIdAndUser(id, usuarioId, dto);
+    const category = await this.findOne(id, usuarioId);
+    const { tipo, ...mutableFields } = dto;
+    if (tipo !== undefined && tipo !== category.tipo) {
+      throw new BusinessRuleException(
+        'CATEGORIA_TYPE_IMMUTABLE',
+        'O tipo da categoria nao pode ser alterado. Crie outra categoria.',
+        { field: 'tipo' },
+      );
+    }
+    if (!Object.values(mutableFields).some((value) => value !== undefined))
+      return category;
+    await this.categoriaRepository.updateByIdAndUser(
+      id,
+      usuarioId,
+      mutableFields,
+    );
     const updatedCategory = await this.findOne(id, usuarioId);
 
     await this.logsService.logEntityEvent({
@@ -105,7 +119,7 @@ export class CategoriasService {
       entityId: updatedCategory.id,
       message: 'Categoria atualizada com sucesso.',
       details: {
-        changedFields: this.getChangedFields(dto),
+        changedFields: this.getChangedFields(mutableFields),
       },
     });
 

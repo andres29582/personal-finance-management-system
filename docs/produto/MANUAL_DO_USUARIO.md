@@ -55,6 +55,8 @@
 
 ## Regras importantes
 
+- O tipo da categoria e definido na criacao e nao pode ser alterado. Para reclassificar, crie outra categoria e desative a anterior; o historico nao e reescrito.
+
 - Uma categoria de `receita` só pode ser usada com uma transação de `receita`.
 - Uma categoria de `despesa` só pode ser usada com uma transação de `despesa`.
 - As transferências entre contas não contam como receita nem despesa do relatório.
