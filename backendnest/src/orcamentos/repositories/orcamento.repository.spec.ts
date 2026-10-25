@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { DataSource, SelectQueryBuilder } from 'typeorm';
 import { Orcamento } from '../entities/orcamento.entity';
 import { Transacao } from '../../transacoes/entities/transacao.entity';
 import { TipoTransacao } from '../../transacoes/enums/tipo-transacao.enum';
@@ -6,33 +6,32 @@ import { OrcamentoRepository } from './orcamento.repository';
 
 describe('OrcamentoRepository', () => {
   it('aggregates active non-adjustment expenses by month and category', async () => {
-    const queryBuilder = {
-      select: jest.fn(),
-      addSelect: jest.fn(),
-      where: jest.fn(),
-      andWhere: jest.fn(),
-      groupBy: jest.fn(),
-      addGroupBy: jest.fn(),
-      getRawMany: jest
-        .fn()
-        .mockResolvedValue([
-          { mesReferencia: '2026-04', categoriaId: 'food', gastoAtual: '75' },
-        ]),
-    };
-    [
-      queryBuilder.select,
-      queryBuilder.addSelect,
-      queryBuilder.where,
-      queryBuilder.andWhere,
-      queryBuilder.groupBy,
-      queryBuilder.addGroupBy,
-    ].forEach((method) => method.mockReturnValue(queryBuilder));
-    const transactionRepository = {
-      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
-    };
+    const dataSource = new DataSource({ type: 'postgres' });
+    const initialize = jest
+      .spyOn(dataSource, 'initialize')
+      .mockRejectedValue(new Error('Database initialization is forbidden'));
+    const connect = jest
+      .spyOn(dataSource.driver, 'connect')
+      .mockRejectedValue(new Error('Database connection is forbidden'));
+    const queryBuilder = new SelectQueryBuilder<Transacao>(dataSource);
+    jest.spyOn(queryBuilder, 'select').mockReturnValue(queryBuilder);
+    jest.spyOn(queryBuilder, 'addSelect').mockReturnValue(queryBuilder);
+    jest.spyOn(queryBuilder, 'where').mockReturnValue(queryBuilder);
+    jest.spyOn(queryBuilder, 'andWhere').mockReturnValue(queryBuilder);
+    jest.spyOn(queryBuilder, 'groupBy').mockReturnValue(queryBuilder);
+    jest.spyOn(queryBuilder, 'addGroupBy').mockReturnValue(queryBuilder);
+    jest
+      .spyOn(queryBuilder, 'getRawMany')
+      .mockResolvedValue([
+        { mesReferencia: '2026-04', categoriaId: 'food', gastoAtual: '75' },
+      ]);
+    const transactionRepository = dataSource.manager.getRepository(Transacao);
+    jest
+      .spyOn(transactionRepository, 'createQueryBuilder')
+      .mockReturnValue(queryBuilder);
     const repository = new OrcamentoRepository(
-      {} as Repository<Orcamento>,
-      transactionRepository as Repository<Transacao>,
+      dataSource.manager.getRepository(Orcamento),
+      transactionRepository,
     );
 
     await expect(
@@ -41,6 +40,17 @@ describe('OrcamentoRepository', () => {
       { mesReferencia: '2026-04', categoriaId: 'food', gastoAtual: '75' },
     ]);
 
+    expect(transactionRepository.createQueryBuilder).toHaveBeenCalledWith(
+      'transaction',
+    );
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'transaction.usuarioId = :usuarioId',
+      { usuarioId: 'user-1' },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      "TO_CHAR(transaction.data, 'YYYY-MM') IN (:...mesReferencias)",
+      { mesReferencias: ['2026-04'] },
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'transaction.ehAjuste = :ehAjuste',
       { ehAjuste: false },
@@ -58,5 +68,8 @@ describe('OrcamentoRepository', () => {
     expect(queryBuilder.addGroupBy).toHaveBeenCalledWith(
       'transaction.categoriaId',
     );
+    expect(dataSource.isInitialized).toBe(false);
+    expect(initialize).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
   });
 });
