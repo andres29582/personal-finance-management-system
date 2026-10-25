@@ -243,4 +243,30 @@ describe('DashboardService', () => {
       result.transacoesRecentes.map((transaction) => transaction.id),
     ).toEqual(['despesa-ativa']);
   });
+
+  it('keeps dashboard totals, category totals, savings and comparisons exact', async () => {
+    contasService.findAll.mockResolvedValue([
+      { id: 'a', saldoAtual: 0.1 },
+      { id: 'b', saldoAtual: 0.2 },
+    ] as never);
+    dashboardRepository.findCategoriesByUser.mockResolvedValue([]);
+    dashboardRepository.findRecentTransactions.mockResolvedValue([]);
+    dashboardRepository.findTransactionsByPeriod
+      .mockResolvedValueOnce([
+        { tipo: TipoTransacao.RECEITA, valor: 0.1 },
+        { tipo: TipoTransacao.RECEITA, valor: 0.2 },
+        { tipo: TipoTransacao.DESPESA, valor: 0.1, categoriaId: 'food' },
+        { tipo: TipoTransacao.DESPESA, valor: 0.2, categoriaId: 'food' },
+      ] as Transacao[])
+      .mockResolvedValueOnce([
+        { tipo: TipoTransacao.RECEITA, valor: 0.1 },
+      ] as Transacao[]);
+    const result = await service.getDashboard('owner', { mes: '2099-01' });
+    expect(result.saldoTotal).toBe(0.3);
+    expect(result.receitasMes).toBe(0.3);
+    expect(result.despesasMes).toBe(0.3);
+    expect(result.economiaMes).toBe(0);
+    expect(result.gastosPorCategoria[0].total).toBe(0.3);
+    expect(result.comparativoMensal.receitas.diferenca).toBe(0.2);
+  });
 });

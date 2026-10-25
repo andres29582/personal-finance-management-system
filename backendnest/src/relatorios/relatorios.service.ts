@@ -5,6 +5,7 @@ import {
   resolveQuarterRange,
 } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
+import { moneyToCents, centsToMoney } from '../common/money.util';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { GetRelatorioDto } from './dto/get-relatorio.dto';
 import { PeriodoRelatorio } from './enums/periodo-relatorio.enum';
@@ -44,15 +45,25 @@ export class RelatoriosService {
       categorias.map((categoria) => [categoria.id, categoria]),
     );
     const contasById = new Map(contas.map((conta) => [conta.id, conta]));
-    const totalReceitas = filteredTransactions
-      .filter((transaction) => transaction.tipo === TipoTransacao.RECEITA)
-      .reduce((sum, transaction) => sum + toNumber(transaction.valor), 0);
-    const totalDespesas = filteredTransactions
-      .filter((transaction) => transaction.tipo === TipoTransacao.DESPESA)
-      .reduce((sum, transaction) => sum + toNumber(transaction.valor), 0);
+    const totalReceitas = centsToMoney(
+      filteredTransactions
+        .filter((transaction) => transaction.tipo === TipoTransacao.RECEITA)
+        .reduce(
+          (sum, transaction) => sum + moneyToCents(transaction.valor),
+          0n,
+        ),
+    );
+    const totalDespesas = centsToMoney(
+      filteredTransactions
+        .filter((transaction) => transaction.tipo === TipoTransacao.DESPESA)
+        .reduce(
+          (sum, transaction) => sum + moneyToCents(transaction.valor),
+          0n,
+        ),
+    );
     const despesasPorCategoriaMap = new Map<
       string,
-      { categoriaId: string; categoriaNome: string; total: number }
+      { categoriaId: string; categoriaNome: string; total: bigint }
     >();
 
     for (const transaction of filteredTransactions) {
@@ -66,11 +77,12 @@ export class RelatoriosService {
       despesasPorCategoriaMap.set(transaction.categoriaId, {
         categoriaId: transaction.categoriaId,
         categoriaNome: categoria?.nome ?? 'Sem categoria',
-        total: (currentValue?.total ?? 0) + toNumber(transaction.valor),
+        total: (currentValue?.total ?? 0n) + moneyToCents(transaction.valor),
       });
     }
 
     const despesasPorCategoria = [...despesasPorCategoriaMap.values()]
+      .map((entry) => ({ ...entry, total: centsToMoney(entry.total) }))
       .sort((leftItem, rightItem) => rightItem.total - leftItem.total)
       .map((entry) => ({
         ...entry,
@@ -98,7 +110,9 @@ export class RelatoriosService {
       periodo: query.periodo,
       periodoReferencia: dateRange.label,
       resumo: {
-        economia: totalReceitas - totalDespesas,
+        economia: centsToMoney(
+          moneyToCents(totalReceitas) - moneyToCents(totalDespesas),
+        ),
         totalDespesas,
         totalReceitas,
         totalTransacoes: filteredTransactions.length,

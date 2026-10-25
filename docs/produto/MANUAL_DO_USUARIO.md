@@ -61,4 +61,5 @@
 - Uma categoria de `despesa` só pode ser usada com uma transação de `despesa`.
 - As transferências entre contas não contam como receita nem despesa do relatório.
 
+- Saldos, totais de dashboard/relatorios e progresso de orcamentos somam valores em centavos exatos. As respostas continuam numericas; um total sem representacao numerica fiel produz erro, nunca aproximacao silenciosa.
 - O alerta de orcamento usa o gasto exato: abaixo de 80% e normal, de 80% ate menos de 100% e alerta, e a partir de 100% e estourado. O percentual exibido e arredondado a duas casas e nao determina o estado.

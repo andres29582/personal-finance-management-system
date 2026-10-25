@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { resolveMonthRange } from '../common/date-range.util';
 import { toNumber } from '../common/number.util';
+import { moneyToCents, centsToMoney } from '../common/money.util';
 import { Conta } from '../contas/entities/conta.entity';
 import { ContasService } from '../contas/contas.service';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
@@ -61,7 +62,7 @@ export class DashboardService {
     );
     const gastosPorCategoriaMap = new Map<
       string,
-      { categoriaId: string; categoriaNome: string; total: number }
+      { categoriaId: string; categoriaNome: string; total: bigint }
     >();
 
     for (const transacao of transacoesPeriodo) {
@@ -71,7 +72,7 @@ export class DashboardService {
 
       const categoria = categoriasById.get(transacao.categoriaId);
       const currentEntry = gastosPorCategoriaMap.get(transacao.categoriaId);
-      const total = (currentEntry?.total ?? 0) + toNumber(transacao.valor);
+      const total = (currentEntry?.total ?? 0n) + moneyToCents(transacao.valor);
 
       gastosPorCategoriaMap.set(transacao.categoriaId, {
         categoriaId: transacao.categoriaId,
@@ -81,6 +82,7 @@ export class DashboardService {
     }
 
     const gastosPorCategoria = [...gastosPorCategoriaMap.values()]
+      .map((entry) => ({ ...entry, total: centsToMoney(entry.total) }))
       .sort((leftItem, rightItem) => rightItem.total - leftItem.total)
       .map((entry) => ({
         ...entry,
@@ -109,10 +111,13 @@ export class DashboardService {
       },
     );
 
-    const saldoTotal = contas.reduce(
-      (sum, conta) =>
-        sum + toNumber((conta as Conta & { saldoAtual?: number }).saldoAtual),
-      0,
+    const saldoTotal = centsToMoney(
+      contas.reduce(
+        (sum, conta) =>
+          sum +
+          moneyToCents((conta as Conta & { saldoAtual: number }).saldoAtual),
+        0n,
+      ),
     );
 
     return {
@@ -132,7 +137,9 @@ export class DashboardService {
         receitas: buildMonthlyComparison(totalReceitas, totalReceitasAnterior),
       },
       despesasMes: totalDespesas,
-      economiaMes: totalReceitas - totalDespesas,
+      economiaMes: centsToMoney(
+        moneyToCents(totalReceitas) - moneyToCents(totalDespesas),
+      ),
       gastosPorCategoria,
       mesReferencia: periodRange.label,
       receitasMes: totalReceitas,
@@ -154,17 +161,21 @@ function resolvePreviousMonthRange(monthReference: string) {
 function sumTransactionsByType(
   transactions: Array<{
     tipo: TipoTransacao;
-    valor: number | string | null | undefined;
+    valor: number | string;
   }>,
   type: TipoTransacao,
 ) {
-  return transactions
-    .filter((transacao) => transacao.tipo === type)
-    .reduce((sum, transacao) => sum + toNumber(transacao.valor), 0);
+  return centsToMoney(
+    transactions
+      .filter((transacao) => transacao.tipo === type)
+      .reduce((sum, transacao) => sum + moneyToCents(transacao.valor), 0n),
+  );
 }
 
 function buildMonthlyComparison(currentValue: number, previousValue: number) {
-  const diferenca = currentValue - previousValue;
+  const diferenca = centsToMoney(
+    moneyToCents(currentValue) - moneyToCents(previousValue),
+  );
 
   return {
     atual: currentValue,

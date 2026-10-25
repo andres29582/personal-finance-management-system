@@ -410,4 +410,24 @@ describe('ContasService', () => {
       statusCode: 404,
     });
   });
+
+  it('keeps account cents exact across initial balance, transactions, transfers and fees', async () => {
+    contasRepository.findActiveByUser.mockResolvedValue([
+      { id: 'account', saldoInicial: 0.1 },
+    ] as Conta[]);
+    contasRepository.findTransactionsForAccounts.mockResolvedValue([
+      { contaId: 'account', tipo: TipoTransacao.RECEITA, valor: 0.2 },
+    ] as Transacao[]);
+    contasRepository.findTransfersByUser.mockResolvedValue([]);
+    expect((await service.findAll('owner'))[0].saldoAtual).toBe(0.3);
+    contasRepository.findTransfersByUser.mockResolvedValue([
+      {
+        contaOrigemId: 'account',
+        contaDestinoId: 'other',
+        valor: 0.1,
+        comissao: 0.1,
+      },
+    ] as Transferencia[]);
+    expect((await service.findAll('owner'))[0].saldoAtual).toBe(0.1);
+  });
 });

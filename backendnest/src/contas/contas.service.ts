@@ -5,7 +5,7 @@ import {
   BusinessRuleException,
   ResourceNotFoundException,
 } from '../common/exceptions';
-import { toNumber } from '../common/number.util';
+import { moneyToCents, centsToMoney } from '../common/money.util';
 import { LogsService } from '../logs/logs.service';
 import { TipoTransacao } from '../transacoes/enums/tipo-transacao.enum';
 import { CreateContaDto } from './dto/create-conta.dto';
@@ -213,7 +213,7 @@ export class ContasService {
       const transactionDelta = transacoes
         .filter((transaction) => transaction.contaId === conta.id)
         .reduce((sum, transaction) => {
-          const transactionValue = toNumber(transaction.valor);
+          const transactionValue = moneyToCents(transaction.valor);
 
           return (
             sum +
@@ -221,10 +221,10 @@ export class ContasService {
               ? transactionValue
               : -transactionValue)
           );
-        }, 0);
+        }, 0n);
       const transferDelta = transferencias.reduce((sum, transferencia) => {
-        const transferValue = toNumber(transferencia.valor);
-        const feeValue = toNumber(transferencia.comissao);
+        const transferValue = moneyToCents(transferencia.valor);
+        const feeValue = moneyToCents(transferencia.comissao);
 
         if (transferencia.contaOrigemId === conta.id) {
           return sum - transferValue - feeValue;
@@ -235,12 +235,13 @@ export class ContasService {
         }
 
         return sum;
-      }, 0);
+      }, 0n);
 
       return {
         ...conta,
-        saldoAtual:
-          toNumber(conta.saldoInicial) + transactionDelta + transferDelta,
+        saldoAtual: centsToMoney(
+          moneyToCents(conta.saldoInicial) + transactionDelta + transferDelta,
+        ),
       };
     });
   }

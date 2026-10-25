@@ -153,4 +153,21 @@ describe('RelatoriosService', () => {
       'despesa-ativa',
     ]);
   });
+
+  it('keeps report totals, category totals and savings exact', async () => {
+    repository.findTransactionsByPeriod.mockResolvedValue([
+      { tipo: TipoTransacao.RECEITA, valor: 0.3 },
+      { tipo: TipoTransacao.DESPESA, valor: 0.1, categoriaId: 'food' },
+      { tipo: TipoTransacao.DESPESA, valor: 0.2, categoriaId: 'food' },
+    ] as Transacao[]);
+    repository.findCategoriesByUser.mockResolvedValue([]);
+    repository.findAccountsByUser.mockResolvedValue([]);
+    const result = await service.getRelatorio('owner', {
+      periodo: PeriodoRelatorio.MENSAL,
+      mes: '2099-01',
+    });
+    expect(result.resumo.totalDespesas).toBe(0.3);
+    expect(result.resumo.economia).toBe(0);
+    expect(result.despesasPorCategoria[0].total).toBe(0.3);
+  });
 });
