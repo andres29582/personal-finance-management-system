@@ -25,7 +25,7 @@ export type CreateTransacaoRequestDto = {
 };
 
 export type UpdateTransacaoRequestDto =
-  Partial<Omit<CreateTransacaoRequestDto, 'descricao'>> & {
+  Partial<Omit<CreateTransacaoRequestDto, 'descricao' | 'ehAjuste'>> & {
     descricao?: string | null;
   };
 

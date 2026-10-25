@@ -395,3 +395,22 @@ Reforcos recomendados:
 - manter builders/fixtures tipados alinhados aos DTOs reais;
 - registrar no documento de testes frontend qualquer mudanca relevante de
   cobertura por rota.
+
+### Contrato de atualização de transações — 2026-10-25
+
+`UpdateTransacaoRequestDto` exclui `ehAjuste`, como o PATCH da API; a criação
+mantém o campo opcional e a atualização mantém `descricao` anulável. Não há novo
+fluxo de ajuste nem mudança de comportamento no servidor ou no formulário.
+
+A fixture `src/modules/transacoes/types/transacao.contract.typecheck.ts` contém
+somente tipos e é incluída pelo `tsconfig.json`. Verifique com o compilador real,
+a partir de `frontend`; a transformação isolada do Jest não prova esse contrato:
+
+```sh
+node node_modules/typescript/bin/tsc --noEmit --incremental false
+npm test -- --runInBand --testTimeout=15000 --runTestsByPath src/modules/transacoes/__tests__/transacaoService.test.ts src/modules/transacoes/__tests__/transacoes-form.test.tsx
+```
+
+As invariantes verificam a ausência da chave no PATCH, a preservação da flag
+opcional booleana na criação e a descrição anulável na atualização. Essa prova
+de tipos não certifica execução HTTP, banco ou interface real.
