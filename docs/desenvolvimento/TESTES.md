@@ -414,3 +414,41 @@ npm test -- --runInBand --testTimeout=15000 --runTestsByPath src/modules/transac
 As invariantes verificam a ausência da chave no PATCH, a preservação da flag
 opcional booleana na criação e a descrição anulável na atualização. Essa prova
 de tipos não certifica execução HTTP, banco ou interface real.
+
+### Entrega local verificada — 2026-10-25
+
+Cinco commits locais foram criados, sem push; a evidência abaixo não significa
+aceite global, deploy ou execução do cliente real.
+
+| Commit | Escopo | Prova delimitada em candidato isolado |
+| --- | --- | --- |
+| `4ba12e0` | Mock tipado de repositório de orçamento, pré-requisito aprovado em 12/10 | HEAD + pré-requisito: um teste PASS, exit 0; hash atual igual ao aprovado. |
+| `627bed8` | Contrato PATCH de transação sem `ehAjuste`, preservando POST e descrição anulável | Fixture de tipos: exit 0. |
+| `6740cd6` | Natureza imutável de categoria e eco DTO sem escrita vazia | 15 testes focalizados PASS, exit 0. |
+| `03889fb` | Centavos exatos, limite/delta de alocação e limiares de orçamento | 49 testes focalizados PASS, exit 0. |
+| `ba41bed` | Saldos e agregados de conta/dashboard/relatório com centavos exatos | 19 testes focalizados PASS, exit 0. |
+
+São **84 testes backend focalizados**, incluindo o pré-requisito. O candidato
+cumulativo com os cinco conjuntos passou no backend completo:
+`node node_modules/typescript/bin/tsc --noEmit --incremental false`, exit 0.
+O candidato anterior sem o pré-requisito falhou; o PASS vale para a árvore
+expandida, não para uma repetição de bytes inalterados. As dependências já
+instaladas foram reutilizadas por junctions: não houve instalação nem prova de
+instalação limpa pelo lockfile/CI.
+
+**Limites frontend:** o tipo isolado passou, mas o compilador completo de HEAD +
+contrato terminou com exit 2: 572 erros em 32 arquivos inalterados, classificados
+como baseline/ambiente instalado, incluindo tipos Jest ausentes e tipos de
+estilos. O `tsc` completo do WIP havia passado anteriormente; essa árvore é
+diferente e não substitui a prova do candidato. No WIP, a única execução das
+duas suites de transações teve 21 PASS/um timeout de 15000 ms no caso de criação
+em `transacoes-form.test.tsx:80`; causa não diagnosticada. Não há GREEN global
+frontend nem repetição desses testes nesta atualização documental.
+
+Continuam fora desses commits os baselines de draft frontend, adaptadores de
+sessão, launcher financeiro, CLI de migração e transferências. A validação do
+cliente real e novas execuções com banco permanecem adiadas. A evidência de
+tipagem PostgreSQL de 24/10 é histórica, não uma nova certificação desses
+baselines. Registros privados locais de candidatos e resultados estão em
+`.tmp/isolated-unit-verify-11c04ecd36b544d08af551be89feaaf0/`; não publicar logs
+brutos nem tratar esse diretório temporário como artefato de equipe versionado.
