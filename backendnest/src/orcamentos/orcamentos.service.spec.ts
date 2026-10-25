@@ -361,4 +361,129 @@ describe('OrcamentosService', () => {
 
     expect(manager.update).not.toHaveBeenCalled();
   });
+
+  describe('exact monetary boundaries', () => {
+    let allocationRepository: {
+      findOneBy: jest.Mock;
+      create: jest.Mock;
+      save: jest.Mock;
+      createQueryBuilder: jest.Mock;
+    };
+    beforeEach(() => {
+      manager.findOne.mockResolvedValue({
+        id: 'budget',
+        usuarioId: 'owner',
+        mesReferencia: '2099-01',
+        valorPlanejado: '0.30',
+      });
+      orcamentosRepository.findByIdAndUser.mockResolvedValue({
+        id: 'budget',
+        mesReferencia: '2099-01',
+        valorPlanejado: 0.3,
+      } as Orcamento);
+      orcamentosRepository.findExpenseTotalsByMonths.mockResolvedValue([]);
+      categoriasService.findActiveForWrite.mockResolvedValue({
+        tipo: 'despesa',
+      } as never);
+      const query = {
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({ total: '0.10' }),
+      };
+      allocationRepository = {
+        findOneBy: jest.fn(),
+        create: jest.fn((data) => data),
+        save: jest.fn(async (data) => data),
+        createQueryBuilder: jest.fn(() => query),
+      };
+      manager.getRepository.mockReturnValue(allocationRepository);
+    });
+
+    it('accepts 0.10 plus 0.20 at the global cap with the existing budget lock', async () => {
+      await expect(
+        service.createAllocation('budget', 'owner', {
+          categoriaId: 'category',
+          valorPlanejado: 0.2,
+        }),
+      ).resolves.toMatchObject({ valorPlanejado: 0.2 });
+      expect(manager.findOne).toHaveBeenCalledWith(Orcamento, {
+        where: { id: 'budget', usuarioId: 'owner' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(logsService.logEntityEventTransactional).toHaveBeenCalled();
+    });
+
+    it('calculates allocation changes from exact old and new cents', async () => {
+      allocationRepository.findOneBy.mockResolvedValue({
+        id: 'allocation',
+        valorPlanejado: '0.10',
+      });
+      allocationRepository
+        .createQueryBuilder()
+        .getRawOne.mockResolvedValue({ total: '0.20' });
+      await expect(
+        service.updateAllocation('budget', 'allocation', 'owner', {
+          valorPlanejado: 0.2,
+        }),
+      ).resolves.toMatchObject({ valorPlanejado: 0.2 });
+    });
+
+    it('rejects a cent above the global cap without saving', async () => {
+      await expect(
+        service.createAllocation('budget', 'owner', {
+          categoriaId: 'category',
+          valorPlanejado: 0.21,
+        }),
+      ).rejects.toMatchObject({
+        code: 'ORCAMENTO_CATEGORIA_TOTAL_EXCEEDS_BUDGET',
+      });
+      expect(allocationRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('allows reducing the budget to the exact allocated total', async () => {
+      await expect(
+        service.update('budget', 'owner', { valorPlanejado: 0.1 }),
+      ).resolves.toBeDefined();
+      expect(manager.update).toHaveBeenCalled();
+    });
+
+    it.each([
+      ['799.99', 'normal'],
+      ['800.00', 'alerta_80'],
+      ['800.01', 'alerta_80'],
+      ['999.99', 'alerta_80'],
+      ['1000.00', 'estourado'],
+      ['1000.01', 'estourado'],
+    ])(
+      'uses exact global and category thresholds for %s',
+      async (spent, status) => {
+        orcamentosRepository.findByIdAndUser.mockResolvedValue({
+          mesReferencia: '2099-01',
+          valorPlanejado: 1000,
+          alocacoes: [{ categoriaId: 'category', valorPlanejado: 1000 }],
+        } as Orcamento);
+        orcamentosRepository.findExpenseTotalsByMonths.mockResolvedValue([
+          {
+            mesReferencia: '2099-01',
+            categoriaId: 'category',
+            gastoAtual: spent,
+          },
+        ]);
+        const result = await service.findOne('budget', 'owner');
+        expect(result.statusAlerta).toBe(status);
+        expect(result.alocacoes?.[0].statusAlerta).toBe(status);
+        expect(result.restante).toBe(Number((1000 - Number(spent)).toFixed(2)));
+      },
+    );
+
+    it('sums category expense aggregates and remaining money exactly', async () => {
+      orcamentosRepository.findExpenseTotalsByMonths.mockResolvedValue([
+        { mesReferencia: '2099-01', categoriaId: 'a', gastoAtual: '0.10' },
+        { mesReferencia: '2099-01', categoriaId: 'b', gastoAtual: '0.20' },
+      ]);
+      const result = await service.findOne('budget', 'owner');
+      expect(result.gastoAtual).toBe(0.3);
+      expect(result.restante).toBe(0);
+    });
+  });
 });

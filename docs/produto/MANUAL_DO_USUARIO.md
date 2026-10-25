@@ -60,3 +60,5 @@
 - Uma categoria de `receita` só pode ser usada com uma transação de `receita`.
 - Uma categoria de `despesa` só pode ser usada com uma transação de `despesa`.
 - As transferências entre contas não contam como receita nem despesa do relatório.
+
+- O alerta de orcamento usa o gasto exato: abaixo de 80% e normal, de 80% ate menos de 100% e alerta, e a partir de 100% e estourado. O percentual exibido e arredondado a duas casas e nao determina o estado.

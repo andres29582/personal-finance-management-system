@@ -10,7 +10,7 @@ import {
 } from '../common/exceptions';
 import { assertPositiveFinancialValue } from '../common/financial-validation.util';
 import { normalizeMonthReference } from '../common/date-range.util';
-import { toNumber } from '../common/number.util';
+import { moneyToCents, centsToMoney } from '../common/money.util';
 import { CreateOrcamentoDto } from './dto/create-orcamento.dto';
 import { FindOrcamentosDto } from './dto/find-orcamentos.dto';
 import { UpdateOrcamentoDto } from './dto/update-orcamento.dto';
@@ -185,7 +185,7 @@ export class OrcamentosService {
         id,
         budget.valorPlanejado,
         manager,
-        dto.valorPlanejado,
+        moneyToCents(dto.valorPlanejado),
       );
       const allocation = await allocationRepository.save(
         allocationRepository.create({
@@ -245,7 +245,7 @@ export class OrcamentosService {
         id,
         budget.valorPlanejado,
         manager,
-        valorPlanejado - toNumber(allocation.valorPlanejado),
+        moneyToCents(valorPlanejado) - moneyToCents(allocation.valorPlanejado),
       );
       allocation.valorPlanejado = valorPlanejado;
       const updated = await allocationRepository.save(allocation);
@@ -331,7 +331,7 @@ export class OrcamentosService {
     orcamentoId: string,
     budgetValue: number | string,
     manager: EntityManager,
-    delta = 0,
+    delta = 0n,
   ): Promise<void> {
     const result = await manager
       .getRepository(OrcamentoCategoria)
@@ -340,7 +340,7 @@ export class OrcamentosService {
       .where('allocation.orcamentoId = :orcamentoId', { orcamentoId })
       .getRawOne<{ total: string }>();
     const total = result?.total ?? '0';
-    if (toNumber(total) + delta > toNumber(budgetValue)) {
+    if (moneyToCents(total) + delta > moneyToCents(budgetValue)) {
       throw new BusinessRuleException(
         'ORCAMENTO_CATEGORIA_TOTAL_EXCEEDS_BUDGET',
         'A soma das alocacoes por categoria nao pode exceder o valor planejado.',
@@ -359,11 +359,12 @@ export class OrcamentosService {
     const monthlyTotals = expenseTotals.filter(
       (total) => total.mesReferencia === orcamento.mesReferencia,
     );
-    const gastoAtual = monthlyTotals.reduce(
-      (sum, total) => sum + toNumber(total.gastoAtual),
-      0,
+    const spentCents = monthlyTotals.reduce(
+      (sum, total) => sum + moneyToCents(total.gastoAtual),
+      0n,
     );
-    const valorPlanejado = toNumber(orcamento.valorPlanejado);
+    const gastoAtual = centsToMoney(spentCents);
+    const valorPlanejado = centsToMoney(moneyToCents(orcamento.valorPlanejado));
     const progress = this.calculateProgress(valorPlanejado, gastoAtual);
 
     return {
@@ -372,37 +373,43 @@ export class OrcamentosService {
       valorPlanejado,
       alocacoes: orcamento.alocacoes?.map((allocation) => ({
         ...allocation,
-        valorPlanejado: toNumber(allocation.valorPlanejado),
+        valorPlanejado: centsToMoney(moneyToCents(allocation.valorPlanejado)),
         ...this.calculateProgress(
-          toNumber(allocation.valorPlanejado),
-          toNumber(
-            monthlyTotals.find(
-              (total) => total.categoriaId === allocation.categoriaId,
-            )?.gastoAtual ?? '0',
-          ),
+          allocation.valorPlanejado,
+          monthlyTotals.find(
+            (total) => total.categoriaId === allocation.categoriaId,
+          )?.gastoAtual ?? '0',
         ),
       })),
     };
   }
 
-  private calculateProgress(valorPlanejado: number, gastoAtual: number) {
+  private calculateProgress(
+    valorPlanejado: number | string,
+    gastoAtual: number | string,
+  ) {
+    const plannedCents = moneyToCents(valorPlanejado);
+    const spentCents = moneyToCents(gastoAtual);
+    const planned = centsToMoney(plannedCents);
+    const spent = centsToMoney(spentCents);
     const percentualUtilizado =
-      valorPlanejado > 0
-        ? Number(((gastoAtual / valorPlanejado) * 100).toFixed(2))
-        : gastoAtual > 0
+      plannedCents > 0n
+        ? Number(((spent / planned) * 100).toFixed(2))
+        : spentCents > 0n
           ? 100
           : 0;
 
     return {
-      gastoAtual,
+      gastoAtual: spent,
       percentualUtilizado,
-      restante: valorPlanejado - gastoAtual,
-      statusAlerta:
-        percentualUtilizado >= 100
-          ? 'estourado'
-          : percentualUtilizado >= 80
-            ? 'alerta_80'
-            : 'normal',
+      restante: centsToMoney(plannedCents - spentCents),
+      statusAlerta: (
+        plannedCents > 0n ? spentCents >= plannedCents : spentCents > 0n
+      )
+        ? 'estourado'
+        : plannedCents > 0n && spentCents * 5n >= plannedCents * 4n
+          ? 'alerta_80'
+          : 'normal',
     };
   }
 
