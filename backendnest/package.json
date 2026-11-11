@@ -14,8 +14,8 @@
     "start:dev:standard": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
-    "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -27,7 +27,8 @@
     "migration:run": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts run",
     "migration:status": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts status",
     "migration:dry-run": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts dry-run",
-    "migration:mark-baseline": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts mark-baseline"
+    "migration:mark-baseline": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts mark-baseline",
+    "lint:contract": "node test/lint-contract.cjs backendnest"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

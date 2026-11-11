@@ -6,30 +6,33 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs'],
+    ignores: ['dist/**', '.dev-dist/**', '.dev-dist-localhost/**', 'coverage/**', '.tmp/**'],
   },
-  eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
-  eslintPluginPrettierRecommended,
   {
+    files: ['**/*.ts'],
+    extends: [eslint.configs.recommended, ...tseslint.configs.recommendedTypeChecked, eslintPluginPrettierRecommended],
     languageOptions: {
-      globals: {
-        ...globals.node,
-        ...globals.jest,
-      },
+      globals: globals.node,
       sourceType: 'commonjs',
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
-  },
-  {
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
+  },
+  {
+    files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
+    extends: [eslint.configs.recommended],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['**/*.spec.ts', 'test/**/*.ts'],
+    languageOptions: { globals: globals.jest },
   },
 );
