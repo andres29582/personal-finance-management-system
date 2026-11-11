@@ -68,6 +68,12 @@ function isAuthRefreshExcluded(url?: string) {
     return false;
   }
 
+  // CEP lookup is public during registration; never require or send credentials.
+  if (/^\/cep\/\d{8}$/.test(url)) return true;
+
+  // CEP lookup is public during registration; never require or send credentials.
+  if (/^\/cep\/\d{8}$/.test(url)) return true;
+
   return [
     "/auth/login",
     "/auth/register",
