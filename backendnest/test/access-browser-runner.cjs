@@ -35,6 +35,8 @@ function staticFile(root, url) {
   const pathname = decodeURIComponent(
     new URL(url, 'http://127.0.0.1').pathname,
   );
+  // URL paths use forward slashes on every host, including Linux CI.
+  if (pathname.includes('\\')) throw new Error('Invalid static path.');
   const target = path.resolve(root, '.' + pathname);
   if (target !== root && !target.startsWith(root + path.sep))
     throw new Error('Invalid static path.');
