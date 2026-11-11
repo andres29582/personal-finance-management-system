@@ -1,0 +1,137 @@
+{
+  "date": "2026-11-11",
+  "timezone": "America/Sao_Paulo",
+  "status": "ACCESS_WEB_CLOSED_LOCAL",
+  "branch": "codex/cierre-pruebas-acceso",
+  "base": "a2863da5c7eb1b8f76e39eba53c8587b3d58ae05",
+  "codeCandidate": "631b187f6ffd0776f8e99be7ba5596a7fb55cb0f",
+  "runtime": {
+    "node": "22.23.4",
+    "postgresql": "18.6",
+    "browser": "Microsoft Edge (headless, chromium)",
+    "webViewport": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "tests": {
+    "backendJest": {
+      "pass": 1089,
+      "fail": 0,
+      "suites": 101,
+      "executionCandidate": "77253f1655f0b2373d4b23e49fec2ec82981be34",
+      "inputReuse": "backendnest/src unchanged after L3"
+    },
+    "frontendJest": {
+      "pass": 882,
+      "fail": 0,
+      "suites": 96
+    },
+    "registrationPostgreSQL": {
+      "pass": 6,
+      "fail": 0,
+      "executionCandidate": "e57e7761637dbf5a8b18ebd89c59ad43f93c12f0",
+      "inputReuse": "backend production sources unchanged after L1"
+    },
+    "harness": {
+      "pass": 101,
+      "fail": 0,
+      "windowsDownloadMetadataRecovered": true,
+      "scope": "Full 101 passed; after static-path portability adjustment, the three affected access-runner tests passed again; the other 98 inputs are unchanged.",
+      "portabilityChecks": [
+        {
+          "pathImplementation": "posix",
+          "traversalsRejected": 2
+        },
+        {
+          "pathImplementation": "win32",
+          "traversalsRejected": 2
+        }
+      ]
+    },
+    "realWeb": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "retries": 0,
+      "flaky": 0,
+      "runId": "1faebbd5-07af-4de2-bdd3-443da11db4fe",
+      "sourceDigest": "f2bf9fbe9db20138168f4a55ce2d95a3cd9009ffd4c9a8cf9881bd48298bda87",
+      "sourcesVerified": 853,
+      "sourceDrift": 0,
+      "cleanupErrors": 0
+    }
+  },
+  "checks": {
+    "backendTypes": 0,
+    "frontendTypes": 0,
+    "nestBuild": 0,
+    "expoProductionWebExport": 0,
+    "workflowAndOpenApiParse": 0
+  },
+  "lint": {
+    "backend": {
+      "files": 378,
+      "errors": 1555,
+      "warnings": 140
+    },
+    "frontend": {
+      "full": {
+        "files": 385,
+        "errors": 3784,
+        "warnings": 2564
+      },
+      "maintained": {
+        "files": 384,
+        "errors": 70,
+        "warnings": 78
+      },
+      "excludedGeneratedPath": "frontend/smoke-web"
+    },
+    "newFilesErrors": 0,
+    "autofix": false,
+    "baselineTotalsUnchanged": true,
+    "preexistingErrorInTouchedFile": {
+      "path": "frontend/src/navigation/RootLayout.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "expression": "setSecondsLeft(null)",
+      "introducedByThisTask": false
+    }
+  },
+  "cleanup": {
+    "postgresqlStopped": true,
+    "listeners4319_4189_55439": 0,
+    "individualEdgePidInspection": false
+  },
+  "ci": {
+    "prepared": true,
+    "remoteRun": false,
+    "postgresql16LocalRun": false
+  },
+  "pending": [
+    "Android/iOS device journeys",
+    "Remote CI",
+    "Existing global lint debt",
+    "Historical P4/U6 and production gates",
+    "Historical partial-account investigation"
+  ],
+  "productionDatabaseAccessed": false,
+  "pushed": false,
+  "conservation": {
+    "worktrees": 39,
+    "worktreeMetadataFiles": 301,
+    "worktreeDrift": 0,
+    "untouchedFiles": 1084,
+    "untouchedFileDrift": 0,
+    "consolidatedBranchUnchanged": true,
+    "guardianDownloadMetadata": "RECOVERED_FROM_PRESERVED_SNAPSHOT"
+  },
+  "gitNexus": {
+    "indexedCodeCandidate": "631b187f6ffd0776f8e99be7ba5596a7fb55cb0f",
+    "files": 863,
+    "processes": 788,
+    "ftsEnabled": false,
+    "rootLayoutDiffRisk": "HIGH",
+    "comparisonAgainstMainRisk": "CRITICAL_INCLUDES_PREVIOUS_CONSOLIDATED_WORK"
+  }
+}

@@ -2609,6 +2609,14 @@ paths:
       tags:
       - Auth
       summary: Registrar usuario
+      description: >-
+        Confirma usuario e oito categorias iniciais na mesma transacao. Em caso
+        de falha antes do commit, nenhuma parte do cadastro permanece. Retorna
+        apenas usuario publico, sem tokens ou autologin. Conflitos de email/CPF,
+        inclusive concorrentes, retornam 409 com AUTH_EMAIL_ALREADY_EXISTS
+        (campo email) ou AUTH_CPF_ALREADY_EXISTS (campo cpf). Se a resposta se
+        perder depois do commit, o cadastro pode existir completo; o cliente
+        deve oferecer login ou recuperacao, sem afirmar rollback.
       requestBody:
         required: true
         content:

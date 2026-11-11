@@ -84,6 +84,24 @@ payload V2 sem depender de uma API FastAPI real durante o teste do backend.
 
 ## Frontend Expo/React Native
 
+### Registro atômico e percursos reais de acesso
+
+`backendnest/test/registration-atomicity.e2e-spec.ts` verifica o cadastro completo,
+rollback após falha de categoria, reenvio e concorrência real de email/CPF em
+PostgreSQL descartável. Usuário e catálogo inicial compartilham a transação;
+o sucesso continua sem autologin.
+
+O comando `npm run test:access-browser` em `backendnest/` exporta o frontend
+atual e percorre telas reais com Nest/PostgreSQL e navegador. Configuração,
+isolamento, limites e evidências estão no
+[runbook de acesso web](../operacao/PRUEBAS_ACCESO_WEB.md). A CI possui um job
+dedicado; sua configuração não equivale a uma execução remota aprovada.
+
+`resolveApiError` classifica os erros sem limpar credenciais. A coordenação de
+API/storage invalida somente o contexto proprietário; `RootLayout` oculta o
+conteúdo até confirmar autoridade. Fixtures devem fornecer geração, snapshot,
+autoridade e closures de cleanup coerentes com esse contrato.
+
 Os testes do frontend ficam em `frontend/__tests__/` e em
 `frontend/src/modules/**/__tests__/`.
 

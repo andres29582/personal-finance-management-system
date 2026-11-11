@@ -2,11 +2,18 @@
 
 Fecha: **11 de noviembre de 2026**, America/Sao_Paulo.
 
-Estado: **IMPLEMENTACIÓN EN CURSO**. Registro transaccional y correcciones de pruebas implementados; validación completa y recorridos de acceso en curso. Los resultados de cierre se documentarán con su candidato exacto.
+Estado: **CERRADO EN EL ALCANCE LOCAL DE ACCESO WEB Y PRUEBAS**. Registro atómico, Jest completo, tipos, builds y seis recorridos web reales aprobados. [Resultado y límites](../validacao/CIERRE_PRUEBAS_ACCESO_2026-11-11.md). Android/iOS, CI remota y deuda global de lint conservan su estado pendiente.
 
 Proyecto: `meu-sistema-financeiro`. Base revisada: `a2863da5c7eb1b8f76e39eba53c8587b3d58ae05`, rama `codex/consolidacion-2026-11-11`. La [consolidación previa](../validacao/CONSOLIDACION_2026-11-11.md) conserva el trabajo y permite comenzar desde una referencia recuperable.
 
 ## 1. Resultado esperado y prioridad
+
+Implementado en `codex/cierre-pruebas-acceso`, candidato de código
+`631b187f6ffd0776f8e99be7ba5596a7fb55cb0f`. G0–G5 cumplidos para este alcance:
+1.089 pruebas backend, 882 frontend, seis casos de registro con PostgreSQL,
+101 pruebas del arnés y seis recorridos Edge. Los resultados iniciales y el
+diseño que siguen se conservan como trazabilidad del plan; el informe enlazado
+describe el sistema resultante y las excepciones de lint preexistentes.
 
 El registro debe confirmar una cuenta únicamente cuando usuario y categorías iniciales estén guardados en una misma transacción. El acceso debe conservar las garantías actuales de sesión y tener pruebas que representen sus contratos reales, desde el registro hasta el cierre de sesión.
 

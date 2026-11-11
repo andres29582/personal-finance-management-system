@@ -1,5 +1,21 @@
 # Testes e Rastreabilidade do Frontend
 
+## Verificação de acesso — 11/11/2026
+
+O [fechamento atual](../validacao/CIERRE_PRUEBAS_ACCESO_2026-11-11.md) registra
+Jest completo e percursos web reais do candidato identificado por SHA. A matriz
+abaixo mantém a classificação por camada; cobertura web não certifica Android/iOS.
+
+| Contrato de acesso | Evidência atual |
+| --- | --- |
+| Autoridade antes de renderizar, suspensão e geração antiga | `session-authority-root.test.tsx`, `protected-routes.test.ts`, testes de API/storage e percursos web |
+| Metadados do perfil preservam a navegação da mesma sessão confirmada | Duas regressões em `session-authority-root.test.tsx` e perfil real em Edge |
+| CEP público sem credenciais, rotas protegidas mantidas | Seis regressões em `api-public-cep.test.ts`; cadastro real com CEP auxiliar sintético |
+| Cadastro, consentimento, conflitos e resposta perdida | `register.test.tsx`, `registration-atomicity.e2e-spec.ts` e `tests/access/access.spec.ts` |
+| Recuperação, troca de senha, logout offline e duas abas | Telas reais em `tests/access/access.spec.ts`, Nest e PostgreSQL descartável |
+
+Execução e limites: [runbook de acesso](../operacao/PRUEBAS_ACCESO_WEB.md).
+
 ## Escopo
 
 Esta matriz rastreia as rotas Expo Router do frontend contra telas reais em `src/modules`, servicos, fluxos de API, riscos funcionais e testes automatizados existentes.
@@ -138,9 +154,10 @@ Telas com dados remotos devem cobrir loading, erro, vazio e sucesso. Telas com
 formularios devem cobrir validacao client-side, erro de backend, estado
 `submitting` e sucesso/navegacao apos envio.
 
-## Evidencia tecnica atual
+## Registro histórico anterior
 
-Ultima verificacao registrada nesta etapa:
+Verificação anterior à consolidação e ao fechamento de 11/11/2026. Os números e
+o lint desta seção são históricos; consultar o resultado atual no início desta página:
 
 - `npm test -- --runInBand`: 45 suites / 440 testes passando.
 - `npm run lint`: passando.

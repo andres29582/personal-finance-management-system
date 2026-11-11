@@ -188,6 +188,9 @@ Documentação de testes:
 - [Estratégia Geral de Testes](docs/desenvolvimento/TESTES.md)
 - [Testes e Rastreabilidade do Frontend](docs/desenvolvimento/TESTES_FRONTEND.md)
 
+- [Resultado do fechamento de acesso web](docs/validacao/CIERRE_PRUEBAS_ACCESO_2026-11-11.md)
+- [Executar os percursos reais de acesso](docs/operacao/PRUEBAS_ACCESO_WEB.md)
+
 ## Como executar localmente
 
 Pré-requisitos gerais:
