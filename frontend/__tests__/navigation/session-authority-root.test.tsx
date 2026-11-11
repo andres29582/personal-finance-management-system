@@ -45,6 +45,43 @@ const state = () => ({
   absoluteExpiresAt: new Date(Date.now() + 43200000).toISOString(),
   policyVersion: 1,
 });
+
+it("keeps the protected route mounted for an informational update of its confirmed session", async () => {
+  let listener!: () => void;
+  jest.mocked(storage.subscribeAuthState).mockImplementation((fn) => {
+    listener = fn;
+    return () => {};
+  });
+  jest
+    .mocked(api.get)
+    .mockResolvedValueOnce({ data: state() } as never)
+    .mockReturnValue(new Promise(() => {}));
+  render(<RootLayout />);
+  expect(await screen.findByText("Protected stack")).toBeTruthy();
+  act(() => listener());
+  expect(screen.queryByText("Protected stack")).toBeTruthy();
+  expect(api.get).toHaveBeenCalledTimes(1);
+});
+
+it("reconfirms the same generation when authority has already been suspended", async () => {
+  let listener!: () => void;
+  jest.mocked(storage.subscribeAuthState).mockImplementation((fn) => {
+    listener = fn;
+    return () => {};
+  });
+  jest
+    .mocked(api.get)
+    .mockResolvedValueOnce({ data: state() } as never)
+    .mockReturnValue(new Promise(() => {}));
+  render(<RootLayout />);
+  expect(await screen.findByText("Protected stack")).toBeTruthy();
+  act(() => {
+    suspendSessionAuthority();
+    listener();
+  });
+  expect(screen.queryByText("Protected stack")).toBeNull();
+  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+});
 beforeEach(() => {
   jest.clearAllMocks();
   suspendSessionAuthority();
@@ -86,16 +123,14 @@ it("transient startup failure retains credentials, hides data and allows explici
 });
 it("allows explicit local-only exit while the actual protected stack is hidden", async () => {
   const coordinator = require("../../src/modules/auth/services/logoutCoordinator");
-  const local = jest
-    .spyOn(coordinator, "logoutLocally")
-    .mockReturnValue({
-      generation: 2,
-      completion: Promise.resolve({
-        localDurable: true,
-        cleanupComplete: true,
-        remote: "unconfirmed",
-      }),
-    });
+  const local = jest.spyOn(coordinator, "logoutLocally").mockReturnValue({
+    generation: 2,
+    completion: Promise.resolve({
+      localDurable: true,
+      cleanupComplete: true,
+      remote: "unconfirmed",
+    }),
+  });
   jest.mocked(api.get).mockRejectedValue(new Error("offline"));
   render(<RootLayout />);
   fireEvent.press(await screen.findByText("Sair somente neste dispositivo"));

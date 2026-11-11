@@ -142,6 +142,16 @@ export function RootLayout() {
     }
     void syncAuthState();
     const unsubscribe = subscribeAuthState(() => {
+      const current = getSessionAuthority();
+      // Profile metadata updates keep the same confirmed owner. Revalidating
+      // them would unmount Stack and discard the route being loaded.
+      if (
+        current &&
+        !background &&
+        !isLocallySignedOut() &&
+        current.snapshot.generation === getSessionGeneration()
+      )
+        return;
       void syncAuthState();
     });
     return () => {
