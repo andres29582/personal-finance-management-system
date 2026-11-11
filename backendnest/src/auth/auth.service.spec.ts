@@ -10,7 +10,7 @@ import { AuthSessionsService } from './auth-sessions.service';
 import { PasswordResetDeliveryService } from './password-reset-delivery.service';
 import { AuthService } from './auth.service';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
-import { CategoriasService } from '../categorias/categorias.service';
+import { AuthRegistrationRepository } from './repositories/auth-registration.repository';
 import { LogsService } from '../logs/logs.service';
 import { UsersService } from '../users/users.service';
 
@@ -24,14 +24,14 @@ describe('AuthService', () => {
   let usersService: jest.Mocked<
     Pick<
       UsersService,
-      'create' | 'findByCpf' | 'findByEmail' | 'findById' | 'updatePassword'
+      'findByCpf' | 'findByEmail' | 'findById' | 'updatePassword'
     >
   >;
   let jwtService: jest.Mocked<
     Pick<JwtService, 'decode' | 'signAsync' | 'verifyAsync'>
   >;
-  let categoriasService: jest.Mocked<
-    Pick<CategoriasService, 'seedDefaultCategories'>
+  let registrationRepository: jest.Mocked<
+    Pick<AuthRegistrationRepository, 'createWithDefaultCategories'>
   >;
   let authSessionsService: jest.Mocked<
     Pick<
@@ -58,7 +58,6 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     usersService = {
-      create: jest.fn(),
       findByCpf: jest.fn(),
       findByEmail: jest.fn(),
       findById: jest.fn(),
@@ -69,8 +68,8 @@ describe('AuthService', () => {
       signAsync: jest.fn(),
       verifyAsync: jest.fn(),
     };
-    categoriasService = {
-      seedDefaultCategories: jest.fn(),
+    registrationRepository = {
+      createWithDefaultCategories: jest.fn(),
     };
     authSessionsService = {
       create: jest.fn(async (input) =>
@@ -115,7 +114,7 @@ describe('AuthService', () => {
     return new AuthService(
       usersService as unknown as UsersService,
       jwtService as unknown as JwtService,
-      categoriasService as unknown as CategoriasService,
+      registrationRepository as unknown as AuthRegistrationRepository,
       authSessionsService as unknown as AuthSessionsService,
       configService as unknown as ConfigService,
       logsService as unknown as LogsService,
@@ -133,7 +132,7 @@ describe('AuthService', () => {
   it('registers a new user and seeds default categories', async () => {
     usersService.findByEmail.mockResolvedValue(null);
     usersService.findByCpf.mockResolvedValue(null);
-    usersService.create.mockResolvedValue({
+    registrationRepository.createWithDefaultCategories.mockResolvedValue({
       cep: '01001000',
       cidade: 'Sao Paulo',
       cpf: '52998224725',
@@ -145,7 +144,6 @@ describe('AuthService', () => {
       moedaPadrao: 'BRL',
       senhaHash: 'hashed-password',
     } as never);
-    categoriasService.seedDefaultCategories.mockResolvedValue([] as never);
     (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
 
     const result = await service.register({
@@ -160,7 +158,9 @@ describe('AuthService', () => {
       senha: 'segredo123',
     });
 
-    expect(usersService.create).toHaveBeenCalledWith(
+    expect(
+      registrationRepository.createWithDefaultCategories,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         cep: '01001000',
         cidade: 'Sao Paulo',
@@ -172,9 +172,6 @@ describe('AuthService', () => {
         senhaHash: 'hashed-password',
         lgpdConsentimentoEm: expect.any(Date) as Date,
       }),
-    );
-    expect(categoriasService.seedDefaultCategories).toHaveBeenCalledWith(
-      'user-1',
     );
     expect(result).toEqual({
       usuario: {
@@ -189,12 +186,14 @@ describe('AuthService', () => {
         moedaPadrao: 'BRL',
       },
     });
+    expect(authSessionsService.create).not.toHaveBeenCalled();
+    expect(jwtService.signAsync).not.toHaveBeenCalled();
   });
 
   it('hashes the registration password exactly as received', async () => {
     usersService.findByEmail.mockResolvedValue(null);
     usersService.findByCpf.mockResolvedValue(null);
-    usersService.create.mockResolvedValue({
+    registrationRepository.createWithDefaultCategories.mockResolvedValue({
       id: 'user-1',
       email: 'ana@example.com',
       nome: 'Ana',

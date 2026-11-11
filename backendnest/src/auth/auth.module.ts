@@ -11,9 +11,9 @@ import { AuthSession } from './entities/auth-session.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { CategoriasModule } from '../categorias/categorias.module';
 import { UsersModule } from '../users/users.module';
 import { AuthSessionRepository } from './repositories/auth-session.repository';
+import { AuthRegistrationRepository } from './repositories/auth-registration.repository';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 import { resolveAuthTokenConfig } from './config/auth-token.config';
 import { PasswordChangedOutbox } from './entities/password-changed-outbox.entity';
@@ -23,7 +23,6 @@ import { PasswordChangedWorker } from './notifications/password-changed.worker';
 @Module({
   imports: [
     UsersModule,
-    CategoriasModule,
     TypeOrmModule.forFeature([
       AuthSession,
       PasswordResetToken,
@@ -55,6 +54,7 @@ import { PasswordChangedWorker } from './notifications/password-changed.worker';
     JwtStrategy,
     JwtAuthGuard,
     AuthSessionRepository,
+    AuthRegistrationRepository,
     PasswordResetTokenRepository,
     PasswordChangedOutboxRepository,
     PasswordChangedWorker,

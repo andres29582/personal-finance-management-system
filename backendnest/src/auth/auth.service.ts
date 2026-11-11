@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes, randomUUID } from 'crypto';
-import { CategoriasService } from '../categorias/categorias.service';
+import { AuthRegistrationRepository } from './repositories/auth-registration.repository';
 import {
   isValidCep,
   isValidCpf,
@@ -94,7 +94,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
-    private readonly categoriasService: CategoriasService,
+    private readonly registrationRepository: AuthRegistrationRepository,
     private readonly authSessionsService: AuthSessionsService,
     private readonly configService: ConfigService,
     private readonly logsService: LogsService,
@@ -148,7 +148,7 @@ export class AuthService {
 
     const senhaHash = await bcrypt.hash(senha, 10);
     const consentimentoEm = new Date();
-    const user = await this.usersService.create({
+    const user = await this.registrationRepository.createWithDefaultCategories({
       id: randomUUID(),
       nome,
       email,
@@ -160,8 +160,6 @@ export class AuthService {
       senhaHash,
       lgpdConsentimentoEm: consentimentoEm,
     });
-
-    await this.categoriasService.seedDefaultCategories(user.id);
 
     return {
       usuario: this.toPublicUser(user),
