@@ -226,6 +226,7 @@ function makeHistoricalParticipantsScenario() {
 
 async function renderReady() {
   render(<PlanejamentoGastoFormScreen />);
+  await settleAsyncWork();
 
   await waitFor(() => {
     expect(screen.getByText('Salvar gasto')).toBeTruthy();

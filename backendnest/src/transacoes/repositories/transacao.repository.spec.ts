@@ -32,7 +32,7 @@ describe('TransacaoRepository', () => {
 
     expect(options).toEqual(
       expect.objectContaining({
-        order: { createdAt: 'DESC', data: 'DESC' },
+        order: { createdAt: 'DESC', data: 'DESC', id: 'DESC' },
         skip: 50,
         take: 25,
       }),

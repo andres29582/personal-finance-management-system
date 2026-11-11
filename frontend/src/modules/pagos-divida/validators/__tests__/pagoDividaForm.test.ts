@@ -23,6 +23,7 @@ describe('validatePagoDividaForm', () => {
       expect(validatePagoDividaForm({ ...validValues, valor })).toEqual({
         valid: false,
         message: 'Preencha conta, categoria, valor e data.',
+        fieldErrors: { valor: 'Informe um valor valido para o pagamento.' },
       });
     },
   );
@@ -31,6 +32,7 @@ describe('validatePagoDividaForm', () => {
     expect(validatePagoDividaForm({ ...validValues, valor })).toEqual({
       valid: false,
       message: 'O valor deve ser maior que zero.',
+      fieldErrors: { valor: 'O valor deve ser maior que zero.' },
     });
   });
 
@@ -38,6 +40,7 @@ describe('validatePagoDividaForm', () => {
     expect(validatePagoDividaForm({ ...validValues, data: '2026-99-99' })).toEqual({
       valid: false,
       message: 'Informe uma data valida no formato YYYY-MM-DD.',
+      fieldErrors: { data: 'Data do pagamento invalida. Use YYYY-MM-DD.' },
     });
   });
 
@@ -45,6 +48,7 @@ describe('validatePagoDividaForm', () => {
     expect(validatePagoDividaForm({ ...validValues, data: '01/05/2026' })).toEqual({
       valid: false,
       message: 'Informe uma data valida no formato YYYY-MM-DD.',
+      fieldErrors: { data: 'Data do pagamento invalida. Use YYYY-MM-DD.' },
     });
   });
 });
