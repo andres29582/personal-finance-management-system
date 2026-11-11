@@ -290,4 +290,27 @@ describe('RegisterScreen', () => {
       expect(screen.getByText('Ja existe um usuario com este e-mail ou CPF.')).toBeTruthy();
     });
   });
+
+  it('keeps an unknown registration outcome recoverable without claiming rollback or retrying automatically', async () => {
+    mockRegister.mockRejectedValue({ isAxiosError: true, code: 'ERR_NETWORK' });
+    render(<RegisterScreen />);
+    for (const [placeholder, value] of [
+      ['Seu nome completo', 'Test User'], ['voce@exemplo.com', 'test@example.com'],
+      ['000.000.000-00', '12345678901'], ['00000-000', '12345678'],
+      ['Rua, avenida ou logradouro', 'Test Street'], ['123 ou S/N', '123'],
+      ['Sua cidade', 'Test City'], ['Entre 6 e 64 caracteres', 'password123'],
+      ['Repita a senha', 'password123'],
+    ]) fireEvent.changeText(screen.getByPlaceholderText(placeholder), value);
+    fireEvent.press(screen.getByRole('checkbox'));
+    fireEvent.press(screen.getByText('Criar conta'));
+
+    await waitFor(() => expect(screen.getByText(
+      'Nao foi possivel confirmar a criacao da conta. Ela pode ter sido criada. Tente entrar ou recuperar sua senha pelo login.',
+    )).toBeTruthy());
+    expect(mockRegister).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('voce@exemplo.com').props.value).toBe('test@example.com');
+    fireEvent.press(screen.getByText('Voltar para login'));
+    expect(mockReplace).toHaveBeenCalledWith('/login');
+  });
 });

@@ -154,7 +154,7 @@ export function RegisterScreen() {
       });
       router.replace('/login' as never);
     } catch (error) {
-      const resolvedError = await resolveApiError(error, 'Nao foi possivel criar a conta.', {
+      const resolvedError = await resolveApiError(error, 'Nao foi possivel confirmar a criacao da conta. Ela pode ter sido criada. Tente entrar ou recuperar sua senha pelo login.', {
         400: 'Confira CPF, CEP e os demais dados informados.',
         409: 'Ja existe um usuario com este e-mail ou CPF.',
       });
@@ -338,6 +338,7 @@ export function RegisterScreen() {
           disabled={loading}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: aceitoPoliticaPrivacidade }}
+          aria-checked={aceitoPoliticaPrivacidade}
         >
           <View
             style={[
