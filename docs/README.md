@@ -152,3 +152,7 @@ A pasta `arquivo/` contém documentos preservados por valor histórico, rastreab
 - [Matriz completa de conservación](planejamento/MATRIZ_CONSERVACION_2026-11-11.json)
 - [Resultados y fallos pendientes](validacao/RESULTADOS_CONSOLIDACION_2026-11-11.json)
 - [Recuperación local comprobada](operacao/RECUPERACION_LOCAL_2026-11-11.md)
+
+## Próxima entrega: pruebas y acceso
+
+- [Plan de cierre de pruebas y recorridos de acceso](planejamento/PLAN_CIERRE_PRUEBAS_ACCESO_2026-11-11.md): registro atómico, sesión/navegación, cierre de la baseline y comprobación con PostgreSQL y navegador reales; implementación y validación en curso.
