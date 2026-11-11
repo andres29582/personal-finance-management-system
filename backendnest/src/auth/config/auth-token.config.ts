@@ -1,3 +1,4 @@
+import { resolveSessionPolicy } from '../session-policy';
 import { ConfigService } from '@nestjs/config';
 
 export type AuthTokenConfig = {
@@ -18,6 +19,7 @@ const PLACEHOLDER_PREFIXES = ['troque_', 'change_me', 'replace_me'];
 export function resolveAuthTokenConfig(
   configService: ConfigReader,
 ): AuthTokenConfig {
+  resolveSessionPolicy(configService);
   const environment = normalizeEnvironment(
     readConfig(configService, 'NODE_ENV'),
   );

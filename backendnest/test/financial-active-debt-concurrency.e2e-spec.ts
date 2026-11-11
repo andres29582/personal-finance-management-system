@@ -1,3 +1,4 @@
+import { combine } from './e2e-runtime.cjs';
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
 import { TipoCategoria } from '../src/categorias/enums/tipo-categoria.enum';
@@ -94,25 +95,28 @@ describe('Financial active debt concurrency (e2e)', () => {
     const cleanupResults = concurrencyHarness
       ? await concurrencyHarness.cleanupAllSettled()
       : [];
-    if (coordinatorDataSource?.isInitialized) {
-      await coordinatorDataSource.destroy();
+    const errors: unknown[] = cleanupResults
+      .filter((result) => result.status === 'rejected')
+      .map((result) => result.reason as unknown);
+    try {
+      if (coordinatorDataSource?.isInitialized)
+        await coordinatorDataSource.destroy();
+    } catch (error) {
+      errors.push(error);
     }
-    await app?.close();
-
-    if (originalPgOptions === undefined) {
-      delete process.env.PGOPTIONS;
-    } else {
-      process.env.PGOPTIONS = originalPgOptions;
+    try {
+      await app?.close();
+    } catch (error) {
+      errors.push(error);
     }
-
-    const cleanupFailure = cleanupResults.find(
-      (result) => result.status === 'rejected',
+    if (originalPgOptions === undefined) delete process.env.PGOPTIONS;
+    else process.env.PGOPTIONS = originalPgOptions;
+    const error = combine(
+      undefined,
+      errors,
+      'Final concurrency cleanup failed',
     );
-    if (cleanupFailure?.status === 'rejected') {
-      throw cleanupFailure.reason instanceof Error
-        ? cleanupFailure.reason
-        : new Error('Final concurrency barrier cleanup failed');
-    }
+    if (error) throw error;
   });
 
   it('A commits a debt payment before deactivating the locked debt', async () => {
@@ -123,12 +127,13 @@ describe('Financial active debt concurrency (e2e)', () => {
       holder: 'debt-payment',
     });
 
-    try {
-      const paymentPromise = withAuth(
-        request(app.getHttpServer()).post('/pagos-divida'),
-        session,
-      )
-        .send(
+    await concurrencyHarness.withBarrier(barrier, async () => {
+      const paymentPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).post('/pagos-divida'),
+          session,
+        ).send(
           makePagoDividaPayload({
             categoriaId: category.id,
             contaId: account.id,
@@ -137,16 +142,17 @@ describe('Financial active debt concurrency (e2e)', () => {
             dividaId: debt.id,
             valor: 150,
           }),
-        )
-        .then((response) => response);
-      barrier.pendingRequests.push(paymentPromise);
+        ),
+      );
 
       const holder = await concurrencyHarness.waitForTaggedHolder(barrier);
-      const deactivationPromise = withAuth(
-        request(app.getHttpServer()).patch(`/dividas/${debt.id}/desativar`),
-        session,
-      ).then((response) => response);
-      barrier.pendingRequests.push(deactivationPromise);
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/dividas/${debt.id}/desativar`),
+          session,
+        ),
+      );
 
       const waitingDeactivation =
         await concurrencyHarness.waitForBlockedActivity(
@@ -194,9 +200,7 @@ describe('Financial active debt concurrency (e2e)', () => {
         'divida',
         debt.id,
       );
-    } finally {
-      await concurrencyHarness.cleanupBarrier(barrier);
-    }
+    });
   });
 
   it('B rejects a debt payment after debt deactivation commits first', async () => {
@@ -207,19 +211,22 @@ describe('Financial active debt concurrency (e2e)', () => {
       holder: 'debt-deactivation',
     });
 
-    try {
-      const deactivationPromise = withAuth(
-        request(app.getHttpServer()).patch(`/dividas/${debt.id}/desativar`),
-        session,
-      ).then((response) => response);
-      barrier.pendingRequests.push(deactivationPromise);
+    await concurrencyHarness.withBarrier(barrier, async () => {
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/dividas/${debt.id}/desativar`),
+          session,
+        ),
+      );
 
       const holder = await concurrencyHarness.waitForTaggedHolder(barrier);
-      const paymentPromise = withAuth(
-        request(app.getHttpServer()).post('/pagos-divida'),
-        session,
-      )
-        .send(
+      const paymentPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).post('/pagos-divida'),
+          session,
+        ).send(
           makePagoDividaPayload({
             categoriaId: category.id,
             contaId: account.id,
@@ -228,9 +235,8 @@ describe('Financial active debt concurrency (e2e)', () => {
             dividaId: debt.id,
             valor: 150,
           }),
-        )
-        .then((response) => response);
-      barrier.pendingRequests.push(paymentPromise);
+        ),
+      );
 
       const waitingPayment = await concurrencyHarness.waitForBlockedActivity(
         barrier,
@@ -260,9 +266,7 @@ describe('Financial active debt concurrency (e2e)', () => {
         'divida',
         debt.id,
       );
-    } finally {
-      await concurrencyHarness.cleanupBarrier(barrier);
-    }
+    });
   });
 
   async function createDebtPaymentTestContext(code: string, cpf: string) {

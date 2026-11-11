@@ -5,6 +5,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import type { Server } from 'node:http';
 import { AppModule } from '../src/app.module';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
+import { combine } from './e2e-runtime.cjs';
 import {
   configureBodyParsers,
   resolveHttpRuntimeConfig,
@@ -33,24 +34,35 @@ export async function createE2eApp(
 
   const moduleFixture = await testingModuleBuilder.compile();
 
-  const app = moduleFixture.createNestApplication<E2eApplication>({
-    bodyParser: false,
-  });
-  const httpConfig = resolveHttpRuntimeConfig(app.get(ConfigService));
+  let app: E2eApplication | undefined;
+  try {
+    app = moduleFixture.createNestApplication<E2eApplication>({
+      bodyParser: false,
+    });
+    const httpConfig = resolveHttpRuntimeConfig(app.get(ConfigService));
 
-  configureBodyParsers(app, httpConfig);
+    configureBodyParsers(app, httpConfig);
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
 
-  app.useGlobalInterceptors(new ResponseInterceptor());
+    app.useGlobalInterceptors(new ResponseInterceptor());
 
-  await app.init();
+    await app.init();
 
-  return app;
+    return app;
+  } catch (primary) {
+    const cleanup: unknown[] = [];
+    try {
+      await (app ?? moduleFixture).close();
+    } catch (error) {
+      cleanup.push(error);
+    }
+    throw combine(primary, cleanup);
+  }
 }

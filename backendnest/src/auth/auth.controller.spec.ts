@@ -171,7 +171,7 @@ describe('AuthController', () => {
     });
 
     const result = await controller.resetPassword(
-      { novaSenha: 'novaSenha123' },
+      { novaSenha: 'novaSenha123', senhaAtual: 'old' },
       {
         user: {
           id: 'user-1',
@@ -185,6 +185,8 @@ describe('AuthController', () => {
     expect(authService.resetPassword).toHaveBeenCalledWith(
       'user-1',
       'novaSenha123',
+      'old',
+      'session-1',
     );
     expect(result.message).toContain('Senha atualizada');
   });

@@ -61,7 +61,13 @@ export class LogsService {
       entity: input.entity ?? null,
       entityId: input.entityId ?? null,
       method: context.method ?? null,
-      route: this.truncate(context.route ?? null, 255),
+      route: this.truncate(
+        context.route?.replace(
+          /^\/auth\/sessions\/[^/]+\/revoke\/?$/i,
+          '/auth/sessions/:id/revoke',
+        ) ?? null,
+        255,
+      ),
       statusCode: context.statusCode ?? null,
       ip: this.truncate(context.ip ?? null, 45),
       userAgent: this.truncate(context.userAgent ?? null, 255),

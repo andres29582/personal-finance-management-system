@@ -17,6 +17,9 @@ export class PasswordResetToken {
   @Column({ name: 'used_at', type: 'timestamp', nullable: true })
   usedAt: Date | null;
 
+  @Column({ name: 'invalidated_at', type: 'timestamp', nullable: true })
+  invalidatedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

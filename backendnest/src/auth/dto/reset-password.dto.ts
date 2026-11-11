@@ -4,6 +4,10 @@ import { IsValidPassword } from '../validators/password-policy';
 export class ResetPasswordDto {
   @IsString()
   @IsNotEmpty()
+  senhaAtual: string;
+
+  @IsString()
+  @IsNotEmpty()
   @IsValidPassword()
   novaSenha: string;
 }

@@ -1,3 +1,4 @@
+import { combine } from './e2e-runtime.cjs';
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
 import { TipoCategoria } from '../src/categorias/enums/tipo-categoria.enum';
@@ -107,25 +108,28 @@ describe('Financial active account concurrency (e2e)', () => {
     const cleanupResults = concurrencyHarness
       ? await concurrencyHarness.cleanupAllSettled()
       : [];
-    if (coordinatorDataSource?.isInitialized) {
-      await coordinatorDataSource.destroy();
+    const errors: unknown[] = cleanupResults
+      .filter((result) => result.status === 'rejected')
+      .map((result) => result.reason as unknown);
+    try {
+      if (coordinatorDataSource?.isInitialized)
+        await coordinatorDataSource.destroy();
+    } catch (error) {
+      errors.push(error);
     }
-    await app?.close();
-
-    if (originalPgOptions === undefined) {
-      delete process.env.PGOPTIONS;
-    } else {
-      process.env.PGOPTIONS = originalPgOptions;
+    try {
+      await app?.close();
+    } catch (error) {
+      errors.push(error);
     }
-
-    const cleanupFailure = cleanupResults.find(
-      (result) => result.status === 'rejected',
+    if (originalPgOptions === undefined) delete process.env.PGOPTIONS;
+    else process.env.PGOPTIONS = originalPgOptions;
+    const error = combine(
+      undefined,
+      errors,
+      'Final concurrency cleanup failed',
     );
-    if (cleanupFailure?.status === 'rejected') {
-      throw cleanupFailure.reason instanceof Error
-        ? cleanupFailure.reason
-        : new Error('Final concurrency barrier cleanup failed');
-    }
+    if (error) throw error;
   });
 
   it('A1 commits a transaction before deactivating the locked account', async () => {
@@ -148,12 +152,13 @@ describe('Financial active account concurrency (e2e)', () => {
       holder: 'transaction',
     });
 
-    try {
-      const transactionPromise = withAuth(
-        request(app.getHttpServer()).post('/transacoes'),
-        session,
-      )
-        .send(
+    await concurrencyHarness.withBarrier(barrier, async () => {
+      const transactionPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).post('/transacoes'),
+          session,
+        ).send(
           makeTransacaoPayload({
             categoriaId: category.id,
             contaId: account.id,
@@ -162,16 +167,17 @@ describe('Financial active account concurrency (e2e)', () => {
             tipo: TipoTransacao.DESPESA,
             valor: 100,
           }),
-        )
-        .then((response) => response);
-      barrier.pendingRequests.push(transactionPromise);
+        ),
+      );
 
       const holder = await waitForTaggedHolder(barrier);
-      const deactivationPromise = withAuth(
-        request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
-        session,
-      ).then((response) => response);
-      barrier.pendingRequests.push(deactivationPromise);
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
+          session,
+        ),
+      );
 
       const waitingDeactivation = await waitForBlockedActivity(
         barrier,
@@ -213,9 +219,7 @@ describe('Financial active account concurrency (e2e)', () => {
         'conta',
         account.id,
       );
-    } finally {
-      await cleanupBarrier(barrier);
-    }
+    });
   });
 
   it('A2 rejects a transaction after deactivation commits first', async () => {
@@ -238,19 +242,22 @@ describe('Financial active account concurrency (e2e)', () => {
       holder: 'deactivation',
     });
 
-    try {
-      const deactivationPromise = withAuth(
-        request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
-        session,
-      ).then((response) => response);
-      barrier.pendingRequests.push(deactivationPromise);
+    await concurrencyHarness.withBarrier(barrier, async () => {
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
+          session,
+        ),
+      );
 
       const holder = await waitForTaggedHolder(barrier);
-      const transactionPromise = withAuth(
-        request(app.getHttpServer()).post('/transacoes'),
-        session,
-      )
-        .send(
+      const transactionPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).post('/transacoes'),
+          session,
+        ).send(
           makeTransacaoPayload({
             categoriaId: category.id,
             contaId: account.id,
@@ -259,9 +266,8 @@ describe('Financial active account concurrency (e2e)', () => {
             tipo: TipoTransacao.DESPESA,
             valor: 100,
           }),
-        )
-        .then((response) => response);
-      barrier.pendingRequests.push(transactionPromise);
+        ),
+      );
 
       const waitingTransaction = await waitForBlockedActivity(
         barrier,
@@ -302,9 +308,7 @@ describe('Financial active account concurrency (e2e)', () => {
         'conta',
         account.id,
       );
-    } finally {
-      await cleanupBarrier(barrier);
-    }
+    });
   });
 
   it.each([
@@ -323,12 +327,13 @@ describe('Financial active account concurrency (e2e)', () => {
         holder: 'transfer',
       });
 
-      try {
-        const transferPromise = withAuth(
-          request(app.getHttpServer()).post('/transferencias'),
-          session,
-        )
-          .send(
+      await concurrencyHarness.withBarrier(barrier, async () => {
+        const transferPromise = concurrencyHarness.trackRequest(
+          barrier,
+          withAuth(
+            request(app.getHttpServer()).post('/transferencias'),
+            session,
+          ).send(
             makeTransferenciaPayload({
               comissao: 10,
               contaDestinoId: destination.id,
@@ -337,18 +342,19 @@ describe('Financial active account concurrency (e2e)', () => {
               descricao: `Transferencia concorrente ${code}`,
               valor: 200,
             }),
-          )
-          .then((response) => response);
-        barrier.pendingRequests.push(transferPromise);
+          ),
+        );
 
         const holder = await waitForTaggedHolder(barrier);
-        const deactivationPromise = withAuth(
-          request(app.getHttpServer()).patch(
-            `/contas/${accountToDeactivate.id}/desativar`,
+        const deactivationPromise = concurrencyHarness.trackRequest(
+          barrier,
+          withAuth(
+            request(app.getHttpServer()).patch(
+              `/contas/${accountToDeactivate.id}/desativar`,
+            ),
+            session,
           ),
-          session,
-        ).then((response) => response);
-        barrier.pendingRequests.push(deactivationPromise);
+        );
 
         const waitingDeactivation = await waitForBlockedActivity(
           barrier,
@@ -395,9 +401,7 @@ describe('Financial active account concurrency (e2e)', () => {
           'conta',
           accountToDeactivate.id,
         );
-      } finally {
-        await cleanupBarrier(barrier);
-      }
+      });
     },
   );
 
@@ -417,21 +421,24 @@ describe('Financial active account concurrency (e2e)', () => {
         holder: 'deactivation',
       });
 
-      try {
-        const deactivationPromise = withAuth(
-          request(app.getHttpServer()).patch(
-            `/contas/${accountToDeactivate.id}/desativar`,
+      await concurrencyHarness.withBarrier(barrier, async () => {
+        const deactivationPromise = concurrencyHarness.trackRequest(
+          barrier,
+          withAuth(
+            request(app.getHttpServer()).patch(
+              `/contas/${accountToDeactivate.id}/desativar`,
+            ),
+            session,
           ),
-          session,
-        ).then((response) => response);
-        barrier.pendingRequests.push(deactivationPromise);
+        );
 
         const holder = await waitForTaggedHolder(barrier);
-        const transferPromise = withAuth(
-          request(app.getHttpServer()).post('/transferencias'),
-          session,
-        )
-          .send(
+        const transferPromise = concurrencyHarness.trackRequest(
+          barrier,
+          withAuth(
+            request(app.getHttpServer()).post('/transferencias'),
+            session,
+          ).send(
             makeTransferenciaPayload({
               comissao: 10,
               contaDestinoId: destination.id,
@@ -440,9 +447,8 @@ describe('Financial active account concurrency (e2e)', () => {
               descricao: `Transferencia concorrente ${code} rejeitada`,
               valor: 200,
             }),
-          )
-          .then((response) => response);
-        barrier.pendingRequests.push(transferPromise);
+          ),
+        );
 
         const waitingTransfer = await waitForBlockedActivity(
           barrier,
@@ -476,9 +482,7 @@ describe('Financial active account concurrency (e2e)', () => {
           'conta',
           accountToDeactivate.id,
         );
-      } finally {
-        await cleanupBarrier(barrier);
-      }
+      });
     },
   );
 
@@ -490,12 +494,13 @@ describe('Financial active account concurrency (e2e)', () => {
       holder: 'debt-payment',
     });
 
-    try {
-      const paymentPromise = withAuth(
-        request(app.getHttpServer()).post('/pagos-divida'),
-        session,
-      )
-        .send(
+    await concurrencyHarness.withBarrier(barrier, async () => {
+      const paymentPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).post('/pagos-divida'),
+          session,
+        ).send(
           makePagoDividaPayload({
             categoriaId: category.id,
             contaId: account.id,
@@ -504,16 +509,17 @@ describe('Financial active account concurrency (e2e)', () => {
             dividaId: debt.id,
             valor: 150,
           }),
-        )
-        .then((response) => response);
-      barrier.pendingRequests.push(paymentPromise);
+        ),
+      );
 
       const holder = await waitForTaggedHolder(barrier);
-      const deactivationPromise = withAuth(
-        request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
-        session,
-      ).then((response) => response);
-      barrier.pendingRequests.push(deactivationPromise);
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
+          session,
+        ),
+      );
 
       const waitingDeactivation = await waitForBlockedActivity(
         barrier,
@@ -558,9 +564,7 @@ describe('Financial active account concurrency (e2e)', () => {
         'conta',
         account.id,
       );
-    } finally {
-      await cleanupBarrier(barrier);
-    }
+    });
   });
 
   it('D2 rejects a debt payment after deactivation commits first', async () => {
@@ -571,19 +575,22 @@ describe('Financial active account concurrency (e2e)', () => {
       holder: 'deactivation',
     });
 
-    try {
-      const deactivationPromise = withAuth(
-        request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
-        session,
-      ).then((response) => response);
-      barrier.pendingRequests.push(deactivationPromise);
+    await concurrencyHarness.withBarrier(barrier, async () => {
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
+          session,
+        ),
+      );
 
       const holder = await waitForTaggedHolder(barrier);
-      const paymentPromise = withAuth(
-        request(app.getHttpServer()).post('/pagos-divida'),
-        session,
-      )
-        .send(
+      const paymentPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).post('/pagos-divida'),
+          session,
+        ).send(
           makePagoDividaPayload({
             categoriaId: category.id,
             contaId: account.id,
@@ -592,9 +599,8 @@ describe('Financial active account concurrency (e2e)', () => {
             dividaId: debt.id,
             valor: 150,
           }),
-        )
-        .then((response) => response);
-      barrier.pendingRequests.push(paymentPromise);
+        ),
+      );
 
       const waitingPayment = await waitForBlockedActivity(
         barrier,
@@ -623,9 +629,7 @@ describe('Financial active account concurrency (e2e)', () => {
         'conta',
         account.id,
       );
-    } finally {
-      await cleanupBarrier(barrier);
-    }
+    });
   });
 
   it('E does not block deactivation of a different account', async () => {
@@ -652,14 +656,14 @@ describe('Financial active account concurrency (e2e)', () => {
       accountId: accountA.id,
       holder: 'transaction',
     });
-    let accountBBarrier: Barrier | undefined;
 
-    try {
-      const transactionPromise = withAuth(
-        request(app.getHttpServer()).post('/transacoes'),
-        session,
-      )
-        .send(
+    await concurrencyHarness.withBarrier(accountABarrier, async () => {
+      const transactionPromise = concurrencyHarness.trackRequest(
+        accountABarrier,
+        withAuth(
+          request(app.getHttpServer()).post('/transacoes'),
+          session,
+        ).send(
           makeTransacaoPayload({
             categoriaId: category.id,
             contaId: accountA.id,
@@ -668,60 +672,67 @@ describe('Financial active account concurrency (e2e)', () => {
             tipo: TipoTransacao.DESPESA,
             valor: 100,
           }),
-        )
-        .then((response) => response);
-      accountABarrier.pendingRequests.push(transactionPromise);
+        ),
+      );
       const accountAHolder = await waitForTaggedHolder(accountABarrier);
 
-      accountBBarrier = await installBarrier({
+      const accountBBarrier = await installBarrier({
         accountId: accountB.id,
         holder: 'deactivation',
       });
-      const deactivationPromise = withAuth(
-        request(app.getHttpServer()).patch(`/contas/${accountB.id}/desativar`),
-        session,
-      ).then((response) => response);
-      accountBBarrier.pendingRequests.push(deactivationPromise);
-      const accountBHolder = await waitForTaggedHolder(accountBBarrier);
+      await concurrencyHarness.withBarrier(accountBBarrier, async () => {
+        const deactivationPromise = concurrencyHarness.trackRequest(
+          accountBBarrier,
+          withAuth(
+            request(app.getHttpServer()).patch(
+              `/contas/${accountB.id}/desativar`,
+            ),
+            session,
+          ),
+        );
+        const accountBHolder = await waitForTaggedHolder(accountBBarrier);
 
-      expect(accountBHolder.blockers).not.toContain(accountAHolder.pid);
-      await expectTaggedHolderStillBlocked(accountABarrier, accountAHolder.pid);
-      await unlockBarrier(accountBBarrier);
-      const deactivationResponse = await withTimeout(
-        deactivationPromise,
-        'E account B deactivation',
-      );
-      expect(deactivationResponse.status).toBe(200);
-      await expectAccountState(session, accountB.id, 500, true);
-      await expectTaggedHolderStillBlocked(accountABarrier, accountAHolder.pid);
+        expect(accountBHolder.blockers).not.toContain(accountAHolder.pid);
+        await expectTaggedHolderStillBlocked(
+          accountABarrier,
+          accountAHolder.pid,
+        );
+        await unlockBarrier(accountBBarrier);
+        const deactivationResponse = await withTimeout(
+          deactivationPromise,
+          'E account B deactivation',
+        );
+        expect(deactivationResponse.status).toBe(200);
+        await expectAccountState(session, accountB.id, 500, true);
+        await expectTaggedHolderStillBlocked(
+          accountABarrier,
+          accountAHolder.pid,
+        );
 
-      await unlockBarrier(accountABarrier);
-      const transactionResponse = await withTimeout(
-        transactionPromise,
-        'E account A transaction',
-      );
-      expect(transactionResponse.status).toBe(201);
-      const transaction = unwrapSuccess<TransacaoResponse>(transactionResponse);
-      await expectPersistedTransaction(transaction.id, accountA.id);
-      await expectAccountState(session, accountA.id, 900, false);
-      await expectSingleAuditEvent(
-        session.userId,
-        'TRANSACAO_CREATED',
-        'transacao',
-        transaction.id,
-      );
-      await expectSingleAuditEvent(
-        session.userId,
-        'CONTA_DEACTIVATED',
-        'conta',
-        accountB.id,
-      );
-    } finally {
-      if (accountBBarrier !== undefined) {
-        await cleanupBarrier(accountBBarrier);
-      }
-      await cleanupBarrier(accountABarrier);
-    }
+        await unlockBarrier(accountABarrier);
+        const transactionResponse = await withTimeout(
+          transactionPromise,
+          'E account A transaction',
+        );
+        expect(transactionResponse.status).toBe(201);
+        const transaction =
+          unwrapSuccess<TransacaoResponse>(transactionResponse);
+        await expectPersistedTransaction(transaction.id, accountA.id);
+        await expectAccountState(session, accountA.id, 900, false);
+        await expectSingleAuditEvent(
+          session.userId,
+          'TRANSACAO_CREATED',
+          'transacao',
+          transaction.id,
+        );
+        await expectSingleAuditEvent(
+          session.userId,
+          'CONTA_DEACTIVATED',
+          'conta',
+          accountB.id,
+        );
+      });
+    });
   });
 
   async function createTransferTestContext(code: string, cpf: string) {
@@ -852,10 +863,6 @@ describe('Financial active account concurrency (e2e)', () => {
 
   function unlockBarrier(barrier: Barrier): Promise<void> {
     return concurrencyHarness.unlockBarrier(barrier);
-  }
-
-  function cleanupBarrier(barrier: Barrier): Promise<void> {
-    return concurrencyHarness.cleanupBarrier(barrier);
   }
 
   function isAccountShareLockQuery(activity: BackendActivity): boolean {

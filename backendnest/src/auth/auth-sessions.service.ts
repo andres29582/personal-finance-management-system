@@ -1,71 +1,84 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { AuthSessionRepository } from './repositories/auth-session.repository';
+import {
+  AuthSessionRepository,
+  SessionIssuer,
+  IssuedSessionTokens,
+} from './repositories/auth-session.repository';
+import { SessionPolicy } from './session-policy';
+import { SessionListOptions } from './dto/session-management.dto';
 
 @Injectable()
 export class AuthSessionsService {
   constructor(private readonly authSessionRepository: AuthSessionRepository) {}
-
-  async create(session: {
-    expiresAt: Date;
-    id: string;
-    maxActiveSessions: number;
-    refreshToken: string;
-    userId: string;
-  }) {
-    const now = new Date();
-
-    return this.authSessionRepository.createSession({
-      id: session.id,
-      userId: session.userId,
-      refreshTokenHash: this.hashToken(session.refreshToken),
-      expiresAt: session.expiresAt,
-      maxActiveSessions: session.maxActiveSessions,
-      revokedAt: null,
-      lastUsedAt: now,
-    });
+  async listOwnSessions(
+    userId: string,
+    callerId: string,
+    options: SessionListOptions,
+  ) {
+    return this.authSessionRepository.listOwnSessions(
+      userId,
+      callerId,
+      options,
+    );
   }
-
+  async reserveSessionReauthentication(userId: string, callerId: string) {
+    return this.authSessionRepository.reserveSessionReauthentication(
+      userId,
+      callerId,
+    );
+  }
+  async revokeOwnSessions(
+    userId: string,
+    callerId: string,
+    expectedPasswordHash: string,
+    targetId?: string,
+  ) {
+    return this.authSessionRepository.revokeOwnSessions(
+      userId,
+      callerId,
+      expectedPasswordHash,
+      targetId,
+    );
+  }
+  async create(session: {
+    id: string;
+    userId: string;
+    expectedPasswordHash: string;
+    maxActiveSessions: number;
+    policy: SessionPolicy;
+    issue: SessionIssuer;
+  }): Promise<IssuedSessionTokens> {
+    return this.authSessionRepository.createSession(session);
+  }
   async findActiveById(sessionId: string) {
     return this.authSessionRepository.findActiveById(sessionId);
   }
-
-  async touchIfActive(sessionId: string) {
-    await this.authSessionRepository.touchIfActive(sessionId, new Date());
+  async authorize(sessionId: string, userId: string, activity = false) {
+    return this.authSessionRepository.authorize(sessionId, userId, activity);
   }
-
+  async touchIfActive(sessionId: string, userId: string) {
+    return this.authSessionRepository.touchIfActive(sessionId, userId);
+  }
   async rotateIfActiveWithMatchingToken(
     sessionId: string,
+    userId: string,
     currentRefreshToken: string,
-    nextRefreshToken: string,
-    expiresAt: Date,
+    issue: SessionIssuer,
   ) {
-    const now = new Date();
-
     return this.authSessionRepository.rotateIfActiveWithMatchingToken(
       sessionId,
+      userId,
       this.hashToken(currentRefreshToken),
-      {
-        refreshTokenHash: this.hashToken(nextRefreshToken),
-        expiresAt,
-        lastUsedAt: now,
-        updatedAt: now,
-      },
+      issue,
     );
   }
-
   async revoke(sessionId: string, userId: string) {
-    const now = new Date();
-
-    await this.authSessionRepository.revoke(sessionId, userId, now);
+    await this.authSessionRepository.revoke(sessionId, userId);
   }
-
   async revokeAllByUser(userId: string) {
-    const now = new Date();
-
-    await this.authSessionRepository.revokeAllByUser(userId, now);
+    await this.authSessionRepository.revokeAllByUser(userId);
   }
-
   private hashToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
   }

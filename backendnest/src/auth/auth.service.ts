@@ -13,7 +13,6 @@ import {
   AppConflictException,
   AppUnauthorizedException,
   BusinessRuleException,
-  ResourceNotFoundException,
   ValidationAppException,
 } from '../common/exceptions';
 import { LogsService } from '../logs/logs.service';
@@ -29,8 +28,18 @@ import {
   PasswordResetConfig,
   resolvePasswordResetConfig,
 } from './config/password-reset.config';
+import {
+  resolveSessionPolicy,
+  SessionPolicy,
+  cappedExpiration,
+  rejectSession,
+} from './session-policy';
 import { RegisterDto } from './dto/register.dto';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
+import {
+  SessionListQueryDto,
+  decodeSessionCursor,
+} from './dto/session-management.dto';
 
 type AuthTokens = {
   access_token: string;
@@ -44,7 +53,43 @@ type JwtExpirationPayload = {
 @Injectable()
 export class AuthService {
   private readonly tokenConfig: AuthTokenConfig;
+  private readonly sessionPolicy: SessionPolicy;
   private readonly passwordResetConfig: PasswordResetConfig;
+
+  async listOwnSessions(
+    userId: string,
+    callerId: string,
+    query: SessionListQueryDto,
+  ) {
+    return this.authSessionsService.listOwnSessions(userId, callerId, {
+      limit: query.limit,
+      cursor: decodeSessionCursor(query.cursor),
+    });
+  }
+  async revokeOwnSessions(
+    userId: string,
+    callerId: string,
+    senhaAtual: string,
+    targetId?: string,
+  ): Promise<void> {
+    const expectedHash =
+      await this.authSessionsService.reserveSessionReauthentication(
+        userId,
+        callerId,
+      );
+    if (!(await bcrypt.compare(senhaAtual, expectedHash)))
+      throw new BusinessRuleException(
+        'AUTH_CURRENT_PASSWORD_INVALID',
+        'Senha atual incorreta.',
+        { field: 'senhaAtual' },
+      );
+    await this.authSessionsService.revokeOwnSessions(
+      userId,
+      callerId,
+      expectedHash,
+      targetId,
+    );
+  }
 
   constructor(
     private readonly usersService: UsersService,
@@ -57,6 +102,7 @@ export class AuthService {
     private readonly passwordResetDeliveryService: PasswordResetDeliveryService,
   ) {
     this.tokenConfig = resolveAuthTokenConfig(configService);
+    this.sessionPolicy = resolveSessionPolicy(configService);
     this.passwordResetConfig = resolvePasswordResetConfig(configService);
   }
 
@@ -183,58 +229,39 @@ export class AuthService {
 
   async refreshSession(refreshToken: string) {
     const payload = await this.verifyRefreshToken(refreshToken);
-    const session = await this.authSessionsService.findActiveById(payload.sid);
-
-    if (
-      !session ||
-      session.userId !== payload.sub ||
-      session.expiresAt.getTime() <= Date.now()
-    ) {
-      throw new AppUnauthorizedException(
-        'AUTH_INVALID_REFRESH_TOKEN',
-        'Refresh token invalido',
-      );
-    }
-
     const user = await this.usersService.findById(payload.sub);
-
-    if (!user) {
-      throw new AppUnauthorizedException(
-        'AUTH_INVALID_SESSION',
-        'Sessao invalida',
-      );
-    }
-
-    const nextRefreshToken = await this.buildRefreshToken(user, session.id);
-    const rotated =
+    if (!user) rejectSession('AUTH_INVALID_SESSION');
+    const result =
       await this.authSessionsService.rotateIfActiveWithMatchingToken(
-        session.id,
+        payload.sid,
+        payload.sub,
         refreshToken,
-        nextRefreshToken,
-        this.getTokenExpiration(nextRefreshToken),
+        (now, absolute) =>
+          this.issueSessionTokens(user!, payload.sid, now, absolute),
       );
-
-    if (!rotated) {
-      await this.authSessionsService.revoke(session.id, user.id);
-      await this.logsService.logAuthEvent({
-        event: 'REFRESH_TOKEN_REUSE_DETECTED',
-        level: 'warn',
-        success: false,
-        userId: user.id,
-        message: 'Reutilizacao de refresh token detectada; sessao revogada.',
-        details: { sessionId: session.id },
-      });
-      throw new AppUnauthorizedException(
-        'AUTH_INVALID_REFRESH_TOKEN',
-        'Refresh token invalido',
-      );
+    if ('failure' in result) {
+      if (result.reuse)
+        await this.logsService.logAuthEvent({
+          event: 'REFRESH_TOKEN_REUSE_DETECTED',
+          level: 'warn',
+          success: false,
+          userId: user!.id,
+          message: 'Reutilizacao de refresh token detectada; sessao revogada.',
+          details: { sessionId: payload.sid },
+        });
+      if (result.failure === 'AUTH_INVALID_REFRESH_TOKEN')
+        throw new AppUnauthorizedException(
+          result.failure,
+          'Refresh token invalido',
+        );
+      rejectSession(result.failure);
     }
-
     return {
-      access_token: await this.buildAccessToken(user, session.id),
-      refresh_token: nextRefreshToken,
+      access_token: result.tokens.access_token,
+      refresh_token: result.tokens.refresh_token,
     };
   }
+
   async logout(userId: string, sessionId?: string) {
     if (sessionId) {
       await this.authSessionsService.revoke(sessionId, userId);
@@ -255,20 +282,35 @@ export class AuthService {
     };
   }
 
-  async resetPassword(userId: string, novaSenha: string) {
+  async resetPassword(
+    userId: string,
+    novaSenha: string,
+    senhaAtual: string,
+    sessionId: string,
+  ) {
     const user = await this.usersService.findById(userId);
 
-    if (!user) {
-      throw new ResourceNotFoundException(
-        'AUTH_USER_NOT_FOUND',
-        'Usuario nao encontrado',
+    if (!user || !sessionId) {
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_SESSION',
+        'Sessao invalida',
       );
     }
 
+    if (!senhaAtual || !(await bcrypt.compare(senhaAtual, user.senhaHash))) {
+      throw new BusinessRuleException(
+        'AUTH_CURRENT_PASSWORD_INVALID',
+        'Senha atual incorreta.',
+        { field: 'senhaAtual' },
+      );
+    }
     const newPasswordHash = await bcrypt.hash(novaSenha, 10);
-
-    await this.usersService.updatePassword(user.id, newPasswordHash);
-    await this.authSessionsService.revokeAllByUser(user.id);
+    await this.passwordResetTokenRepository.changeAuthenticatedPassword(
+      user.id,
+      sessionId,
+      user.senhaHash,
+      newPasswordHash,
+    );
     await this.logsService.logAuthEvent({
       event: 'PASSWORD_RESET_SUCCESS',
       level: 'info',
@@ -306,22 +348,22 @@ export class AuthService {
 
     const plainToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(plainToken).digest('hex');
-    const expiresAt = new Date(
-      Date.now() + this.passwordResetConfig.ttlMinutes * 60 * 1000,
+    const createdToken = await this.passwordResetTokenRepository.createToken(
+      {
+        id: randomUUID(),
+        userId: user.id,
+        tokenHash,
+        usedAt: null,
+      },
+      user.senhaHash,
+      this.passwordResetConfig.ttlMinutes,
     );
-
-    await this.passwordResetTokenRepository.createToken({
-      id: randomUUID(),
-      userId: user.id,
-      tokenHash,
-      expiresAt,
-      usedAt: null,
-    });
+    if (!createdToken) return { message: genericMessage };
     void Promise.resolve()
       .then(() =>
         this.passwordResetDeliveryService.deliver({
           email: user.email,
-          expiresAt,
+          expiresAt: createdToken.expiresAt,
           resetToken: plainToken,
         }),
       )
@@ -364,7 +406,6 @@ export class AuthService {
       );
     }
 
-    await this.authSessionsService.revokeAllByUser(userId);
     await this.logsService.logAuthEvent({
       event: 'PASSWORD_RESET_TOKEN_SUCCESS',
       level: 'info',
@@ -379,30 +420,61 @@ export class AuthService {
   }
   private async createTokensForUser(user: User): Promise<AuthTokens> {
     const sessionId = randomUUID();
-    const refreshToken = await this.buildRefreshToken(user, sessionId);
-
-    await this.authSessionsService.create({
+    const issued = await this.authSessionsService.create({
       id: sessionId,
       userId: user.id,
-      refreshToken,
-      expiresAt: this.getTokenExpiration(refreshToken),
+      expectedPasswordHash: user.senhaHash,
       maxActiveSessions: this.tokenConfig.maxActiveSessions,
+      policy: this.sessionPolicy,
+      issue: (now, absolute) =>
+        this.issueSessionTokens(user, sessionId, now, absolute),
     });
-
     return {
-      access_token: await this.buildAccessToken(user, sessionId),
-      refresh_token: refreshToken,
+      access_token: issued.access_token,
+      refresh_token: issued.refresh_token,
     };
   }
 
-  private async buildAccessToken(user: User, sessionId: string) {
-    return this.jwtService.signAsync(
+  private async issueSessionTokens(
+    user: User,
+    sessionId: string,
+    now: Date,
+    absolute: Date,
+  ) {
+    const refreshToken = await this.buildRefreshToken(
+      user,
+      sessionId,
+      now,
+      absolute,
+    );
+    const accessToken = await this.buildAccessToken(
+      user,
+      sessionId,
+      now,
+      absolute,
+    );
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      refreshTokenHash: createHash('sha256').update(refreshToken).digest('hex'),
+      expiresAt: this.getTokenExpiration(refreshToken),
+    };
+  }
+
+  private async buildAccessToken(
+    user: User,
+    sessionId: string,
+    now?: Date,
+    absolute?: Date,
+  ) {
+    return this.signCappedToken(
       {
         sub: user.id,
         email: user.email,
         nome: user.nome,
         sid: sessionId,
         tokenType: 'access',
+        ...(now ? { iat: Math.floor(now.getTime() / 1000) } : {}),
       },
       {
         algorithm: this.tokenConfig.algorithm,
@@ -410,16 +482,24 @@ export class AuthService {
         expiresIn: this.tokenConfig.accessExpiresIn as never,
         issuer: this.tokenConfig.issuer,
       },
+      absolute,
+      now,
     );
   }
 
-  private async buildRefreshToken(user: User, sessionId: string) {
-    return this.jwtService.signAsync(
+  private async buildRefreshToken(
+    user: User,
+    sessionId: string,
+    now?: Date,
+    absolute?: Date,
+  ) {
+    return this.signCappedToken(
       {
         sub: user.id,
         sid: sessionId,
         jti: randomUUID(),
         tokenType: 'refresh',
+        ...(now ? { iat: Math.floor(now.getTime() / 1000) } : {}),
       },
       {
         algorithm: this.tokenConfig.algorithm,
@@ -427,7 +507,27 @@ export class AuthService {
         expiresIn: this.tokenConfig.refreshExpiresIn as never,
         issuer: this.tokenConfig.issuer,
       },
+      absolute,
+      now,
     );
+  }
+
+  private async signCappedToken(
+    payload: Record<string, unknown>,
+    options: Parameters<JwtService['signAsync']>[1],
+    absolute?: Date,
+    now?: Date,
+  ) {
+    const token = await this.jwtService.signAsync(payload, options);
+    if (!absolute || !now) return token;
+    const expiration = this.getTokenExpiration(token).getTime() / 1000;
+    const exp = cappedExpiration(expiration, absolute);
+    if (exp * 1000 <= now.getTime()) rejectSession('AUTH_INVALID_SESSION');
+    if (exp === expiration) return token;
+    return this.jwtService.signAsync(payload, {
+      ...options,
+      expiresIn: exp - Math.floor(now.getTime() / 1000),
+    });
   }
 
   private async verifyRefreshToken(refreshToken: string) {

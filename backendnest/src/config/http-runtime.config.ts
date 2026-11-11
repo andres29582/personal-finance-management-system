@@ -65,6 +65,7 @@ export function configureCors(
 
   app.enableCors({
     credentials: true,
+    exposedHeaders: ['X-Session-State'],
     methods: CORS_METHODS,
     origin: (origin, callback) => {
       callback(null, !origin || allowedOrigins.has(origin));

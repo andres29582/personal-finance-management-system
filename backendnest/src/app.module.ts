@@ -33,6 +33,7 @@ import { PrevisoesModule } from './previsoes/previsoes.module';
 import { AuditLogsModule } from './logs/audit-logs.module';
 import { PlanejamentosModule } from './planejamentos/planejamentos.module';
 import { PasswordResetToken } from './auth/entities/password-reset-token.entity';
+import { PasswordChangedOutbox } from './auth/entities/password-changed-outbox.entity';
 import { User } from './users/entities/user.entity';
 import { AuthSession } from './auth/entities/auth-session.entity';
 import { Conta } from './contas/entities/conta.entity';
@@ -44,6 +45,7 @@ import { PagoDivida } from './pagos-divida/entities/pago-divida.entity';
 import { Meta } from './metas/entities/meta.entity';
 import { Alerta } from './alertas/entities/alerta.entity';
 import { Orcamento } from './orcamentos/entities/orcamento.entity';
+import { OrcamentoCategoria } from './orcamentos/entities/orcamento-categoria.entity';
 import { Planejamento } from './planejamentos/entities/planejamento.entity';
 import { ParticipantePlanejamento } from './planejamentos/entities/participante-planejamento.entity';
 import { GastoPlanejamento } from './planejamentos/entities/gasto-planejamento.entity';
@@ -56,6 +58,7 @@ import { resolveThrottlerConfig } from './config/throttler.config';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      ignoreEnvFile: process.env.NODE_ENV === 'test',
     }),
 
     TypeOrmModule.forRootAsync({
@@ -70,6 +73,7 @@ import { resolveThrottlerConfig } from './config/throttler.config';
             User,
             AuthSession,
             PasswordResetToken,
+            PasswordChangedOutbox,
             AuditLog,
             Conta,
             Categoria,
@@ -80,6 +84,7 @@ import { resolveThrottlerConfig } from './config/throttler.config';
             Meta,
             Alerta,
             Orcamento,
+            OrcamentoCategoria,
             Planejamento,
             ParticipantePlanejamento,
             GastoPlanejamento,
@@ -87,6 +92,9 @@ import { resolveThrottlerConfig } from './config/throttler.config';
             AcertoPlanejamento,
           ],
           synchronize: false,
+          ...(process.env.NODE_ENV === 'test'
+            ? { connectTimeoutMS: 5000 }
+            : {}),
         };
       },
     }),

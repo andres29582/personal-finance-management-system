@@ -49,7 +49,7 @@ describe('AuthService', () => {
   let passwordResetTokenRepository: jest.Mocked<
     Pick<
       PasswordResetTokenRepository,
-      'consumeAndResetPassword' | 'createToken'
+      'consumeAndResetPassword' | 'createToken' | 'changeAuthenticatedPassword'
     >
   >;
   let passwordResetDeliveryService: jest.Mocked<
@@ -73,7 +73,9 @@ describe('AuthService', () => {
       seedDefaultCategories: jest.fn(),
     };
     authSessionsService = {
-      create: jest.fn(),
+      create: jest.fn(async (input) =>
+        input.issue(new Date(), new Date(Date.now() + 43200000)),
+      ),
       findActiveById: jest.fn(),
       revoke: jest.fn(),
       revokeAllByUser: jest.fn(),
@@ -97,7 +99,10 @@ describe('AuthService', () => {
     };
     passwordResetTokenRepository = {
       consumeAndResetPassword: jest.fn(),
-      createToken: jest.fn(),
+      createToken: jest
+        .fn()
+        .mockResolvedValue({ expiresAt: new Date(Date.now() + 3600_000) }),
+      changeAuthenticatedPassword: jest.fn(),
     };
     passwordResetDeliveryService = {
       deliver: jest.fn(),
@@ -338,8 +343,9 @@ describe('AuthService', () => {
 
     expect(authSessionsService.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        refreshToken: 'refresh-token-1',
+        issue: expect.any(Function),
         userId: 'user-1',
+        expectedPasswordHash: 'hashed-password',
       }),
     );
     expect(result.access_token).toBe('access-token-1');
@@ -505,7 +511,11 @@ describe('AuthService', () => {
     jwtService.decode.mockReturnValue({
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
-    authSessionsService.rotateIfActiveWithMatchingToken.mockResolvedValue(true);
+    authSessionsService.rotateIfActiveWithMatchingToken.mockImplementation(
+      async (_sid, _owner, _token, issue) => ({
+        tokens: await issue(new Date(), new Date(Date.now() + 43200000)),
+      }),
+    );
 
     const result = await service.refreshSession('refresh-token-1');
 
@@ -513,9 +523,9 @@ describe('AuthService', () => {
       authSessionsService.rotateIfActiveWithMatchingToken,
     ).toHaveBeenCalledWith(
       'session-1',
+      'user-1',
       'refresh-token-1',
-      'refresh-token-2',
-      expect.any(Date),
+      expect.any(Function),
     );
     expect(result).toEqual({
       access_token: 'access-token-2',
@@ -548,9 +558,10 @@ describe('AuthService', () => {
     jwtService.decode.mockReturnValue({
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
-    authSessionsService.rotateIfActiveWithMatchingToken.mockResolvedValue(
-      false,
-    );
+    authSessionsService.rotateIfActiveWithMatchingToken.mockResolvedValue({
+      failure: 'AUTH_INVALID_REFRESH_TOKEN',
+      reuse: true,
+    });
 
     await expect(
       service.refreshSession('reused-refresh-token'),
@@ -559,10 +570,7 @@ describe('AuthService', () => {
       statusCode: 401,
     });
 
-    expect(authSessionsService.revoke).toHaveBeenCalledWith(
-      'session-1',
-      'user-1',
-    );
+    expect(authSessionsService.revoke).not.toHaveBeenCalled();
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'REFRESH_TOKEN_REUSE_DETECTED',
@@ -604,6 +612,8 @@ describe('AuthService', () => {
         tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) as string,
         userId: 'user-1',
       }),
+      undefined,
+      60,
     );
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -673,6 +683,8 @@ describe('AuthService', () => {
       expect.objectContaining({
         tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) as string,
       }),
+      undefined,
+      60,
     );
     const storedToken =
       passwordResetTokenRepository.createToken.mock.calls[0][0].tokenHash;
@@ -693,8 +705,10 @@ describe('AuthService', () => {
 
     expect(passwordResetTokenRepository.createToken).toHaveBeenCalledWith(
       expect.objectContaining({
-        expiresAt: new Date('2026-07-11T12:15:00.000Z'),
+        userId: 'user-1',
       }),
+      undefined,
+      15,
     );
     jest.useRealTimers();
   });
@@ -740,14 +754,25 @@ describe('AuthService', () => {
     } as never);
     (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
 
+    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     const password = ' novaSenha123 ';
-    const result = await service.resetPassword('user-1', password);
-
-    expect(usersService.updatePassword).toHaveBeenCalledWith(
+    const result = await service.resetPassword(
       'user-1',
+      password,
+      'old',
+      'session-1',
+    );
+
+    expect(
+      passwordResetTokenRepository.changeAuthenticatedPassword,
+    ).toHaveBeenCalledWith(
+      'user-1',
+      'session-1',
+      'hashed-password',
       'new-hash',
     );
-    expect(authSessionsService.revokeAllByUser).toHaveBeenCalledWith('user-1');
+    expect(usersService.updatePassword).not.toHaveBeenCalled();
+    expect(authSessionsService.revokeAllByUser).not.toHaveBeenCalled();
     expect(result.message).toContain('Senha atualizada');
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -769,9 +794,48 @@ describe('AuthService', () => {
     await service.resetPasswordWithToken('plain-token', password);
 
     expect(bcrypt.hash).toHaveBeenCalledWith(password, 10);
-    expect(authSessionsService.revokeAllByUser).toHaveBeenCalledWith('user-1');
+    expect(authSessionsService.revokeAllByUser).not.toHaveBeenCalled();
     expect(logsService.logAuthEvent).toHaveBeenCalledWith(
       expect.not.objectContaining({ password, senha: password }),
+    );
+  });
+
+  it('rejects a wrong current password without revoking the current session', async () => {
+    usersService.findById.mockResolvedValue({
+      id: 'user-1',
+      senhaHash: 'old-hash',
+    } as never);
+    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+    await expect(
+      service.resetPassword('user-1', 'NewPassword123', 'wrong', 'session-1'),
+    ).rejects.toMatchObject({
+      code: 'AUTH_CURRENT_PASSWORD_INVALID',
+      statusCode: 400,
+      field: 'senhaAtual',
+    });
+    expect(
+      passwordResetTokenRepository.changeAuthenticatedPassword,
+    ).not.toHaveBeenCalled();
+    expect(authSessionsService.revokeAllByUser).not.toHaveBeenCalled();
+    expect(usersService.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it('keeps recovery response generic when a stale password snapshot is refused', async () => {
+    configValues.AUTH_RETURN_RESET_TOKEN = 'true';
+    service = createService();
+    usersService.findByEmail.mockResolvedValue({
+      id: 'user-1',
+      email: 'a@example.com',
+      senhaHash: 'old-hash',
+    } as never);
+    passwordResetTokenRepository.createToken.mockResolvedValue(null);
+    const result = await service.requestPasswordReset('a@example.com');
+    expect(result).not.toHaveProperty('resetToken');
+    expect(passwordResetDeliveryService.deliver).not.toHaveBeenCalled();
+    expect(passwordResetTokenRepository.createToken).toHaveBeenCalledWith(
+      expect.any(Object),
+      'old-hash',
+      60,
     );
   });
 
@@ -863,8 +927,13 @@ describe('AuthService', () => {
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
     authSessionsService.rotateIfActiveWithMatchingToken
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false);
+      .mockImplementationOnce(async (_sid, _owner, _token, issue) => ({
+        tokens: await issue(new Date(), new Date(Date.now() + 43200000)),
+      }))
+      .mockResolvedValueOnce({
+        failure: 'AUTH_INVALID_REFRESH_TOKEN',
+        reuse: true,
+      });
 
     const results = await Promise.allSettled([
       service.refreshSession('same-refresh-token'),
@@ -880,9 +949,6 @@ describe('AuthService', () => {
     expect(
       authSessionsService.rotateIfActiveWithMatchingToken,
     ).toHaveBeenCalledTimes(2);
-    expect(authSessionsService.revoke).toHaveBeenCalledWith(
-      'session-1',
-      'user-1',
-    );
+    expect(authSessionsService.revoke).not.toHaveBeenCalled();
   });
 });

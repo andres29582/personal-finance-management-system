@@ -1,68 +1,202 @@
 import { AuthSessionRepository } from './auth-session.repository';
-
-describe('AuthSessionRepository', () => {
-  it('revokes the oldest active session before creating one beyond the limit', async () => {
-    const manager = {
-      create: jest.fn((_target: unknown, data: unknown) => data),
-      find: jest
-        .fn()
-        .mockResolvedValue([{ id: 'oldest-session' }, { id: 'newer-session' }]),
-      query: jest.fn(),
-      save: jest.fn().mockResolvedValue({ id: 'new-session' }),
-      update: jest.fn(),
-    };
-    const dataSource = {
-      transaction: jest.fn((callback: (value: typeof manager) => unknown) =>
-        callback(manager),
-      ),
-    };
-    const repository = new AuthSessionRepository(
-      {} as never,
-      dataSource as never,
-    );
-
-    await repository.createSession({
-      expiresAt: new Date('2026-10-01T00:00:00.000Z'),
-      id: 'new-session',
-      lastUsedAt: new Date('2026-09-14T00:00:00.000Z'),
-      maxActiveSessions: 2,
-      refreshTokenHash: 'hash-only',
-      revokedAt: null,
-      userId: 'user-1',
-    });
-
-    expect(manager.query).toHaveBeenCalledWith(
-      'SELECT 1 FROM usuario WHERE id = $1 FOR UPDATE',
-      ['user-1'],
-    );
-    expect(manager.update).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.anything() as unknown,
-      expect.objectContaining({ revokedAt: expect.any(Date) as unknown }),
-    );
-    expect(manager.save).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.not.objectContaining({
-        maxActiveSessions: expect.anything() as unknown,
-      }),
+import { AuthSession } from '../entities/auth-session.entity';
+import { User } from '../../users/entities/user.entity';
+const now = new Date('2026-10-09T12:00:00Z');
+function valid(id = 'session-1') {
+  return {
+    id,
+    userId: 'user-1',
+    refreshTokenHash: 'old',
+    revokedAt: null,
+    authenticatedAt: new Date(now.getTime() - 1000),
+    lastActivityAt: new Date(now.getTime() - 1000),
+    absoluteExpiresAt: new Date(now.getTime() + 43200000),
+    refreshExpiresAt: new Date(now.getTime() + 43200000),
+    idleTimeoutSeconds: 900,
+    policyVersion: 1,
+  };
+}
+function fixture() {
+  const calls: string[] = [];
+  let current: any = valid();
+  const manager = {
+    query: jest.fn(async (sql: string) => {
+      calls.push(
+        sql.includes('clock_timestamp')
+          ? 'clock'
+          : sql.includes('FOR UPDATE')
+            ? 'sessions'
+            : 'timeout',
+      );
+      return sql.includes('clock_timestamp')
+        ? [{ milliseconds: now.getTime() }]
+        : sql.includes('FOR UPDATE')
+          ? [{ id: 'session-1' }]
+          : [];
+    }),
+    findOne: jest.fn(async (target: any) => {
+      calls.push(target === User ? 'user' : 'session');
+      return target === User
+        ? { id: 'user-1', senhaHash: 'verified' }
+        : current;
+    }),
+    find: jest.fn(async () => [current]),
+    update: jest.fn(async (..._args: unknown[]) => ({ affected: 1 })),
+    save: jest.fn(async (_: any, data: any) => data),
+    create: jest.fn((_: any, data: any) => data),
+  };
+  const source = {
+    transaction: jest.fn(async (work: any) => {
+      const result = await work(manager);
+      calls.push('commit');
+      return result;
+    }),
+  };
+  return {
+    repository: new AuthSessionRepository({} as never, source as never),
+    manager,
+    calls,
+    setSession: (session: any) => {
+      current = session;
+    },
+  };
+}
+const issue = jest.fn(async () => ({
+  access_token: 'access',
+  refresh_token: 'refresh',
+  refreshTokenHash: 'next',
+  expiresAt: new Date(now.getTime() + 60000),
+}));
+describe('AuthSessionRepository atomic authority', () => {
+  beforeEach(() => issue.mockClear());
+  it('takes user then session locks before clock and returns only after commit', async () => {
+    const f = fixture();
+    await f.repository.authorize('session-1', 'user-1', true);
+    expect(f.calls).toEqual(['timeout', 'user', 'session', 'clock', 'commit']);
+    expect(f.manager.update).toHaveBeenCalledWith(
+      AuthSession,
+      expect.anything(),
+      expect.objectContaining({ lastActivityAt: now }),
     );
   });
-
-  it('touches only a non-revoked, non-expired session', async () => {
-    const persistence = { update: jest.fn() };
-    const repository = new AuthSessionRepository(
-      {
-        update: persistence.update,
-      } as never,
-      {} as never,
+  it('checks background without touch', async () => {
+    const f = fixture();
+    await f.repository.authorize('session-1', 'user-1', false);
+    expect(f.manager.update).not.toHaveBeenCalled();
+  });
+  it('commits idle expiry before throwing and never touches', async () => {
+    const f = fixture();
+    f.setSession({
+      ...valid(),
+      lastActivityAt: new Date(now.getTime() - 900000),
+      authenticatedAt: new Date(now.getTime() - 901000),
+    });
+    await expect(
+      f.repository.authorize('session-1', 'user-1', true),
+    ).rejects.toMatchObject({ code: 'AUTH_SESSION_IDLE_EXPIRED' });
+    expect(f.calls.at(-1)).toBe('commit');
+    expect(f.manager.update).toHaveBeenCalledWith(
+      AuthSession,
+      expect.anything(),
+      expect.objectContaining({ terminalReason: 'AUTH_SESSION_IDLE_EXPIRED' }),
     );
-    const now = new Date('2026-09-14T00:00:00.000Z');
-
-    await repository.touchIfActive('session-1', now);
-
-    expect(persistence.update).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'session-1' }),
-      { lastUsedAt: now, updatedAt: now },
+  });
+  it('does not authorize a zero-row touch', async () => {
+    const f = fixture();
+    f.manager.update.mockResolvedValue({ affected: 0 });
+    await expect(
+      f.repository.authorize('session-1', 'user-1', true),
+    ).rejects.toMatchObject({ statusCode: 500 });
+    expect(f.calls).not.toContain('commit');
+  });
+  it('cannot touch an owner mismatch', async () => {
+    const f = fixture();
+    f.setSession({ ...valid(), userId: 'other' });
+    await expect(
+      f.repository.authorize('session-1', 'user-1', true),
+    ).rejects.toMatchObject({ code: 'AUTH_INVALID_SESSION' });
+    expect(f.manager.update).not.toHaveBeenCalled();
+  });
+  it('reads no clock until session lock resolves', async () => {
+    const f = fixture();
+    let release!: (v: any) => void;
+    let entered!: () => void;
+    const reached = new Promise<void>((r) => (entered = r));
+    const lock = new Promise((r) => (release = r));
+    f.manager.findOne.mockImplementation(async (target: any) => {
+      if (target === User) return { id: 'user-1', senhaHash: 'verified' };
+      entered();
+      return lock as any;
+    });
+    const pending = f.repository.authorize('session-1', 'user-1', false);
+    await reached;
+    expect(f.calls).not.toContain('clock');
+    release(valid());
+    await pending;
+    expect(f.calls).toContain('clock');
+  });
+  it('rotates without changing activity or absolute and distinguishes real reuse', async () => {
+    const f = fixture();
+    await expect(
+      f.repository.rotateIfActiveWithMatchingToken(
+        'session-1',
+        'user-1',
+        'old',
+        issue,
+      ),
+    ).resolves.toHaveProperty('tokens');
+    const update = f.manager.update.mock.calls[0] as any[];
+    expect(update[2]).not.toHaveProperty('lastActivityAt');
+    expect(update[2]).not.toHaveProperty('absoluteExpiresAt');
+    const reused = await f.repository.rotateIfActiveWithMatchingToken(
+      'session-1',
+      'user-1',
+      'wrong',
+      issue,
+    );
+    expect(reused).toEqual({
+      failure: 'AUTH_INVALID_REFRESH_TOKEN',
+      reuse: true,
+    });
+    expect(f.calls.at(-1)).toBe('commit');
+  });
+  it('does not classify ordinary expiry as replay', async () => {
+    const f = fixture();
+    f.setSession({ ...valid(), absoluteExpiresAt: now });
+    expect(
+      await f.repository.rotateIfActiveWithMatchingToken(
+        'session-1',
+        'user-1',
+        'wrong',
+        issue,
+      ),
+    ).toEqual({ failure: 'AUTH_SESSION_ABSOLUTE_EXPIRED' });
+    expect(issue).not.toHaveBeenCalled();
+  });
+  it('prunes only valid sessions and initializes deadlines after locks', async () => {
+    const f = fixture();
+    await f.repository.createSession({
+      id: 'new',
+      userId: 'user-1',
+      expectedPasswordHash: 'verified',
+      maxActiveSessions: 1,
+      policy: { idleSeconds: 900, absoluteSeconds: 43200, version: 1 },
+      issue,
+    });
+    expect(f.calls.indexOf('sessions')).toBeLessThan(f.calls.indexOf('clock'));
+    expect(f.manager.save).toHaveBeenCalledWith(
+      AuthSession,
+      expect.objectContaining({
+        authenticatedAt: now,
+        lastActivityAt: now,
+        absoluteExpiresAt: new Date(now.getTime() + 43200000),
+        policyVersion: 1,
+      }),
+    );
+    expect(f.manager.update).toHaveBeenCalledWith(
+      AuthSession,
+      expect.anything(),
+      expect.objectContaining({ terminalReason: 'AUTH_SESSION_REVOKED' }),
     );
   });
 });

@@ -16,12 +16,19 @@ import { UsersModule } from '../users/users.module';
 import { AuthSessionRepository } from './repositories/auth-session.repository';
 import { PasswordResetTokenRepository } from './repositories/password-reset-token.repository';
 import { resolveAuthTokenConfig } from './config/auth-token.config';
+import { PasswordChangedOutbox } from './entities/password-changed-outbox.entity';
+import { PasswordChangedOutboxRepository } from './notifications/password-changed-outbox.repository';
+import { PasswordChangedWorker } from './notifications/password-changed.worker';
 
 @Module({
   imports: [
     UsersModule,
     CategoriasModule,
-    TypeOrmModule.forFeature([AuthSession, PasswordResetToken]),
+    TypeOrmModule.forFeature([
+      AuthSession,
+      PasswordResetToken,
+      PasswordChangedOutbox,
+    ]),
     PassportModule,
     ConfigModule,
     JwtModule.registerAsync({
@@ -49,6 +56,8 @@ import { resolveAuthTokenConfig } from './config/auth-token.config';
     JwtAuthGuard,
     AuthSessionRepository,
     PasswordResetTokenRepository,
+    PasswordChangedOutboxRepository,
+    PasswordChangedWorker,
   ],
   exports: [AuthService, JwtModule, JwtAuthGuard],
 })

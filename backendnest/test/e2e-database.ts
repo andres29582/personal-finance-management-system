@@ -1,6 +1,6 @@
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { DataSource } from 'typeorm';
+import { configureEnvironment, withGuardedDatabase } from './e2e-runtime.cjs';
 
 type E2eDatabaseConfig = {
   host: string;
@@ -8,12 +8,12 @@ type E2eDatabaseConfig = {
   username: string;
   password: string;
   database: string;
-  adminDatabase: string;
 };
 
 export function configureE2eEnvironment(): E2eDatabaseConfig {
   const config = resolveE2eDatabaseConfig();
   assertSafeTestDatabaseName(config.database);
+  configureEnvironment(config);
 
   process.env.DB_HOST = config.host;
   process.env.DB_PORT = String(config.port);
@@ -32,6 +32,8 @@ export function configureE2eEnvironment(): E2eDatabaseConfig {
   process.env.THROTTLE_LIMIT = '1000';
   process.env.THROTTLE_TTL_MS = '60000';
   process.env.AUTH_RETURN_RESET_TOKEN = 'true';
+  process.env.PASSWORD_RESET_DELIVERY_URL = '';
+  process.env.PASSWORD_RESET_DELIVERY_API_KEY = '';
 
   return config;
 }
@@ -40,90 +42,54 @@ export async function prepareE2eDatabase(
   config: E2eDatabaseConfig,
 ): Promise<void> {
   assertSafeTestDatabaseName(config.database);
-  await ensureDatabaseExists(config);
+  const expected = resolveE2eDatabaseConfig();
+  if (
+    Object.keys(expected).some(
+      (key) =>
+        expected[key as keyof E2eDatabaseConfig] !==
+        config[key as keyof E2eDatabaseConfig],
+    )
+  ) {
+    throw new Error(
+      'E2E destination does not match the explicit confirmed configuration.',
+    );
+  }
   await recreatePublicSchema(config);
   await runSqlMigrations(config);
 }
 
 function resolveE2eDatabaseConfig(): E2eDatabaseConfig {
-  const envFile = readDotEnvFile(join(__dirname, '..', '.env'));
-
-  return {
-    host:
-      process.env.E2E_DB_HOST ??
-      process.env.DB_HOST ??
-      envFile.DB_HOST ??
-      'localhost',
-    port: Number(
-      process.env.E2E_DB_PORT ??
-        process.env.DB_PORT ??
-        envFile.DB_PORT ??
-        '5432',
-    ),
-    username:
-      process.env.E2E_DB_USERNAME ??
-      process.env.DB_USERNAME ??
-      envFile.DB_USERNAME ??
-      'postgres',
-    password:
-      process.env.E2E_DB_PASSWORD ??
-      process.env.DB_PASSWORD ??
-      envFile.DB_PASSWORD ??
-      '1234',
-    database:
-      process.env.E2E_DB_NAME ??
-      process.env.DB_TEST_NAME ??
-      'gestao_financeira_test',
-    adminDatabase: process.env.E2E_DB_ADMIN_DATABASE ?? 'postgres',
+  const required = (key: string): string => {
+    const value = process.env[key];
+    if (!value)
+      throw new Error(
+        'Explicit disposable E2E configuration is required: ' + key,
+      );
+    return value;
   };
-}
-
-function readDotEnvFile(path: string): Record<string, string> {
-  if (!existsSync(path)) {
-    return {};
-  }
-
-  return readFileSync(path, 'utf8')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .reduce<Record<string, string>>((accumulator, line) => {
-      const separatorIndex = line.indexOf('=');
-
-      if (separatorIndex <= 0) {
-        return accumulator;
-      }
-
-      const key = line.slice(0, separatorIndex).trim();
-      const value = line.slice(separatorIndex + 1).trim();
-      accumulator[key] = value;
-
-      return accumulator;
-    }, {});
-}
-
-async function ensureDatabaseExists(config: E2eDatabaseConfig): Promise<void> {
-  await withDataSource(
-    { ...config, database: config.adminDatabase },
-    async (dataSource) => {
-      const databaseExists = await dataSource.query<
-        Array<Record<string, unknown>>
-      >('SELECT 1 FROM pg_database WHERE datname = $1', [config.database]);
-
-      if (databaseExists.length === 0) {
-        await dataSource.query(
-          `CREATE DATABASE ${quoteIdentifier(config.database)}`,
-        );
-      }
-    },
-  );
+  const database = required('E2E_DB_NAME');
+  assertSafeTestDatabaseName(database);
+  if (required('E2E_DB_RESET_CONFIRM') !== database)
+    throw new Error('E2E reset confirmation does not match.');
+  const username = required('E2E_DB_USERNAME');
+  if (!/^finance_e2e_[a-z0-9_]+$/.test(username))
+    throw new Error('Dedicated E2E role is required.');
+  const port = Number(required('E2E_DB_PORT'));
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error('Invalid E2E port.');
+  return {
+    host: required('E2E_DB_HOST'),
+    port,
+    username,
+    password: required('E2E_DB_PASSWORD'),
+    database,
+  };
 }
 
 async function recreatePublicSchema(config: E2eDatabaseConfig): Promise<void> {
   await withDataSource(config, async (dataSource) => {
     await dataSource.query('DROP SCHEMA IF EXISTS public CASCADE');
     await dataSource.query('CREATE SCHEMA public');
-    await dataSource.query('GRANT ALL ON SCHEMA public TO PUBLIC');
   });
 }
 
@@ -143,38 +109,22 @@ async function runSqlMigrations(config: E2eDatabaseConfig): Promise<void> {
 
 async function withDataSource(
   config: E2eDatabaseConfig,
-  callback: (dataSource: DataSource) => Promise<void>,
+  callback: (connection: {
+    query<T = unknown>(sql: string, parameters?: unknown[]): Promise<T>;
+  }) => Promise<void>,
 ): Promise<void> {
-  const dataSource = new DataSource({
-    type: 'postgres',
-    host: config.host,
-    port: config.port,
-    username: config.username,
-    password: config.password,
-    database: config.database,
+  await withGuardedDatabase(config, process.env, async (client) => {
+    await callback({
+      query: async <T>(sql: string, parameters?: unknown[]): Promise<T> =>
+        (await client.query(sql, parameters)).rows as T,
+    });
   });
-
-  await dataSource.initialize();
-
-  try {
-    await callback(dataSource);
-  } finally {
-    await dataSource.destroy();
-  }
 }
 
 function assertSafeTestDatabaseName(database: string): void {
-  if (!/test/i.test(database)) {
+  if (!/^finance_e2e_[a-z0-9_]+$/.test(database)) {
     throw new Error(
-      `E2E_DB_NAME must include "test"; refusing to reset database "${database}".`,
+      'E2E database must have the exact finance_e2e_ disposable prefix.',
     );
   }
-}
-
-function quoteIdentifier(identifier: string): string {
-  if (!/^[a-zA-Z0-9_]+$/.test(identifier)) {
-    throw new Error(`Invalid PostgreSQL identifier: ${identifier}`);
-  }
-
-  return `"${identifier.replace(/"/g, '""')}"`;
 }

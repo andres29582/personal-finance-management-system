@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource, type QueryRunner } from 'typeorm';
+import type { Response, Test } from 'supertest';
+import { combine } from '../e2e-runtime.cjs';
+
+type PendingRequest = {
+  request: Pick<Test, 'abort'>;
+  promise: Promise<unknown>;
+  settled: boolean;
+};
 
 export type BackendActivity = {
   blockers: number[];
@@ -13,7 +21,7 @@ export type PostgresBarrier = {
   applicationName: string;
   functionName: string;
   marker: string;
-  pendingRequests: Promise<unknown>[];
+  pendingRequests: PendingRequest[];
   pids: Set<number>;
   queryRunner: QueryRunner;
   table: string;
@@ -32,6 +40,7 @@ export const REQUEST_DEADLINE_MS = 15000;
 
 export class PostgresConcurrencyHarness {
   private readonly activeBarriers = new Set<PostgresBarrier>();
+  private cleanupFailure?: unknown;
 
   constructor(private readonly coordinatorDataSource: DataSource) {}
 
@@ -40,6 +49,7 @@ export class PostgresConcurrencyHarness {
     table,
     triggerEvent,
   }: InstallBarrierOptions): Promise<PostgresBarrier> {
+    if (this.cleanupFailure) throw this.cleanupFailure;
     const marker = `fc_${randomUUID().replaceAll('-', '')}`;
     const barrier: PostgresBarrier = {
       applicationName: `${marker}_${holder}`,
@@ -157,13 +167,23 @@ export class PostgresConcurrencyHarness {
   async cleanupBarrier(barrier: PostgresBarrier): Promise<void> {
     if (barrier.queryRunner.isReleased) {
       this.activeBarriers.delete(barrier);
-      return;
+      throw new Error(
+        'Barrier coordinator was released before cleanup confirmation',
+      );
     }
-
-    await barrier.queryRunner.connect();
-    const discoveredPids = (await barrier.queryRunner
-      .query(
-        `WITH holders AS (
+    const errors: unknown[] = [];
+    const attempt = async (work: () => Promise<unknown>) => {
+      try {
+        await work();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    try {
+      await attempt(async () => {
+        await barrier.queryRunner.connect();
+        const discoveredPids = (await barrier.queryRunner.query(
+          `WITH holders AS (
            SELECT pid
            FROM pg_stat_activity
            WHERE application_name = $1
@@ -176,63 +196,164 @@ export class PostgresConcurrencyHarness {
               FROM holders
               WHERE holders.pid = ANY(pg_blocking_pids(activity.pid))
             )`,
-        [barrier.applicationName],
-      )
-      .catch(() => [])) as Array<{ pid: number }>;
-    for (const { pid } of discoveredPids) {
-      barrier.pids.add(pid);
-    }
-
-    await this.unlockBarrier(barrier);
-    await Promise.allSettled(
-      barrier.pendingRequests.map((pending) =>
-        withTimeout(pending, 'pending request cleanup', 1000),
-      ),
-    );
-
-    const pids = [...barrier.pids];
-    if (pids.length > 0) {
-      await barrier.queryRunner.query(
-        `SELECT pg_cancel_backend(pid)
+          [barrier.applicationName],
+        )) as Array<{ pid: number }>;
+        for (const { pid } of discoveredPids) barrier.pids.add(pid);
+      });
+      for (const pending of barrier.pendingRequests) {
+        if (!pending.settled) {
+          errors.push(
+            new Error(
+              'Pending HTTP handler completion is unconfirmed after abort',
+            ),
+          );
+          await attempt(async () => {
+            pending.request.abort();
+          });
+        }
+      }
+      await attempt(() => this.unlockBarrier(barrier));
+      const pids = [...barrier.pids];
+      if (pids.length > 0)
+        await attempt(() =>
+          barrier.queryRunner.query(
+            `SELECT pg_cancel_backend(pid)
          FROM pg_stat_activity
-         WHERE pid = ANY($1::integer[]) AND state <> 'idle'`,
-        [pids],
+         WHERE pid = ANY($1::integer[]) AND datname = current_database()
+           AND usename = current_user AND state <> 'idle'`,
+            [pids],
+          ),
+        );
+      const pendingResults = await Promise.allSettled(
+        barrier.pendingRequests.map(({ promise }) =>
+          withTimeout(promise, 'aborted request cleanup', 2000),
+        ),
       );
-    }
-    const pendingResults = await Promise.allSettled(
-      barrier.pendingRequests.map((pending) =>
-        withTimeout(pending, 'cancelled request cleanup', 2000),
-      ),
-    );
-    const timedOutRequest = pendingResults.find(
-      (result) =>
-        result.status === 'rejected' &&
-        result.reason instanceof Error &&
-        result.reason.message.startsWith('Timed out waiting for'),
-    );
-    if (timedOutRequest !== undefined) {
-      throw new Error('Timed out cleaning up a pending HTTP request');
-    }
-
-    await barrier.queryRunner.query(
-      `DROP TRIGGER IF EXISTS ${quoteIdentifier(barrier.triggerName)}
+      for (const result of pendingResults) {
+        if (
+          result.status === 'rejected' &&
+          result.reason instanceof Error &&
+          result.reason.message.startsWith('Timed out waiting')
+        )
+          errors.push(result.reason);
+      }
+      if (pids.length > 0)
+        await attempt(async () => {
+          await this.pollDatabase(async () => {
+            const active = (await barrier.queryRunner.query(
+              `SELECT pid FROM pg_stat_activity WHERE pid = ANY($1::integer[])
+               AND datname = current_database() AND usename = current_user
+               AND (state <> 'idle' OR xact_start IS NOT NULL)`,
+              [pids],
+            )) as Array<{ pid: number }>;
+            return active.length === 0 ? true : undefined;
+          }, 'cancelled SQL transactions to settle');
+        });
+      await attempt(() =>
+        barrier.queryRunner.query(
+          `DROP TRIGGER IF EXISTS ${quoteIdentifier(barrier.triggerName)}
        ON ${quoteIdentifier(barrier.table)}`,
+        ),
+      );
+      await attempt(() =>
+        barrier.queryRunner.query(
+          `DROP FUNCTION IF EXISTS ${quoteIdentifier(barrier.functionName)}()`,
+        ),
+      );
+    } finally {
+      if (barrier.queryRunner.isTransactionActive)
+        await attempt(() => barrier.queryRunner.rollbackTransaction());
+      // Remove session settings before returning a healthy coordinator to its pool.
+      await attempt(() =>
+        barrier.queryRunner.query(
+          'RESET lock_timeout; RESET statement_timeout',
+        ),
+      );
+      if (errors.length > 0) {
+        // TypeORM's PostgreSQL release(error) path removes the client instead of recycling it.
+        const disposable = barrier.queryRunner as unknown as {
+          releasePostgresConnection(error: Error): Promise<void>;
+        };
+        await attempt(() =>
+          disposable.releasePostgresConnection(
+            new Error('E2E coordinator cleanup failed'),
+          ),
+        );
+      } else {
+        await attempt(() => barrier.queryRunner.release());
+      }
+      this.activeBarriers.delete(barrier);
+    }
+    const error = combine(
+      undefined,
+      errors,
+      'Concurrency barrier cleanup failed',
     );
-    await barrier.queryRunner.query(
-      `DROP FUNCTION IF EXISTS ${quoteIdentifier(barrier.functionName)}()`,
+    if (error) {
+      this.cleanupFailure = error;
+      throw error;
+    }
+  }
+
+  trackRequest(barrier: PostgresBarrier, request: Test): Promise<Response> {
+    const pending: PendingRequest = {
+      request,
+      promise: Promise.resolve(),
+      settled: false,
+    };
+    request.timeout({ deadline: REQUEST_DEADLINE_MS });
+    pending.promise = new Promise<Response>((resolve, reject) => {
+      const aborted = () => reject(new Error('Owned HTTP request aborted'));
+      request.once('abort', aborted);
+      void request.then(resolve, reject).finally(() => {
+        request.off('abort', aborted);
+      });
+    });
+    void pending.promise.then(
+      () => {
+        pending.settled = true;
+      },
+      () => {
+        pending.settled = true;
+      },
     );
-    await barrier.queryRunner.release();
-    this.activeBarriers.delete(barrier);
+    barrier.pendingRequests.push(pending);
+    return pending.promise as Promise<Response>;
+  }
+
+  async withBarrier<T>(
+    barrier: PostgresBarrier,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    let primary: unknown;
+    let value: T | undefined;
+    try {
+      value = await work();
+    } catch (error) {
+      primary = error;
+    }
+    const cleanup: unknown[] = [];
+    try {
+      await this.cleanupBarrier(barrier);
+    } catch (error) {
+      cleanup.push(error);
+    }
+    const error = combine(primary, cleanup);
+    if (error) throw error;
+    return value as T;
   }
 
   async cleanupAll(): Promise<void> {
     const results = await this.cleanupAllSettled();
-    const failure = results.find((result) => result.status === 'rejected');
-    if (failure?.status === 'rejected') {
-      throw failure.reason instanceof Error
-        ? failure.reason
-        : new Error('Concurrency barrier cleanup failed');
-    }
+    const errors = results
+      .filter((result) => result.status === 'rejected')
+      .map((result) => result.reason as unknown);
+    const error = combine(
+      undefined,
+      errors,
+      'Concurrency barrier cleanup failed',
+    );
+    if (error) throw error;
   }
 
   cleanupAllSettled(): Promise<PromiseSettledResult<void>[]> {

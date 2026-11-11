@@ -1,146 +1,76 @@
-import { ConfigService } from '@nestjs/config';
-import { AppUnauthorizedException } from '../../common/exceptions';
-import { AuthSessionsService } from '../auth-sessions.service';
 import { JwtStrategy } from './jwt.strategy';
-import { RequestContextService } from '../../logs/request-context.service';
-
+const state = {
+  serverNow: '2026-10-09T12:00:00Z',
+  idleExpiresAt: '2026-10-09T12:15:00Z',
+  absoluteExpiresAt: '2026-10-10T00:00:00Z',
+  policyVersion: 1,
+};
 describe('JwtStrategy', () => {
-  let strategy: JwtStrategy;
-  let authSessionsService: jest.Mocked<
-    Pick<AuthSessionsService, 'findActiveById' | 'touchIfActive'>
-  >;
-  let requestContextService: jest.Mocked<
-    Pick<RequestContextService, 'setUserId'>
-  >;
-
+  const sessions = { authorize: jest.fn() },
+    context = { setUserId: jest.fn() };
+  const config = {
+    get: (key: string) =>
+      key === 'JWT_ACCESS_SECRET' ? 'access-secret' : undefined,
+  };
+  const strategy = new JwtStrategy(
+    config as never,
+    sessions as never,
+    context as never,
+  );
+  const payload = {
+    sub: 'user-1',
+    sid: 'session-1',
+    email: 'ana@example.com',
+    nome: 'Ana',
+    tokenType: 'access',
+  };
   beforeEach(() => {
-    const configService = {
-      get: jest.fn((key: string) =>
-        key === 'JWT_ACCESS_SECRET' ? 'access-secret' : undefined,
+    jest.clearAllMocks();
+    sessions.authorize.mockResolvedValue(state);
+  });
+  it.each([
+    { ...payload, sid: undefined },
+    { ...payload, tokenType: 'refresh' },
+  ])('rejects invalid token metadata without lookup', async (data) => {
+    await expect(strategy.validate({} as never, data)).rejects.toMatchObject({
+      code: 'AUTH_INVALID_SESSION',
+    });
+    expect(sessions.authorize).not.toHaveBeenCalled();
+  });
+  it('delegates owner and atomic authorization, not split touch', async () => {
+    expect(
+      await strategy.validate(
+        { method: 'GET', path: '/users/me' } as never,
+        payload,
       ),
-      getOrThrow: jest.fn(() => 'legacy-secret'),
-    };
-    authSessionsService = {
-      findActiveById: jest.fn(),
-      touchIfActive: jest.fn(),
-    };
-    requestContextService = {
-      setUserId: jest.fn(),
-    };
-
-    strategy = new JwtStrategy(
-      configService as unknown as ConfigService,
-      authSessionsService as unknown as AuthSessionsService,
-      requestContextService as unknown as RequestContextService,
+    ).toMatchObject({ id: 'user-1', sessionState: state });
+    expect(sessions.authorize).toHaveBeenCalledWith(
+      'session-1',
+      'user-1',
+      false,
+    );
+    expect(context.setUserId).toHaveBeenCalledWith('user-1');
+  });
+  it('marks only approved interactive mutations', async () => {
+    await strategy.validate(
+      {
+        method: 'POST',
+        path: '/transacoes',
+        headers: { 'x-active': 'false' },
+      } as never,
+      payload,
+    );
+    expect(sessions.authorize).toHaveBeenCalledWith(
+      'session-1',
+      'user-1',
+      true,
     );
   });
-
-  it('rejects payloads without a session id', async () => {
-    const promise = strategy.validate({} as never, {
-      email: 'ana@example.com',
-      nome: 'Ana',
-      sub: 'user-1',
-    });
-
-    await expect(promise).rejects.toBeInstanceOf(AppUnauthorizedException);
-    await expect(promise).rejects.toMatchObject({
-      code: 'AUTH_INVALID_SESSION',
-      message: 'Sessao invalida',
-      statusCode: 401,
-    });
-
-    expect(authSessionsService.findActiveById).not.toHaveBeenCalled();
-  });
-
-  it('rejects tokens whose session is missing', async () => {
-    authSessionsService.findActiveById.mockResolvedValue(null);
-
-    await expect(
-      strategy.validate({} as never, {
-        email: 'ana@example.com',
-        nome: 'Ana',
-        sid: 'session-1',
-        sub: 'user-1',
-        tokenType: 'access',
-      }),
-    ).rejects.toBeInstanceOf(AppUnauthorizedException);
-  });
-
-  it('rejects tokens whose session belongs to another user', async () => {
-    authSessionsService.findActiveById.mockResolvedValue({
-      expiresAt: new Date(Date.now() + 60_000),
-      id: 'session-1',
-      userId: 'user-2',
-    } as never);
-
-    await expect(
-      strategy.validate({} as never, {
-        email: 'ana@example.com',
-        nome: 'Ana',
-        sid: 'session-1',
-        sub: 'user-1',
-        tokenType: 'access',
-      }),
-    ).rejects.toBeInstanceOf(AppUnauthorizedException);
-  });
-
-  it('rejects tokens whose session is expired', async () => {
-    authSessionsService.findActiveById.mockResolvedValue({
-      expiresAt: new Date(Date.now() - 60_000),
-      id: 'session-1',
-      userId: 'user-1',
-    } as never);
-
-    await expect(
-      strategy.validate({} as never, {
-        email: 'ana@example.com',
-        nome: 'Ana',
-        sid: 'session-1',
-        sub: 'user-1',
-        tokenType: 'access',
-      }),
-    ).rejects.toBeInstanceOf(AppUnauthorizedException);
-  });
-
-  it('accepts a valid token and stores the user id in request context', async () => {
-    authSessionsService.findActiveById.mockResolvedValue({
-      expiresAt: new Date(Date.now() + 60_000),
-      id: 'session-1',
-      userId: 'user-1',
-    } as never);
-
-    const result = await strategy.validate({} as never, {
-      email: 'ana@example.com',
-      nome: 'Ana',
-      sid: 'session-1',
-      sub: 'user-1',
-      tokenType: 'access',
-    });
-
-    expect(result).toEqual({
-      email: 'ana@example.com',
-      id: 'user-1',
-      nome: 'Ana',
-      sid: 'session-1',
-    });
-    expect(requestContextService.setUserId).toHaveBeenCalledWith('user-1');
-    expect(authSessionsService.touchIfActive).toHaveBeenCalledWith('session-1');
-  });
-
-  it('rejects refresh tokens presented as bearer access tokens', async () => {
-    const promise = strategy.validate({} as never, {
-      email: 'ana@example.com',
-      nome: 'Ana',
-      sid: 'session-1',
-      sub: 'user-1',
-      tokenType: 'refresh',
-    });
-
-    await expect(promise).rejects.toMatchObject({
-      code: 'AUTH_INVALID_SESSION',
-      statusCode: 401,
-    });
-    expect(authSessionsService.findActiveById).not.toHaveBeenCalled();
-    expect(authSessionsService.touchIfActive).not.toHaveBeenCalled();
+  it('does not accept terminal or transient denied authority', async () => {
+    sessions.authorize.mockRejectedValue(new Error('denied'));
+    await expect(strategy.validate({} as never, payload)).rejects.toThrow(
+      'denied',
+    );
+    expect(context.setUserId).not.toHaveBeenCalled();
   });
 });

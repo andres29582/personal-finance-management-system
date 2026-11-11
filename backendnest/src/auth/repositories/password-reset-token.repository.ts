@@ -1,10 +1,33 @@
+import {
+  lockUserSessions,
+  persistSessionFailure,
+} from './auth-session.repository';
+import {
+  sessionFailure,
+  SessionFailure,
+  rejectSession,
+} from '../session-policy';
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  IsNull,
+  MoreThan,
+  Repository,
+} from 'typeorm';
+import { AppUnauthorizedException } from '../../common/exceptions';
+import {
+  credentialTime,
+  credentialTransaction,
+  lockCredentialUser,
+} from './credential-lock';
 import { BaseRepository } from '../../common/abstract/base.repository';
 import { User } from '../../users/entities/user.entity';
 import { AuthSession } from '../entities/auth-session.entity';
 import { PasswordResetToken } from '../entities/password-reset-token.entity';
+import { PasswordChangedOutbox } from '../entities/password-changed-outbox.entity';
 
 @Injectable()
 export class PasswordResetTokenRepository extends BaseRepository<PasswordResetToken> {
@@ -18,62 +41,130 @@ export class PasswordResetTokenRepository extends BaseRepository<PasswordResetTo
 
   async createToken(
     token: Partial<PasswordResetToken>,
-  ): Promise<PasswordResetToken> {
-    const entity = this.passwordResetTokenRepository.create(token);
-    return this.passwordResetTokenRepository.save(entity);
+    expectedPasswordHash: string,
+    ttlMinutes: number,
+  ): Promise<PasswordResetToken | null> {
+    if (!token.userId) return null;
+    const userId = token.userId;
+    return credentialTransaction(this.dataSource, async (manager) => {
+      const user = await lockCredentialUser(manager, userId);
+      if (!user || user.senhaHash !== expectedPasswordHash) return null;
+      const now = await credentialTime(manager);
+      return manager.save(
+        PasswordResetToken,
+        manager.create(PasswordResetToken, {
+          ...token,
+          expiresAt: new Date(now.getTime() + ttlMinutes * 60_000),
+          usedAt: null,
+          invalidatedAt: null,
+        }),
+      );
+    });
   }
 
   async consumeAndResetPassword(
     tokenHash: string,
     passwordHash: string,
-    now: Date,
+    _now?: Date,
   ): Promise<string | null> {
-    return this.dataSource.transaction(async (manager) => {
+    void _now; // Legacy caller time is not authoritative after waiting for a lock.
+    const hint = await this.passwordResetTokenRepository.findOne({
+      where: { tokenHash },
+    });
+    if (!hint) return null;
+    return credentialTransaction(this.dataSource, async (manager) => {
+      const user = await lockCredentialUser(manager, hint.userId);
+      if (!user) return null;
+      await lockUserSessions(manager, user.id);
+      await manager.query(
+        'SELECT id FROM password_reset_token WHERE user_id = $1 ORDER BY id FOR UPDATE',
+        [user.id],
+      );
+      const now = await credentialTime(manager);
       const result = await manager
         .createQueryBuilder()
         .update(PasswordResetToken)
         .set({ usedAt: now })
         .where('token_hash = :tokenHash', { tokenHash })
+        .andWhere('user_id = :userId', { userId: user.id })
         .andWhere('used_at IS NULL')
+        .andWhere('invalidated_at IS NULL')
         .andWhere('expires_at > :now', { now })
-        .returning('user_id')
         .execute();
-      const raw = result.raw as unknown;
-      const firstRow = isRecordArray(raw) ? raw[0] : undefined;
-      const userId =
-        firstRow && typeof firstRow.user_id === 'string'
-          ? firstRow.user_id
-          : undefined;
-
-      if (!userId) {
-        return null;
-      }
-
-      await manager
-        .createQueryBuilder()
-        .update(User)
-        .set({ senhaHash: passwordHash })
-        .where('id = :userId', { userId })
-        .execute();
-      await manager
-        .createQueryBuilder()
-        .update(AuthSession)
-        .set({ revokedAt: now, updatedAt: now })
-        .where('usuario_id = :userId', { userId })
-        .andWhere('revoked_at IS NULL')
-        .execute();
-
-      return userId;
+      if (result.affected !== 1) return null;
+      await this.changeCredentials(manager, user, passwordHash, now);
+      return user.id;
     });
   }
-}
 
-function isRecordArray(
-  value: unknown,
-): value is Array<Record<string, unknown>> {
-  return Array.isArray(value) && value.every(isRecord);
-}
+  async changeAuthenticatedPassword(
+    userId: string,
+    sessionId: string,
+    expectedPasswordHash: string,
+    passwordHash: string,
+  ): Promise<void> {
+    const failure = await credentialTransaction(
+      this.dataSource,
+      async (manager): Promise<SessionFailure | null> => {
+        const user = await lockCredentialUser(manager, userId);
+        if (!user || user.senhaHash !== expectedPasswordHash)
+          return 'AUTH_INVALID_SESSION';
+        await lockUserSessions(manager, userId);
+        const session = await manager.findOne(AuthSession, {
+          where: { id: sessionId, userId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        await manager.query(
+          'SELECT id FROM password_reset_token WHERE user_id = $1 ORDER BY id FOR UPDATE',
+          [userId],
+        );
+        const now = await credentialTime(manager);
+        const invalid = sessionFailure(session, userId, now);
+        if (invalid) {
+          await persistSessionFailure(manager, session, userId, now, invalid);
+          return invalid;
+        }
+        await this.changeCredentials(manager, user, passwordHash, now);
+        return null;
+      },
+    );
+    if (failure) rejectSession(failure);
+  }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  private async changeCredentials(
+    manager: EntityManager,
+    user: Pick<User, 'id' | 'email'>,
+    passwordHash: string,
+    now: Date,
+  ): Promise<void> {
+    const userId = user.id;
+    const updated = await manager.update(
+      User,
+      { id: userId },
+      { senhaHash: passwordHash },
+    );
+    if (updated.affected !== 1)
+      throw new AppUnauthorizedException(
+        'AUTH_INVALID_SESSION',
+        'Sessao invalida',
+      );
+    await manager
+      .createQueryBuilder()
+      .update(PasswordResetToken)
+      .set({ invalidatedAt: now })
+      .where('user_id = :userId', { userId })
+      .andWhere('used_at IS NULL')
+      .andWhere('invalidated_at IS NULL')
+      .execute();
+    await manager.update(
+      AuthSession,
+      { userId, revokedAt: IsNull() },
+      { revokedAt: now, updatedAt: now },
+    );
+    await manager.insert(PasswordChangedOutbox, {
+      id: randomUUID(),
+      recipient: user.email,
+      occurredAt: now,
+    });
+  }
 }

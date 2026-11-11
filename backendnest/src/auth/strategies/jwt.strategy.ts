@@ -1,3 +1,4 @@
+import { isEligibleSessionActivity } from '../session-activity';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
@@ -28,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(
-    _req: Request,
+    req: Request,
     payload: {
       sub: string;
       email: string;
@@ -44,20 +45,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
 
-    const session = await this.authSessionsService.findActiveById(payload.sid);
-
-    if (
-      !session ||
-      session.userId !== payload.sub ||
-      session.expiresAt.getTime() <= Date.now()
-    ) {
-      throw new AppUnauthorizedException(
-        'AUTH_INVALID_SESSION',
-        'Sessao invalida',
-      );
-    }
-
-    await this.authSessionsService.touchIfActive(session.id);
+    const state = await this.authSessionsService.authorize(
+      payload.sid,
+      payload.sub,
+      isEligibleSessionActivity(req),
+    );
+    req.res?.setHeader('X-Session-State', JSON.stringify(state));
+    req.res?.setHeader('Cache-Control', 'no-store');
     this.requestContextService.setUserId(payload.sub);
 
     return {
@@ -65,6 +59,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: payload.email,
       nome: payload.nome,
       sid: payload.sid,
+      sessionState: state,
     };
   }
 }
