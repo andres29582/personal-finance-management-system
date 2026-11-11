@@ -1,0 +1,111 @@
+name: P4 bounded PG16 proof
+
+# Publication, public audience and owner custody require a separate human approval.
+on:
+  workflow_dispatch:
+    inputs:
+      approved_commit:
+        description: Exact reviewed commit SHA selected as the workflow ref
+        required: true
+        type: string
+      evidence_policy:
+        description: P4_PUBLIC_7D_OWNER_CUSTODY confirms public proof, seven-day artifact and owner custody
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: p4-bootstrap-disposable
+          POSTGRES_DB: postgres
+        ports:
+          - 55436:5432
+        options: >-
+          --log-driver=none
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      P4_APPROVED_COMMIT: ${{ inputs.approved_commit }}
+      P4_APPROVAL: ${{ inputs.evidence_policy }}
+    steps:
+      - name: Reject unapproved candidate or policy
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          if [[ ! "$P4_APPROVED_COMMIT" =~ ^[a-f0-9]{40}$ ]] ||
+             [[ "$P4_APPROVED_COMMIT" != "$GITHUB_SHA" ]] ||
+             [[ "$P4_APPROVAL" != P4_PUBLIC_7D_OWNER_CUSTODY ]]; then
+            echo P4_APPROVAL_REJECTED
+            exit 1
+          fi
+      - name: Checkout approved workflow ref
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Configure Node without dependency cache
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Install locked backend dependencies without publishing diagnostics
+        timeout-minutes: 5
+        working-directory: backendnest
+        shell: bash
+        run: |
+          if ! timeout --signal=TERM --kill-after=10s 270s npm ci --no-audit --no-fund > "$RUNNER_TEMP/p4-install-private.log" 2>&1; then
+            echo P4_INSTALL_FAILED_NO_PRIVATE_UPLOAD
+            exit 1
+          fi
+          echo P4_INSTALL_PASS
+      - name: Full types, explicit U6 offline, native PG16 negative and existing PG16 E2E
+        timeout-minutes: 38
+        shell: bash
+        run: |
+          if ! timeout --signal=TERM --kill-after=20s 2200s node backendnest/test/session-harness/p4-ci.cjs > "$RUNNER_TEMP/p4-driver-private.log" 2>&1; then
+            echo P4_CHECKS_FAILED_NO_PRIVATE_UPLOAD
+            exit 1
+          fi
+          echo P4_CHECKS_AND_EXPORT_PASS
+      - name: Upload only closed sanitized proof after all checks and cleanup
+        id: export
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: p4-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tmp/p4-export/proof.json
+            .tmp/p4-export/proof.sha256
+          if-no-files-found: error
+          # .tmp is hidden; the exact two-file paths, not a directory/glob, are admitted.
+          include-hidden-files: true
+          retention-days: 7
+          compression-level: 0
+      - name: Download the exact uploaded artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.export.outputs.artifact-id }}
+          path: .tmp/p4-download
+          merge-multiple: true
+      - name: Fail closed on download checksum, schema or commit/run/attempt mismatch
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          if ! node backendnest/test/session-harness/p4-proof.cjs --readback > "$RUNNER_TEMP/p4-readback-private.log" 2>&1; then
+            echo P4_DOWNLOAD_READBACK_FAILED
+            exit 1
+          fi
+          echo P4_DOWNLOAD_READBACK_PASS_U6_OPEN_PRODUCTION_BLOCKED

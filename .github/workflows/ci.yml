@@ -146,10 +146,10 @@ jobs:
       NODE_ENV: test
       E2E_DB_HOST: localhost
       E2E_DB_PORT: 5432
-      E2E_DB_USERNAME: postgres
-      E2E_DB_PASSWORD: postgres
-      E2E_DB_NAME: gestao_financeira_test
-      E2E_DB_ADMIN_DATABASE: postgres
+      E2E_DB_USERNAME: finance_e2e_ci_owner
+      E2E_DB_PASSWORD: disposable-ci-only
+      E2E_DB_NAME: finance_e2e_ci
+      E2E_DB_RESET_CONFIRM: finance_e2e_ci
 
     defaults:
       run:
@@ -169,9 +169,23 @@ jobs:
       - name: Instalar dependencias do backend
         run: npm ci
 
+      - name: Bootstrap confined disposable E2E database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -X -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE finance_e2e_ci_owner LOGIN PASSWORD 'disposable-ci-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+          ALTER ROLE finance_e2e_ci_owner SET timezone='UTC';
+          CREATE DATABASE finance_e2e_ci OWNER finance_e2e_ci_owner;
+          COMMENT ON DATABASE finance_e2e_ci IS 'finance-e2e-disposable';
+          REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+          REVOKE CONNECT ON DATABASE template1 FROM PUBLIC;
+          REVOKE ALL ON DATABASE finance_e2e_ci FROM PUBLIC;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE finance_e2e_ci TO finance_e2e_ci_owner;
+          SQL
+
       - name: Executar testes E2E do backend
-        # O helper E2E cria o banco de teste, recria o schema public
-        # e aplica as migrations SQL versionadas antes das suites.
+        # O helper verifica owner/marker/confirmacao antes de recriar public.
         run: npm run test:e2e
 
   ml:
@@ -189,7 +203,7 @@ jobs:
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
           cache: pip
           cache-dependency-path: ml-finance-tcc/requirements.txt
 
