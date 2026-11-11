@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { createElement } from 'react';
+import { AppState } from 'react-native';
 import { RootLayout } from '../../src/navigation/RootLayout';
+import { api } from '../../src/shared/services/api';
+import { suspendSessionAuthority } from '../../src/modules/auth/services/sessionAuthority';
 import * as authStorage from '../../storage/authStorage';
 
 jest.mock('expo-router', () => ({
@@ -12,20 +15,48 @@ jest.mock('expo-router', () => ({
   useSegments: jest.fn(),
 }));
 jest.mock('../../storage/authStorage');
+jest.mock('../../src/shared/services/api', () => ({ api: { get: jest.fn() } }));
 
 describe('RootLayout route guard', () => {
   const replace = jest.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    suspendSessionAuthority();
     (useRouter as jest.Mock).mockReturnValue({ replace });
     (useRootNavigationState as jest.Mock).mockReturnValue({ key: 'ready' });
     jest.mocked(authStorage.subscribeAuthState).mockReturnValue(jest.fn());
+    jest.mocked(authStorage.observeSessionLifecycle).mockReturnValue(jest.fn());
+    jest.mocked(authStorage.getSessionGeneration).mockReturnValue(1);
+    jest.mocked(authStorage.isLocallySignedOut).mockReturnValue(false);
+    jest.mocked(authStorage.isSessionCurrent).mockResolvedValue(true);
+    jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
+    const now = Date.now();
+    jest.mocked(api.get).mockResolvedValue({
+      data: {
+        serverNow: new Date(now).toISOString(),
+        idleExpiresAt: new Date(now + 900000).toISOString(),
+        absoluteExpiresAt: new Date(now + 43200000).toISOString(),
+        policyVersion: 1,
+      },
+    } as never);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   function renderRoute(path: string, token: string | null) {
     (useSegments as jest.Mock).mockReturnValue(path.split('/').filter(Boolean));
     jest.mocked(authStorage.getToken).mockResolvedValue(token);
+    jest.mocked(authStorage.getSessionSnapshot).mockResolvedValue({
+      generation: 1,
+      incarnation: 'route-fixture',
+      revision: 1,
+      sessionId: token ? 'route-session' : null,
+      accessToken: token,
+      refreshToken: token ? 'route-refresh' : null,
+    });
     render(createElement(RootLayout));
   }
 

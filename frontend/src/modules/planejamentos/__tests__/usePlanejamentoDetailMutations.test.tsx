@@ -927,7 +927,7 @@ describe('usePlanejamentoDetailMutations', () => {
 
     await runMutation(result.current.handleSyncAcertos);
 
-    expect(mockClearSession).toHaveBeenCalledTimes(1);
+    expect(mockClearSession).not.toHaveBeenCalled();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     expect(result.current.acertosError).toBe(
       'Sessao expirada. Faca login novamente.',

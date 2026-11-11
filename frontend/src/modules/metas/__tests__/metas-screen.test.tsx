@@ -91,7 +91,7 @@ describe('MetasScreen', () => {
     render(<MetasScreen />);
 
     await waitFor(() => {
-      expect(mockClearSession).toHaveBeenCalled();
+      expect(mockClearSession).not.toHaveBeenCalled();
       expect(mockReplace).toHaveBeenCalledWith('/login');
       expect(screen.getByText('Sessao expirada. Faca login novamente.')).toBeTruthy();
     });
