@@ -11,7 +11,9 @@ import {
   MaxLength,
   Min,
   ValidateIf,
+  Max,
 } from 'class-validator';
+import { MAX_EXPENSE_CENTS } from '../../common/monetary-limits';
 import { GastoComportamento } from '../enums';
 
 export class UpdateGastoPlanejamentoDto {
@@ -24,6 +26,7 @@ export class UpdateGastoPlanejamentoDto {
   @ValidateIf((_, value) => value !== undefined)
   @IsInt()
   @Min(1)
+  @Max(MAX_EXPENSE_CENTS)
   valorCentavos?: number;
 
   @ValidateIf((_, value) => value !== undefined)

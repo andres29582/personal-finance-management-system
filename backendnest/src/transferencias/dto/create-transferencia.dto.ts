@@ -8,10 +8,16 @@ import {
   IsUUID,
   Matches,
   Min,
+  Max,
 } from 'class-validator';
+import { MAX_FINANCIAL_AMOUNT } from '../../common/monetary-limits';
 import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 
 export class CreateTransferenciaDto {
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
+
   @IsUUID()
   contaOrigemId: string;
 
@@ -21,6 +27,7 @@ export class CreateTransferenciaDto {
   @IsNumber()
   @HasAtMostTwoDecimalPlaces()
   @IsPositive()
+  @Max(MAX_FINANCIAL_AMOUNT)
   valor: number;
 
   @IsString()
@@ -39,5 +46,6 @@ export class CreateTransferenciaDto {
   @IsNumber()
   @HasAtMostTwoDecimalPlaces()
   @Min(0)
+  @Max(MAX_FINANCIAL_AMOUNT)
   comissao?: number;
 }

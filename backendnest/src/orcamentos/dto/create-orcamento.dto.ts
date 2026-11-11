@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsNumber, IsPositive, Matches } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsPositive, Matches, Max } from 'class-validator';
+import { MAX_FINANCIAL_AMOUNT } from '../../common/monetary-limits';
 import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 
 export class CreateOrcamentoDto {
@@ -9,5 +10,6 @@ export class CreateOrcamentoDto {
   @IsNumber()
   @HasAtMostTwoDecimalPlaces()
   @IsPositive()
+  @Max(MAX_FINANCIAL_AMOUNT)
   valorPlanejado: number;
 }

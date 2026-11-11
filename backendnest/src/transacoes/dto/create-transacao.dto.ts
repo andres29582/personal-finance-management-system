@@ -9,7 +9,9 @@ import {
   IsString,
   IsUUID,
   Matches,
+  Max,
 } from 'class-validator';
+import { MAX_FINANCIAL_AMOUNT } from '../../common/monetary-limits';
 import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { TipoTransacao } from '../enums/tipo-transacao.enum';
 
@@ -26,6 +28,7 @@ export class CreateTransacaoDto {
   @IsNumber()
   @HasAtMostTwoDecimalPlaces()
   @IsPositive()
+  @Max(MAX_FINANCIAL_AMOUNT)
   valor: number;
 
   @IsString()

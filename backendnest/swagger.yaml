@@ -18,8 +18,12 @@ info:
 
     Rotas protegidas usam `Authorization: Bearer <access_token>` e validacao de sessao ativa.
 
+    Saldos de contas, totais de dashboard/relatorios e progresso de orcamentos usam centavos exatos internamente.
+    Respostas mantem numeros JSON; total sem projecao numerica fiel aos centavos falha com 500 sanitizado, sem aproximacao silenciosa.
+    Limites monetarios dos DTOs continuam por entrada, nao por soma agregada.
 
-    Todas as respostas bem-sucedidas sao envelopadas como `{ success, data, timestamp, requestId }`. Toda resposta de erro
+
+    Respostas bem-sucedidas sao envelopadas como `{ success, data, timestamp, requestId }`, exceto os dois endpoints U5 de revogacao que retornam HTTP 204 com corpo vazio. Toda resposta de erro
     usa `{ success:false, error, timestamp, requestId }`. O `requestId` do corpo corresponde ao header `x-request-id`.
 
     '
@@ -198,6 +202,109 @@ components:
                 type: string
               refresh_token:
                 type: string
+    CurrentSessionState:
+      type: object
+      additionalProperties: false
+      required:
+      - serverNow
+      - idleExpiresAt
+      - absoluteExpiresAt
+      - policyVersion
+      properties:
+        serverNow:
+          type: string
+          format: date-time
+          description: Relogio do servidor usado na autorizacao da sessao.
+        idleExpiresAt:
+          type: string
+          format: date-time
+          description: Menor prazo entre ultima atividade mais timeout idle, expiracao absoluta e expiracao do refresh.
+        absoluteExpiresAt:
+          type: string
+          format: date-time
+        policyVersion:
+          type: integer
+          enum:
+          - 1
+    CurrentSessionSuccess:
+      allOf:
+      - $ref: '#/components/schemas/SuccessAny'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/CurrentSessionState'
+    RevokeSessionRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - senhaAtual
+      properties:
+        senhaAtual:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: Senha atual exata, sem normalizacao. Confirmacao por acao; nao cria prova reutilizavel de reautenticacao.
+    OwnSession:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - isCurrent
+      - authenticatedAt
+      - lastActivityAt
+      - idleExpiresAt
+      - absoluteExpiresAt
+      - clientDescription
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador de apresentacao; nao concede autoridade sobre a sessao.
+        isCurrent:
+          type: boolean
+        authenticatedAt:
+          type: string
+          format: date-time
+        lastActivityAt:
+          type: string
+          format: date-time
+        idleExpiresAt:
+          type: string
+          format: date-time
+        absoluteExpiresAt:
+          type: string
+          format: date-time
+        clientDescription:
+          type: string
+          nullable: true
+          enum:
+          - null
+          description: Sempre null neste recorte; dispositivo nao identificado, sem nova coleta IP/UA.
+    OwnSessionPageSuccess:
+      allOf:
+      - $ref: '#/components/schemas/SuccessAny'
+      - type: object
+        properties:
+          data:
+            type: object
+            additionalProperties: false
+            required:
+            - items
+            - nextCursor
+            - serverNow
+            properties:
+              items:
+                type: array
+                maxItems: 20
+                items:
+                  $ref: '#/components/schemas/OwnSession'
+              nextCursor:
+                type: string
+                nullable: true
+                maxLength: 256
+              serverNow:
+                type: string
+                format: date-time
     PublicUser:
       type: object
       properties:
@@ -354,9 +461,15 @@ components:
           type: string
     ResetPasswordRequest:
       type: object
+      additionalProperties: false
       required:
+      - senhaAtual
       - novaSenha
       properties:
+        senhaAtual:
+          type: string
+          minLength: 1
+          description: Senha atual exata; sem normalizacao ou politica de nova senha para usuarios legados.
         novaSenha:
           type: string
           minLength: 6
@@ -404,9 +517,13 @@ components:
           - cartao_credito
         saldoInicial:
           type: number
+          maximum: 9999999999.99
+          minimum: -9999999999.99
           multipleOf: 0.01
         limiteCredito:
           type: number
+          maximum: 9999999999.99
+          minimum: -9999999999.99
           multipleOf: 0.01
         dataCorte:
           type: integer
@@ -423,6 +540,8 @@ components:
           type: string
         limiteCredito:
           type: number
+          maximum: 9999999999.99
+          minimum: -9999999999.99
           multipleOf: 0.01
         dataCorte:
           type: integer
@@ -457,6 +576,7 @@ components:
         nome:
           type: string
         tipo:
+          description: Imutavel apos criacao. Eco do mesmo tipo e aceito por compatibilidade e nao e regravado; mudanca retorna 400 CATEGORIA_TYPE_IMMUTABLE no campo tipo.
           type: string
           enum:
           - receita
@@ -489,6 +609,7 @@ components:
           - despesa
         valor:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -517,6 +638,7 @@ components:
           description: Permitido pelo DTO atual; categoria e revalidada contra o tipo.
         valor:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -526,6 +648,7 @@ components:
         descricao:
           type: string
     CreateTransferenciaRequest:
+      description: Chave opcional por tentativa. Repetir a mesma chave e os mesmos dados retorna a transferencia original; sem chave, cada POST cria uma nova transferencia.
       type: object
       required:
       - contaOrigemId
@@ -533,6 +656,10 @@ components:
       - valor
       - data
       properties:
+        idempotencyKey:
+          type: string
+          format: uuid
+          description: Mantida na mesma tentativa, inclusive apos timeout. Nao reutilizar para dados diferentes.
         contaOrigemId:
           type: string
           format: uuid
@@ -541,6 +668,7 @@ components:
           format: uuid
         valor:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -551,12 +679,14 @@ components:
           type: string
         comissao:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
     UpdateTransferenciaRequest:
       type: object
       properties:
         valor:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -567,6 +697,7 @@ components:
           type: string
         comissao:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
     CreateDividaRequest:
       type: object
@@ -583,14 +714,18 @@ components:
           type: string
         montoTotal:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         tasaInteres:
           type: number
+          maximum: 999.99
+          multipleOf: 0.01
           minimum: 0
         cuotaMensual:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -618,9 +753,12 @@ components:
           type: string
         tasaInteres:
           type: number
+          maximum: 999.99
+          multipleOf: 0.01
           minimum: 0
         cuotaMensual:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -659,6 +797,7 @@ components:
           format: uuid
         valor:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -684,6 +823,7 @@ components:
           - reducao_divida
         montoObjetivo:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -704,11 +844,13 @@ components:
           type: string
         montoObjetivo:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
         montoActual:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
         fechaLimite:
@@ -756,6 +898,7 @@ components:
           pattern: ^\d{4}-(0[1-9]|1[0-2])$
         valorPlanejado:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
@@ -764,9 +907,77 @@ components:
       properties:
         valorPlanejado:
           type: number
+          maximum: 999999999999.99
           multipleOf: 0.01
           minimum: 0
           exclusiveMinimum: true
+    CreateOrcamentoCategoriaRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - categoriaId
+      - valorPlanejado
+      properties:
+        categoriaId:
+          type: string
+          format: uuid
+        valorPlanejado:
+          type: number
+          maximum: 999999999999.99
+          multipleOf: 0.01
+          minimum: 0
+          exclusiveMinimum: true
+    UpdateOrcamentoCategoriaRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - valorPlanejado
+      properties:
+        valorPlanejado:
+          type: number
+          maximum: 999999999999.99
+          multipleOf: 0.01
+          minimum: 0
+          exclusiveMinimum: true
+      description: O service exige valorPlanejado; categoriaId e orcamentoId nao sao editaveis.
+    OrcamentoCategoria:
+      type: object
+      required:
+      - id
+      - orcamentoId
+      - categoriaId
+      - valorPlanejado
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        orcamentoId:
+          type: string
+          format: uuid
+        categoriaId:
+          type: string
+          format: uuid
+        valorPlanejado:
+          description: Valor persistido; a entidade decimal nao possui normalizacao de resposta, podendo ser numero ou string decimal do driver.
+          oneOf:
+          - type: number
+          - type: string
+            pattern: '^\d+(\.\d{1,2})?$'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OrcamentoCategoriaSuccess:
+      allOf:
+      - $ref: '#/components/schemas/SuccessAny'
+      - type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/OrcamentoCategoria'
     CreatePlanejamentoRequest:
       type: object
       required:
@@ -824,6 +1035,7 @@ components:
           maxLength: 255
         valorCentavos:
           type: integer
+          maximum: 2147483647
           minimum: 1
         dataGasto:
           type: string
@@ -863,6 +1075,7 @@ components:
           maxLength: 255
         valorCentavos:
           type: integer
+          maximum: 2147483647
           minimum: 1
         dataGasto:
           type: string
@@ -1221,10 +1434,13 @@ components:
         gastoAtual:
           type: number
         percentualUtilizado:
+          description: Percentual arredondado a duas casas para exibicao; nao determina statusAlerta.
           type: number
         restante:
+          description: Valor planejado menos gasto em centavos exatos; negativo quando excedido.
           type: number
         statusAlerta:
+          description: Normal abaixo de 80%; alerta_80 a partir de 80% e abaixo de 100%; estourado a partir de 100%, comparando valores exatos antes do arredondamento percentual.
           type: string
           enum:
           - normal
@@ -2522,6 +2738,169 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
       operationId: refreshToken
+  /auth/session:
+    get:
+      tags:
+      - Auth
+      summary: Consultar autoridade da sessao atual
+      description: >-
+        Valida JWT de acesso e sessao persistida do proprio chamador; identidade e SID
+        vem do Bearer, nao de parametros. Retorna somente prazos e versao da politica,
+        sem tokens, hashes ou metadados de outras sessoes. Esta consulta nao renova
+        atividade idle nem o prazo absoluto e nao rotaciona credenciais.
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Estado da sessao autorizada no envelope global de sucesso.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+            X-Session-State:
+              description: JSON serializado do mesmo CurrentSessionState retornado em data.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentSessionSuccess'
+        '401':
+          description: >-
+            JWT ausente/invalido (UNAUTHORIZED), access token expirado
+            (AUTH_ACCESS_TOKEN_EXPIRED), sessao invalida (AUTH_INVALID_SESSION),
+            revogada (AUTH_SESSION_REVOKED), expirada por inatividade
+            (AUTH_SESSION_IDLE_EXPIRED) ou por limite absoluto (AUTH_SESSION_ABSOLUTE_EXPIRED).
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: getCurrentSession
+  /auth/sessions:
+    get:
+      tags:
+      - Auth
+      summary: Listar sessoes ativas da propria conta
+      description: Revalida chamador na transacao; nao renova atividade. Owner/SID vem somente do Bearer autenticado. Ordenacao authenticatedAt DESC, id DESC; cursor preserva microssegundos e nao concede acesso. Sessao ativa nao indica dispositivo conectado agora.
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 20
+      - name: cursor
+        in: query
+        description: Cursor base64url tipado da pagina anterior; nao aceita owner, ano zero ou datas normalizadas. Parametros extras sao rejeitados.
+        schema:
+          type: string
+          maxLength: 256
+      responses:
+        '200':
+          description: Pagina propria bounded, sem touch.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnSessionPageSuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: listOwnSessions
+  /auth/sessions/{id}/revoke:
+    post:
+      tags:
+      - Auth
+      summary: Encerrar uma sessao propria apos confirmar a senha atual
+      description: Chamador/hash revalidados no mesmo efeito. Estrangeira, inexistente e ja revogada retornam o mesmo 204 apos reautenticacao. Alvo atual tambem perde autoridade; UI usa esta rota so para remotas e mantem logout U2 sem senha. Senha errada ou alterada durante a acao retorna AUTH_CURRENT_PASSWORD_INVALID (400). Limite compartilhado 5 reservas/60 s por conta, inclusive tentativas validas; IP/rota 20/min. Timeout/5xx nao confirma revogacao e nao deve causar replay automatico.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeSessionRequest'
+      responses:
+        '204':
+          description: Commit confirmado ou alvo sem efeito; corpo vazio, sem envelope.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: revokeOwnSession
+  /auth/sessions/revoke-all:
+    post:
+      tags:
+      - Auth
+      summary: Encerrar todas as sessoes proprias, incluindo a atual
+      description: Confirma senha e chamador na transacao; mesmo orçamento por conta compartilhado com revogacao escolhida (5 reservas/60 s) e IP/rota 20/min. Revoga as sessoes existentes no ponto serializado; login ordenado depois pode criar nova sessao. Nao impede logins futuros nem desfaz handlers ja admitidos. Cliente espera 204 e faz somente cleanup local da geracao capturada, sem segundo logout remoto. Timeout/5xx tem resultado desconhecido; nao repetir automaticamente. Chamador revogado em repeticao recebe 401.
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeSessionRequest'
+      responses:
+        '204':
+          description: Revogacao global commitada, incluindo atual; corpo vazio, sem envelope.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                - no-store
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: revokeAllOwnSessions
   /auth/logout:
     post:
       tags:
@@ -2544,6 +2923,7 @@ paths:
       tags:
       - Auth
       summary: Alterar senha do usuario autenticado
+      description: Exige senha atual e sessao ativa. Revoga todas as sessoes e invalida links pendentes atomicamente; exige novo login. Senha atual incorreta retorna AUTH_CURRENT_PASSWORD_INVALID (400); hash concorrente ou sessao invalida retorna AUTH_INVALID_SESSION (401).
       security:
       - BearerAuth: []
       requestBody:
@@ -2840,7 +3220,7 @@ paths:
     patch:
       tags:
       - Categorias
-      summary: Atualizar categoria
+      summary: Atualizar campos mutaveis da categoria
       security:
       - BearerAuth: []
       parameters:
@@ -2859,7 +3239,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/CategoriaSuccess'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Payload invalido ou CATEGORIA_TYPE_IMMUTABLE se tipo difere do persistido; campo tipo. Eco identico sem outros campos e no-op.
+          headers:
+            x-request-id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -2929,9 +3316,31 @@ paths:
       tags:
       - Transacoes
       summary: Listar transacoes
+      description: >-
+        Retorna diretamente uma lista (no campo `data` do envelope global), sem
+        metadados de total. A paginacao usa `offset` (skip) e `limit` (take),
+        com ordenacao por `data` decrescente e, em caso de empate, `createdAt`
+        decrescente. Por padrao, retorna ate 50 itens a partir do primeiro.
       security:
       - BearerAuth: []
       parameters:
+      - name: limit
+        in: query
+        required: false
+        description: Quantidade de itens (take); padrao 50.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        description: Quantidade de itens a ignorar (skip); padrao 0.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
       - name: mes
         in: query
         required: false
@@ -3099,6 +3508,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Chave ja utilizada com dados diferentes ou transferencia original excluida. Nao cria nem restaura registros.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '429':
@@ -3110,6 +3525,23 @@ paths:
       tags:
       - Transferencias
       summary: Listar transferencias
+      description: Pagina limitada, ordenada por data, criacao e identificador decrescentes. A resposta preserva a lista de transferencias.
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
       security:
       - BearerAuth: []
       responses:
@@ -3119,6 +3551,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransferenciaListSuccess'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -3856,6 +4290,168 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
       operationId: updateOrcamento
+  /orcamentos/{id}/categorias:
+    post:
+      tags:
+      - Orcamentos
+      summary: Criar alocacao por categoria no orcamento
+      description: >-
+        Exige orcamento proprio do mes atual ou futuro e categoria propria ativa do
+        tipo DESPESA. Revalida o orcamento sob lock; categoria nao pode ter alocacao
+        existente e a soma das alocacoes nao pode superar o total mensal.
+        Alocacao e evento de auditoria confirmam na mesma transacao.
+        Retorna a entidade criada, sem enriquecer progresso ou executar transacao financeira.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrcamentoCategoriaRequest'
+      responses:
+        '201':
+          description: Alocacao criada no envelope global.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrcamentoCategoriaSuccess'
+        '400':
+          description: >-
+            UUID/payload invalido, campo extra, valor nao positivo ou com mais de duas casas decimais;
+            CATEGORIA_INACTIVE, ORCAMENTO_CATEGORIA_MUST_BE_EXPENSE,
+            ORCAMENTO_PAST_MONTH_IMMUTABLE ou ORCAMENTO_CATEGORIA_TOTAL_EXCEEDS_BUDGET.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: ORCAMENTO_NOT_FOUND ou CATEGORIA_NOT_FOUND; recurso alheio tambem nao e acessivel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: ORCAMENTO_CATEGORIA_ALREADY_EXISTS para alocacao existente da categoria neste orcamento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: createOrcamentoCategoria
+  /orcamentos/{id}/categorias/{allocationId}:
+    patch:
+      tags:
+      - Orcamentos
+      summary: Atualizar valor de alocacao do orcamento
+      description: >-
+        Altera somente valorPlanejado de alocacao pertencente ao orcamento proprio.
+        Exige mes atual ou futuro e revalida a soma sob lock do orcamento; nao altera
+        categoria nem revalida sua atividade neste fluxo. Atualizacao e auditoria
+        confirmam na mesma transacao. Retorna a entidade, sem progresso enriquecido.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      - name: allocationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrcamentoCategoriaRequest'
+      responses:
+        '200':
+          description: Alocacao atualizada no envelope global.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrcamentoCategoriaSuccess'
+        '400':
+          description: >-
+            UUID/payload invalido, campo extra, valor nao positivo ou com mais de duas casas decimais;
+            ORCAMENTO_CATEGORIA_UPDATE_REQUIRES_VALUE se omitido,
+            ORCAMENTO_PAST_MONTH_IMMUTABLE ou ORCAMENTO_CATEGORIA_TOTAL_EXCEEDS_BUDGET.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: ORCAMENTO_NOT_FOUND ou ORCAMENTO_CATEGORIA_NOT_FOUND; alocacao precisa pertencer ao orcamento acessivel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: FINANCIAL_VALUE_MUST_BE_POSITIVE se valor nulo ultrapassar validacao opcional do DTO e chegar ao service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: updateOrcamentoCategoria
+    delete:
+      tags:
+      - Orcamentos
+      summary: Remover alocacao do orcamento
+      description: >-
+        Remove fisicamente a alocacao do orcamento proprio do mes atual ou futuro,
+        sem excluir a categoria nem movimentacoes financeiras. O lock e a auditoria
+        pertencem a mesma transacao. Nao usa HTTP 204; controller retorna undefined
+        envelopado como data null em HTTP 200. Repetir apos remocao retorna 404.
+      security:
+      - BearerAuth: []
+      parameters:
+      - $ref: '#/components/parameters/IdParam'
+      - name: allocationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/EmptyEnvelope'
+        '400':
+          description: UUID invalido ou ORCAMENTO_PAST_MONTH_IMMUTABLE.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: ORCAMENTO_NOT_FOUND ou ORCAMENTO_CATEGORIA_NOT_FOUND; alocacao precisa pertencer ao orcamento acessivel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+      operationId: removeOrcamentoCategoria
   /relatorios:
     get:
       tags:

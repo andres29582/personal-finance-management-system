@@ -8,7 +8,12 @@ import {
   IsString,
   Matches,
   Min,
+  Max,
 } from 'class-validator';
+import {
+  MAX_INTEREST_RATE,
+  MAX_FINANCIAL_AMOUNT,
+} from '../../common/monetary-limits';
 import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { Periodicidade } from '../enums/periodicidade.enum';
 
@@ -20,12 +25,15 @@ export class UpdateDividaDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(MAX_INTEREST_RATE)
+  @HasAtMostTwoDecimalPlaces()
   tasaInteres?: number;
 
   @IsOptional()
   @IsNumber()
   @HasAtMostTwoDecimalPlaces()
   @IsPositive()
+  @Max(MAX_FINANCIAL_AMOUNT)
   cuotaMensual?: number;
 
   @IsOptional()

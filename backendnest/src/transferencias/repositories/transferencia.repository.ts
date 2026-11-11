@@ -1,3 +1,4 @@
+import { FindTransferenciasDto } from '../dto/find-transferencias.dto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,10 +15,12 @@ export class TransferenciaRepository extends BaseRepository<Transferencia> {
     super(transferenciaRepository);
   }
 
-  async findByUser(usuarioId: string): Promise<Transferencia[]> {
+  async findByUser(usuarioId: string, query: FindTransferenciasDto = {}): Promise<Transferencia[]> {
     return this.transferenciaRepository.find({
       where: { usuarioId, ...notSoftDeleted },
-      order: { data: 'DESC', createdAt: 'DESC' },
+      order: { data: 'DESC', createdAt: 'DESC', id: 'DESC' },
+      take: query.limit ?? 50,
+      skip: query.offset ?? 0,
     });
   }
 

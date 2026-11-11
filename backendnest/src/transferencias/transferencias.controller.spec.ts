@@ -58,7 +58,7 @@ describe('TransferenciasController', () => {
 
     const result = await controller.findAll(request);
 
-    expect(transferenciasService.findAll).toHaveBeenCalledWith('user-1');
+    expect(transferenciasService.findAll).toHaveBeenCalledWith('user-1', {});
     expect(result).toEqual([{ id: 'transferencia-1' }]);
   });
 

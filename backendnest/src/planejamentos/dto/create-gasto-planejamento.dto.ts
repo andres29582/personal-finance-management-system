@@ -11,7 +11,9 @@ import {
   Matches,
   MaxLength,
   Min,
+  Max,
 } from 'class-validator';
+import { MAX_EXPENSE_CENTS } from '../../common/monetary-limits';
 import { GastoComportamento } from '../enums';
 
 export class CreateGastoPlanejamentoDto {
@@ -22,6 +24,7 @@ export class CreateGastoPlanejamentoDto {
 
   @IsInt()
   @Min(1)
+  @Max(MAX_EXPENSE_CENTS)
   valorCentavos: number;
 
   @IsString()

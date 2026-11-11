@@ -22,7 +22,11 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "node test/e2e-runner.cjs",
     "u6:check": "node test/session-harness/u6.cjs",
-    "u6:test": "node test/session-harness/u6.spec.cjs"
+    "u6:test": "node test/session-harness/u6.spec.cjs",
+    "migration:run": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts run",
+    "migration:status": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts status",
+    "migration:dry-run": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts dry-run",
+    "migration:mark-baseline": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts mark-baseline"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

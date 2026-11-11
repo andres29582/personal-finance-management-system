@@ -2,11 +2,15 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  Check,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
 @Entity('transferencia')
+@Index('uq_transferencia_usuario_idempotency', ['usuarioId', 'idempotencyKey'], { unique: true })
+@Check('ck_transferencia_idempotency_pair', '(idempotency_key IS NULL) = (idempotency_fingerprint IS NULL)')
 export class Transferencia {
   @PrimaryColumn('uuid')
   id: string;
@@ -20,7 +24,7 @@ export class Transferencia {
   @Column({ name: 'conta_destino_id', type: 'uuid' })
   contaDestinoId: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 14, scale: 2 })
   valor: number;
 
   @Column({ type: 'date' })
@@ -29,7 +33,7 @@ export class Transferencia {
   @Column({ type: 'varchar', length: 255, nullable: true })
   descricao: string | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 14, scale: 2, default: 0 })
   comissao: number;
 
   @Column({ type: 'varchar', length: 10, default: 'BRL' })
@@ -40,6 +44,12 @@ export class Transferencia {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @Column({ name: 'idempotency_key', type: 'uuid', nullable: true, select: false })
+  idempotencyKey: string | null;
+
+  @Column({ name: 'idempotency_fingerprint', type: 'varchar', length: 64, nullable: true, select: false })
+  idempotencyFingerprint: string | null;
 
   @Column({ name: 'excluido_em', type: 'timestamp', nullable: true })
   excluidoEm: Date | null;

@@ -1,3 +1,5 @@
+import { FindTransferenciasDto } from './dto/find-transferencias.dto';
+import { publicTransfer } from './transfer-intent';
 import {
   Body,
   Controller,
@@ -8,6 +10,7 @@ import {
   Patch,
   Post,
   Request,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -26,12 +29,12 @@ export class TransferenciasController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: CreateTransferenciaDto,
   ) {
-    return this.transferenciasService.create(req.user.id, dto);
+    return this.transferenciasService.create(req.user.id, dto).then(publicTransfer);
   }
 
   @Get()
-  findAll(@Request() req: AuthenticatedRequest) {
-    return this.transferenciasService.findAll(req.user.id);
+  findAll(@Request() req: AuthenticatedRequest, @Query() query: FindTransferenciasDto = {}) {
+    return this.transferenciasService.findAll(req.user.id, query).then((rows) => rows.map(publicTransfer));
   }
 
   @Get(':id')
@@ -39,7 +42,7 @@ export class TransferenciasController {
     @Param('id', ParseUUIDPipe) id: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.transferenciasService.findOne(id, req.user.id);
+    return this.transferenciasService.findOne(id, req.user.id).then(publicTransfer);
   }
 
   @Patch(':id')
@@ -48,7 +51,7 @@ export class TransferenciasController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: UpdateTransferenciaDto,
   ) {
-    return this.transferenciasService.update(id, req.user.id, dto);
+    return this.transferenciasService.update(id, req.user.id, dto).then(publicTransfer);
   }
 
   @Delete(':id')

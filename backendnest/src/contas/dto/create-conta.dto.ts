@@ -8,6 +8,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { MAX_ACCOUNT_AMOUNT } from '../../common/monetary-limits';
 import { HasAtMostTwoDecimalPlaces } from '../../common/monetary-scale.validator';
 import { TipoConta } from '../enums/tipo-conta.enum';
 
@@ -21,11 +22,15 @@ export class CreateContaDto {
 
   @IsNumber()
   @HasAtMostTwoDecimalPlaces()
+  @Max(MAX_ACCOUNT_AMOUNT)
+  @Min(-MAX_ACCOUNT_AMOUNT)
   saldoInicial: number;
 
   @IsOptional()
   @IsNumber()
   @HasAtMostTwoDecimalPlaces()
+  @Max(MAX_ACCOUNT_AMOUNT)
+  @Min(-MAX_ACCOUNT_AMOUNT)
   limiteCredito?: number;
 
   @IsOptional()

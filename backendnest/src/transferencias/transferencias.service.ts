@@ -1,3 +1,7 @@
+import { FindTransferenciasDto } from './dto/find-transferencias.dto';
+import { AppException } from '../common/exceptions/app.exception';
+import { InternalServerAppException } from '../common/exceptions';
+import { canonicalTransferIntent, replayTransferIntent } from './transfer-intent';
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DataSource, EntityManager } from 'typeorm';
@@ -30,8 +34,19 @@ export class TransferenciasService {
     usuarioId: string,
     dto: CreateTransferenciaDto,
   ): Promise<Transferencia> {
+    let created = false;
     const savedTransfer = await this.dataSource.transaction(async (manager) => {
-      if (dto.contaOrigemId === dto.contaDestinoId) {
+      const key = dto.idempotencyKey?.toLowerCase();
+      const intent = key ? canonicalTransferIntent(dto) : null;
+      const findIntent = () => manager.createQueryBuilder(Transferencia, 'transfer')
+        .addSelect(['transfer.idempotencyKey', 'transfer.idempotencyFingerprint'])
+        .where('transfer.usuarioId = :usuarioId AND transfer.idempotencyKey = :key', { usuarioId, key })
+        .getOne();
+      if (intent) {
+        const existing = await findIntent();
+        if (existing) return replayTransferIntent(existing, intent.fingerprint);
+      }
+      if ((intent?.values.contaOrigemId ?? dto.contaOrigemId) === (intent?.values.contaDestinoId ?? dto.contaDestinoId)) {
         throw new BusinessRuleException(
           'TRANSFERENCIA_SAME_ACCOUNT',
           'Conta origem e destino devem ser diferentes',
@@ -50,13 +65,29 @@ export class TransferenciasService {
       const transfer = manager.create(Transferencia, {
         id: randomUUID(),
         usuarioId,
-        ...dto,
+        ...(intent ? intent.values : dto),
+        ...(intent ? { idempotencyKey: key, idempotencyFingerprint: intent.fingerprint } : {}),
       });
 
-      return manager.save(transfer);
+      if (intent) {
+        const result = await manager.createQueryBuilder().insert().into(Transferencia)
+          .values(transfer).onConflict('(usuario_id, idempotency_key) DO NOTHING')
+          .returning('id').execute();
+        const stored = await findIntent();
+        if (!stored) throw new Error('Transfer intent was not persisted.');
+        created = result.raw.length > 0;
+        return replayTransferIntent(stored, intent.fingerprint);
+      }
+      const saved = await manager.save(transfer);
+      created = true;
+      return saved;
+    }).catch((error: unknown) => {
+      if (!dto.idempotencyKey || error instanceof AppException) throw error;
+      // Do not forward driver diagnostics containing the private intent fingerprint.
+      throw new InternalServerAppException('Nao foi possivel processar a tentativa de transferencia.');
     });
 
-    await this.logsService.logEntityEvent({
+    if (created) await this.logsService.logEntityEvent({
       event: 'TRANSFERENCIA_CREATED',
       module: 'transferencias',
       action: 'create',
@@ -74,8 +105,8 @@ export class TransferenciasService {
     return savedTransfer;
   }
 
-  async findAll(usuarioId: string): Promise<Transferencia[]> {
-    return this.transferenciaRepository.findByUser(usuarioId);
+  async findAll(usuarioId: string, query: FindTransferenciasDto = {}): Promise<Transferencia[]> {
+    return this.transferenciaRepository.findByUser(usuarioId, query);
   }
 
   async findOne(id: string, usuarioId: string): Promise<Transferencia> {
@@ -97,6 +128,11 @@ export class TransferenciasService {
     usuarioId: string,
     dto: UpdateTransferenciaDto,
   ): Promise<Transferencia> {
+    const changes: UpdateTransferenciaDto = Object.fromEntries(
+      ['valor', 'comissao', 'data', 'descricao']
+        .filter((field) => dto[field as keyof UpdateTransferenciaDto] !== undefined)
+        .map((field) => [field, dto[field as keyof UpdateTransferenciaDto]]),
+    );
     const updatedTransfer = await this.dataSource.transaction(
       async (manager) => {
         const currentTransfer = await this.findOneForWrite(
@@ -122,7 +158,7 @@ export class TransferenciasService {
         await manager.update(
           Transferencia,
           { id, usuarioId, ...notSoftDeleted },
-          dto,
+          changes,
         );
 
         return this.findOneForWrite(id, usuarioId, manager);
@@ -138,7 +174,7 @@ export class TransferenciasService {
       entityId: updatedTransfer.id,
       message: 'Transferencia atualizada com sucesso.',
       details: {
-        changedFields: this.getChangedFields(dto),
+        changedFields: this.getChangedFields(changes),
       },
     });
 

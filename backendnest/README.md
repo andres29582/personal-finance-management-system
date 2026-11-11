@@ -11,6 +11,7 @@ Documentos relacionados:
 - Runbook local: `../docs/operacao/RUNBOOK.md`
 - Contrato oficial da API: `swagger.yaml` (`backendnest/swagger.yaml` no repositorio)
 - Baseline de banco: `migrations/0001_mvp_baseline.sql`
+- Especificação completa do banco de dados (ERD e Dicionário): `../docs/arquitetura/BANCO_DE_DADOS.md`
 
 O contrato oficial da API e `backendnest/swagger.yaml`.
 
@@ -175,6 +176,17 @@ previsiveis e deve coincidir com a configuracao do servico ML.
 
 ## Banco de dados e migrations
 
+O sistema conta com um runner automatizado versionado para controle de migrações:
+
+```powershell
+npm run migration:status       # Exibe status das migrações (aplicadas vs pendentes)
+npm run migration:run          # Executa todas as migrações pendentes com advisory lock
+npm run migration:dry-run      # Simula execução sem aplicar
+npm run migration:mark-baseline # Registra arquivos existentes em schema_migrations
+```
+
+Alternativamente, as migrações podem ser inspecionadas em `migrations/` e executadas manualmente via `psql`:
+
 As migrations ficam em `migrations/` e devem ser executadas em ordem:
 
 ```text
@@ -188,6 +200,14 @@ As migrations ficam em `migrations/` e devem ser executadas em ordem:
 0008_align_divida_monetary_precision.sql
 0009_align_transacao_schema.sql
 0010_harden_auth_session_lookup.sql
+0011_add_transacao_positive_amount_check.sql
+0012_align_orcamento_month_constraint.sql
+0013_create_orcamento_categoria.sql
+0014_invalidate_password_reset_tokens.sql
+0015_password_changed_outbox.sql
+0016_add_session_policy.sql
+0017_add_session_reauthentication_budget.sql
+0018_transfer_create_intent.sql
 ```
 
 Exemplo de execucao com `psql`:
@@ -203,7 +223,18 @@ psql -h localhost -U postgres -d gestao_financeira -f migrations/0007_create_pla
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0008_align_divida_monetary_precision.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0009_align_transacao_schema.sql
 psql -h localhost -U postgres -d gestao_financeira -f migrations/0010_harden_auth_session_lookup.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0011_add_transacao_positive_amount_check.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0012_align_orcamento_month_constraint.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0013_create_orcamento_categoria.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0014_invalidate_password_reset_tokens.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0015_password_changed_outbox.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0016_add_session_policy.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0017_add_session_reauthentication_budget.sql
+psql -h localhost -U postgres -d gestao_financeira -f migrations/0018_transfer_create_intent.sql
 ```
+
+A migration `0011` adiciona a constraint `chk_transacao_valor_positivo` para
+impedir valores de transacao menores ou iguais a zero no banco.
 
 ### Atencao: Planejamentos Compartilhados
 
@@ -432,3 +463,9 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\verify-all.ps1
   preferencialmente use `npm run start:dev`.
 - Previsao indisponivel: confirme `ML_API_URL`, healthcheck da API ML e contrato
   V2 do payload.
+
+## Seguranca de credenciais - etapa 1
+
+Troca autenticada exige `senhaAtual`; troca/recuperacao invalidam links pendentes
+e revogam sessoes na transacao. Migration aditiva `0014` deve preceder o servidor.
+[Estado, testes, preflight destrutivo e bloqueios de deploy](../docs/validacao/SEGURANCA_CREDENCIAIS_ETAPA_1_RESULTADO.md).
