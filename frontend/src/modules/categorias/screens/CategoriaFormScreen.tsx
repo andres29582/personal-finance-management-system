@@ -1,37 +1,46 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useFinancialDraft } from "../../../shared/hooks/useFinancialDraft";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
   GlassPanel,
   GlassTextInput,
-} from '../../../shared/ui';
-import { FinanceTheme } from '../../../shared/styles/financeTheme';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
+} from "../../../shared/ui";
+import { FinanceTheme } from "../../../shared/styles/financeTheme";
 import {
   createCategoria,
   getCategoriaById,
   updateCategoria,
-} from '../services/categoriaService';
-import { TipoCategoria } from '../types/categoria';
-import { resolveApiError } from '../../../../utils/api-error';
+} from "../services/categoriaService";
+import { TipoCategoria } from "../types/categoria";
+import { resolveApiError } from "../../../../utils/api-error";
 
 export function CategoriaFormScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const categoriaId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [nome, setNome] = useState('');
-  const [tipo, setTipo] = useState<TipoCategoria>('despesa');
-  const [message, setMessage] = useState('');
+  const draft = useFinancialDraft("category/" + (categoriaId ?? "new"), {
+    nome: "",
+    tipo: "despesa" as TipoCategoria,
+  });
+  const nome = draft.fields.nome;
+  const setNome = (value: string) => draft.setField("nome", value);
+  const tipo = draft.fields.tipo;
+  const setTipo = (value: TipoCategoria) => draft.setField("tipo", value);
+
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(!!categoriaId);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function loadCategoria() {
+      const loadScope = draft.capture();
+      if (!draft.isCurrent(loadScope)) return;
       if (!categoriaId) {
         return;
       }
@@ -39,16 +48,18 @@ export function CategoriaFormScreen() {
       try {
         setLoading(true);
         const categoria = await getCategoriaById(categoriaId);
-        setNome(categoria.nome);
-        setTipo(categoria.tipo);
+        if (!draft.isCurrent(loadScope)) return;
+        draft.hydrate({ nome: categoria.nome, tipo: categoria.tipo });
       } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
         const resolvedError = await resolveApiError(
           error,
-          'Nao foi possivel carregar a categoria.',
+          "Nao foi possivel carregar a categoria.",
         );
+        if (!draft.isCurrent(loadScope)) return;
         setMessage(resolvedError.message);
       } finally {
-        setLoading(false);
+        if (draft.isCurrent()) setLoading(false);
       }
     }
 
@@ -56,14 +67,16 @@ export function CategoriaFormScreen() {
   }, [categoriaId]);
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     if (!nome.trim()) {
-      setMessage('Informe um nome para a categoria.');
+      setMessage("Informe um nome para a categoria.");
       return;
     }
 
     try {
       setSaving(true);
-      setMessage('');
+      setMessage("");
 
       const payload = {
         nome: nome.trim(),
@@ -71,36 +84,41 @@ export function CategoriaFormScreen() {
       };
 
       if (categoriaId) {
-        await updateCategoria(categoriaId, payload);
+        await updateCategoria(categoriaId, { nome: payload.nome });
       } else {
         await createCategoria(payload);
       }
 
-      router.replace('/categorias' as never);
+      if (!draft.isCurrent(submitted)) return;
+
+      draft.clear(submitted);
+
+      router.replace("/categorias" as never);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(
         error,
-        'Nao foi possivel salvar a categoria.',
+        "Nao foi possivel salvar a categoria.",
       );
+      if (!draft.isCurrent(submitted)) return;
       setMessage(resolvedError.message);
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   if (loading) {
     return (
-      <FinanceAppShell
+      <AppShell
         activeRoute="/categorias"
-        header={
+        onProfilePress={() => router.push("/usuario" as never)}
+        pageHeader={
           <FinanceAppHeader
             eyebrow="Classificacao"
             subtitle="Carregando dados da categoria."
             title="Categorias"
           />
         }
-        onNavigate={(route) => router.push(route as never)}
-        sidebarItems={financeSidebarItems}
       >
         <GlassPanel>
           <View style={styles.loadingRow}>
@@ -108,33 +126,36 @@ export function CategoriaFormScreen() {
             <Text style={styles.loadingText}>Carregando categoria...</Text>
           </View>
         </GlassPanel>
-      </FinanceAppShell>
+      </AppShell>
     );
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/categorias"
-      header={
+      onProfilePress={() => router.push("/usuario" as never)}
+      pageHeader={
         <FinanceAppHeader
           action={
             <GlassButton
               label="Voltar"
-              onPress={() => router.back()}
+              onPress={() => {
+                draft.clear();
+                router.back();
+              }}
               variant="ghost"
             />
           }
           eyebrow="Classificacao"
           subtitle="Defina como suas receitas e despesas serao agrupadas."
-          title={categoriaId ? 'Editar categoria' : 'Nova categoria'}
+          title={categoriaId ? "Editar categoria" : "Nova categoria"}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassField label="Nome">
           <GlassTextInput
+            accessibilityLabel="Nome da categoria"
             value={nome}
             onChangeText={setNome}
             placeholder="Ex.: Alimentacao"
@@ -142,24 +163,30 @@ export function CategoriaFormScreen() {
         </GlassField>
 
         <GlassField label="Tipo">
-          <GlassOptionGroup
-            options={[
-              { label: 'Despesa', value: 'despesa' },
-              { label: 'Receita', value: 'receita' },
-            ]}
-            value={tipo}
-            onChange={(value) => setTipo(value as TipoCategoria)}
-          />
+          {categoriaId ? (
+            <Text style={styles.loadingText}>
+              O tipo e definido na criacao. Para trocar, crie outra categoria.
+            </Text>
+          ) : (
+            <GlassOptionGroup
+              options={[
+                { label: "Despesa", value: "despesa" },
+                { label: "Receita", value: "receita" },
+              ]}
+              value={tipo}
+              onChange={(value) => setTipo(value as TipoCategoria)}
+            />
+          )}
         </GlassField>
 
         {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
         <GlassButton
-          label={saving ? 'Salvando...' : 'Salvar categoria'}
+          label={saving ? "Salvando..." : "Salvar categoria"}
           onPress={handleSave}
           disabled={saving}
         />
       </GlassPanel>
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 
@@ -169,18 +196,18 @@ const styles = StyleSheet.create({
   errorMessage: {
     color: FinanceTheme.colors.danger,
     fontSize: FinanceTheme.typography.caption,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: FinanceTheme.spacing.sm,
-    textAlign: 'center',
+    textAlign: "center",
   },
   loadingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
+    alignItems: "center",
+    flexDirection: "row",
     gap: FinanceTheme.spacing.sm,
   },
   loadingText: {
     color: FinanceTheme.colors.textMuted,
     fontSize: FinanceTheme.typography.caption,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

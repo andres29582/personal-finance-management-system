@@ -1,13 +1,13 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -34,15 +34,45 @@ export function DividasFormScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const dividaId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [contas, setContas] = useState<Conta[]>([]);
-  const [contaId, setContaId] = useState('');
-  const [nome, setNome] = useState('');
-  const [montoTotal, setMontoTotal] = useState('');
-  const [tasaInteres, setTasaInteres] = useState('');
-  const [cuotaMensual, setCuotaMensual] = useState('');
-  const [fechaInicio, setFechaInicio] = useState(getLocalDateInputValue());
-  const [fechaVencimiento, setFechaVencimiento] = useState(getLocalDateInputValue());
-  const [proximoVencimiento, setProximoVencimiento] = useState('');
-  const [periodicidade, setPeriodicidade] = useState<Periodicidade>('mensal');
+  const draft = useFinancialDraft('debt/' + (dividaId ?? 'new'), {
+    nome: '',
+    tasaInteres: '',
+    cuotaMensual: '',
+    fechaVencimiento: getLocalDateInputValue(),
+    proximoVencimiento: '',
+    periodicidade: 'mensal' as Periodicidade,
+    ...(dividaId
+      ? {}
+      : { contaId: '', montoTotal: '', fechaInicio: getLocalDateInputValue() }),
+  });
+  const [lockedFields, setLockedFields] = useState({ contaId: '', montoTotal: '', fechaInicio: getLocalDateInputValue() });
+  const nome = draft.fields.nome;
+  const setNome = (value: string) => draft.setField("nome", value);
+  const tasaInteres = draft.fields.tasaInteres;
+  const setTasaInteres = (value: string) => draft.setField("tasaInteres", value);
+  const cuotaMensual = draft.fields.cuotaMensual;
+  const setCuotaMensual = (value: string) => draft.setField("cuotaMensual", value);
+  const fechaVencimiento = draft.fields.fechaVencimiento;
+  const setFechaVencimiento = (value: string) => draft.setField("fechaVencimiento", value);
+  const proximoVencimiento = draft.fields.proximoVencimiento;
+  const setProximoVencimiento = (value: string) => draft.setField("proximoVencimiento", value);
+  const periodicidade = draft.fields.periodicidade;
+  const setPeriodicidade = (value: Periodicidade) => draft.setField("periodicidade", value);
+  const contaId = dividaId ? lockedFields.contaId : (draft.fields.contaId ?? '');
+  const setContaId = (value: string) => { if (dividaId) setLockedFields(current => ({...current, contaId: value})); else draft.setField("contaId", value); };
+  const montoTotal = dividaId ? lockedFields.montoTotal : (draft.fields.montoTotal ?? '');
+  const setMontoTotal = (value: string) => { if (dividaId) setLockedFields(current => ({...current, montoTotal: value})); else draft.setField("montoTotal", value); };
+  const fechaInicio = dividaId ? lockedFields.fechaInicio : (draft.fields.fechaInicio ?? getLocalDateInputValue());
+  const setFechaInicio = (value: string) => { if (dividaId) setLockedFields(current => ({...current, fechaInicio: value})); else draft.setField("fechaInicio", value); };
+
+
+
+
+
+
+
+
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -62,34 +92,34 @@ export function DividasFormScreen() {
 
   useEffect(() => {
     async function loadData() {
+    const loadScope = draft.capture();
+    if (!draft.isCurrent(loadScope)) return;
       try {
         setLoading(true);
         const contasData = await listContas();
+        if (!draft.isCurrent(loadScope)) return;
         setContas(contasData);
-        setContaId(contasData[0]?.id ?? '');
+
 
         if (dividaId) {
           const divida = await getDividaById(dividaId);
+          if (!draft.isCurrent(loadScope)) return;
           const formValues = mapDividaToFormValues(divida);
 
-          setContaId(formValues.contaId);
-          setNome(formValues.nome);
-          setMontoTotal(formValues.montoTotal);
-          setTasaInteres(formValues.tasaInteres);
-          setCuotaMensual(formValues.cuotaMensual);
-          setFechaInicio(formValues.fechaInicio);
-          setFechaVencimiento(formValues.fechaVencimiento);
-          setProximoVencimiento(formValues.proximoVencimiento);
-          setPeriodicidade(formValues.periodicidade);
-        }
+          setLockedFields({ contaId: formValues.contaId, montoTotal: formValues.montoTotal, fechaInicio: formValues.fechaInicio });
+          draft.hydrate({ nome: formValues.nome, tasaInteres: formValues.tasaInteres, cuotaMensual: formValues.cuotaMensual,
+            fechaVencimiento: formValues.fechaVencimiento, proximoVencimiento: formValues.proximoVencimiento, periodicidade: formValues.periodicidade });
+        } else { draft.hydrate({ contaId: contasData[0]?.id ?? '' }); }
       } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
         const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar a divida.');
+        if (!draft.isCurrent(loadScope)) return;
         setMessage(resolvedError.message);
         if (resolvedError.unauthorized) {
           router.replace('/login');
         }
       } finally {
-        setLoading(false);
+        if (draft.isCurrent()) setLoading(false);
       }
     }
 
@@ -97,6 +127,8 @@ export function DividasFormScreen() {
   }, [dividaId, router]);
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     const nextFieldErrors = validateDividaForm({
       cuotaMensual,
       fechaInicio,
@@ -136,31 +168,36 @@ export function DividasFormScreen() {
         await createDivida(buildDividaPayload(formValues));
       }
 
+      if (!draft.isCurrent(submitted)) return;
+
+      draft.clear(submitted);
+
       router.replace('/dividas' as never);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(error, 'Nao foi possivel salvar a divida.');
+      if (!draft.isCurrent(submitted)) return;
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/dividas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          action={<GlassButton label="Voltar" onPress={() => { draft.clear(); router.back(); }} variant="ghost" />}
           eyebrow="Compromissos"
           subtitle="Cadastre valores, vencimentos e periodicidade."
           title={dividaId ? 'Editar divida' : 'Nova divida'}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading ? (
         <GlassPanel>
@@ -294,7 +331,7 @@ export function DividasFormScreen() {
           />
         </GlassPanel>
       )}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

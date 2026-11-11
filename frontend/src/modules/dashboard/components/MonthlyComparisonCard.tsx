@@ -18,7 +18,7 @@ export function MonthlyComparisonCard({
   return (
     <SectionCard
       accessibilityLabel="Alternar comparativo de gastos"
-      accent="magenta"
+      accent="cyan"
       subtitle={`${comparison.mesAtual} comparado com ${comparison.mesAnterior}`}
       title="Comparativo de gastos"
       onPress={() => setExpanded((current) => !current)}
@@ -27,19 +27,10 @@ export function MonthlyComparisonCard({
         <View style={styles.item}>
             <View style={styles.itemHeader}>
               <View
-                style={[
-                  styles.iconBox,
-                  expenses.accent === 'magenta'
-                    ? styles.magentaIcon
-                    : styles.cyanIcon,
-                ]}
+                style={[styles.iconBox, styles.cyanIcon]}
               >
                 <MaterialCommunityIcons
-                  color={
-                    expenses.accent === 'magenta'
-                      ? DashboardTheme.colors.magenta
-                      : DashboardTheme.colors.cyan
-                  }
+                  color={DashboardTheme.colors.cyan}
                   name={expenses.icon}
                   size={20}
                 />
@@ -128,10 +119,6 @@ const styles = StyleSheet.create({
     color: DashboardTheme.colors.text,
     fontSize: DashboardTheme.typography.body,
     fontWeight: '900',
-  },
-  magentaIcon: {
-    backgroundColor: DashboardTheme.colors.magentaSoft,
-    borderColor: DashboardTheme.neon.magenta.borderColor,
   },
   previousValue: {
     color: DashboardTheme.colors.textMuted,

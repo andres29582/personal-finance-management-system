@@ -5,11 +5,10 @@ import { listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -116,17 +115,16 @@ export function RelatoriosScreen() {
   }, [handleGenerate]);
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/relatorios"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           eyebrow="Analise financeira"
           subtitle="Analise receitas, despesas e economia."
           title="Relatorios"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassField label="Periodo">
@@ -144,6 +142,7 @@ export function RelatoriosScreen() {
         {periodo === 'mensal' ? (
           <GlassField label="Mes (YYYY-MM)">
             <GlassTextInput
+              accessibilityLabel="Mes do relatorio"
               placeholder="2026-04"
               value={mes}
               onChangeText={setMes}
@@ -155,6 +154,7 @@ export function RelatoriosScreen() {
           <>
             <GlassField label="Ano">
               <GlassTextInput
+                accessibilityLabel="Ano do relatorio"
                 keyboardType="number-pad"
                 placeholder="2026"
                 value={ano}
@@ -163,6 +163,7 @@ export function RelatoriosScreen() {
             </GlassField>
             <GlassField label="Trimestre">
               <GlassTextInput
+                accessibilityLabel="Trimestre do relatorio"
                 keyboardType="number-pad"
                 placeholder="1"
                 value={trimestre}
@@ -176,6 +177,7 @@ export function RelatoriosScreen() {
           <>
             <GlassField label="Data inicial">
               <GlassTextInput
+                accessibilityLabel="Data inicial do relatorio"
                 placeholder="2026-04-01"
                 value={dataInicio}
                 onChangeText={setDataInicio}
@@ -183,6 +185,7 @@ export function RelatoriosScreen() {
             </GlassField>
             <GlassField label="Data final">
               <GlassTextInput
+                accessibilityLabel="Data final do relatorio"
                 placeholder="2026-04-30"
                 value={dataFim}
                 onChangeText={setDataFim}
@@ -326,7 +329,7 @@ export function RelatoriosScreen() {
           </GlassPanel>
         </>
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

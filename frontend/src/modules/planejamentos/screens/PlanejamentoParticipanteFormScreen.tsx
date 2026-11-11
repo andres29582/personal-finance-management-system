@@ -1,13 +1,13 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { getUser } from '../../../../storage/authStorage';
 import { resolveApiError } from '../../../../utils/api-error';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassPanel,
@@ -96,9 +96,17 @@ export function PlanejamentoParticipanteFormScreen() {
   const planejamentoId = normalizeRouteId(params.id);
   const [authorizationLoad, setAuthorizationLoad] =
     useState<AuthorizationLoad | null>(null);
-  const [email, setEmail] = useState('');
+  const draft = useFinancialDraft(
+    'planning-participant/' + (planejamentoId ?? 'missing'),
+    { nome: '', email: '' },
+  );
+  const nome = draft.fields.nome;
+  const setNome = (value: string) => draft.setField('nome', value);
+  const email = draft.fields.email;
+  const setEmail = (value: string) => draft.setField('email', value);
+
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
-  const [nome, setNome] = useState('');
+
   const [savingToken, setSavingToken] = useState<SaveToken | null>(null);
   const authorizationLoadRef = useRef<AuthorizationLoad | null>(null);
   const mountedRef = useRef(true);
@@ -152,9 +160,9 @@ export function PlanejamentoParticipanteFormScreen() {
     let active = true;
 
     setAuthorizationLoad(null);
-    setEmail('');
+
     setFeedback({ generation: expectedGeneration, message: '' });
-    setNome('');
+
     setSavingToken(null);
 
     if (!expectedPlanejamentoId) {
@@ -170,11 +178,14 @@ export function PlanejamentoParticipanteFormScreen() {
       routeContextRef.current.planejamentoId === expectedPlanejamentoId;
 
     async function loadAuthorization(currentPlanejamentoId: string) {
+      const loadScope = draft.capture();
+      if (!draft.isCurrent(loadScope)) return;
       try {
         const [usuarioAutenticado, planejamento] = await Promise.all([
           getUser(),
           getPlanejamentoById(currentPlanejamentoId),
         ]);
+        if (!draft.isCurrent(loadScope)) return;
 
         if (!isCurrentLoad()) {
           return;
@@ -200,6 +211,7 @@ export function PlanejamentoParticipanteFormScreen() {
           usuarioAutenticadoId: usuarioAutenticado.id,
         });
       } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
         if (!isCurrentLoad()) {
           return;
         }
@@ -208,6 +220,7 @@ export function PlanejamentoParticipanteFormScreen() {
           error,
           'Planejamento inexistente ou inacessivel.',
         );
+        if (!draft.isCurrent(loadScope)) return;
 
         if (!isCurrentLoad()) {
           return;
@@ -262,6 +275,8 @@ export function PlanejamentoParticipanteFormScreen() {
   }
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     const context = routeContextRef.current;
     const authorization = authorizationLoadRef.current;
     const currentPlanejamentoId = context.planejamentoId;
@@ -327,11 +342,12 @@ export function PlanejamentoParticipanteFormScreen() {
         ...(trimmedEmail ? { email: trimmedEmail } : {}),
       });
 
-      if (isCurrentSaveContext(token)) {
+      if (draft.isCurrent(submitted) && isCurrentSaveContext(token)) {
+        draft.clear(submitted);
         goBackToDetail(token.planejamentoId);
       }
     } catch (error) {
-      if (!isCurrentSaveContext(token)) {
+      if (!draft.isCurrent(submitted) || !isCurrentSaveContext(token)) {
         return;
       }
 
@@ -340,7 +356,7 @@ export function PlanejamentoParticipanteFormScreen() {
         'Nao foi possivel adicionar o participante.',
       );
 
-      if (!isCurrentSaveContext(token)) {
+      if (!draft.isCurrent(submitted) || !isCurrentSaveContext(token)) {
         return;
       }
 
@@ -358,7 +374,7 @@ export function PlanejamentoParticipanteFormScreen() {
       }
 
       if (
-        mountedRef.current &&
+        draft.isCurrent() && mountedRef.current &&
         routeContextRef.current.generation === token.generation &&
         routeContextRef.current.planejamentoId === token.planejamentoId
       ) {
@@ -368,14 +384,15 @@ export function PlanejamentoParticipanteFormScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/planejamentos"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           action={
             <GlassButton
               label="Voltar"
-              onPress={() => goBackToDetail()}
+              onPress={() => { draft.clear(); goBackToDetail(); }}
               variant="ghost"
             />
           }
@@ -384,8 +401,6 @@ export function PlanejamentoParticipanteFormScreen() {
           title="Adicionar participante"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {authorizationLoading ? (
         <GlassPanel>
@@ -420,6 +435,7 @@ export function PlanejamentoParticipanteFormScreen() {
         <GlassPanel>
           <GlassField label="Nome">
             <GlassTextInput
+              accessibilityLabel="Nome do participante"
               editable={!isSaving}
               maxLength={150}
               onChangeText={setNome}
@@ -430,6 +446,7 @@ export function PlanejamentoParticipanteFormScreen() {
 
           <GlassField label="Email">
             <GlassTextInput
+              accessibilityLabel="Email do participante"
               autoCapitalize="none"
               editable={!isSaving}
               keyboardType="email-address"
@@ -451,7 +468,7 @@ export function PlanejamentoParticipanteFormScreen() {
           />
         </GlassPanel>
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

@@ -2,11 +2,9 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { formatCurrency } from "../../../../utils/formatters";
 import { FinanceTheme } from "../../../shared/styles/financeTheme";
-import { GlassStatusCard } from "../../../shared/ui";
+import { AppShell, FinanceAppHeader, GlassStatusCard } from "../../../shared/ui";
 import { AccountsOverviewCard } from "../components/AccountsOverviewCard";
 import { CategoryBarsCard } from "../components/CategoryBarsCard";
-import { DashboardHeader } from "../components/DashboardHeader";
-import { DashboardShell } from "../components/DashboardShell";
 import { FinancialSummaryGrid } from "../components/FinancialSummaryGrid";
 import { MonthlyComparisonCard } from "../components/MonthlyComparisonCard";
 import { PlanningOverviewGrid } from "../components/PlanningOverviewGrid";
@@ -14,7 +12,6 @@ import { RecentTransactionsCard } from "../components/RecentTransactionsCard";
 import { useDashboardData } from "../hooks/useDashboardData";
 import { InsightCard } from "../v2/components";
 import {
-  dashboardSidebarItems,
   mapBudgetOverview,
   mapCategoryBars,
   mapDashboardMetrics,
@@ -45,19 +42,22 @@ export function DashboardScreen() {
   const goalOverview = mapGoalOverview(metaDestaque);
 
   return (
-    <DashboardShell
+    <AppShell
       activeRoute="/dashboard"
-      header={
-        <DashboardHeader
-          email={usuario?.email}
-          monthReference={dashboard?.mesReferencia}
-          onLogout={handleLogout}
-          onProfilePress={() => router.push("/usuario")}
-          userName={usuario?.nome}
+      onLogout={handleLogout}
+      onProfilePress={() => router.push("/usuario")}
+      onRefresh={reloadDashboard}
+      refreshing={loading && Boolean(dashboard)}
+      pageHeader={
+        <FinanceAppHeader
+          eyebrow="Dashboard financeiro"
+          meta={dashboard?.mesReferencia}
+          subtitle={usuario?.email ?? "Resumo financeiro do mes"}
+          title={`Ola${usuario?.nome ? `, ${usuario.nome}` : ""}`}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={dashboardSidebarItems}
+      profileDetail={usuario?.email}
+      profileLabel={usuario?.nome ?? "Perfil"}
     >
       {message && dashboard ? (
         <Text style={styles.errorMessage}>{message}</Text>
@@ -98,8 +98,8 @@ export function DashboardScreen() {
             <InsightCard
               description={
                 dashboard.economiaMes >= 0
-                  ? "Suas receitas cobrem as despesas registradas neste mes."
-                  : "As despesas registradas passaram das receitas do mes."
+                  ? "Receitas cobrem as despesas do mes."
+                  : "Despesas acima das receitas no mes."
               }
               icon={
                 dashboard.economiaMes >= 0
@@ -143,7 +143,7 @@ export function DashboardScreen() {
           />
         </>
       ) : null}
-    </DashboardShell>
+    </AppShell>
   );
 }
 

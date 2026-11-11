@@ -101,7 +101,9 @@ describe('AlertasFormScreen', () => {
 
     render(<AlertasFormScreen />);
 
-    await waitFor(() => expect(screen.getByText('Novo alerta')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Meta futura')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
     fireEvent.press(screen.getByText('Meta futura'));
     fireEvent.press(screen.getByText('Salvar alerta'));
 

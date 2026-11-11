@@ -83,6 +83,9 @@ describe('PagosDividaScreen', () => {
       expect(screen.getByText('01/05/2026')).toBeTruthy();
       expect(screen.getByText('R$ 500,00')).toBeTruthy();
     });
+
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
   });
 
   it('registers a debt payment and reloads payment history', async () => {
@@ -243,4 +246,17 @@ describe('PagosDividaScreen', () => {
       expect(screen.getByText('Sessao expirada. Faca login novamente.')).toBeTruthy();
     });
   });
+});
+
+it('names editable payment fields and associates validation errors with their context', async () => {
+  jest.clearAllMocks(); mockLocalSearchParams = {dividaId: 'divida1'};
+  mockSuccessfulLoad(); render(<PagosDividaScreen/>);
+  const amount=await screen.findByLabelText('Valor do pagamento');
+  expect(screen.getByLabelText('Data do pagamento')).toBeTruthy();
+  expect(screen.getByLabelText('Descricao do pagamento')).toBeTruthy();
+  fireEvent.changeText(amount,'-1');
+  fireEvent.press(screen.getByText('Registrar pagamento'));
+  await waitFor(()=>expect(screen.getByLabelText('Valor do pagamento').props.accessibilityHint).toBe('O valor deve ser maior que zero.'));
+  expect(screen.getByRole('alert')).toBeTruthy();
+  expect(mockCreatePagoDivida).not.toHaveBeenCalled();
 });

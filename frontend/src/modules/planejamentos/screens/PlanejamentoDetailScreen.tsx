@@ -1,11 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
@@ -92,9 +91,10 @@ export function PlanejamentoDetailScreen() {
   const participantes = planejamento?.participantes ?? [];
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/planejamentos"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           action={
             <GlassButton
@@ -108,8 +108,6 @@ export function PlanejamentoDetailScreen() {
           title={planejamento?.nome ?? 'Detalhe'}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading ? (
         <GlassPanel>
@@ -225,7 +223,7 @@ export function PlanejamentoDetailScreen() {
           />
         </>
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

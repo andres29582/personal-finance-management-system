@@ -48,13 +48,16 @@ describe('TransferenciaFormScreen', () => {
       expect(screen.getByText('Nova transferencia')).toBeTruthy();
     });
 
-    const emptyInputs = screen.getAllByDisplayValue('');
-    fireEvent.changeText(emptyInputs[0], '200,50');
-    fireEvent.changeText(emptyInputs[2], 'Reserva mensal');
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+
+    fireEvent.changeText(screen.getByLabelText('Valor da transferencia'), '200,50');
+    fireEvent.changeText(screen.getByLabelText('Descricao da transferencia'), 'Reserva mensal');
     fireEvent.press(screen.getByText('Salvar transferencia'));
 
     await waitFor(() => {
       expect(mockCreateTransferencia).toHaveBeenCalledWith({
+        idempotencyKey: expect.any(String),
         comissao: 0,
         contaDestinoId: 'conta2',
         contaOrigemId: 'conta1',
@@ -81,6 +84,65 @@ describe('TransferenciaFormScreen', () => {
       jest.useRealTimers();
     }
   });
+
+  it.each(['invalid', '-0,01', '1,23,456'])(
+    'blocks saving a transfer with invalid commission %s',
+    async (commission) => {
+      mockContas();
+      render(<TransferenciaFormScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Valor da transferencia')).toBeTruthy();
+      });
+
+      fireEvent.changeText(
+        screen.getByLabelText('Valor da transferencia'),
+        '100',
+      );
+      fireEvent.changeText(
+        screen.getByLabelText('Comissao da transferencia'),
+        commission,
+      );
+      fireEvent.press(screen.getByText('Salvar transferencia'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Informe uma comissao valida maior ou igual a zero.'),
+        ).toBeTruthy();
+      });
+      expect(mockCreateTransferencia).not.toHaveBeenCalled();
+      expect(mockUpdateTransferencia).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['', '   ', '0'])(
+    'defaults only an empty commission or zero to zero: %s',
+    async (commission) => {
+      mockContas();
+      mockCreateTransferencia.mockResolvedValue(makeTransferencia());
+      render(<TransferenciaFormScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Valor da transferencia')).toBeTruthy();
+      });
+
+      fireEvent.changeText(
+        screen.getByLabelText('Valor da transferencia'),
+        '100',
+      );
+      fireEvent.changeText(
+        screen.getByLabelText('Comissao da transferencia'),
+        commission,
+      );
+      fireEvent.press(screen.getByText('Salvar transferencia'));
+
+      await waitFor(() => {
+        expect(mockCreateTransferencia).toHaveBeenCalledWith(
+          expect.objectContaining({ comissao: 0 }),
+        );
+      });
+    },
+  );
 
   it('blocks save when source and destination accounts are the same', async () => {
     mockListContas.mockResolvedValue([contaOrigem]);

@@ -92,6 +92,9 @@ describe('RelatoriosScreen', () => {
       expect(screen.getByText('Mercado')).toBeTruthy();
       expect(screen.getByText('Conta Corrente - 01/06/2026 - despesa')).toBeTruthy();
     });
+
+    fireEvent.press(screen.getByText('Perfil'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
   });
 
   it('generates report with selected type, account and category filters', async () => {

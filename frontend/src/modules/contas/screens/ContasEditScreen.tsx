@@ -1,11 +1,11 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassPanel,
@@ -23,41 +23,60 @@ export function ContasEditScreen() {
   const contaId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   const [conta, setConta] = useState<Conta | null>(null);
-  const [nome, setNome] = useState('');
-  const [limiteCredito, setLimiteCredito] = useState('');
-  const [dataCorte, setDataCorte] = useState('');
-  const [dataPagamento, setDataPagamento] = useState('');
+  const draft = useFinancialDraft('account/' + (contaId ?? 'missing'), {
+    nome: '',
+    limiteCredito: '',
+    dataCorte: '',
+    dataPagamento: '',
+  });
+  const nome = draft.fields.nome;
+  const setNome = (value: string) => draft.setField('nome', value);
+  const limiteCredito = draft.fields.limiteCredito;
+  const setLimiteCredito = (value: string) =>
+    draft.setField('limiteCredito', value);
+  const dataCorte = draft.fields.dataCorte;
+  const setDataCorte = (value: string) => draft.setField('dataCorte', value);
+  const dataPagamento = draft.fields.dataPagamento;
+  const setDataPagamento = (value: string) =>
+    draft.setField('dataPagamento', value);
+
+
+
+
   const [loadingConta, setLoadingConta] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     async function loadConta() {
+    const loadScope = draft.capture();
+    if (!draft.isCurrent(loadScope)) return;
       if (!contaId) {
         setError('Conta invalida.');
-        setLoadingConta(false);
+        if (draft.isCurrent()) setLoadingConta(false);
         return;
       }
 
       try {
         setLoadingConta(true);
         const data = await getContaById(contaId);
+        if (!draft.isCurrent(loadScope)) return;
         setConta(data);
-        setNome(data.nome);
-        setLimiteCredito(data.limiteCredito != null ? String(data.limiteCredito) : '');
-        setDataCorte(data.dataCorte != null ? String(data.dataCorte) : '');
-        setDataPagamento(data.dataPagamento != null ? String(data.dataPagamento) : '');
+        draft.hydrate({ nome: data.nome, limiteCredito: data.limiteCredito != null ? String(data.limiteCredito) : '',
+          dataCorte: data.dataCorte != null ? String(data.dataCorte) : '', dataPagamento: data.dataPagamento != null ? String(data.dataPagamento) : '' });
       } catch (requestError) {
+        if (!draft.isCurrent(loadScope)) return;
         const resolvedError = await resolveApiError(
           requestError,
           'Nao foi possivel carregar a conta.',
         );
+        if (!draft.isCurrent(loadScope)) return;
         setError(resolvedError.message);
         if (resolvedError.unauthorized) {
           router.replace('/login');
         }
       } finally {
-        setLoadingConta(false);
+        if (draft.isCurrent()) setLoadingConta(false);
       }
     }
 
@@ -67,6 +86,8 @@ export function ContasEditScreen() {
   const isCartaoCredito = conta?.tipo === 'cartao_credito';
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     if (!contaId || !conta) {
       setError('Conta invalida.');
       return;
@@ -127,34 +148,39 @@ export function ContasEditScreen() {
           : {}),
       });
 
+      if (!draft.isCurrent(submitted)) return;
+
+      draft.clear(submitted);
+
       router.replace('/contas');
     } catch (requestError) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(
         requestError,
         'Nao foi possivel atualizar a conta.',
       );
+      if (!draft.isCurrent(submitted)) return;
       setError(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/contas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Cancelar" onPress={() => router.back()} variant="ghost" />}
+          action={<GlassButton label="Cancelar" onPress={() => { draft.clear(); router.back(); }} variant="ghost" />}
           eyebrow="Gestao financeira"
           subtitle="Atualize os dados operacionais da conta."
           title="Editar conta"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loadingConta ? (
         <GlassStatusCard
@@ -179,6 +205,7 @@ export function ContasEditScreen() {
 
           <GlassField label="Nome da conta">
             <GlassTextInput
+              accessibilityLabel="Nome da conta"
               value={nome}
               onChangeText={setNome}
               placeholder="Ex.: Carteira principal"
@@ -190,6 +217,7 @@ export function ContasEditScreen() {
             <>
               <GlassField label="Limite de credito">
                 <GlassTextInput
+                  accessibilityLabel="Limite de credito"
                   value={limiteCredito}
                   onChangeText={setLimiteCredito}
                   placeholder="0,00"
@@ -202,6 +230,7 @@ export function ContasEditScreen() {
                 <View style={styles.half}>
                   <GlassField label="Dia corte">
                     <GlassTextInput
+                      accessibilityLabel="Dia de corte"
                       value={dataCorte}
                       onChangeText={setDataCorte}
                       placeholder="1-31"
@@ -213,6 +242,7 @@ export function ContasEditScreen() {
                 <View style={styles.half}>
                   <GlassField label="Dia pagamento">
                     <GlassTextInput
+                      accessibilityLabel="Dia de pagamento"
                       value={dataPagamento}
                       onChangeText={setDataPagamento}
                       placeholder="1-31"
@@ -234,7 +264,7 @@ export function ContasEditScreen() {
           />
         </GlassPanel>
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

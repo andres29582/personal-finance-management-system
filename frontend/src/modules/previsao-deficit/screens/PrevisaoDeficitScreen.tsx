@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassPanel,
@@ -123,21 +122,21 @@ export function PrevisaoDeficitScreen() {
   }, [previsao]);
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/previsao-deficit"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           eyebrow="Machine Learning"
           subtitle="Analise mensal de risco de deficit."
           title="Previsao de deficit"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassField label="Mes (YYYY-MM)">
           <GlassTextInput
+            accessibilityLabel="Mes da previsao"
             placeholder="2026-05"
             value={mes}
             onChangeText={setMes}
@@ -218,7 +217,7 @@ export function PrevisaoDeficitScreen() {
           </GlassPanel>
         </>
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

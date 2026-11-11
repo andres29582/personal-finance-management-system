@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "U3 Synthetic Session Harness",
+    "slug": "u3-session-browser-harness",
+    "platforms": [
+      "web"
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}

@@ -132,6 +132,14 @@ describe('PlanejamentoParticipanteFormScreen', () => {
     mockAddParticipantePlanejamento.mockResolvedValue(makeParticipante());
   });
 
+  it('abre o perfil pelo shell movel', async () => {
+    await renderAuthorized();
+
+    fireEvent.press(screen.getByText('Perfil'));
+
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+  });
+
   it('permite ao proprietario adicionar participante em planejamento aberto', async () => {
     await renderAuthorized();
     fillParticipantForm();

@@ -1,3 +1,4 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -7,11 +8,10 @@ import {
   Text,
   View,
 } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -155,16 +155,49 @@ export function PlanejamentoGastoFormScreen() {
   }
 
   const currentRoute = routeContextRef.current;
-  const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
-  const [dataGasto, setDataGasto] = useState(getLocalDateInputValue());
-  const [comportamento, setComportamento] =
-    useState<GastoPlanejamentoComportamento>('EVENTUAL');
-  const [pagoPorParticipanteId, setPagoPorParticipanteId] = useState('');
-  const [participantesIds, setParticipantesIds] = useState<string[]>([]);
-  const [categoria, setCategoria] = useState('');
-  const [observacao, setObservacao] = useState('');
-  const [mesReferencia, setMesReferencia] = useState('');
+  const draft = useFinancialDraft('planning-expense/' + routeKey, {
+    descricao: '',
+    valor: '',
+    dataGasto: getLocalDateInputValue(),
+    comportamento: 'EVENTUAL' as GastoPlanejamentoComportamento,
+    pagoPorParticipanteId: '',
+    participantesIds: [] as string[],
+    categoria: '',
+    observacao: '',
+    mesReferencia: '',
+  });
+  const descricao = draft.fields.descricao;
+  const setDescricao = (value: string) => draft.setField('descricao', value);
+  const valor = draft.fields.valor;
+  const setValor = (value: string) => draft.setField('valor', value);
+  const dataGasto = draft.fields.dataGasto;
+  const setDataGasto = (value: string) => draft.setField('dataGasto', value);
+  const comportamento = draft.fields.comportamento;
+  const setComportamento = (value: GastoPlanejamentoComportamento) =>
+    draft.setField('comportamento', value);
+  const pagoPorParticipanteId = draft.fields.pagoPorParticipanteId;
+  const setPagoPorParticipanteId = (value: string) =>
+    draft.setField('pagoPorParticipanteId', value);
+  const participantesIds = draft.fields.participantesIds;
+  const setParticipantesIds = (
+    value: string[] | ((previous: string[]) => string[]),
+  ) => draft.setField('participantesIds', value);
+  const categoria = draft.fields.categoria;
+  const setCategoria = (value: string) => draft.setField('categoria', value);
+  const observacao = draft.fields.observacao;
+  const setObservacao = (value: string) => draft.setField('observacao', value);
+  const mesReferencia = draft.fields.mesReferencia;
+  const setMesReferencia = (value: string) =>
+    draft.setField('mesReferencia', value);
+
+
+
+
+
+
+
+
+
   const [pagadoresDisponiveis, setPagadoresDisponiveis] = useState<
     ParticipantePlanejamento[]
   >([]);
@@ -240,17 +273,19 @@ export function PlanejamentoGastoFormScreen() {
     setFeedback({ message: '', route: expectedRoute });
     setPagadoresDisponiveis([]);
     setParticipantesDivisaoDisponiveis([]);
-    setDescricao('');
-    setValor('');
-    setDataGasto(getLocalDateInputValue());
-    setComportamento('EVENTUAL');
-    setPagoPorParticipanteId('');
-    setParticipantesIds([]);
-    setCategoria('');
-    setObservacao('');
-    setMesReferencia('');
+
+
+
+
+
+
+
+
+
 
     async function loadPlanejamento() {
+      const loadScope = draft.capture();
+      if (!draft.isCurrent(loadScope)) return;
       if (!planejamentoId) {
         return;
       }
@@ -263,6 +298,7 @@ export function PlanejamentoGastoFormScreen() {
             ? getGastoPlanejamentoById(planejamentoId, gastoId)
             : Promise.resolve(null),
         ]);
+        if (!draft.isCurrent(loadScope)) return;
 
         if (!active || !isCurrentLoad(expectedRoute, loadGeneration)) {
           return;
@@ -304,15 +340,9 @@ export function PlanejamentoGastoFormScreen() {
         setParticipantesDivisaoDisponiveis(participantesDivisao);
 
         if (gasto) {
-          setDescricao(gasto.descricao);
-          setValor(formatCentavosInput(gasto.valorCentavos));
-          setDataGasto(gasto.dataGasto.slice(0, 10));
-          setComportamento(gasto.comportamento);
-          setPagoPorParticipanteId(gasto.pagoPorParticipanteId);
-          setParticipantesIds(participantesDivisaoIds);
-          setCategoria(gasto.categoria ?? '');
-          setObservacao(gasto.observacao ?? '');
-          setMesReferencia(gasto.mesReferencia ?? '');
+          draft.hydrate({ descricao: gasto.descricao, valor: formatCentavosInput(gasto.valorCentavos), dataGasto: gasto.dataGasto.slice(0, 10),
+            comportamento: gasto.comportamento, pagoPorParticipanteId: gasto.pagoPorParticipanteId, participantesIds: participantesDivisaoIds,
+            categoria: gasto.categoria ?? '', observacao: gasto.observacao ?? '', mesReferencia: gasto.mesReferencia ?? '' });
         }
 
         const usuarioAutenticadoId = usuarioAutenticado.id;
@@ -380,6 +410,7 @@ export function PlanejamentoGastoFormScreen() {
 
         updateAccessState('authorized', '', loadedContext);
       } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
         if (!active || !isCurrentLoad(expectedRoute, loadGeneration)) {
           return;
         }
@@ -388,6 +419,7 @@ export function PlanejamentoGastoFormScreen() {
           error,
           'Nao foi possivel carregar o formulario de gasto.',
         );
+        if (!draft.isCurrent(loadScope)) return;
 
         if (!active || !isCurrentLoad(expectedRoute, loadGeneration)) {
           return;
@@ -447,6 +479,8 @@ export function PlanejamentoGastoFormScreen() {
   }
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     if (
       accessState.kind !== 'authorized' ||
       !accessState.context ||
@@ -611,9 +645,10 @@ export function PlanejamentoGastoFormScreen() {
       }
 
       if (
-        savingLockRef.current === savingOperationToken &&
+        draft.isCurrent(submitted) && savingLockRef.current === savingOperationToken &&
         isCurrentRouteContext(expectedContext.route)
       ) {
+        draft.clear(submitted);
         router.replace({
           pathname: '/planejamentos-detail',
           params: { id: expectedContext.route.planejamentoId },
@@ -621,7 +656,7 @@ export function PlanejamentoGastoFormScreen() {
       }
     } catch (error) {
       if (
-        savingLockRef.current !== savingOperationToken ||
+        !draft.isCurrent(submitted) || savingLockRef.current !== savingOperationToken ||
         !isCurrentRouteContext(expectedContext.route)
       ) {
         return;
@@ -635,7 +670,7 @@ export function PlanejamentoGastoFormScreen() {
       );
 
       if (
-        savingLockRef.current !== savingOperationToken ||
+        !draft.isCurrent(submitted) || savingLockRef.current !== savingOperationToken ||
         !isCurrentRouteContext(expectedContext.route)
       ) {
         return;
@@ -653,7 +688,7 @@ export function PlanejamentoGastoFormScreen() {
       if (savingLockRef.current === savingOperationToken) {
         savingLockRef.current = null;
 
-        if (isCurrentRouteContext(expectedContext.route)) {
+        if (draft.isCurrent() && isCurrentRouteContext(expectedContext.route)) {
           setSavingToken((currentToken) =>
             currentToken === savingOperationToken ? null : currentToken,
           );
@@ -680,14 +715,15 @@ export function PlanejamentoGastoFormScreen() {
     participantesDivisaoDisponiveis.length > 0;
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/planejamentos"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           action={
             <GlassButton
               label="Voltar"
-              onPress={goBackToDetail}
+              onPress={() => { draft.clear(); goBackToDetail(); }}
               variant="ghost"
             />
           }
@@ -700,8 +736,6 @@ export function PlanejamentoGastoFormScreen() {
           title={isEditing ? 'Editar gasto' : 'Adicionar gasto'}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {!currentAccessState || currentAccessState.kind === 'loading' ? (
         <GlassPanel>
@@ -750,6 +784,7 @@ export function PlanejamentoGastoFormScreen() {
         <GlassPanel>
           <GlassField label="Descricao">
             <GlassTextInput
+              accessibilityLabel="Descricao do gasto"
               editable={!formDisabled}
               maxLength={255}
               onChangeText={setDescricao}
@@ -760,6 +795,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Valor">
             <GlassTextInput
+              accessibilityLabel="Valor do gasto"
               editable={!formDisabled}
               keyboardType="decimal-pad"
               onChangeText={setValor}
@@ -770,6 +806,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Data do gasto (YYYY-MM-DD)">
             <GlassTextInput
+              accessibilityLabel="Data do gasto"
               editable={!formDisabled}
               onChangeText={setDataGasto}
               placeholder="2026-04-07"
@@ -819,6 +856,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Categoria">
             <GlassTextInput
+              accessibilityLabel="Categoria do gasto"
               editable={!formDisabled}
               maxLength={100}
               onChangeText={setCategoria}
@@ -829,6 +867,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Observacao">
             <GlassTextInput
+              accessibilityLabel="Observacao do gasto"
               editable={!formDisabled}
               maxLength={500}
               multiline
@@ -841,6 +880,7 @@ export function PlanejamentoGastoFormScreen() {
 
           <GlassField label="Mes de referencia (YYYY-MM)">
             <GlassTextInput
+              accessibilityLabel="Mes de referencia do gasto"
               editable={!formDisabled}
               onChangeText={setMesReferencia}
               placeholder="2026-04"
@@ -867,7 +907,7 @@ export function PlanejamentoGastoFormScreen() {
           />
         </GlassPanel>
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 
@@ -896,6 +936,7 @@ function ParticipantSelector({
         return (
           <Pressable
             key={participante.id}
+            accessibilityLabel={`${participante.nome}${participante.email ? `, ${participante.email}` : ''}`}
             accessibilityRole="checkbox"
             accessibilityState={{
               checked: selected,

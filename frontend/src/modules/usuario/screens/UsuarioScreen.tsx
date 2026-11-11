@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { saveUser } from '../../../../storage/authStorage';
+import { saveUser, getSessionSnapshot, getSessionGeneration, subscribeAuthState, isSessionCurrent } from '../../../../storage/authStorage';
 import {
   formatCpfInput,
   isValidCep,
@@ -10,11 +10,10 @@ import {
 import { resolveApiError } from '../../../../utils/api-error';
 import { formatDate } from '../../../../utils/formatters';
 import { useCepAutofill } from '../../../shared/hooks/use-cep-autofill';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassPanel,
@@ -54,6 +53,16 @@ export function UsuarioScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let generation = getSessionGeneration();
+    return subscribeAuthState(() => {
+      if (generation !== getSessionGeneration()) {
+        generation = getSessionGeneration();
+        setProfile(null); setNome(''); setEmail(''); setCpf(''); setCep('');
+        setEndereco(''); setNumero(''); setCidade(''); setMessage(''); setSuccessMessage('');
+      }
+    });
+  }, []);
 
   const applyCepLookup = useCallback((data: CepLookupResponse) => {
     setCep(formatCepValue(data.cep));
@@ -82,12 +91,14 @@ export function UsuarioScreen() {
   });
 
   const loadProfile = useCallback(async () => {
+    const origin = await getSessionSnapshot();
     try {
       setLoading(true);
       setMessage('');
       const user = await getCurrentUserProfile();
+      await saveUser(user, origin);
+      if (!await isSessionCurrent(origin)) return;
       setProfile(user);
-      await saveUser(user);
       setNome(user.nome ?? '');
       setEmail(user.email ?? '');
       setCpf(user.cpf ? formatCpfInput(user.cpf) : '');
@@ -96,6 +107,7 @@ export function UsuarioScreen() {
       setNumero(user.numero ?? '');
       setCidade(user.cidade ?? '');
     } catch (error) {
+      if (!await isSessionCurrent(origin)) return;
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel carregar seus dados.',
@@ -106,7 +118,7 @@ export function UsuarioScreen() {
         router.replace('/login');
       }
     } finally {
-      setLoading(false);
+      if (await isSessionCurrent(origin)) setLoading(false);
     }
   }, [router]);
 
@@ -153,6 +165,7 @@ export function UsuarioScreen() {
   }
 
   async function handleSave() {
+    const origin = await getSessionSnapshot();
     const validationErrors = validateForm();
     setErrors(validationErrors);
     setMessage('');
@@ -174,8 +187,9 @@ export function UsuarioScreen() {
         nome: nome.trim(),
         numero: numero.trim(),
       });
+      await saveUser(updatedUser, origin);
+      if (!await isSessionCurrent(origin)) return;
       setProfile(updatedUser);
-      await saveUser(updatedUser);
       setNome(updatedUser.nome ?? '');
       setEmail(updatedUser.email ?? '');
       setCpf(updatedUser.cpf ? formatCpfInput(updatedUser.cpf) : '');
@@ -185,6 +199,7 @@ export function UsuarioScreen() {
       setCidade(updatedUser.cidade ?? '');
       setSuccessMessage('Perfil atualizado com sucesso.');
     } catch (error) {
+      if (!await isSessionCurrent(origin)) return;
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel salvar seus dados.',
@@ -204,9 +219,10 @@ export function UsuarioScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/usuario"
-      header={
+      onProfilePress={() => router.replace('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           action={
             <View style={styles.headerActions}>
@@ -223,8 +239,6 @@ export function UsuarioScreen() {
           title="Meu perfil"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading && !profile ? (
         <GlassStatusCard
@@ -256,10 +270,21 @@ export function UsuarioScreen() {
       {profile ? (
         <>
           <GlassPanel>
+            <Text style={styles.sectionTitle}>Seguranca e privacidade</Text>
+            <View style={styles.profileActions}>
+              <GlassButton label="Alterar senha" onPress={() => router.push('/reset-password' as never)} variant="ghost" />
+              <GlassButton label="Sessoes" onPress={() => router.push('/sessoes' as never)} variant="ghost" />
+              <GlassButton label="Privacidade" onPress={() => router.push('/privacidade' as never)} variant="ghost" />
+              <GlassButton label="Log de auditoria" onPress={() => router.push('/audit-logs' as never)} variant="ghost" />
+            </View>
+          </GlassPanel>
+
+          <GlassPanel>
             <Text style={styles.sectionTitle}>Informacoes pessoais</Text>
 
             <GlassField label="Nome completo" error={errors.nome}>
               <GlassTextInput
+                accessibilityLabel="Nome completo"
                 value={nome}
                 onChangeText={(value) => {
                   setNome(value);
@@ -272,6 +297,7 @@ export function UsuarioScreen() {
 
             <GlassField label="E-mail" error={errors.email}>
               <GlassTextInput
+                accessibilityLabel="E-mail"
                 value={email}
                 onChangeText={(value) => {
                   setEmail(value);
@@ -286,6 +312,7 @@ export function UsuarioScreen() {
 
             <GlassField label="CPF" error={errors.cpf}>
               <GlassTextInput
+                accessibilityLabel="CPF"
                 value={cpf}
                 onChangeText={(value) => {
                   setCpf(formatCpfInput(value));
@@ -304,6 +331,7 @@ export function UsuarioScreen() {
 
             <GlassField label="CEP" error={errors.cep}>
               <GlassTextInput
+                accessibilityLabel="CEP"
                 value={cep}
                 onChangeText={(value) => {
                   setCep(handleCepValueChange(value));
@@ -323,6 +351,7 @@ export function UsuarioScreen() {
 
             <GlassField label="Endereco" error={errors.endereco}>
               <GlassTextInput
+                accessibilityLabel="Endereco"
                 value={endereco}
                 onChangeText={(value) => {
                   setEndereco(value);
@@ -335,6 +364,7 @@ export function UsuarioScreen() {
 
             <GlassField label="Numero" error={errors.numero}>
               <GlassTextInput
+                accessibilityLabel="Numero"
                 value={numero}
                 onChangeText={(value) => {
                   setNumero(value);
@@ -347,6 +377,7 @@ export function UsuarioScreen() {
 
             <GlassField label="Cidade" error={errors.cidade}>
               <GlassTextInput
+                accessibilityLabel="Cidade"
                 value={cidade}
                 onChangeText={(value) => {
                   setCidade(value);
@@ -372,7 +403,7 @@ export function UsuarioScreen() {
           </GlassPanel>
         </>
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 
@@ -400,6 +431,9 @@ const styles = StyleSheet.create({
     fontSize: FinanceTheme.typography.caption,
     fontWeight: '700',
     marginBottom: FinanceTheme.spacing.sm,
+  },
+  profileActions: {
+    gap: FinanceTheme.spacing.sm,
   },
   sectionTitle: {
     color: FinanceTheme.colors.text,

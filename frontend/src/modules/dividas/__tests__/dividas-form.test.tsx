@@ -42,6 +42,9 @@ describe('DividasFormScreen', () => {
       expect(screen.getByText('Nova divida')).toBeTruthy();
     });
 
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+
     const emptyInputs = screen.getAllByDisplayValue('');
     fireEvent.changeText(emptyInputs[0], 'Emprestimo banco');
     fireEvent.changeText(screen.getByPlaceholderText('Ex.: 15000,00'), '5000');

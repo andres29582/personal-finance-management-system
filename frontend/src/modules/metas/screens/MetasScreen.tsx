@@ -2,14 +2,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
 } from '../../../shared/ui';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateMeta, listMetas } from '../services/metaService';
 import { Meta } from '../types/meta';
 import { confirmAction } from '../../../../utils/confirm-action';
@@ -70,18 +69,16 @@ export function MetasScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/metas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Nova" onPress={() => router.push('/metas-form' as never)} />}
           eyebrow="Planejamento"
           subtitle="Acompanhe objetivos de economia e reducao de divida."
           title="Metas"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {message && metas.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
@@ -106,9 +103,7 @@ export function MetasScreen() {
       {!loading && !message && !metas.length ? (
         <GlassStatusCard
           title="Nenhuma meta cadastrada"
-          description="Crie uma meta para acompanhar progresso e prazos."
-          actionLabel="Nova meta"
-          onActionPress={() => router.push('/metas-form' as never)}
+          description="Use o menu + para criar uma meta e acompanhar progresso e prazos."
         />
       ) : null}
 
@@ -145,7 +140,7 @@ export function MetasScreen() {
           </GlassPanel>
         ))
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

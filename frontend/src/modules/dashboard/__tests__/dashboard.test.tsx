@@ -1,3 +1,5 @@
+import { logout } from '../../auth/services/logoutCoordinator';
+jest.mock('../../auth/services/logoutCoordinator');
 import { describe, expect, it, jest } from '@jest/globals';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import { DashboardScreen } from '../screens/DashboardScreen';
@@ -79,11 +81,14 @@ async function renderDashboard() {
 describe('DashboardScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(authStorage.subscribeAuthState).mockReturnValue(() => {});
+    jest.mocked(authStorage.getSessionGeneration).mockReturnValue(0);
+    jest.mocked(logout).mockReturnValue({generation:1, completion:Promise.resolve({localDurable:true,cleanupComplete:true,remote:'confirmed'})});
     mockListMetas.mockResolvedValue([]);
     mockListOrcamentos.mockResolvedValue([]);
   });
 
-  it('renders dashboard with user greeting and sidebar navigation', async () => {
+  it('renders dashboard with user greeting and bottom navigation', async () => {
     const mockUser = { id: '1', nome: 'João Silva', email: 'joao@example.com' };
     const mockDashboard = makeDashboard();
 
@@ -94,9 +99,11 @@ describe('DashboardScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Ola, João Silva')).toBeTruthy();
-      expect(screen.getByLabelText('Contas')).toBeTruthy();
-      expect(screen.getByLabelText('Transacoes')).toBeTruthy();
-      expect(screen.getByText('Sair')).toBeTruthy();
+      expect(screen.getByLabelText('Dashboard')).toBeTruthy();
+      expect(screen.getByLabelText('Planejamentos')).toBeTruthy();
+      expect(screen.getByLabelText('Previsão ML')).toBeTruthy();
+      expect(screen.getByLabelText('Decisões')).toBeTruthy();
+      expect(screen.getByLabelText('Sair da conta')).toBeTruthy();
     });
   });
 
@@ -133,8 +140,10 @@ describe('DashboardScreen', () => {
       expect(screen.getByText('R$ 5.000,00')).toBeTruthy(); // saldoTotal
       expect(screen.getByText('R$ 8.000,00')).toBeTruthy(); // receitasTotais
       expect(screen.getByText('R$ 3.000,00')).toBeTruthy(); // despesasTotais
-      expect(screen.getByText('Receitas do mes')).toBeTruthy();
-      expect(screen.getByText('Despesas do mes')).toBeTruthy();
+      expect(screen.getByText('Saldo total')).toBeTruthy();
+      expect(screen.getByText('Receitas')).toBeTruthy();
+      expect(screen.getByText('Despesas')).toBeTruthy();
+      expect(screen.getByText('Resultado')).toBeTruthy();
       expect(screen.getByText('Mes com saldo positivo')).toBeTruthy();
       expect(screen.getAllByText('R$ 2.000,00').length).toBeGreaterThan(0);
       expect(screen.getByText('Comparativo de gastos')).toBeTruthy();
@@ -143,7 +152,35 @@ describe('DashboardScreen', () => {
     });
   });
 
-  it('navigates through sidebar routes', async () => {
+  it('toggles privacy for the total balance without hiding monthly values', async () => {
+    mockGetUser.mockResolvedValue({ id: '1', nome: 'João Silva', email: 'joao@example.com' });
+    mockGetDashboard.mockResolvedValue(
+      makeDashboard({
+        saldoTotal: 5000,
+        receitasMes: 8000,
+        despesasMes: 3000,
+        economiaMes: 2000,
+      }),
+    );
+
+    await renderDashboard();
+
+    expect(screen.getByText('R$ 5.000,00')).toBeTruthy();
+    expect(screen.getByText('R$ 8.000,00')).toBeTruthy();
+    expect(screen.getByText('R$ 3.000,00')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Ocultar saldo'));
+
+    expect(screen.queryByText('R$ 5.000,00')).toBeNull();
+    expect(screen.getByText('••••••')).toBeTruthy();
+    expect(screen.getByText('R$ 8.000,00')).toBeTruthy();
+    expect(screen.getByText('R$ 3.000,00')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Mostrar saldo'));
+    expect(screen.getByText('R$ 5.000,00')).toBeTruthy();
+  });
+
+  it('navigates through bottom navigation routes', async () => {
     const mockUser = { id: '1', nome: 'João Silva', email: 'joao@example.com' };
     const mockDashboard = makeDashboard();
 
@@ -153,10 +190,21 @@ describe('DashboardScreen', () => {
     await renderDashboard();
 
     await waitFor(() => {
-      const contasButton = screen.getByLabelText('Contas');
-      fireEvent.press(contasButton);
-      expect(mockPush).toHaveBeenCalledWith('/contas');
+      fireEvent.press(screen.getByLabelText('Planejamentos'));
+      expect(mockPush).toHaveBeenCalledWith('/planejamentos');
     });
+  });
+
+  it('opens quick actions and preserves transaction type in navigation', async () => {
+    mockGetUser.mockResolvedValue({ id: '1', nome: 'João Silva', email: 'joao@example.com' });
+    mockGetDashboard.mockResolvedValue(makeDashboard());
+
+    await renderDashboard();
+
+    fireEvent.press(screen.getByLabelText('Abrir ações rápidas'));
+    fireEvent.press(screen.getByLabelText('Nova receita'));
+
+    expect(mockPush).toHaveBeenCalledWith('/transacoes-form?tipo=receita');
   });
 
   it('handles logout correctly', async () => {
@@ -171,13 +219,12 @@ describe('DashboardScreen', () => {
     await renderDashboard();
 
     await waitFor(() => {
-      const logoutButton = screen.getByText('Sair');
+      const logoutButton = screen.getByLabelText('Sair da conta');
       fireEvent.press(logoutButton);
     });
 
     await waitFor(() => {
-      expect(mockLogoutSession).toHaveBeenCalled();
-      expect(mockClearSession).toHaveBeenCalled();
+      expect(logout).toHaveBeenCalled();
       expect(mockReplace).toHaveBeenCalledWith('/login');
     });
   });
@@ -223,7 +270,7 @@ describe('DashboardScreen', () => {
     });
   });
 
-  it('expands category and transaction panels on demand', async () => {
+  it('shows recent transactions and expands optional chart details', async () => {
     const mockUser = { id: '1', nome: 'JoÃ£o Silva', email: 'joao@example.com' };
     const mockDashboard = makeDashboard({
       gastosPorCategoria: [
@@ -259,7 +306,6 @@ describe('DashboardScreen', () => {
       fireEvent.press(screen.getByLabelText('Alternar gastos por categoria'));
       expect(screen.getByText('R$ 250,00 (100%)')).toBeTruthy();
 
-      fireEvent.press(screen.getByLabelText('Alternar ultimas transacoes'));
       expect(screen.getByText('Conta Corrente - 01/05/2026')).toBeTruthy();
 
       fireEvent.press(screen.getByLabelText('Alternar comparativo de gastos'));
@@ -339,7 +385,7 @@ describe('DashboardScreen', () => {
     });
   });
 
-  it('shows v2 empty states inside expandable dashboard sections', async () => {
+  it('shows empty states in dashboard sections', async () => {
     const mockUser = { id: '1', nome: 'JoÃ£o Silva', email: 'joao@example.com' };
     const mockDashboard = makeDashboard({ totalContas: 1 });
 
@@ -352,7 +398,6 @@ describe('DashboardScreen', () => {
       fireEvent.press(screen.getByLabelText('Alternar gastos por categoria'));
       expect(screen.getByText('Nenhuma despesa registrada neste mes.')).toBeTruthy();
 
-      fireEvent.press(screen.getByLabelText('Alternar ultimas transacoes'));
       expect(screen.getByText('Sem transacoes recentes.')).toBeTruthy();
     });
   });

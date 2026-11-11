@@ -1,11 +1,11 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -46,15 +46,34 @@ function isValidDateInput(value: string) {
 
 export function PlanejamentoFormScreen() {
   const router = useRouter();
-  const [nome, setNome] = useState('');
-  const [descricao, setDescricao] = useState('');
-  const [tipo, setTipo] = useState<PlanejamentoTipo>('CASA');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
+  const draft = useFinancialDraft('planning/new', {
+    nome: '',
+    descricao: '',
+    tipo: 'CASA' as PlanejamentoTipo,
+    dataInicio: '',
+    dataFim: '',
+  });
+  const nome = draft.fields.nome;
+  const setNome = (value: string) => draft.setField('nome', value);
+  const descricao = draft.fields.descricao;
+  const setDescricao = (value: string) => draft.setField('descricao', value);
+  const tipo = draft.fields.tipo;
+  const setTipo = (value: PlanejamentoTipo) => draft.setField('tipo', value);
+  const dataInicio = draft.fields.dataInicio;
+  const setDataInicio = (value: string) => draft.setField('dataInicio', value);
+  const dataFim = draft.fields.dataFim;
+  const setDataFim = (value: string) => draft.setField('dataFim', value);
+
+
+
+
+
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     const trimmedNome = nome.trim();
     const trimmedDescricao = descricao.trim();
     const trimmedDataInicio = dataInicio.trim();
@@ -96,34 +115,41 @@ export function PlanejamentoFormScreen() {
         ...(trimmedDataFim ? { dataFim: trimmedDataFim } : {}),
       });
 
+      if (!draft.isCurrent(submitted)) return;
+
+      draft.clear(submitted);
+
       router.replace({
         pathname: '/planejamentos-detail',
         params: { id: planejamento.id },
       } as never);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel criar o planejamento.',
       );
+      if (!draft.isCurrent(submitted)) return;
       setMessage(resolvedError.message);
 
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/planejamentos"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           action={
             <GlassButton
               label="Cancelar"
-              onPress={() => router.back()}
+              onPress={() => { draft.clear(); router.back(); }}
               variant="ghost"
             />
           }
@@ -132,12 +158,11 @@ export function PlanejamentoFormScreen() {
           title="Novo planejamento"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassField label="Nome">
           <GlassTextInput
+            accessibilityLabel="Nome do planejamento"
             editable={!saving}
             maxLength={150}
             onChangeText={setNome}
@@ -156,6 +181,7 @@ export function PlanejamentoFormScreen() {
 
         <GlassField label="Descricao">
           <GlassTextInput
+            accessibilityLabel="Descricao do planejamento"
             editable={!saving}
             maxLength={500}
             multiline
@@ -170,6 +196,7 @@ export function PlanejamentoFormScreen() {
           <View style={styles.half}>
             <GlassField label="Data inicial">
               <GlassTextInput
+                accessibilityLabel="Data inicial do planejamento"
                 editable={!saving}
                 maxLength={10}
                 onChangeText={setDataInicio}
@@ -181,6 +208,7 @@ export function PlanejamentoFormScreen() {
           <View style={styles.half}>
             <GlassField label="Data final">
               <GlassTextInput
+                accessibilityLabel="Data final do planejamento"
                 editable={!saving}
                 maxLength={10}
                 onChangeText={setDataFim}
@@ -199,7 +227,7 @@ export function PlanejamentoFormScreen() {
           onPress={handleSave}
         />
       </GlassPanel>
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 
@@ -215,9 +243,11 @@ const styles = StyleSheet.create({
   },
   half: {
     flex: 1,
+    minWidth: 140,
   },
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: FinanceTheme.spacing.sm,
   },
   textArea: {

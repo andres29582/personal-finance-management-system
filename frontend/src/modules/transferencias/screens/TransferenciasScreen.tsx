@@ -1,15 +1,15 @@
+import { createHistoryRequestFence } from '../../../shared/hooks/historyRequestFence';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
 } from '../../../shared/ui';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
 import {
@@ -23,6 +23,8 @@ import { formatCurrency, formatDate } from '../../../../utils/formatters';
 
 export function TransferenciasScreen() {
   const router = useRouter();
+  const [requests] = useState(createHistoryRequestFence);
+  const [offset, setOffset] = useState(0);
   const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [contas, setContas] = useState<Conta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,50 +36,62 @@ export function TransferenciasScreen() {
   );
 
   const loadTransferencias = useCallback(async () => {
+    const request = requests.start();
+    if (!requests.current(request)) return;
     try {
       setLoading(true);
       setMessage('');
       const [contasData, transferenciasData] = await Promise.all([
         listContas(),
-        listTransferencias(),
+        listTransferencias({ limit: 50, offset }),
       ]);
+      if (!requests.current(request)) return;
+      if (!transferenciasData.length && offset > 0) { setTransferencias([]); requests.invalidate(); setOffset(current => Math.max(0, current - 50)); return; }
       setContas(contasData);
       setTransferencias(transferenciasData);
     } catch (error) {
+      if (!requests.current(request)) return;
       const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar transferencias.');
+      if (!requests.current(request)) return;
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setLoading(false);
+      if (requests.current(request)) setLoading(false);
     }
-  }, [router]);
+  }, [router, offset, requests]);
 
   useFocusEffect(
     useCallback(() => {
-      loadTransferencias();
-    }, [loadTransferencias]),
+      requests.focus();
+      void loadTransferencias();
+      return () => requests.blur();
+    }, [loadTransferencias, requests]),
   );
 
   async function handleRemove(id: string) {
+    const request = requests.capture();
     const confirmed = await confirmAction(
       'Excluir transferencia',
       'Deseja remover esta transferencia?',
     );
 
-    if (!confirmed) {
+    if (!requests.current(request) || !confirmed) {
       return;
     }
 
     try {
       await removeTransferencia(id);
+      if (!requests.current(request)) return;
       await loadTransferencias();
     } catch (error) {
+      if (!requests.current(request)) return;
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel excluir a transferencia.',
       );
+      if (!requests.current(request)) return;
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
@@ -86,23 +100,16 @@ export function TransferenciasScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/transferencias"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={
-            <GlassButton
-              label="Nova"
-              onPress={() => router.push('/transferencias-form' as never)}
-            />
-          }
           eyebrow="Movimentacoes"
           subtitle="Movimente valores entre contas sem afetar receitas e despesas."
           title="Transferencias"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {message && transferencias.length ? (
         <Text style={styles.errorMessage}>{message}</Text>
@@ -129,9 +136,7 @@ export function TransferenciasScreen() {
       {!loading && !message && !transferencias.length ? (
         <GlassStatusCard
           title="Nenhuma transferencia cadastrada"
-          description="Crie uma transferencia para registrar movimentacoes internas."
-          actionLabel="Nova transferencia"
-          onActionPress={() => router.push('/transferencias-form' as never)}
+          description="Use o menu + para registrar uma movimentacao interna entre contas."
         />
       ) : null}
 
@@ -165,7 +170,15 @@ export function TransferenciasScreen() {
           </GlassPanel>
         ))
       ) : null}
-    </FinanceAppShell>
+
+      <View style={styles.actions}>
+        <GlassButton label="Pagina anterior" variant="ghost" disabled={loading || offset === 0}
+          onPress={() => { requests.invalidate(); setTransferencias([]); const next = Math.max(0, offset - 50); setOffset(next); }} />
+        <Text accessibilityLiveRegion="polite" style={styles.meta}>Pagina {offset / 50 + 1}</Text>
+        <GlassButton label="Proxima pagina" variant="ghost" disabled={loading || transferencias.length < 50}
+          onPress={() => { requests.invalidate(); setTransferencias([]); const next = offset + 50; setOffset(next); }} />
+      </View>
+    </AppShell>
   );
 }
 

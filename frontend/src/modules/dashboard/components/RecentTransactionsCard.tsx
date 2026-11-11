@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { formatCurrency, formatDate } from '../../../../utils/formatters';
 import { DashboardTransacaoRecente } from '../types/dashboard';
@@ -15,14 +14,10 @@ export function RecentTransactionsCard({
   items,
   onOpenHistory,
 }: RecentTransactionsCardProps) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
     <SectionCard
-      accessibilityLabel="Alternar ultimas transacoes"
       accent="cyan"
       title="Ultimas transacoes"
-      onPress={() => setExpanded((current) => !current)}
       action={
         <View style={styles.actions}>
           <NeonIconButton
@@ -34,30 +29,28 @@ export function RecentTransactionsCard({
         </View>
       }
     >
-      {expanded ? (
-        items.length ? (
-          items.map((item) => (
-            <View key={item.id} style={styles.item}>
-              <View style={styles.itemHeader}>
-                <Text style={styles.label} numberOfLines={1}>
-                  {item.descricao || item.categoriaNome}
-                </Text>
-                <Text style={styles.value}>{formatCurrency(item.valor)}</Text>
-              </View>
-              <Text style={styles.meta}>
-                {item.contaNome} - {formatDate(item.data)}
+      {items.length ? (
+        items.map((item) => (
+          <View key={item.id} style={styles.item}>
+            <View style={styles.itemHeader}>
+              <Text style={styles.label} numberOfLines={1}>
+                {item.descricao || item.categoriaNome}
               </Text>
+              <Text style={styles.value}>{formatCurrency(item.valor)}</Text>
             </View>
-          ))
-        ) : (
-          <EmptyState
-            description="As ultimas receitas, despesas e transferencias aparecem aqui."
-            framed={false}
-            icon="receipt-text-clock-outline"
-            title="Sem transacoes recentes."
-          />
-        )
-      ) : null}
+            <Text style={styles.meta}>
+              {item.contaNome} - {formatDate(item.data)}
+            </Text>
+          </View>
+        ))
+      ) : (
+        <EmptyState
+          description="As ultimas receitas, despesas e transferencias aparecem aqui."
+          framed={false}
+          icon="receipt-text-clock-outline"
+          title="Sem transacoes recentes."
+        />
+      )}
     </SectionCard>
   );
 }

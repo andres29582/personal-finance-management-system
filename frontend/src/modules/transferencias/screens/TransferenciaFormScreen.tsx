@@ -1,13 +1,14 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
+import { prepareTransferIntent, isUnknownTransferOutcome, TransferIntent } from '../utils/transferIntent';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -29,33 +30,40 @@ export function TransferenciaFormScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const transferenciaId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [contas, setContas] = useState<Conta[]>([]);
-  const [contaOrigemId, setContaOrigemId] = useState('');
-  const [contaDestinoId, setContaDestinoId] = useState('');
-  const [valor, setValor] = useState('');
-  const [comissao, setComissao] = useState('');
-  const [data, setData] = useState(getLocalDateInputValue());
-  const [descricao, setDescricao] = useState('');
+  const draft = useFinancialDraft('transfer/' + (transferenciaId ?? 'new'), {
+    contaOrigemId: '', contaDestinoId: '', valor: '', comissao: '',
+    data: getLocalDateInputValue(), descricao: '', intent: null as TransferIntent | null,
+  });
+  const { contaOrigemId, contaDestinoId, valor, comissao, data, descricao, intent } = draft.fields;
+  const setContaOrigemId = (value: string) => draft.setField('contaOrigemId', value);
+  const setContaDestinoId = (value: string) => draft.setField('contaDestinoId', value);
+  const setValor = (value: string) => draft.setField('valor', value);
+  const setComissao = (value: string) => draft.setField('comissao', value);
+  const setData = (value: string) => draft.setField('data', value);
+  const setDescricao = (value: string) => draft.setField('descricao', value);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const sending = useRef(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     async function loadData() {
       try {
         setLoading(true);
         const contasData = await listContas();
+        if (cancelled) return;
         setContas(contasData);
-        setContaOrigemId(contasData[0]?.id ?? '');
-        setContaDestinoId(contasData[1]?.id ?? contasData[0]?.id ?? '');
 
         if (transferenciaId) {
           const transferencia = await getTransferenciaById(transferenciaId);
-          setContaOrigemId(transferencia.contaOrigemId);
-          setContaDestinoId(transferencia.contaDestinoId);
-          setValor(String(transferencia.valor));
-          setComissao(String(transferencia.comissao));
-          setData(transferencia.data);
-          setDescricao(transferencia.descricao || '');
+          if (cancelled) return;
+          draft.hydrate({ contaOrigemId: transferencia.contaOrigemId,
+            contaDestinoId: transferencia.contaDestinoId, valor: String(transferencia.valor),
+            comissao: String(transferencia.comissao), data: transferencia.data,
+            descricao: transferencia.descricao || '' });
+        } else {
+          draft.hydrate({ contaOrigemId: contasData[0]?.id ?? '', contaDestinoId: contasData[1]?.id ?? contasData[0]?.id ?? '' });
         }
       } catch (error) {
         const resolvedError = await resolveApiError(
@@ -67,16 +75,18 @@ export function TransferenciaFormScreen() {
           router.replace('/login');
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     void loadData();
+    return () => { cancelled = true; };
   }, [router, transferenciaId]);
 
   async function handleSave() {
+    if (sending.current) return;
     const parsedValor = parseDecimalInput(valor);
-    const parsedComissao = parseDecimalInput(comissao);
+    const parsedComissao = comissao.trim() ? parseDecimalInput(comissao) : 0;
 
     if (!contaOrigemId || !contaDestinoId || !Number.isFinite(parsedValor) || !data) {
       setMessage('Preencha origem, destino, valor e data.');
@@ -93,17 +103,28 @@ export function TransferenciaFormScreen() {
       return;
     }
 
+    if (!Number.isFinite(parsedComissao) || parsedComissao < 0) {
+      setMessage('Informe uma comissao valida maior ou igual a zero.');
+      return;
+    }
+
     if (contaOrigemId === contaDestinoId) {
       setMessage('Conta origem e destino devem ser diferentes.');
       return;
     }
 
+    const payload = { comissao: parsedComissao, data, descricao: descricao.trim() || undefined, valor: parsedValor, contaDestinoId, contaOrigemId };
+    const attempt = transferenciaId ? null : prepareTransferIntent(payload, intent);
+    if (!transferenciaId && !attempt) { setMessage('Resultado ainda nao confirmado. Confira o historico antes de alterar esta tentativa.'); return; }
+    if (attempt) draft.setField('intent', attempt);
+    const submitted = draft.capture();
+    sending.current = true;
     try {
       setSaving(true);
       setMessage('');
 
       const updatePayload = {
-        comissao: Number.isFinite(parsedComissao) ? parsedComissao : 0,
+        comissao: parsedComissao,
         data,
         descricao: descricao.trim() || undefined,
         valor: parsedValor,
@@ -112,43 +133,48 @@ export function TransferenciaFormScreen() {
       if (transferenciaId) {
         await updateTransferencia(transferenciaId, updatePayload);
       } else {
-        await createTransferencia({
-          ...updatePayload,
-          contaDestinoId,
-          contaOrigemId,
-        });
+        await createTransferencia({ ...attempt!.payload, idempotencyKey: attempt!.key });
       }
 
+      if (!draft.isCurrent(submitted)) return;
+      draft.clear(submitted);
       router.replace('/transferencias' as never);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
+      if (isUnknownTransferOutcome(error)) {
+        setMessage('Resultado nao confirmado. Confira o historico ou tente confirmar a mesma transferencia.');
+        return;
+      }
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel salvar a transferencia.',
       );
+      if (!draft.isCurrent(submitted)) return;
+      if ((error as { response?: { status?: number } })?.response?.status !== 409) draft.setField('intent', null);
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      sending.current = false;
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   const contaOptions = contas.map((conta) => ({ label: conta.nome, value: conta.id }));
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/transferencias"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          action={<GlassButton label="Voltar" onPress={() => { if (!intent) draft.clear(); router.back(); }} variant="ghost" />}
           eyebrow="Movimentacoes"
           subtitle="Registre transferencias entre contas."
           title={transferenciaId ? 'Editar transferencia' : 'Nova transferencia'}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading ? (
         <GlassPanel>
@@ -179,6 +205,7 @@ export function TransferenciaFormScreen() {
 
           <GlassField label="Valor">
             <GlassTextInput
+              accessibilityLabel="Valor da transferencia"
               keyboardType="decimal-pad"
               value={valor}
               onChangeText={setValor}
@@ -187,6 +214,7 @@ export function TransferenciaFormScreen() {
 
           <GlassField label="Comissao">
             <GlassTextInput
+              accessibilityLabel="Comissao da transferencia"
               keyboardType="decimal-pad"
               value={comissao}
               onChangeText={setComissao}
@@ -194,13 +222,26 @@ export function TransferenciaFormScreen() {
           </GlassField>
 
           <GlassField label="Data">
-            <GlassTextInput value={data} onChangeText={setData} />
+            <GlassTextInput
+              accessibilityLabel="Data da transferencia"
+              value={data}
+              onChangeText={setData}
+            />
           </GlassField>
 
           <GlassField label="Descricao">
-            <GlassTextInput value={descricao} onChangeText={setDescricao} />
+            <GlassTextInput
+              accessibilityLabel="Descricao da transferencia"
+              value={descricao}
+              onChangeText={setDescricao}
+            />
           </GlassField>
 
+          {intent ? <>
+            <Text style={styles.errorMessage}>Resultado ainda nao confirmado. Confira o historico antes de iniciar outra transferencia.</Text>
+            <GlassButton label="Conferi o historico; iniciar outra transferencia" variant="ghost"
+              disabled={saving} onPress={() => { draft.setField('intent', null); setMessage(''); }} />
+          </> : null}
           {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
           <GlassButton
             label={saving ? 'Salvando...' : 'Salvar transferencia'}
@@ -209,7 +250,7 @@ export function TransferenciaFormScreen() {
           />
         </GlassPanel>
       )}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

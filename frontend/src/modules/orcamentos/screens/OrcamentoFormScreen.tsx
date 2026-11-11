@@ -1,11 +1,11 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassPanel,
@@ -24,14 +24,25 @@ export function OrcamentoFormScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const orcamentoId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [mesReferencia, setMesReferencia] = useState(getCurrentMonthReference());
-  const [valorPlanejado, setValorPlanejado] = useState('');
+  const draft = useFinancialDraft('budget/' + (orcamentoId ?? 'new'), {
+    valorPlanejado: '',
+    ...(orcamentoId ? {} : { mesReferencia: getCurrentMonthReference() }),
+  });
+  const [lockedFields, setLockedFields] = useState({ mesReferencia: getCurrentMonthReference() });
+  const valorPlanejado = draft.fields.valorPlanejado;
+  const setValorPlanejado = (value: string) => draft.setField("valorPlanejado", value);
+  const mesReferencia = orcamentoId ? lockedFields.mesReferencia : (draft.fields.mesReferencia ?? getCurrentMonthReference());
+  const setMesReferencia = (value: string) => { if (orcamentoId) setLockedFields(current => ({...current, mesReferencia: value})); else draft.setField("mesReferencia", value); };
+
+
   const [loading, setLoading] = useState(!!orcamentoId);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     async function loadOrcamento() {
+    const loadScope = draft.capture();
+    if (!draft.isCurrent(loadScope)) return;
       if (!orcamentoId) {
         return;
       }
@@ -39,19 +50,22 @@ export function OrcamentoFormScreen() {
       try {
         setLoading(true);
         const orcamento = await getOrcamentoById(orcamentoId);
+        if (!draft.isCurrent(loadScope)) return;
         setMesReferencia(orcamento.mesReferencia);
-        setValorPlanejado(String(orcamento.valorPlanejado));
+        draft.hydrate({ valorPlanejado: String(orcamento.valorPlanejado) });
       } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
         const resolvedError = await resolveApiError(
           error,
           'Nao foi possivel carregar o orcamento.',
         );
+        if (!draft.isCurrent(loadScope)) return;
         setMessage(resolvedError.message);
         if (resolvedError.unauthorized) {
           router.replace('/login');
         }
       } finally {
-        setLoading(false);
+        if (draft.isCurrent()) setLoading(false);
       }
     }
 
@@ -59,6 +73,8 @@ export function OrcamentoFormScreen() {
   }, [orcamentoId, router]);
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     const parsedValue = parseDecimalInput(valorPlanejado);
 
     if (!mesReferencia || !Number.isFinite(parsedValue)) {
@@ -84,34 +100,39 @@ export function OrcamentoFormScreen() {
         });
       }
 
+      if (!draft.isCurrent(submitted)) return;
+
+      draft.clear(submitted);
+
       router.replace('/orcamentos' as never);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(
         error,
         'Nao foi possivel salvar o orcamento.',
       );
+      if (!draft.isCurrent(submitted)) return;
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/orcamentos"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          action={<GlassButton label="Voltar" onPress={() => { draft.clear(); router.back(); }} variant="ghost" />}
           eyebrow="Planejamento"
           subtitle="Defina o limite planejado para o mes."
           title={orcamentoId ? 'Editar orcamento' : 'Novo orcamento'}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading ? (
         <GlassPanel>
@@ -148,7 +169,7 @@ export function OrcamentoFormScreen() {
           />
         </GlassPanel>
       )}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

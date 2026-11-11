@@ -195,7 +195,7 @@ describe('Auth Flow - Login/Logout', () => {
       });
       mockAuthStorage.clearSession.mockResolvedValue(undefined);
 
-      await authService.resetPassword({ novaSenha: 'newpassword123' });
+      await authService.resetPassword({ novaSenha: 'newpassword123', senhaAtual: 'oldpassword' });
       await authStorage.clearSession();
 
       expect(mockAuthStorage.clearSession).toHaveBeenCalled();
@@ -208,7 +208,7 @@ describe('Auth Flow - Login/Logout', () => {
       mockAuthStorage.clearSession.mockResolvedValue(undefined);
 
       try {
-        await authService.resetPassword({ novaSenha: 'newpassword123' });
+        await authService.resetPassword({ novaSenha: 'newpassword123', senhaAtual: 'oldpassword' });
       } catch (error: any) {
         if (error?.response?.status === 401) {
           await authStorage.clearSession();

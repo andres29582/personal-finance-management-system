@@ -2,14 +2,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
 } from '../../../shared/ui';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import {
   deactivateAlerta,
   listAlertas,
@@ -86,18 +85,16 @@ export function AlertasScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/alertas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Novo" onPress={() => router.push('/alertas-form' as never)} />}
           eyebrow="Monitoramento"
           subtitle="Alertas in-app para metas, dividas e limite de gasto."
           title="Alertas"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {message && alertas.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
@@ -122,9 +119,7 @@ export function AlertasScreen() {
       {!loading && !message && !alertas.length ? (
         <GlassStatusCard
           title="Nenhum alerta cadastrado"
-          description="Crie alertas para acompanhar metas, dividas e limites."
-          actionLabel="Novo alerta"
-          onActionPress={() => router.push('/alertas-form' as never)}
+          description="Use o menu + para criar alertas e acompanhar metas, dividas e limites."
         />
       ) : null}
 
@@ -165,7 +160,7 @@ export function AlertasScreen() {
           </GlassPanel>
         ))
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

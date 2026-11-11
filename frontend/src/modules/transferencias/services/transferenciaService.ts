@@ -1,12 +1,13 @@
 import {
   CreateTransferenciaRequestDto,
   Transferencia,
+  FindTransferenciasParams,
   UpdateTransferenciaRequestDto,
 } from '../types/transferencia';
 import { api } from '../../../shared/services/api';
 
-export async function listTransferencias(): Promise<Transferencia[]> {
-  const response = await api.get<Transferencia[]>('/transferencias');
+export async function listTransferencias(params?: FindTransferenciasParams): Promise<Transferencia[]> {
+  const response = await api.get<Transferencia[]>('/transferencias', { params });
   return response.data;
 }
 

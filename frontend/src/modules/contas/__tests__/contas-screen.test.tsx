@@ -59,7 +59,7 @@ describe('ContasScreen', () => {
     });
   });
 
-  it('navigates to create and edit account screens', async () => {
+  it('uses global create access and keeps edit contextual', async () => {
     mockListContas.mockResolvedValue([conta]);
 
     render(<ContasScreen />);
@@ -68,7 +68,9 @@ describe('ContasScreen', () => {
       expect(screen.getByText('Conta Corrente')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText('Nova'));
+    expect(screen.queryByText('Nova')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Abrir ações rápidas'));
+    fireEvent.press(screen.getByLabelText('Nova conta'));
     expect(mockPush).toHaveBeenCalledWith('/contas-create');
 
     fireEvent.press(screen.getByText('Editar'));
@@ -76,6 +78,24 @@ describe('ContasScreen', () => {
       pathname: '/contas-edit',
       params: { id: 'conta1' },
     });
+  });
+
+  it('opens the user profile from the mobile shell', async () => {
+    mockListContas.mockResolvedValue([]);
+
+    render(<ContasScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nenhuma conta encontrada')).toBeTruthy();
+    });
+
+    expect(
+      screen.getByText(
+        'Use o menu + para criar a primeira conta e comecar a organizar seu saldo.',
+      ),
+    ).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
   });
 
   it('deactivates account after confirmation and reloads list', async () => {

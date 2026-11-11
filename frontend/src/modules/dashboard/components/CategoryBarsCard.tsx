@@ -16,13 +16,13 @@ export function CategoryBarsCard({ items, onOpenHistory }: CategoryBarsCardProps
   return (
     <SectionCard
       accessibilityLabel="Alternar gastos por categoria"
-      accent="magenta"
+      accent="cyan"
       title="Gastos por categoria"
       onPress={() => setExpanded((current) => !current)}
       action={
         <View style={styles.actions}>
           <NeonIconButton
-            accent="magenta"
+            accent="cyan"
             icon="history"
             label="Historico categorias"
             onPress={onOpenHistory}
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   fill: {
-    backgroundColor: DashboardTheme.colors.magenta,
+    backgroundColor: DashboardTheme.colors.aquateal[500],
     borderRadius: DashboardTheme.radius.xs,
     height: '100%',
     minWidth: 8,

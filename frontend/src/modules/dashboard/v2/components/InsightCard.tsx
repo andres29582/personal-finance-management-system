@@ -22,24 +22,24 @@ export function InsightCard({
 }: InsightCardProps) {
   return (
     <SectionCard compact style={styles.card}>
-      <View style={styles.header}>
+      <View style={styles.row}>
         <View style={[styles.iconFrame, toneStyles[tone]]}>
           <MaterialCommunityIcons color={toneColors[tone]} name={icon} size={20} />
         </View>
-        <View style={styles.titleGroup}>
-          <Text numberOfLines={2} style={styles.title}>
+        <View style={styles.copy}>
+          <Text numberOfLines={1} style={styles.title}>
             {title}
           </Text>
-          {value ? (
-            <Text adjustsFontSizeToFit numberOfLines={1} style={styles.value}>
-              {value}
-            </Text>
-          ) : null}
+          <Text numberOfLines={2} style={styles.description}>
+            {description}
+          </Text>
         </View>
+        {value ? (
+          <Text adjustsFontSizeToFit numberOfLines={1} style={styles.value}>
+            {value}
+          </Text>
+        ) : null}
       </View>
-      <Text numberOfLines={3} style={styles.description}>
-        {description}
-      </Text>
     </SectionCard>
   );
 }
@@ -53,19 +53,17 @@ const toneColors = {
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 132,
-    minWidth: 220,
+    minWidth: 0,
   },
   description: {
     color: FinanceTheme.colors.textSubtle,
-    fontSize: FinanceTheme.typography.caption,
-    lineHeight: 19,
+    fontSize: FinanceTheme.typography.micro,
+    lineHeight: 16,
   },
-  header: {
+  row: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: FinanceTheme.spacing.sm,
-    marginBottom: FinanceTheme.spacing.sm,
   },
   iconFrame: {
     alignItems: 'center',
@@ -80,15 +78,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 18,
   },
-  titleGroup: {
+  copy: {
     flex: 1,
     minWidth: 0,
   },
   value: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.micro,
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.body,
     fontWeight: '800',
-    marginTop: FinanceTheme.spacing.xxs,
+    maxWidth: 108,
   },
 });
 

@@ -30,6 +30,8 @@ export type UpdateTransacaoRequestDto =
   };
 
 export type FindTransacoesParams = {
+  limit?: number;
+  offset?: number;
   categoriaId?: string;
   contaId?: string;
   mes?: string;

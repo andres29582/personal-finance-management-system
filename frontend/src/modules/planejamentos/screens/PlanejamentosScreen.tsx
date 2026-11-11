@@ -1,11 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -89,9 +88,12 @@ export function PlanejamentosScreen() {
   );
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/planejamentos"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      onRefresh={loadPlanejamentos}
+      refreshing={loading && planejamentos.length > 0}
+      pageHeader={
         <FinanceAppHeader
           action={
             <GlassButton
@@ -104,8 +106,6 @@ export function PlanejamentosScreen() {
           title="Planejamentos"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassField label="Status">
@@ -201,7 +201,7 @@ export function PlanejamentosScreen() {
             </GlassPanel>
           ))
         : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

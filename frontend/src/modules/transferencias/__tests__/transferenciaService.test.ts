@@ -38,9 +38,9 @@ describe('transferenciaService', () => {
         data: mockTransferencias,
       });
 
-      const result = await listTransferencias();
+      const result = await listTransferencias({ limit: 50, offset: 100 });
 
-      expect(mockedApi.get).toHaveBeenCalledWith('/transferencias');
+      expect(mockedApi.get).toHaveBeenCalledWith('/transferencias', { params: { limit: 50, offset: 100 } });
       expect(result).toEqual(mockTransferencias);
     });
 

@@ -272,6 +272,17 @@ describe('PlanejamentoDetailScreen', () => {
     );
   });
 
+  it('abre o perfil pelo shell movel', async () => {
+    render(<PlanejamentoDetailScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Dados gerais')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Perfil'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+  });
+
   it('carrega e compoe as seis secoes do detalhe', async () => {
     mockListGastosPlanejamento.mockResolvedValue([makeGasto()]);
     mockListAcertosPlanejamento.mockResolvedValue([makeAcerto()]);

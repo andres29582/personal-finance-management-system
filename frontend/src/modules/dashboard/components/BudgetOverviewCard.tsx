@@ -17,11 +17,11 @@ export function BudgetOverviewCard({
 
   return (
     <SectionCard
-      accent="mixed"
+      accent="cyan"
       title="Orcamento do mes"
       action={
         <NeonIconButton
-          accent="mixed"
+          accent="cyan"
           icon="cash-multiple"
           label="Orcamentos"
           onPress={onOpenBudgets}

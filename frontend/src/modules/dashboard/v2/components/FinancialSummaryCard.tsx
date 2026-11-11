@@ -1,31 +1,31 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FinanceAccent, FinanceTheme } from '../../../../shared/styles/financeTheme';
 import { SectionCard } from './SectionCard';
 
 type DashboardV2IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+type SummaryMetric = { label: string; value: string };
 
 type FinancialSummaryCardProps = {
   accent?: FinanceAccent;
-  helperText?: string;
   icon: DashboardV2IconName;
   label: string;
-  trendLabel?: string;
-  trendTone?: 'negative' | 'neutral' | 'positive';
+  monthlyMetrics: SummaryMetric[];
   value: string;
 };
 
 export function FinancialSummaryCard({
   accent = 'cyan',
-  helperText,
   icon,
   label,
-  trendLabel,
-  trendTone = 'neutral',
+  monthlyMetrics,
   value,
 }: FinancialSummaryCardProps) {
+  const [balanceVisible, setBalanceVisible] = useState(true);
+
   return (
-    <SectionCard accent={accent} compact style={styles.card}>
+    <SectionCard accent={accent} style={styles.card}>
       <View style={styles.header}>
         <View style={[styles.iconFrame, accentBackgrounds[accent]]}>
           <MaterialCommunityIcons
@@ -34,26 +34,45 @@ export function FinancialSummaryCard({
             size={22}
           />
         </View>
-        {trendLabel ? (
-          <View style={[styles.trendPill, trendStyles[trendTone]]}>
-            <Text style={[styles.trendText, trendTextStyles[trendTone]]}>
-              {trendLabel}
-            </Text>
-          </View>
-        ) : null}
+        <Text numberOfLines={1} style={styles.label}>{label}</Text>
       </View>
 
-      <Text numberOfLines={1} style={styles.label}>
-        {label}
-      </Text>
-      <Text adjustsFontSizeToFit numberOfLines={1} style={styles.value}>
-        {value}
-      </Text>
-      {helperText ? (
-        <Text numberOfLines={2} style={styles.helperText}>
-          {helperText}
+      <View style={styles.balanceRow}>
+        <Text adjustsFontSizeToFit numberOfLines={1} style={styles.value}>
+          {balanceVisible ? value : '••••••'}
         </Text>
-      ) : null}
+        <Pressable
+          accessibilityLabel={balanceVisible ? 'Ocultar saldo' : 'Mostrar saldo'}
+          accessibilityRole="button"
+          onPress={() => setBalanceVisible((visible) => !visible)}
+          style={({ pressed }) => [
+            styles.visibilityButton,
+            pressed ? styles.visibilityButtonPressed : null,
+          ]}
+        >
+          <MaterialCommunityIcons
+            color={FinanceTheme.colors.aquateal[400]}
+            name={balanceVisible ? 'eye-off-outline' : 'eye-outline'}
+            size={22}
+          />
+        </Pressable>
+      </View>
+
+      <View style={styles.metricsRow}>
+        {monthlyMetrics.map((metric, index) => (
+          <View
+            key={metric.label}
+            style={[styles.metric, index > 0 ? styles.metricSeparated : null]}
+          >
+            <Text numberOfLines={1} style={styles.metricLabel}>
+              {metric.label}
+            </Text>
+            <Text adjustsFontSizeToFit numberOfLines={1} style={styles.metricValue}>
+              {metric.value}
+            </Text>
+          </View>
+        ))}
+      </View>
     </SectionCard>
   );
 }
@@ -66,20 +85,23 @@ const accentColors = {
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 156,
-    minWidth: 220,
+    minWidth: 0,
   },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: FinanceTheme.spacing.md,
+    gap: FinanceTheme.spacing.sm,
   },
-  helperText: {
-    color: FinanceTheme.colors.textSubtle,
-    fontSize: FinanceTheme.typography.caption,
-    lineHeight: 18,
+  balanceRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: FinanceTheme.spacing.xs,
     marginTop: FinanceTheme.spacing.xs,
+  },
+  label: {
+    color: FinanceTheme.colors.textMuted,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '700',
   },
   iconFrame: {
     alignItems: 'center',
@@ -88,29 +110,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 42,
   },
-  label: {
-    color: FinanceTheme.colors.textMuted,
-    fontSize: FinanceTheme.typography.caption,
-    fontWeight: '700',
-    marginBottom: FinanceTheme.spacing.xs,
-  },
-  trendPill: {
-    borderRadius: FinanceTheme.radius.sm,
-    paddingHorizontal: FinanceTheme.spacing.xs,
-    paddingVertical: FinanceTheme.spacing.xxs,
-  },
-  trendText: {
-    fontSize: FinanceTheme.typography.micro,
-    fontWeight: '800',
+  metricsRow: {
+    borderTopColor: FinanceTheme.colors.border,
+    borderTopWidth: FinanceTheme.borderWidth.hairline,
+    flexDirection: 'row',
+    marginTop: FinanceTheme.spacing.md,
+    paddingTop: FinanceTheme.spacing.sm,
   },
   value: {
     color: FinanceTheme.colors.text,
-    fontSize: FinanceTheme.typography.heading,
+    flex: 1,
+    fontSize: FinanceTheme.typography.hero,
     fontWeight: '900',
-    lineHeight: 26,
+    lineHeight: 40,
+    minWidth: 0,
+  },
+  visibilityButton: {
+    alignItems: 'center',
+    backgroundColor: FinanceTheme.colors.glassSubtle,
+    borderColor: FinanceTheme.colors.border,
+    borderRadius: FinanceTheme.radius.md,
+    borderWidth: FinanceTheme.borderWidth.hairline,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  visibilityButtonPressed: {
+    opacity: FinanceTheme.opacity.pressed,
+  },
+  metric: {
+    flex: 1,
+    gap: FinanceTheme.spacing.xxs,
+    minWidth: 0,
+    paddingHorizontal: FinanceTheme.spacing.xs,
+  },
+  metricLabel: {
+    color: FinanceTheme.colors.textSubtle,
+    fontSize: FinanceTheme.typography.micro,
+    fontWeight: '700',
+  },
+  metricValue: {
+    color: FinanceTheme.colors.text,
+    fontSize: FinanceTheme.typography.caption,
+    fontWeight: '800',
+  },
+  metricSeparated: {
+    borderLeftColor: FinanceTheme.colors.border,
+    borderLeftWidth: FinanceTheme.borderWidth.hairline,
   },
 });
-
 const accentBackgrounds = StyleSheet.create({
   cyan: {
     backgroundColor: FinanceTheme.colors.cyanSoft,
@@ -120,29 +168,5 @@ const accentBackgrounds = StyleSheet.create({
   },
   mixed: {
     backgroundColor: 'rgba(183, 140, 255, 0.18)',
-  },
-});
-
-const trendStyles = StyleSheet.create({
-  negative: {
-    backgroundColor: 'rgba(255, 122, 144, 0.14)',
-  },
-  neutral: {
-    backgroundColor: FinanceTheme.colors.glassSubtle,
-  },
-  positive: {
-    backgroundColor: 'rgba(61, 220, 151, 0.14)',
-  },
-});
-
-const trendTextStyles = StyleSheet.create({
-  negative: {
-    color: FinanceTheme.colors.danger,
-  },
-  neutral: {
-    color: FinanceTheme.colors.textMuted,
-  },
-  positive: {
-    color: FinanceTheme.colors.success,
   },
 });

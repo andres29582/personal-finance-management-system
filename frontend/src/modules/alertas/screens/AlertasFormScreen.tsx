@@ -1,3 +1,4 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -7,11 +8,10 @@ import { listMetas } from '../../metas/services/metaService';
 import { Meta } from '../../metas/types/meta';
 import { listOrcamentos } from '../../orcamentos/services/orcamentoService';
 import { Orcamento } from '../../orcamentos/types/orcamento';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -26,9 +26,22 @@ export function AlertasFormScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const alertaId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [tipo, setTipo] = useState<TipoAlerta>('vencimento_meta');
-  const [referenciaId, setReferenciaId] = useState('');
-  const [diasAnticipacion, setDiasAnticipacion] = useState('3');
+  const draft = useFinancialDraft('alert/' + (alertaId ?? 'new'), {
+    diasAnticipacion: '3',
+    ...(alertaId
+      ? {}
+      : { tipo: 'vencimento_meta' as TipoAlerta, referenciaId: '' }),
+  });
+  const [lockedFields, setLockedFields] = useState({ tipo: 'vencimento_meta' as TipoAlerta, referenciaId: '' });
+  const diasAnticipacion = draft.fields.diasAnticipacion;
+  const setDiasAnticipacion = (value: string) => draft.setField("diasAnticipacion", value);
+  const tipo = alertaId ? lockedFields.tipo : (draft.fields.tipo ?? 'vencimento_meta' as TipoAlerta);
+  const setTipo = (value: TipoAlerta) => { if (alertaId) setLockedFields(current => ({...current, tipo: value})); else draft.setField("tipo", value); };
+  const referenciaId = alertaId ? lockedFields.referenciaId : (draft.fields.referenciaId ?? '');
+  const setReferenciaId = (value: string) => { if (alertaId) setLockedFields(current => ({...current, referenciaId: value})); else draft.setField("referenciaId", value); };
+
+
+
   const [metas, setMetas] = useState<Meta[]>([]);
   const [dividas, setDividas] = useState<Divida[]>([]);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
@@ -38,6 +51,8 @@ export function AlertasFormScreen() {
 
   useEffect(() => {
     async function loadData() {
+    const loadScope = draft.capture();
+    if (!draft.isCurrent(loadScope)) return;
       try {
         setLoading(true);
         const [metasData, dividasData, orcamentosData] = await Promise.all([
@@ -45,24 +60,28 @@ export function AlertasFormScreen() {
           listDividas(),
           listOrcamentos(),
         ]);
+        if (!draft.isCurrent(loadScope)) return;
         setMetas(metasData);
         setDividas(dividasData);
         setOrcamentos(orcamentosData);
 
         if (alertaId) {
           const alerta = await getAlertaById(alertaId);
+          if (!draft.isCurrent(loadScope)) return;
           setTipo(alerta.tipo);
           setReferenciaId(alerta.referenciaId);
-          setDiasAnticipacion(String(alerta.diasAnticipacion));
+          draft.hydrate({ diasAnticipacion: String(alerta.diasAnticipacion) });
         }
       } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
         const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar o alerta.');
+        if (!draft.isCurrent(loadScope)) return;
         setMessage(resolvedError.message);
         if (resolvedError.unauthorized) {
           router.replace('/login');
         }
       } finally {
-        setLoading(false);
+        if (draft.isCurrent()) setLoading(false);
       }
     }
 
@@ -89,6 +108,8 @@ export function AlertasFormScreen() {
     'Referência indisponível';
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     const parsedDays = Number(diasAnticipacion);
 
     if (
@@ -114,31 +135,36 @@ export function AlertasFormScreen() {
         });
       }
 
+      if (!draft.isCurrent(submitted)) return;
+
+      draft.clear(submitted);
+
       router.replace('/alertas' as never);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(error, 'Nao foi possivel salvar o alerta.');
+      if (!draft.isCurrent(submitted)) return;
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/alertas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          action={<GlassButton label="Voltar" onPress={() => { draft.clear(); router.back(); }} variant="ghost" />}
           eyebrow="Monitoramento"
           subtitle="Configure lembretes para metas, dividas e limites."
           title={alertaId ? 'Editar alerta' : 'Novo alerta'}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading ? (
         <GlassPanel>
@@ -205,7 +231,7 @@ export function AlertasFormScreen() {
           />
         </GlassPanel>
       )}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

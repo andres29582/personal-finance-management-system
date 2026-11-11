@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
@@ -55,16 +54,18 @@ export function AuditLogsScreen() {
   }, [router]);
 
   useEffect(() => {
-    void load(0);
+    const timeout = setTimeout(() => void load(0), 0);
+    return () => clearTimeout(timeout);
   }, [load]);
 
   const hasPrev = offset > 0;
   const hasNext = offset + items.length < total;
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/audit-logs"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
           action={<GlassButton label="Atualizar" onPress={() => void load(offset)} variant="ghost" />}
           eyebrow="Seguranca e LGPD"
@@ -72,8 +73,6 @@ export function AuditLogsScreen() {
           title="Log de auditoria"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {message && items.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
@@ -124,7 +123,7 @@ export function AuditLogsScreen() {
           onPress={() => void load(offset + pageSize)}
         />
       </View>
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

@@ -1,14 +1,19 @@
+import { logout } from '../services/logoutCoordinator';
+jest.mock('../services/logoutCoordinator');
 import { describe, expect, it, beforeEach, jest } from '@jest/globals';
 import * as authService from '../services/authService';
-import { api } from '../../../shared/services/api';
+import { api, refreshOwnedSession } from '../../../shared/services/api';
+import * as authStorage from '../../../../storage/authStorage';
 
 jest.mock('../../../shared/services/api');
+jest.mock('../../../../storage/authStorage');
 
 describe('authService', () => {
   const mockApi = api as jest.Mocked<typeof api>;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(authStorage.getSessionSnapshot).mockResolvedValue({ generation: 0, incarnation: 'service-origin', revision: 0, sessionId: 'service-session', accessToken: 'test', refreshToken: 'old_refresh_token' });
   });
 
   describe('login', () => {
@@ -174,20 +179,20 @@ describe('authService', () => {
         refresh_token: 'new_refresh_token',
       };
 
-      mockApi.post.mockResolvedValue({ data: mockResponse });
+      jest.mocked(refreshOwnedSession).mockResolvedValue(mockResponse);
 
       const result = await authService.refreshSession({
         refreshToken: 'old_refresh_token',
       });
 
       expect(result).toEqual(mockResponse);
-      expect(mockApi.post).toHaveBeenCalledWith('/auth/refresh', {
-        refreshToken: 'old_refresh_token',
-      });
+      expect(refreshOwnedSession).toHaveBeenCalledWith(expect.objectContaining({ refreshToken: 'old_refresh_token' }));
+      expect(mockApi.post).not.toHaveBeenCalled();
     });
 
     it('debe rechazar si refresh_token es inválido o expirado', async () => {
-      mockApi.post.mockRejectedValue({
+      jest.mocked(authStorage.getSessionSnapshot).mockResolvedValue({ generation: 0, incarnation: 'service-origin', revision: 0, sessionId: 'service-session', accessToken: 'test', refreshToken: 'invalid_refresh_token' });
+      jest.mocked(refreshOwnedSession).mockRejectedValue({
         response: {
           status: 401,
           data: { error: { code: 'AUTH_INVALID_REFRESH_TOKEN', message: 'Refresh token invalido' } },
@@ -208,33 +213,14 @@ describe('authService', () => {
   });
 
   describe('logoutSession', () => {
-    it('debe llamar endpoint de logout', async () => {
-      const mockResponse = {
-        message: 'Logged out successfully',
-      };
-
-      mockApi.post.mockResolvedValue({ data: mockResponse });
-
-      const result = await authService.logoutSession();
-
-      expect(result).toEqual(mockResponse);
-      expect(mockApi.post).toHaveBeenCalledWith('/auth/logout');
+    it('returns success only when local durability and remote confirmation succeed', async () => {
+      jest.mocked(logout).mockReturnValue({ generation: 1, completion: Promise.resolve({ localDurable: true, cleanupComplete: true, remote: 'confirmed' }) });
+      expect(await authService.logoutSession()).toEqual({ message: 'Logout realizado com sucesso.' });
+      expect(mockApi.post).not.toHaveBeenCalled();
     });
-
-    it('debe rechazar si logout falla', async () => {
-      mockApi.post.mockRejectedValue({
-        response: {
-          status: 500,
-          data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
-        },
-      });
-
-      await expect(authService.logoutSession()).rejects.toMatchObject({
-        response: {
-          status: 500,
-          data: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Erro interno no servidor.' } },
-        },
-      });
+    it('does not misreport unconfirmed revocation as success', async () => {
+      jest.mocked(logout).mockReturnValue({ generation: 1, completion: Promise.resolve({ localDurable: true, cleanupComplete: true, remote: 'unconfirmed' }) });
+      await expect(authService.logoutSession()).rejects.toThrow('Logout confirmation unavailable.');
     });
   });
 
@@ -247,11 +233,13 @@ describe('authService', () => {
       mockApi.post.mockResolvedValue({ data: mockResponse });
 
       const result = await authService.resetPassword({
+        senhaAtual: 'oldpassword',
         novaSenha: 'newpassword123',
       });
 
       expect(result).toEqual(mockResponse);
       expect(mockApi.post).toHaveBeenCalledWith('/auth/reset-password', {
+        senhaAtual: 'oldpassword',
         novaSenha: 'newpassword123',
       });
     });
@@ -265,7 +253,7 @@ describe('authService', () => {
       });
 
       await expect(
-        authService.resetPassword({ novaSenha: 'newpassword123' })
+        authService.resetPassword({ novaSenha: 'newpassword123', senhaAtual: 'oldpassword' })
       ).rejects.toMatchObject({
         response: {
           status: 401,

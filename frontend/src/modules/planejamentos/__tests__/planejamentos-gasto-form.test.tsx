@@ -310,6 +310,14 @@ describe('PlanejamentoGastoFormScreen', () => {
     mockUpdateGastoPlanejamento.mockResolvedValue(makeGasto());
   });
 
+  it('abre o perfil pelo shell movel', async () => {
+    await renderReady();
+
+    fireEvent.press(screen.getByText('Perfil'));
+
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+  }, 10_000);
+
   it('bloqueia envio sem descricao', async () => {
     await renderReady();
 

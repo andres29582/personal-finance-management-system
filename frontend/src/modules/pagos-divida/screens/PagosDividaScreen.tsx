@@ -1,3 +1,5 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
+import type { PaymentFieldErrors } from '../validators/pagoDividaForm';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -7,11 +9,10 @@ import { listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
 import { getDividaById } from '../../dividas/services/dividaService';
 import { Divida } from '../../dividas/types/divida';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -43,14 +44,33 @@ export function PagosDividaScreen() {
   const [pagos, setPagos] = useState<PagoDivida[]>([]);
   const [contas, setContas] = useState<Conta[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [contaId, setContaId] = useState('');
-  const [categoriaId, setCategoriaId] = useState('');
-  const [valor, setValor] = useState('');
-  const [data, setData] = useState(getLocalDateInputValue());
-  const [descricao, setDescricao] = useState('');
+  const draft = useFinancialDraft('payment/' + (dividaId ?? 'missing'), {
+    contaId: '',
+    categoriaId: '',
+    valor: '',
+    data: getLocalDateInputValue(),
+    descricao: '',
+  });
+  const contaId = draft.fields.contaId;
+  const setContaId = (value: string) => draft.setField('contaId', value);
+  const categoriaId = draft.fields.categoriaId;
+  const setCategoriaId = (value: string) =>
+    draft.setField('categoriaId', value);
+  const valor = draft.fields.valor;
+  const setValor = (value: string) => draft.setField('valor', value);
+  const data = draft.fields.data;
+  const setData = (value: string) => draft.setField('data', value);
+  const descricao = draft.fields.descricao;
+  const setDescricao = (value: string) => draft.setField('descricao', value);
+
+
+
+
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<PaymentFieldErrors>({});
 
   const categoriasDespesa = useMemo(
     () => categorias.filter((categoria) => categoria.tipo === 'despesa'),
@@ -59,9 +79,11 @@ export function PagosDividaScreen() {
   const paymentBlocked = divida?.ativa === false;
 
   const loadPayments = useCallback(async () => {
+    const loadScope = draft.capture();
+    if (!draft.isCurrent(loadScope)) return;
     if (!dividaId) {
       setMessage('Divida invalida.');
-      setLoading(false);
+      if (draft.isCurrent()) setLoading(false);
       return;
     }
 
@@ -74,20 +96,22 @@ export function PagosDividaScreen() {
         listContas(),
         listCategorias('despesa'),
       ]);
+      if (!draft.isCurrent(loadScope)) return;
       setDivida(dividaData);
       setPagos(pagosData);
       setContas(contasData);
       setCategorias(categoriasData);
-      setContaId((current) => current || contasData[0]?.id || '');
-      setCategoriaId((current) => current || categoriasData[0]?.id || '');
+      draft.hydrate({ contaId: contasData[0]?.id || '', categoriaId: categoriasData[0]?.id || '' });
     } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
       const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar pagamentos.');
+      if (!draft.isCurrent(loadScope)) return;
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setLoading(false);
+      if (draft.isCurrent()) setLoading(false);
     }
   }, [dividaId, router]);
 
@@ -104,6 +128,8 @@ export function PagosDividaScreen() {
   }
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     const formValues = {
       categoriaId,
       contaId,
@@ -121,27 +147,36 @@ export function PagosDividaScreen() {
     const validation = validatePagoDividaForm(formValues);
 
     if (!validation.valid) {
+      setFieldErrors(validation.fieldErrors);
       setMessage(validation.message);
       return;
     }
 
     try {
+      setFieldErrors({});
       setSaving(true);
       setMessage('');
       await createPagoDivida(
         buildPagoDividaPayload(formValues, validation.parsedValor),
       );
+      if (!draft.isCurrent(submitted)) return;
       setValor('');
       setDescricao('');
-      await reloadPayments();
+      draft.clear();
+      const completed = draft.capture();
+      const updatedPayments = await listPagosByDivida(dividaId!);
+      if (!draft.isCurrent(completed)) return;
+      setPagos(updatedPayments);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(error, 'Nao foi possivel registrar o pagamento.');
+      if (!draft.isCurrent(submitted)) return;
       setMessage(resolvePaymentErrorMessage(resolvedError));
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
@@ -172,18 +207,17 @@ export function PagosDividaScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/dividas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Voltar" onPress={() => router.replace('/dividas' as never)} variant="ghost" />}
+          action={<GlassButton label="Voltar" onPress={() => { draft.clear(); router.replace('/dividas' as never); }} variant="ghost" />}
           eyebrow="Compromissos"
           subtitle="Registre pagamentos e acompanhe o historico da divida."
           title="Pagamentos da divida"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading ? (
         <GlassStatusCard
@@ -201,7 +235,7 @@ export function PagosDividaScreen() {
             />
           ) : (
             <GlassPanel>
-              <GlassField label="Conta">
+              <GlassField label="Conta" error={fieldErrors.contaId}>
                 <GlassOptionGroup
                   options={contas.map((conta) => ({ label: conta.nome, value: conta.id }))}
                   value={contaId}
@@ -209,7 +243,7 @@ export function PagosDividaScreen() {
                 />
               </GlassField>
 
-              <GlassField label="Categoria">
+              <GlassField label="Categoria" error={fieldErrors.categoriaId}>
                 <GlassOptionGroup
                   options={categoriasDespesa.map((categoria) => ({
                     label: categoria.nome,
@@ -220,23 +254,25 @@ export function PagosDividaScreen() {
                 />
               </GlassField>
 
-              <GlassField label="Valor">
+              <GlassField label="Valor" error={fieldErrors.valor}>
                 <GlassTextInput
+                  accessibilityLabel="Valor do pagamento"
+                  accessibilityHint={fieldErrors.valor}
                   keyboardType="decimal-pad"
                   value={valor}
-                  onChangeText={setValor}
+                  onChangeText={(value) => { setValor(value); setFieldErrors(errors => ({...errors, valor: undefined})); }}
                 />
               </GlassField>
 
-              <GlassField label="Data">
-                <GlassTextInput value={data} onChangeText={setData} />
+              <GlassField label="Data" error={fieldErrors.data}>
+                <GlassTextInput accessibilityLabel="Data do pagamento" accessibilityHint={fieldErrors.data} value={data} onChangeText={(value) => { setData(value); setFieldErrors(errors => ({...errors, data: undefined})); }} />
               </GlassField>
 
               <GlassField label="Descricao">
-                <GlassTextInput value={descricao} onChangeText={setDescricao} />
+                <GlassTextInput accessibilityLabel="Descricao do pagamento" value={descricao} onChangeText={setDescricao} />
               </GlassField>
 
-              {message ? <Text style={styles.errorMessage}>{message}</Text> : null}
+              {message ? <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.errorMessage}>{message}</Text> : null}
               <GlassButton
                 label={saving ? 'Salvando...' : 'Registrar pagamento'}
                 onPress={handleSave}
@@ -268,7 +304,7 @@ export function PagosDividaScreen() {
           )}
         </>
       )}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

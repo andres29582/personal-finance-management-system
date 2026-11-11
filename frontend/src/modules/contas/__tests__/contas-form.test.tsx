@@ -33,6 +33,9 @@ describe('Contas form screens', () => {
 
     render(<ContasCreateScreen />);
 
+    expect(screen.getByLabelText('Abrir ações rápidas')).toBeTruthy();
+    expect(screen.getByLabelText('Nome da conta')).toBeTruthy();
+    expect(screen.getByLabelText('Saldo inicial')).toBeTruthy();
     fireEvent.changeText(screen.getByPlaceholderText('Ex.: Carteira'), 'Conta Corrente');
     fireEvent.changeText(screen.getByPlaceholderText('0,00'), '1000,50');
     fireEvent.press(screen.getByText('Banco'));
@@ -95,6 +98,8 @@ describe('Contas form screens', () => {
       expect(screen.getByDisplayValue('Conta Antiga')).toBeTruthy();
     });
 
+    expect(screen.getByLabelText('Abrir ações rápidas')).toBeTruthy();
+    expect(screen.getByLabelText('Nome da conta')).toBeTruthy();
     fireEvent.changeText(screen.getByDisplayValue('Conta Antiga'), 'Conta Nova');
     fireEvent.press(screen.getByText('Salvar alteracoes'));
 
@@ -104,5 +109,15 @@ describe('Contas form screens', () => {
       });
       expect(mockReplace).toHaveBeenCalledWith('/contas');
     });
+  });
+
+  it('keeps profile and back navigation available in the account form', () => {
+    render(<ContasCreateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    fireEvent.press(screen.getByText('Cancelar'));
+
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+    expect(mockBack).toHaveBeenCalled();
   });
 });

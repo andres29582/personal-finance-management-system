@@ -2,14 +2,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
 } from '../../../shared/ui';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateDivida, listDividas } from '../services/dividaService';
 import { Divida } from '../types/divida';
 import { confirmAction } from '../../../../utils/confirm-action';
@@ -70,18 +69,16 @@ export function DividasScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/dividas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Nova" onPress={() => router.push('/dividas-form' as never)} />}
           eyebrow="Compromissos"
           subtitle="Acompanhe vencimentos e pagamentos."
           title="Dividas"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {message && dividas.length ? <Text style={styles.errorMessage}>{message}</Text> : null}
 
@@ -106,9 +103,7 @@ export function DividasScreen() {
       {!loading && !message && !dividas.length ? (
         <GlassStatusCard
           title="Nenhuma divida cadastrada"
-          description="Cadastre uma divida para acompanhar vencimentos e pagamentos."
-          actionLabel="Nova divida"
-          onActionPress={() => router.push('/dividas-form' as never)}
+          description="Use o menu + para cadastrar uma divida e acompanhar vencimentos e pagamentos."
         />
       ) : null}
 
@@ -160,7 +155,7 @@ export function DividasScreen() {
           </GlassPanel>
         ))
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

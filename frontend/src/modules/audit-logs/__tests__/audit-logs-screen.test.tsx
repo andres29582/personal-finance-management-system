@@ -61,6 +61,31 @@ describe('AuditLogsScreen', () => {
     });
   });
 
+  it('opens the profile route from the shared shell', async () => {
+    render(<AuditLogsScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('TRANSACAO_CREATED')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByLabelText(/Abrir perfil/));
+
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+  });
+
+  it('shows the empty state without changing pagination', async () => {
+    mockListMyAuditLogs.mockResolvedValue({ items: [], total: 0 });
+
+    render(<AuditLogsScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Sem registros')).toBeTruthy();
+      expect(screen.getByText('Ainda nao ha eventos de auditoria.')).toBeTruthy();
+    });
+
+    expect(mockListMyAuditLogs).toHaveBeenCalledWith({ limit: 30, offset: 0 });
+  });
+
   it('loads next page when pagination is available', async () => {
     render(<AuditLogsScreen />);
 

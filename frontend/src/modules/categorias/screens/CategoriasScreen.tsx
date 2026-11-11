@@ -2,14 +2,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
 } from '../../../shared/ui';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateCategoria, listCategorias } from '../services/categoriaService';
 import { Categoria } from '../types/categoria';
 import { confirmAction } from '../../../../utils/confirm-action';
@@ -85,23 +84,16 @@ export function CategoriasScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/categorias"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={
-            <GlassButton
-              label="Nova"
-              onPress={() => router.push('/categorias-form' as never)}
-            />
-          }
           eyebrow="Classificacao"
           subtitle="Organize receitas e despesas por tipo."
           title="Categorias"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassButton label="Atualizar lista" onPress={loadCategorias} variant="ghost" />
@@ -132,9 +124,7 @@ export function CategoriasScreen() {
       {!loading && !message && !categorias.length ? (
         <GlassStatusCard
           title="Nenhuma categoria cadastrada"
-          description="Crie categorias para classificar receitas e despesas."
-          actionLabel="Nova categoria"
-          onActionPress={() => router.push('/categorias-form' as never)}
+          description="Use o menu + para criar uma categoria e classificar receitas e despesas."
         />
       ) : null}
 
@@ -178,7 +168,7 @@ export function CategoriasScreen() {
           </GlassPanel>
         ))
       ) : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

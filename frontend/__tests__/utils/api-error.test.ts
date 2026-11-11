@@ -67,7 +67,7 @@ describe('resolveApiError', () => {
       requestId: 'request-login',
       unauthorized: true,
     });
-    expect(mockClearSession).toHaveBeenCalledTimes(1);
+    expect(mockClearSession).not.toHaveBeenCalled();
   });
 
   it('mantem a mensagem de sessao expirada para 401 sem override', async () => {
@@ -94,7 +94,7 @@ describe('resolveApiError', () => {
       requestId: 'request-session',
       unauthorized: true,
     });
-    expect(mockClearSession).toHaveBeenCalledTimes(1);
+    expect(mockClearSession).not.toHaveBeenCalled();
   });
 
   it('usa a mensagem do backend em erros nao autenticados', async () => {

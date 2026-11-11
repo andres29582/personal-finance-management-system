@@ -1,3 +1,4 @@
+import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -5,11 +6,10 @@ import { getContaById, listContas } from '../../contas/services/contaService';
 import { Conta } from '../../contas/types/conta';
 import { getDividaById, listDividas } from '../../dividas/services/dividaService';
 import { Divida } from '../../dividas/types/divida';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassOptionGroup,
@@ -26,13 +26,37 @@ export function MetasFormScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const metaId = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [nome, setNome] = useState('');
-  const [tipo, setTipo] = useState<TipoMeta>('economia');
-  const [montoObjetivo, setMontoObjetivo] = useState('');
-  const [montoActual, setMontoActual] = useState('');
-  const [fechaLimite, setFechaLimite] = useState(getLocalDateInputValue());
-  const [contaId, setContaId] = useState('');
-  const [dividaId, setDividaId] = useState('');
+  const draft = useFinancialDraft('goal/' + (metaId ?? 'new'), {
+    nome: '',
+    montoObjetivo: '',
+    fechaLimite: getLocalDateInputValue(),
+    ...(metaId
+      ? {}
+      : { tipo: 'economia' as TipoMeta, contaId: '', dividaId: '' }),
+    ...(metaId ? { montoActual: '' } : {}),
+  });
+  const [lockedFields, setLockedFields] = useState({ tipo: 'economia' as TipoMeta, contaId: '', dividaId: '' });
+  const nome = draft.fields.nome;
+  const setNome = (value: string) => draft.setField("nome", value);
+  const montoObjetivo = draft.fields.montoObjetivo;
+  const setMontoObjetivo = (value: string) => draft.setField("montoObjetivo", value);
+  const fechaLimite = draft.fields.fechaLimite;
+  const setFechaLimite = (value: string) => draft.setField("fechaLimite", value);
+  const tipo = metaId ? lockedFields.tipo : (draft.fields.tipo ?? 'economia' as TipoMeta);
+  const setTipo = (value: TipoMeta) => { if (metaId) setLockedFields(current => ({...current, tipo: value})); else draft.setField("tipo", value); };
+  const contaId = metaId ? lockedFields.contaId : (draft.fields.contaId ?? '');
+  const setContaId = (value: string) => { if (metaId) setLockedFields(current => ({...current, contaId: value})); else draft.setField("contaId", value); };
+  const dividaId = metaId ? lockedFields.dividaId : (draft.fields.dividaId ?? '');
+  const setDividaId = (value: string) => { if (metaId) setLockedFields(current => ({...current, dividaId: value})); else draft.setField("dividaId", value); };
+  const montoActual = draft.fields.montoActual ?? '';
+  const setMontoActual = (value: string) => draft.setField("montoActual", value);
+
+
+
+
+
+
+
   const [contas, setContas] = useState<Conta[]>([]);
   const [dividas, setDividas] = useState<Divida[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,14 +65,18 @@ export function MetasFormScreen() {
 
   useEffect(() => {
     async function loadData() {
+    const loadScope = draft.capture();
+    if (!draft.isCurrent(loadScope)) return;
       try {
         setLoading(true);
         const [contasData, dividasData] = await Promise.all([
           listContas(),
           listDividas(),
         ]);
+        if (!draft.isCurrent(loadScope)) return;
         if (metaId) {
           const meta = await getMetaById(metaId);
+          if (!draft.isCurrent(loadScope)) return;
           const [conta, divida] = await Promise.all([
             meta.contaId && !contasData.some(({ id }) => id === meta.contaId)
               ? getContaById(meta.contaId)
@@ -57,27 +85,25 @@ export function MetasFormScreen() {
               ? getDividaById(meta.dividaId)
               : undefined,
           ]);
+          if (!draft.isCurrent(loadScope)) return;
           setContas(conta ? [...contasData, conta] : contasData);
           setDividas(divida ? [...dividasData, divida] : dividasData);
-          setNome(meta.nome);
-          setTipo(meta.tipo);
-          setMontoObjetivo(String(meta.montoObjetivo));
-          setMontoActual(String(meta.montoActual));
-          setFechaLimite(meta.fechaLimite);
-          setContaId(meta.contaId || '');
-          setDividaId(meta.dividaId || '');
+          setLockedFields({ tipo: meta.tipo, contaId: meta.contaId || '', dividaId: meta.dividaId || '' });
+          draft.hydrate({ nome: meta.nome, montoObjetivo: String(meta.montoObjetivo), montoActual: String(meta.montoActual), fechaLimite: meta.fechaLimite });
         } else {
           setContas(contasData);
           setDividas(dividasData);
         }
       } catch (error) {
+        if (!draft.isCurrent(loadScope)) return;
         const resolvedError = await resolveApiError(error, 'Nao foi possivel carregar a meta.');
+        if (!draft.isCurrent(loadScope)) return;
         setMessage(resolvedError.message);
         if (resolvedError.unauthorized) {
           router.replace('/login');
         }
       } finally {
-        setLoading(false);
+        if (draft.isCurrent()) setLoading(false);
       }
     }
 
@@ -85,6 +111,8 @@ export function MetasFormScreen() {
   }, [metaId, router]);
 
   async function handleSave() {
+    const submitted = draft.capture();
+    if (!draft.isCurrent(submitted)) return;
     const objetivo = parseDecimalInput(montoObjetivo);
     const actual = parseDecimalInput(montoActual);
 
@@ -131,31 +159,36 @@ export function MetasFormScreen() {
         });
       }
 
+      if (!draft.isCurrent(submitted)) return;
+
+      draft.clear(submitted);
+
       router.replace('/metas' as never);
     } catch (error) {
+      if (!draft.isCurrent(submitted)) return;
       const resolvedError = await resolveApiError(error, 'Nao foi possivel salvar a meta.');
+      if (!draft.isCurrent(submitted)) return;
       setMessage(resolvedError.message);
       if (resolvedError.unauthorized) {
         router.replace('/login');
       }
     } finally {
-      setSaving(false);
+      if (draft.isCurrent()) setSaving(false);
     }
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/metas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Voltar" onPress={() => router.back()} variant="ghost" />}
+          action={<GlassButton label="Voltar" onPress={() => { draft.clear(); router.back(); }} variant="ghost" />}
           eyebrow="Planejamento"
           subtitle="Defina objetivos e acompanhe progresso financeiro."
           title={metaId ? 'Editar meta' : 'Nova meta'}
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       {loading ? (
         <GlassPanel>
@@ -258,7 +291,7 @@ export function MetasFormScreen() {
           />
         </GlassPanel>
       )}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

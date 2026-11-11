@@ -69,7 +69,7 @@ describe('PlanejamentosScreen', () => {
     render(<PlanejamentosScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('Planejamentos')).toBeTruthy();
+      expect(screen.getAllByText('Planejamentos').length).toBeGreaterThan(0);
       expect(screen.getByText('Viagem de ferias')).toBeTruthy();
       expect(screen.getByText('Custos compartilhados da viagem')).toBeTruthy();
       expect(screen.getByText('Inicio: 10/01/2026')).toBeTruthy();
@@ -83,6 +83,9 @@ describe('PlanejamentosScreen', () => {
       pathname: '/planejamentos-detail',
       params: { id: 'planejamento-1' },
     });
+
+    fireEvent.press(screen.getByText('Perfil'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
   });
 
   it('aplica filtro de status ao atualizar a lista', async () => {

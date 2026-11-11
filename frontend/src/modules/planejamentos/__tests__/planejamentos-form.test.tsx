@@ -89,4 +89,12 @@ describe('PlanejamentoFormScreen', () => {
       expect(mockCreatePlanejamento).not.toHaveBeenCalled();
     });
   });
+
+  it('abre o perfil pelo shell movel', () => {
+    render(<PlanejamentoFormScreen />);
+
+    fireEvent.press(screen.getByText('Perfil'));
+
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+  });
 });

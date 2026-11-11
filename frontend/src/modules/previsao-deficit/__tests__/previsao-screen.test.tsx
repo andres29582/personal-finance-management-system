@@ -59,6 +59,9 @@ describe('PrevisaoDeficitScreen', () => {
       expect(screen.getByText('R$ 4.500,00')).toBeTruthy();
       expect(screen.getAllByText('3').length).toBeGreaterThan(0);
     });
+
+    fireEvent.press(screen.getByText('Perfil'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
   });
 
   it('generates prediction for a manually selected month', async () => {

@@ -2,14 +2,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassPanel,
   GlassStatusCard,
 } from '../../../shared/ui';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { deactivateConta, listContas } from '../services/contaService';
 import { Conta } from '../types/conta';
 import { confirmAction } from '../../../../utils/confirm-action';
@@ -88,23 +87,18 @@ export function ContasScreen() {
   }
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/contas"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      onRefresh={loadContas}
+      refreshing={loading && contas.length > 0}
+      pageHeader={
         <FinanceAppHeader
-          action={
-            <GlassButton
-              label="Nova"
-              onPress={() => router.push('/contas-create' as never)}
-            />
-          }
           eyebrow="Gestao financeira"
           subtitle="Gerencie contas e acompanhe o saldo atual."
           title="Contas"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassButton
@@ -139,9 +133,7 @@ export function ContasScreen() {
       {!loading && !message && !contas.length ? (
         <GlassStatusCard
           title="Nenhuma conta encontrada"
-          description="Crie a primeira conta para comecar a organizar seu saldo."
-          actionLabel="Criar conta"
-          onActionPress={() => router.push('/contas-create' as never)}
+          description="Use o menu + para criar a primeira conta e comecar a organizar seu saldo."
         />
       ) : null}
 
@@ -185,7 +177,7 @@ export function ContasScreen() {
             </GlassPanel>
           ))
         : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

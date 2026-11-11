@@ -14,11 +14,11 @@ export function GoalProgressCard({ goal, onOpenGoals }: GoalProgressCardProps) {
 
   return (
     <SectionCard
-      accent="magenta"
+      accent="cyan"
       title="Meta em destaque"
       action={
         <NeonIconButton
-          accent="magenta"
+          accent="cyan"
           icon="bullseye-arrow"
           label="Metas"
           onPress={onOpenGoals}
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     gap: DashboardTheme.spacing.sm,
   },
   fill: {
-    backgroundColor: DashboardTheme.colors.magenta,
+    backgroundColor: DashboardTheme.colors.aquateal[500],
     borderRadius: DashboardTheme.radius.xs,
     height: '100%',
     minWidth: 6,

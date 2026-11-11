@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type {
   AxiosAdapter,
   AxiosResponse,
   InternalAxiosRequestConfig,
-} from 'axios';
+} from "axios";
 
 let currentAccessToken: string | null = null;
 let currentRefreshToken: string | null = null;
@@ -23,7 +23,7 @@ function buildResponse<T>(
     data,
     headers: {},
     status: 200,
-    statusText: 'OK',
+    statusText: "OK",
   };
 }
 
@@ -31,13 +31,13 @@ function buildUnauthorizedError(config: InternalAxiosRequestConfig) {
   return {
     config,
     isAxiosError: true,
-    message: 'Unauthorized',
+    message: "Unauthorized",
     response: {
       config,
       data: {},
       headers: {},
       status: 401,
-      statusText: 'Unauthorized',
+      statusText: "Unauthorized",
     },
     toJSON: () => ({}),
   };
@@ -46,15 +46,15 @@ function buildUnauthorizedError(config: InternalAxiosRequestConfig) {
 function getAuthorization(config: InternalAxiosRequestConfig) {
   const headers = config.headers;
 
-  if (headers && typeof headers.get === 'function') {
-    return headers.get('Authorization');
+  if (headers && typeof headers.get === "function") {
+    return headers.get("Authorization");
   }
 
   return undefined;
 }
 
 function parseRequestData(data: unknown) {
-  if (typeof data === 'string') {
+  if (typeof data === "string") {
     return JSON.parse(data) as unknown;
   }
 
@@ -63,19 +63,62 @@ function parseRequestData(data: unknown) {
 
 async function loadApi(adapter: AxiosAdapter) {
   jest.resetModules();
-  jest.doMock('../../storage/authStorage', () => ({
+  jest.doMock("../../storage/authStorage", () => ({
     clearSession: mockClearSession,
     getRefreshToken: mockGetRefreshToken,
     getToken: mockGetToken,
     saveRefreshToken: mockSaveRefreshToken,
     saveToken: mockSaveToken,
+    getSessionGeneration: () => 0,
+    getSessionSnapshot: async () => ({
+      generation: 0,
+      incarnation: "unit-test",
+      revision: 0,
+      sessionId: "test",
+      refreshToken: currentRefreshToken,
+      accessToken: currentAccessToken,
+    }),
+    isSessionCurrent: async () => true,
+    REFRESH_TIMEOUT_MS: 5000,
+    rotateSession: async (
+      _snapshot: unknown,
+      send: (
+        token: string,
+        signal: AbortSignal,
+      ) => Promise<{ access_token: string; refresh_token: string }>,
+    ) => {
+      try {
+        const tokens = await send(
+          currentRefreshToken!,
+          new AbortController().signal,
+        );
+        await mockSaveToken(tokens.access_token);
+        await mockSaveRefreshToken(tokens.refresh_token);
+        return tokens;
+      } catch {
+        await mockClearSession();
+        const { SessionRequestError } = jest.requireActual<
+          typeof import("../../utils/session-error")
+        >("../../utils/session-error");
+        throw new SessionRequestError("unknown");
+      }
+    },
+    clearSessionIfCurrent: mockClearSession,
+    applyRefreshIfCurrent: async (
+      _snapshot: unknown,
+      tokens: { access_token: string; refresh_token: string },
+    ) => {
+      await mockSaveToken(tokens.access_token);
+      await mockSaveRefreshToken(tokens.refresh_token);
+      return true;
+    },
   }));
 
-  const axiosModule = jest.requireActual<typeof import('axios')>('axios');
+  const axiosModule = jest.requireActual<typeof import("axios")>("axios");
   axiosModule.default.defaults.adapter = adapter;
 
-  return jest.requireActual<typeof import('../../src/shared/services/api')>(
-    '../../src/shared/services/api',
+  return jest.requireActual<typeof import("../../src/shared/services/api")>(
+    "../../src/shared/services/api",
   );
 }
 
@@ -98,9 +141,9 @@ beforeEach(() => {
   });
 });
 
-describe('api', () => {
-  it('adiciona o token Bearer nas requisicoes autenticadas', async () => {
-    currentAccessToken = 'access-token-teste';
+describe("api", () => {
+  it("adiciona o token Bearer nas requisicoes autenticadas", async () => {
+    currentAccessToken = "access-token-teste";
     const requests: Array<{ authorization: unknown; url?: string }> = [];
 
     const { api } = await loadApi(async (config) => {
@@ -112,35 +155,35 @@ describe('api', () => {
       return buildResponse(config, { ok: true });
     });
 
-    const response = await api.get('/dashboard');
+    const response = await api.get("/dashboard");
 
     expect(response.data).toEqual({ ok: true });
     expect(requests).toEqual([
       {
-        authorization: 'Bearer access-token-teste',
-        url: '/dashboard',
+        authorization: "Bearer access-token-teste",
+        url: "/dashboard",
       },
     ]);
-    expect(mockGetToken).toHaveBeenCalledTimes(1);
+    expect(mockGetToken).not.toHaveBeenCalled(); // Bearer is taken from the coherent owned snapshot.
   });
 
-  it('desembrulha respostas no formato padrao da API', async () => {
+  it("desembrulha respostas no formato padrao da API", async () => {
     const { api } = await loadApi(async (config) => {
       return buildResponse(config, {
         data: { ok: true },
-        requestId: 'request-1',
+        requestId: "request-1",
         success: true,
-        timestamp: '2026-05-18T00:00:00.000Z',
+        timestamp: "2026-05-18T00:00:00.000Z",
       });
     });
 
-    const response = await api.get('/dashboard');
+    const response = await api.get("/dashboard");
 
     expect(response.data).toEqual({ ok: true });
   });
 
-  it('nao adiciona token Bearer nas rotas publicas de autenticacao', async () => {
-    currentAccessToken = 'access-token-expirado';
+  it("nao adiciona token Bearer nas rotas publicas de autenticacao", async () => {
+    currentAccessToken = "access-token-expirado";
     const requests: Array<{ authorization: unknown; url?: string }> = [];
 
     const { api } = await loadApi(async (config) => {
@@ -152,55 +195,48 @@ describe('api', () => {
       return buildResponse(config, { ok: true });
     });
 
-    await api.post('/auth/login', {
-      email: 'demo.financeiro@exemplo.com',
-      senha: 'Demo@123456',
+    await api.post("/auth/login", {
+      email: "demo.financeiro@exemplo.com",
+      senha: "Demo@123456",
     });
-    await api.post('/auth/register', {});
-    await api.post('/auth/refresh', {
-      refreshToken: 'refresh-token-valido',
-    });
+    await api.post("/auth/register", {});
 
     expect(requests).toEqual([
       {
         authorization: undefined,
-        url: '/auth/login',
+        url: "/auth/login",
       },
       {
         authorization: undefined,
-        url: '/auth/register',
-      },
-      {
-        authorization: undefined,
-        url: '/auth/refresh',
+        url: "/auth/register",
       },
     ]);
     expect(mockGetToken).not.toHaveBeenCalled();
   });
 
-  it('renova a sessao depois de 401 e repete a requisicao original', async () => {
-    currentAccessToken = 'access-token-expirado';
-    currentRefreshToken = 'refresh-token-valido';
+  it("renova a sessao depois de 401 e repete a requisicao original", async () => {
+    currentAccessToken = "access-token-expirado";
+    currentRefreshToken = "refresh-token-valido";
     let contasAttempts = 0;
     const contasAuthorizations: unknown[] = [];
     const refreshBodies: unknown[] = [];
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/auth/refresh') {
+      if (config.url === "/auth/refresh") {
         refreshBodies.push(parseRequestData(config.data));
 
         return buildResponse(config, {
           data: {
-            access_token: 'access-token-renovado',
-            refresh_token: 'refresh-token-renovado',
+            access_token: "access-token-renovado",
+            refresh_token: "refresh-token-renovado",
           },
-          requestId: 'request-refresh',
+          requestId: "request-refresh",
           success: true,
-          timestamp: '2026-05-18T00:00:00.000Z',
+          timestamp: "2026-05-18T00:00:00.000Z",
         });
       }
 
-      if (config.url === '/contas') {
+      if (config.url === "/contas") {
         contasAttempts += 1;
         contasAuthorizations.push(getAuthorization(config));
 
@@ -214,65 +250,65 @@ describe('api', () => {
       throw new Error(`URL inesperada no teste: ${config.url}`);
     });
 
-    const response = await api.get('/contas');
+    const response = await api.get("/contas");
 
     expect(response.data).toEqual({ contas: [] });
     expect(contasAuthorizations).toEqual([
-      'Bearer access-token-expirado',
-      'Bearer access-token-renovado',
+      "Bearer access-token-expirado",
+      "Bearer access-token-renovado",
     ]);
-    expect(refreshBodies).toEqual([{ refreshToken: 'refresh-token-valido' }]);
-    expect(mockSaveToken).toHaveBeenCalledWith('access-token-renovado');
-    expect(mockSaveRefreshToken).toHaveBeenCalledWith('refresh-token-renovado');
+    expect(refreshBodies).toEqual([{ refreshToken: "refresh-token-valido" }]);
+    expect(mockSaveToken).toHaveBeenCalledWith("access-token-renovado");
+    expect(mockSaveRefreshToken).toHaveBeenCalledWith("refresh-token-renovado");
     expect(mockClearSession).not.toHaveBeenCalled();
   });
 
-  it('limpa sessão se token ausente (null) e retorna 401', async () => {
+  it("limpa sessão se token ausente (null) e retorna 401", async () => {
     currentAccessToken = null;
     currentRefreshToken = null;
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/contas') {
+      if (config.url === "/contas") {
         return Promise.reject(buildUnauthorizedError(config));
       }
 
       throw new Error(`URL inesperada: ${config.url}`);
     });
 
-    await expect(api.get('/contas')).rejects.toBeDefined();
+    await expect(api.get("/contas")).rejects.toBeDefined();
     expect(mockClearSession).toHaveBeenCalled();
   });
 
-  it('limpa sessão se refresh token não existe', async () => {
-    currentAccessToken = 'access-token-expirado';
+  it("limpa sessão se refresh token não existe", async () => {
+    currentAccessToken = "access-token-expirado";
     currentRefreshToken = null;
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/contas') {
+      if (config.url === "/contas") {
         return Promise.reject(buildUnauthorizedError(config));
       }
 
       throw new Error(`URL inesperada: ${config.url}`);
     });
 
-    await expect(api.get('/contas')).rejects.toBeDefined();
+    await expect(api.get("/contas")).rejects.toBeDefined();
     expect(mockClearSession).toHaveBeenCalled();
   });
 
-  it('limpa sessão se refresh token endpoint retorna 401', async () => {
-    currentAccessToken = 'access-token-expirado';
-    currentRefreshToken = 'refresh-token-invalido';
+  it("limpa sessão se refresh token endpoint retorna 401", async () => {
+    currentAccessToken = "access-token-expirado";
+    currentRefreshToken = "refresh-token-invalido";
     let refreshAttempts = 0;
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/contas') {
+      if (config.url === "/contas") {
         refreshAttempts === 0
           ? refreshAttempts++
           : (refreshAttempts = refreshAttempts);
         return Promise.reject(buildUnauthorizedError(config));
       }
 
-      if (config.url === '/auth/refresh') {
+      if (config.url === "/auth/refresh") {
         // Refresh também retorna 401 (token expirado)
         return Promise.reject(buildUnauthorizedError(config));
       }
@@ -280,39 +316,39 @@ describe('api', () => {
       throw new Error(`URL inesperada: ${config.url}`);
     });
 
-    await expect(api.get('/contas')).rejects.toBeDefined();
+    await expect(api.get("/contas")).rejects.toBeDefined();
     expect(mockClearSession).toHaveBeenCalled();
   });
 
-  it('não repete requisição após falha no refresh token', async () => {
-    currentAccessToken = 'access-token-expirado';
-    currentRefreshToken = 'refresh-token-invalido';
+  it("não repete requisição após falha no refresh token", async () => {
+    currentAccessToken = "access-token-expirado";
+    currentRefreshToken = "refresh-token-invalido";
     let contasAttempts = 0;
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/contas') {
+      if (config.url === "/contas") {
         contasAttempts += 1;
         return Promise.reject(buildUnauthorizedError(config));
       }
 
-      if (config.url === '/auth/refresh') {
+      if (config.url === "/auth/refresh") {
         return Promise.reject(buildUnauthorizedError(config));
       }
 
       throw new Error(`URL inesperada: ${config.url}`);
     });
 
-    await expect(api.get('/contas')).rejects.toBeDefined();
+    await expect(api.get("/contas")).rejects.toBeDefined();
     // Deve tentar refrescar apenas uma vez, não infinitamente
     expect(contasAttempts).toBe(1);
   });
 
-  it('não tenta renovar token em endpoints de refresh (evita loop infinito)', async () => {
-    currentAccessToken = 'access-token-expirado';
-    currentRefreshToken = 'refresh-token-invalido';
+  it("não tenta renovar token em endpoints de refresh (evita loop infinito)", async () => {
+    currentAccessToken = "access-token-expirado";
+    currentRefreshToken = "refresh-token-invalido";
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/auth/refresh') {
+      if (config.url === "/auth/refresh") {
         return Promise.reject(buildUnauthorizedError(config));
       }
 
@@ -320,26 +356,28 @@ describe('api', () => {
     });
 
     await expect(
-      api.post('/auth/refresh', { refreshToken: 'token' }),
+      api.post("/auth/refresh", { refreshToken: "token" }),
     ).rejects.toBeDefined();
-    expect(mockClearSession).toHaveBeenCalled();
+    expect(mockClearSession).not.toHaveBeenCalled();
   });
 
-  it('rejeita erro 500 sem tentar renovar token', async () => {
-    currentAccessToken = 'access-token-valido';
+  it("rejeita erro 500 sem tentar renovar token", async () => {
+    currentAccessToken = "access-token-valido";
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/contas') {
+      if (config.url === "/contas") {
         return Promise.reject({
           config,
           isAxiosError: true,
-          message: 'Server Error',
+          message: "Server Error",
           response: {
             config,
-            data: { error: { code: 'HTTP_ERROR', message: 'Internal Server Error' } },
+            data: {
+              error: { code: "HTTP_ERROR", message: "Internal Server Error" },
+            },
             headers: {},
             status: 500,
-            statusText: 'Internal Server Error',
+            statusText: "Internal Server Error",
           },
           toJSON: () => ({}),
         });
@@ -348,39 +386,39 @@ describe('api', () => {
       throw new Error(`URL inesperada: ${config.url}`);
     });
 
-    await expect(api.get('/contas')).rejects.toBeDefined();
+    await expect(api.get("/contas")).rejects.toBeDefined();
     expect(mockClearSession).not.toHaveBeenCalled();
     expect(mockGetRefreshToken).not.toHaveBeenCalled();
   });
 
-  it('rejeita erro de rede sem tentar renovar token', async () => {
-    currentAccessToken = 'access-token-valido';
+  it("rejeita erro de rede sem tentar renovar token", async () => {
+    currentAccessToken = "access-token-valido";
 
     const { api } = await loadApi(async () => {
-      return Promise.reject(new Error('Network Error'));
+      return Promise.reject(new Error("Network Error"));
     });
 
-    await expect(api.get('/contas')).rejects.toThrow('Network Error');
+    await expect(api.get("/contas")).rejects.toThrow("Network Error");
     expect(mockClearSession).not.toHaveBeenCalled();
   });
 
-  it('permite múltiplos requests concorrentes durante refresh (evita race condition)', async () => {
-    currentAccessToken = 'access-token-expirado';
-    currentRefreshToken = 'refresh-token-valido';
+  it("permite múltiplos requests concorrentes durante refresh (evita race condition)", async () => {
+    currentAccessToken = "access-token-expirado";
+    currentRefreshToken = "refresh-token-valido";
     let refreshAttempts = 0;
 
     const { api } = await loadApi(async (config) => {
-      if (config.url === '/auth/refresh') {
+      if (config.url === "/auth/refresh") {
         refreshAttempts += 1;
         // Simular delay de refresh
         await new Promise((resolve) => setTimeout(resolve, 10));
         return buildResponse(config, {
-          access_token: 'access-token-renovado',
-          refresh_token: 'refresh-token-renovado',
+          access_token: "access-token-renovado",
+          refresh_token: "refresh-token-renovado",
         });
       }
 
-      if (config.url === '/contas' || config.url === '/transacoes') {
+      if (config.url === "/contas" || config.url === "/transacoes") {
         return Promise.reject(buildUnauthorizedError(config));
       }
 
@@ -388,12 +426,81 @@ describe('api', () => {
     });
 
     // Fazer múltiples requisiciones en paralelo
-    const promises = [api.get('/contas'), api.get('/transacoes')];
+    const promises = [api.get("/contas"), api.get("/transacoes")];
 
     // Ambos deben fallar porque el refresh también falla en este test
     await expect(Promise.all(promises)).rejects.toBeDefined();
 
     // El refresh no debe intentarse múltiples veces (solo una vez)
     expect(refreshAttempts).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("U4 terminal and pre-handler contracts", () => {
+  it.each([
+    "AUTH_INVALID_SESSION",
+    "AUTH_SESSION_REVOKED",
+    "AUTH_SESSION_IDLE_EXPIRED",
+    "AUTH_SESSION_ABSOLUTE_EXPIRED",
+  ])("does not refresh a terminal snapshot %s", async (code) => {
+    currentAccessToken = "access";
+    currentRefreshToken = "refresh";
+    let refreshes = 0;
+    const { api } = await loadApi(async (config) => {
+      if (config.url === "/auth/refresh") {
+        refreshes++;
+        return buildResponse(config, {
+          access_token: "new",
+          refresh_token: "new-refresh",
+        });
+      }
+      const error = buildUnauthorizedError(config);
+      error.response.data = { error: { code } };
+      throw error;
+    });
+    await expect(api.get("/contas")).rejects.toBeDefined();
+    expect(refreshes).toBe(0);
+    expect(mockClearSession).toHaveBeenCalledTimes(1);
+  });
+  it("never replays an ambiguous mutating 401 or destroys its capsule", async () => {
+    currentAccessToken = "access";
+    currentRefreshToken = "refresh";
+    const calls: string[] = [];
+    const { api } = await loadApi(async (config) => {
+      calls.push(config.url!);
+      throw buildUnauthorizedError(config);
+    });
+    await expect(api.post("/transacoes", { valor: 100 })).rejects.toMatchObject(
+      { sessionFailure: "unavailable" },
+    );
+    expect(calls).toEqual(["/transacoes"]);
+    expect(mockClearSession).not.toHaveBeenCalled();
+    expect(currentRefreshToken).toBe("refresh");
+  });
+  it("retries a mutation only when expired JWT was rejected before handler", async () => {
+    currentAccessToken = "access";
+    currentRefreshToken = "refresh";
+    let attempts = 0,
+      refreshes = 0;
+    const { api } = await loadApi(async (config) => {
+      if (config.url === "/auth/refresh") {
+        refreshes++;
+        return buildResponse(config, {
+          access_token: "new",
+          refresh_token: "next",
+        });
+      }
+      if (++attempts === 1) {
+        const error = buildUnauthorizedError(config);
+        error.response.data = { error: { code: "AUTH_ACCESS_TOKEN_EXPIRED" } };
+        throw error;
+      }
+      return buildResponse(config, { ok: true });
+    });
+    expect((await api.post("/transacoes", { valor: 100 })).data).toEqual({
+      ok: true,
+    });
+    expect(attempts).toBe(2);
+    expect(refreshes).toBe(1);
   });
 });

@@ -22,12 +22,42 @@ export const FinanceTheme = {
     textSubtle: '#7F90A8',
     white: '#FFFFFF',
     black: '#000000',
+    // AquaFinance / Stitch Oceanic Deep Palette
+    abyss: {
+      950: '#020d10',
+      900: '#021616',
+      800: '#071e22',
+      700: '#0c2a2f',
+    },
+    // Phthalo Blue ("Azul Ftalo") palette for embroidery, borders & glows
+    phthalo: {
+      900: '#002540',
+      800: '#003865',
+      700: '#0a3871',
+      600: '#004d7a',
+      500: '#005c8a',
+      400: '#006994',
+      300: '#0f52ba',
+    },
+    // Aqua Teal highlights & interactive actions
+    aquateal: {
+      300: '#5ffbd6',
+      400: '#26ebd0',
+      500: '#00d2b4',
+      600: '#00b89d',
+    },
+    phthaloBorder: 'rgba(0, 92, 138, 0.55)',
+    phthaloBorderInput: 'rgba(0, 92, 138, 0.45)',
+    phthaloGlow: 'rgba(10, 56, 113, 0.45)',
+    aquaGlow: 'rgba(0, 210, 180, 0.25)',
   },
   gradients: {
     background: ['#070B14', '#0E1725', '#111827'],
+    oceanicMesh: ['#021616', '#020d10', '#071e22'],
     glass: ['rgba(255, 255, 255, 0.12)', 'rgba(255, 255, 255, 0.04)'],
     cyanGlow: ['rgba(125, 249, 255, 0.44)', 'rgba(125, 249, 255, 0)'],
     magentaGlow: ['rgba(232, 121, 249, 0.40)', 'rgba(232, 121, 249, 0)'],
+    aquatealButton: ['#00d2b4', '#26ebd0', '#1cd8bf'],
   },
   spacing: {
     xxs: 4,
@@ -77,6 +107,20 @@ export const FinanceTheme = {
       radius: 24,
       offsetY: 10,
       elevation: 9,
+    },
+    phthaloGlow: {
+      color: '#004d7a',
+      opacity: 0.45,
+      radius: 24,
+      offsetY: 0,
+      elevation: 8,
+    },
+    buttonGlow: {
+      color: '#00d2b4',
+      opacity: 0.4,
+      radius: 20,
+      offsetY: 4,
+      elevation: 7,
     },
   },
   neon: {

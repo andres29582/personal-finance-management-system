@@ -26,7 +26,10 @@ export function parseDecimalInput(rawValue: string): number {
   const decimalSeparatorIndex = Math.max(lastCommaIndex, lastDotIndex);
   const separatorMatches = sanitizedValue.match(/[.,]/g) ?? [];
 
-  if (decimalSeparatorIndex === -1) {
+  if (
+    decimalSeparatorIndex === -1 ||
+    (separatorMatches.length > 1 && (lastCommaIndex === -1 || lastDotIndex === -1))
+  ) {
     const digitsOnly = sanitizedValue.replace(/\D/g, '');
     return Number(`${isNegative ? '-' : ''}${digitsOnly}`);
   }

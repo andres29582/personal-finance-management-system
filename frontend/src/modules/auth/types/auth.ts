@@ -47,6 +47,7 @@ export type RefreshTokenResponseDto = {
 };
 
 export type ResetPasswordRequestDto = {
+  senhaAtual: string;
   novaSenha: string;
 };
 

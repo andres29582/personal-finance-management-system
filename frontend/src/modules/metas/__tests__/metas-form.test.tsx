@@ -92,7 +92,9 @@ describe('MetasFormScreen', () => {
 
     render(<MetasFormScreen />);
 
-    await waitFor(() => expect(screen.getByText('Nova meta')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Salvar meta')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
     const inputs = screen.UNSAFE_getAllByType(TextInput);
     fireEvent.changeText(inputs[0], 'Reserva');
     fireEvent.changeText(inputs[1], '1000');

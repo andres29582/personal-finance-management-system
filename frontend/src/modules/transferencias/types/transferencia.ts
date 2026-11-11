@@ -13,6 +13,7 @@ export type Transferencia = {
 };
 
 export type CreateTransferenciaRequestDto = {
+  idempotencyKey?: string;
   comissao?: number;
   contaDestinoId: string;
   contaOrigemId: string;
@@ -24,3 +25,5 @@ export type CreateTransferenciaRequestDto = {
 export type UpdateTransferenciaRequestDto = Partial<
   Pick<CreateTransferenciaRequestDto, 'comissao' | 'data' | 'descricao' | 'valor'>
 >;
+
+export type FindTransferenciasParams = { limit?: number; offset?: number };

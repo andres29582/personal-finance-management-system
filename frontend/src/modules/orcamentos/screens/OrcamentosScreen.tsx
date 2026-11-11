@@ -1,11 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { financeSidebarItems } from '../../../shared/navigation/financeNavigation';
 import { FinanceTheme } from '../../../shared/styles/financeTheme';
 import {
+  AppShell,
   FinanceAppHeader,
-  FinanceAppShell,
   GlassButton,
   GlassField,
   GlassPanel,
@@ -57,18 +56,16 @@ export function OrcamentosScreen() {
   );
 
   return (
-    <FinanceAppShell
+    <AppShell
       activeRoute="/orcamentos"
-      header={
+      onProfilePress={() => router.push('/usuario' as never)}
+      pageHeader={
         <FinanceAppHeader
-          action={<GlassButton label="Novo" onPress={() => router.push('/orcamentos-form' as never)} />}
           eyebrow="Planejamento"
           subtitle="Controle o teto mensal de despesas."
           title="Orcamentos"
         />
       }
-      onNavigate={(route) => router.push(route as never)}
-      sidebarItems={financeSidebarItems}
     >
       <GlassPanel>
         <GlassField label="Ano">
@@ -105,9 +102,7 @@ export function OrcamentosScreen() {
       {!loading && !message && !orcamentos.length ? (
         <GlassStatusCard
           title="Nenhum orcamento encontrado"
-          description="Crie um orcamento mensal para acompanhar o limite de gastos."
-          actionLabel="Novo orcamento"
-          onActionPress={() => router.push('/orcamentos-form' as never)}
+          description="Use o menu + para criar um orcamento mensal e acompanhar o limite de gastos."
         />
       ) : null}
 
@@ -149,7 +144,7 @@ export function OrcamentosScreen() {
             </GlassPanel>
           ))
         : null}
-    </FinanceAppShell>
+    </AppShell>
   );
 }
 

@@ -58,7 +58,7 @@ describe('DividasScreen', () => {
     });
   });
 
-  it('navigates to create, edit and payment screens', async () => {
+  it('opens profile, creates globally and keeps contextual routes', async () => {
     mockListDividas.mockResolvedValue([divida]);
 
     render(<DividasScreen />);
@@ -67,7 +67,11 @@ describe('DividasScreen', () => {
       expect(screen.getByText('Emprestimo banco')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText('Nova'));
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
+
+    fireEvent.press(screen.getByLabelText('Abrir ações rápidas'));
+    fireEvent.press(screen.getByLabelText('Nova dívida'));
     expect(mockPush).toHaveBeenCalledWith('/dividas-form');
 
     fireEvent.press(screen.getByText('Editar'));

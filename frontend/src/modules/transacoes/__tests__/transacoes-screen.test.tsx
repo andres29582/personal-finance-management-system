@@ -1,3 +1,5 @@
+import { act } from '@testing-library/react-native';
+import { getSessionAuthority } from '../../auth/services/sessionAuthority';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import { TransacoesScreen } from '../screens/TransacoesScreen';
@@ -32,6 +34,12 @@ jest.mock('../../contas/services/contaService');
 jest.mock('../services/transacaoService');
 jest.mock('../../../../storage/authStorage');
 jest.mock('../../../../utils/confirm-action');
+jest.mock('../../auth/services/sessionAuthority', () => ({getSessionAuthority: require('@jest/globals').jest.fn(), subscribeSessionAuthority: () => () => {}}));
+beforeEach(() => {
+  jest.mocked(authStorage.getSessionGeneration).mockReturnValue(1);
+  jest.mocked(authStorage.isLocallySignedOut).mockReturnValue(false);
+  jest.mocked(getSessionAuthority).mockReturnValue({snapshot:{incarnation:'owner',sessionId:'session',generation:1}} as never);
+});
 
 const mockListContas = contaService.listContas as jest.MockedFunction<typeof contaService.listContas>;
 const mockGetContaById = contaService.getContaById as jest.MockedFunction<typeof contaService.getContaById>;
@@ -67,29 +75,29 @@ describe('TransacoesScreen', () => {
     mockConfirmAction.mockResolvedValue(true);
   });
 
-  it('renders transactions with category, account and formatted amount', async () => {
+  it('groups transactions by date and renders compact row semantics', async () => {
     mockSuccessfulLoad();
 
     render(<TransacoesScreen />);
 
     await waitFor(() => {
       expect(screen.getByText('Transacoes')).toBeTruthy();
+      expect(screen.getByText('01/05/2026')).toBeTruthy();
       expect(screen.getByText('Compra mercado')).toBeTruthy();
-      expect(screen.getByText('01/05/2026 - Alimentacao')).toBeTruthy();
-      expect(screen.getByText('Conta: Conta Corrente')).toBeTruthy();
-      expect(screen.getByText('R$ 50,00')).toBeTruthy();
+      expect(screen.getByText('Conta Corrente - Alimentacao')).toBeTruthy();
+      expect(screen.getByText('- R$ 50,00')).toBeTruthy();
       expect(screen.getByText('Despesa')).toBeTruthy();
     });
   });
 
-  it('only reloads after applying the draft filters', async () => {
+  it('applies type immediately and a valid month when the field loses focus', async () => {
     mockSuccessfulLoad();
 
     render(<TransacoesScreen />);
 
     await waitFor(() => {
       expect(mockListTransacoes).toHaveBeenCalledWith({
-        mes: expect.any(String),
+        mes: expect.any(String), limit: 50, offset: 0,
         tipo: undefined,
       });
     });
@@ -97,16 +105,20 @@ describe('TransacoesScreen', () => {
     fireEvent.press(screen.getByText('Receitas'));
     fireEvent.changeText(screen.getByPlaceholderText('2026-04'), '2026-06');
 
-    expect(mockListTransacoes).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockListTransacoes).toHaveBeenLastCalledWith({
+        mes: expect.any(String), limit: 50, offset: 0,
+        tipo: 'receita',
+      });
+    });
 
-    fireEvent.press(screen.getByText('Aplicar filtros'));
+    fireEvent(screen.getByPlaceholderText('2026-04'), 'blur');
 
     await waitFor(() => {
       expect(mockListTransacoes).toHaveBeenLastCalledWith({
-        mes: '2026-06',
+        mes: '2026-06', limit: 50, offset: 0,
         tipo: 'receita',
       });
-      expect(mockListTransacoes).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -139,7 +151,7 @@ describe('TransacoesScreen', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText('Categoria arquivada')).toHaveLength(2);
-      expect(screen.getAllByText('Conta: Conta encerrada')).toHaveLength(2);
+      expect(screen.getAllByText('Conta encerrada - Categoria arquivada')).toHaveLength(2);
       expect(mockGetContaById).toHaveBeenCalledTimes(1);
       expect(mockGetContaById).toHaveBeenCalledWith('conta-historica');
       expect(mockGetCategoriaById).toHaveBeenCalledTimes(1);
@@ -147,7 +159,7 @@ describe('TransacoesScreen', () => {
     });
   });
 
-  it('navigates to create and edit transaction screens', async () => {
+  it('opens the profile, uses global quick actions, and opens the edit sheet', async () => {
     mockSuccessfulLoad();
 
     render(<TransacoesScreen />);
@@ -156,9 +168,15 @@ describe('TransacoesScreen', () => {
       expect(screen.getByText('Compra mercado')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText('Nova'));
-    expect(mockPush).toHaveBeenCalledWith('/transacoes-form');
+    fireEvent.press(screen.getByLabelText('Abrir perfil do usuário'));
+    expect(mockPush).toHaveBeenCalledWith('/usuario');
 
+    fireEvent.press(screen.getByLabelText('Abrir ações rápidas'));
+    fireEvent.press(screen.getByLabelText('Nova despesa'));
+    expect(mockPush).toHaveBeenCalledWith('/transacoes-form?tipo=despesa');
+
+    fireEvent.press(screen.getByText('Compra mercado'));
+    await waitFor(() => expect(screen.getByText('Editar')).toBeTruthy());
     fireEvent.press(screen.getByText('Editar'));
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/transacoes-form',
@@ -173,9 +191,11 @@ describe('TransacoesScreen', () => {
     render(<TransacoesScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('Excluir')).toBeTruthy();
+      expect(screen.getByText('Compra mercado')).toBeTruthy();
     });
 
+    fireEvent.press(screen.getByText('Compra mercado'));
+    await waitFor(() => expect(screen.getByText('Excluir')).toBeTruthy());
     fireEvent.press(screen.getByText('Excluir'));
 
     await waitFor(() => {
@@ -203,4 +223,30 @@ describe('TransacoesScreen', () => {
       expect(screen.getByText('Sessao expirada. Faca login novamente.')).toBeTruthy();
     });
   });
+});
+
+it('requests real pages and resets offset with a type filter', async () => {
+  mockSuccessfulLoad();
+  mockListTransacoes.mockResolvedValue(Array.from({length:50},(_,index)=>({...transacao,id:String(index)})));
+  render(<TransacoesScreen />);
+  await screen.findByText('Pagina 1');
+  await waitFor(() => expect(screen.getByRole('button', {name: 'Proxima pagina'}).props.accessibilityState?.disabled ?? false).toBe(false));
+  fireEvent.press(screen.getByText('Proxima pagina'));
+  await waitFor(()=>expect(mockListTransacoes).toHaveBeenLastCalledWith(expect.objectContaining({limit:50,offset:50})));
+  fireEvent.press(screen.getByText('Receitas'));
+  await waitFor(()=>expect(mockListTransacoes).toHaveBeenLastCalledWith(expect.objectContaining({tipo:'receita',limit:50,offset:0})));
+});
+
+it('ignores historical labels completed after a newer filter request', async()=>{
+  jest.clearAllMocks(); mockSuccessfulLoad();
+  let finish: (value: typeof conta) => void = () => {};
+  mockListTransacoes.mockResolvedValueOnce([{...transacao,contaId:'archived',descricao:'Obsolete transaction'}]).mockResolvedValue([{...transacao,descricao:'Current transaction'}]);
+  mockGetContaById.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+  render(<TransacoesScreen/>);
+  await waitFor(()=>expect(mockGetContaById).toHaveBeenCalledWith('archived'));
+  fireEvent.press(screen.getByText('Receitas'));
+  await screen.findByText('Current transaction');
+  await act(async()=>finish({...conta,id:'archived'}));
+  expect(screen.queryByText('Obsolete transaction')).toBeNull();
+  expect(screen.getByText('Current transaction')).toBeTruthy();
 });

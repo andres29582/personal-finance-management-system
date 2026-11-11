@@ -46,6 +46,7 @@ describe('RootLayout route guard', () => {
     '/forgot-password',
     '/reset-password-token',
     '/privacidade',
+    '/prototype/slime',
   ])('allows unauthenticated access to %s', async (path) => {
     renderRoute(path, null);
 
