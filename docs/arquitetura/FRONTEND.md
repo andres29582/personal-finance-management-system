@@ -101,9 +101,131 @@ src/modules/<dominio>/
 Nem todo modulo precisa criar todas as pastas de inicio. A pasta deve existir
 quando houver responsabilidade real para ela.
 
-A navegacao autenticada usa itens compartilhados em
-`src/shared/navigation/financeNavigation.ts`. Essa lista alimenta o shell
-financeiro compartilhado e evita que cada tela recrie manualmente a sidebar.
+A navegacao principal possui dois contratos durante a migracao visual:
+
+- `AppShell` e o contrato canonico para os fluxos moveis ja migrados e para a
+  pagina publica de privacidade, que preserva sua regra de acesso;
+- `FinanceAppShell` continua atendendo as telas legadas com os itens de
+  `src/shared/navigation/financeNavigation.ts`.
+
+### Contrato canonico do shell movel
+
+`src/shared/ui/AppShell.tsx` e a moldura principal dos fluxos moveis atuais.
+Ele controla area segura, marca com retorno ao dashboard, perfil, logout
+opcional, rolagem da pagina, limite de largura, footer e menu global `+`.
+Dashboard, Contas (lista, criacao e edicao), Transacoes (lista e formulario),
+Categorias (lista e formulario), Transferencias (lista e formulario), Orcamentos
+(lista e formulario), Metas (lista e formulario), Dividas (lista, formulario e
+pagamentos), Alertas (lista e formulario), Relatorios, Planejamentos (lista,
+detalhe, criacao, participante e gasto), Previsao ML e Decisoes sao os
+consumidores financeiros atuais. Usuario, Auditoria e Privacidade completam a
+migracao; Privacidade continua publica, enquanto Usuario e Auditoria continuam
+protegidas pelo `RootLayout`.
+Todo consumidor deve conectar o perfil a `/usuario`; logout permanece opcional
+porque depende de quem possui o estado da sessao.
+
+#### Footer primario
+
+| Label | Rota |
+| --- | --- |
+| Dashboard | `/dashboard` |
+| Planejamentos | `/planejamentos` |
+| Previsao ML | `/previsao-deficit` |
+| Decisoes | `/decisoes` |
+
+O footer contem apenas destinos primarios. `activeRoute` seleciona um item
+somente quando a rota atual pertence a essa lista. Por isso telas contextuais,
+como `/transacoes` e `/transacoes-form`, nao marcam uma aba artificial.
+
+#### Menu global `+`
+
+`QuickActionsMenu` concentra destinos secundarios independentes de uma
+entidade previamente selecionada:
+
+| Grupo | Acoes |
+| --- | --- |
+| Registrar | Nova despesa (`/transacoes-form?tipo=despesa`), nova receita (`/transacoes-form?tipo=receita`), nova conta (`/contas-create`), transferencia (`/transferencias-form`), divida (`/dividas-form`), meta (`/metas-form`), orcamento (`/orcamentos-form`), categoria (`/categorias-form`) e alerta (`/alertas-form`) |
+| Gestionar | Contas (`/contas`); **pagar divida (`/pagos-divida`) e um acesso incorreto ainda presente** |
+| Consultar | Relatorios (`/relatorios`) |
+
+#### Matriz de acesso visivel (38 rotas Expo)
+
+| Classe | Rotas | Entrada real e contrato |
+| --- | --- | --- |
+| Footer | `/dashboard`, `/planejamentos`, `/previsao-deficit`, `/decisoes` | Quatro abas globais do `AppShell`; nenhuma rota contextual deve aparecer aqui. |
+| Menu `+` | `/transacoes-form` (receita/despesa), `/contas-create`, `/transferencias-form`, `/dividas-form`, `/metas-form`, `/orcamentos-form`, `/categorias-form`, `/alertas-form`, `/contas`, `/relatorios` | Acoes globais independentes de uma entidade, definidas em `financeQuickActionGroups`. Os formularios compartilhados podem receber `id` para edicao contextual, mas a criacao nao exige esse parametro. |
+| Perfil | `/usuario`, `/reset-password`, `/privacidade`, `/audit-logs` | Botao de perfil do shell leva a `/usuario`; a tela de perfil oferece acessos visiveis a senha, privacidade e auditoria. Nao sao abas nem acoes globais. |
+| Contextual com entidade obrigatoria | `/contas-edit` (`id`), `/planejamentos-detail` (`id`), `/planejamentos-participante-form` (`id`), `/planejamentos-gasto-form` (`id`), `/pagos-divida` (`dividaId`) | Somente a partir da conta, planejamento ou divida selecionada. O teste de `DividasScreen` verifica o envio de `dividaId`; `PagosDividaScreen` nao funciona sem ele. |
+| Contextual ou publico com entrada visivel | `/transacoes`, `/orcamentos`, `/metas`, `/planejamentos-form`, `/forgot-password`, `/register` | Cards do dashboard, lista de planejamentos ou fluxo publico de autenticacao; nao precisam virar destinos globais duplicados. `/privacidade` tambem permanece publica a partir do cadastro, sem exibir navegacao autenticada para visitantes. |
+| Retorno apos formulario, sem entrada estavel | `/categorias`, `/transferencias`, `/dividas`, `/alertas` | As telas existem, mas hoje so sao alcancaveis indiretamente apos salvar o respectivo formulario; falta um acesso de listagem independente. |
+| Rota legada redundante | `/home` | Nao recebe novo acesso: o dashboard ja cobre essa entrada. |
+| Entrada externa ou tecnica | `/reset-password-token`, `/`, `/login`, `/prototype/slime` | Link de recuperacao de senha, redirects/entrada de sessao e prototipo; fora da navegacao autenticada. |
+
+**Pendente para a fase de acoes:** o menu `+` ainda publica `Pagar divida`
+como `/pagos-divida` sem `dividaId`. Essa entrada nao satisfaz o contrato
+contextual e deve sair do menu global; o acesso valido ja existe em
+`DividasScreen`. O teste de contrato registra a exclusividade como `it.todo`
+ate essa correcao, sem deixar a suite vermelha nesta fase. A matriz descreve
+o acesso real e aponta as lacunas, nao promete alcance que a UI ainda nao tem.
+
+Regras de navegacao:
+
+- nao duplicar no menu os quatro destinos do footer;
+- manter criacao e listagens autonomas no menu global, quando houver entrada
+  implementada;
+- manter edicao, exclusao, desativacao e detalhes junto da entidade escolhida;
+- nunca publicar globalmente uma rota que exige `id` ou `dividaId` de uma
+  entidade selecionada;
+- usar `pageHeader` para voltar ou expor uma acao propria da tela;
+- toda nova entrada deve apontar para uma rota existente, protegida e testada.
+
+#### Primitivas visuais e estados
+
+| Peca | Responsabilidade |
+| --- | --- |
+| `FinanceTheme` | Cores, tipografia, espacamento, raios, bordas, opacidade e sombras |
+| `FinanceLayout` | Breakpoints, padding responsivo e largura maxima |
+| `FinanceAppHeader` | Eyebrow, titulo, subtitulo, metadado e acao contextual |
+| `GlassPanel`, `GlassField`, `GlassButton`, `LiquidButton` | Superficies, formularios e acoes reutilizaveis |
+| `GlassStatusCard` | Loading, erro, vazio e sucesso, com retry quando aplicavel |
+| `useReducedMotion` | Desativa animacao continua quando solicitado pelo sistema |
+
+O `ScrollView` externo pertence ao `AppShell`; consumidores nao devem criar
+outra rolagem de pagina. Listas, filtros e estados de dominio continuam dentro
+da tela.
+
+#### Limites de migracao
+
+`FinanceAppShell`, `FinanceSidebar` e `financeSidebarItems` formam o contrato
+legado ainda usado pelas telas nao migradas. Eles nao devem ser alterados para
+imitar o footer movel nem migrados em lote; cada dominio exige uma fase propria
+com seus testes.
+
+`components/auth-screen.tsx` e o shell publico separado de login e cadastro.
+Ele preserva fundo, teclado, rolagem e card glass, compartilhando tema e campos,
+mas nunca footer, perfil ou menu `+` do shell principal. Privacidade e a unica
+rota publica que compartilha `AppShell`; seus destinos financeiros permanecem
+protegidos pelo guard central.
+
+#### Checklist manual no Expo Go
+
+- abrir Dashboard, Contas, criacao/edicao de conta, Transacoes, formulario de
+  transacao, Categorias, formulario de categoria, Transferencias, formulario de
+  transferencia, Orcamentos, formulario de orcamento, Metas, formulario de meta,
+  Dividas, formulario e pagamentos de divida, Alertas, formulario de alerta e
+  Relatorios, Planejamentos, detalhe, formulario, participante e gasto,
+  Previsao ML e Decisoes;
+- abrir Usuario, Auditoria e Privacidade, incluindo Privacidade sem sessao;
+- confirmar area segura, rolagem e conteudo sem sobreposicao do footer;
+- abrir o teclado nos formularios e confirmar que campos e acoes continuam
+  alcancaveis pela rolagem;
+- validar aba ativa somente nas quatro rotas primarias;
+- abrir, rolar e fechar o menu `+` por botao e backdrop;
+- confirmar destinos, inclusive tipo receita/despesa;
+- abrir `/usuario` pelo perfil em todos os consumidores;
+- confirmar que `/usuario` e `/audit-logs` continuam protegidas e que os botoes
+  publicos de Privacidade retornam a login e cadastro;
+- validar labels do leitor de tela e reduced motion.
 
 ## Fluxo de autenticacao e protecao de rotas
 
@@ -211,10 +333,11 @@ Principais pecas:
 
 - `FinanceTheme`: paleta dark fintech, acentos, espacamentos, raios, bordas e
   tipografia.
-- `FinanceAppShell`: estrutura autenticada com area segura, fundo, sidebar e
-  conteudo responsivo.
+- `AppShell`: shell movel autenticado com footer e menu global `+`.
+- `QuickActionsMenu`: navegacao secundaria global agrupada por intencao.
+- `FinanceAppShell`: shell legado responsivo com sidebar.
 - `FinanceAppHeader`: cabecalho autenticado com titulo, usuario e acoes.
-- `FinanceSidebar`: navegacao principal compartilhada.
+- `FinanceSidebar`: navegacao principal das telas legadas.
 - `GlassPanel`, `GlassButton`, `GlassField`, `GlassStatusCard`,
   `GlassOptionGroup` e `NeonIconButton`: componentes visuais reutilizaveis.
 
@@ -282,8 +405,8 @@ recomendada e:
 4. manter validacoes e normalizacao de payload em funcoes pequenas;
 5. manter rotas em `frontend/app` como adaptadores finos.
 
-Prioridades atuais de atencao: planejamentos, usuario, relatorios, cadastro e
-formularios financeiros complexos.
+Os consumidores autenticados ainda no shell legado sao `HomeScreen` e o
+wrapper `DashboardShell`.
 
 No detalhe de Planejamentos, carregamento de dados e mutacoes permanecem
 separados em hooks, com capacidades centralizadas. Proprietario e participante
@@ -301,6 +424,8 @@ O contrato entre frontend e backend esta documentado em
 Riscos atuais:
 
 - DTOs e types do frontend ainda sao mantidos manualmente;
+- `UserProfile.dataRegistro` e retornado por `UsersService` e consumido no
+  perfil, mas ainda nao aparece no schema Swagger `PublicUser`;
 - services contem paths de endpoint escritos manualmente;
 - o client Axios desembrulha o envelope global de sucesso, entao e preciso
   diferenciar tipo transportado pela API e tipo consumido pela tela;
@@ -314,6 +439,11 @@ serem consumidos pelo frontend.
 - Contratos API manuais podem divergir do Swagger.
 - Telas grandes podem misturar responsabilidades e dificultar testes.
 - Cores hardcoded ainda existem fora do tema compartilhado.
+- `HomeScreen` e `DashboardShell` ainda dependem do shell legado; a migracao em
+  lote continua fora do escopo por impacto compartilhado.
+- O lint completo ainda encontra divida preexistente em efeitos/refs de
+  `PagosDividaScreen` e formularios complexos de Planejamentos; as migracoes de
+  shell nao alteram essa logica de dominio.
 - Nomes tecnicos ainda misturam portugues, ingles e espanhol por historico de
   contrato e dominio.
 - Scripts de validacao eram incompletos antes da inclusao de `typecheck` e
@@ -399,3 +529,11 @@ isolamento por usuario. Mudancas nessas telas devem validar:
 Este documento deve permanecer como visao arquitetural. Detalhes operacionais,
 comandos e evidencias pontuais de execucao devem ficar no README ou nos
 documentos de desenvolvimento.
+
+## Credenciais: respostas obsoletas
+
+A troca autenticada pede senha atual exata e confirmacao local. Storage e refresh
+usam geracao de sessao e fila de mutacoes no mesmo runtime: sucesso antigo nao
+restaura credenciais e falha antiga nao limpa login novo. Abas distintas nao sao
+coordenadas nesta etapa; autoridade continua no servidor.
+[Estado e testes](../validacao/SEGURANCA_CREDENCIAIS_ETAPA_1_RESULTADO.md).

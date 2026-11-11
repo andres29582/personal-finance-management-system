@@ -146,7 +146,9 @@ orcamentos, alem de planejamento compartilhado, participante, gasto, divisao e
 acerto de Planejamentos.
 
 Como `synchronize` esta desativado, migrations SQL sao parte do contrato de
-evolucao do schema. Hoje elas ficam em `backendnest/migrations/`:
+evolucao do schema. Para especificacao completa de tabelas, indices, constraints e diagrama ERD, consulte [BANCO_DE_DADOS.md](BANCO_DE_DADOS.md).
+
+Hoje elas ficam em `backendnest/migrations/`:
 
 - `0001_mvp_baseline.sql`;
 - `0002_align_schema_and_create_orcamento.sql`;
@@ -154,7 +156,18 @@ evolucao do schema. Hoje elas ficam em `backendnest/migrations/`:
 - `0004_add_auth_session.sql`;
 - `0005_add_audit_log.sql`;
 - `0006_soft_delete_lgpd_password_reset.sql`;
-- `0007_create_planejamentos_compartilhados.sql`.
+- `0007_create_planejamentos_compartilhados.sql`;
+- `0008_align_divida_monetary_precision.sql`;
+- `0009_align_transacao_schema.sql`;
+- `0010_harden_auth_session_lookup.sql`;
+- `0011_add_transacao_positive_amount_check.sql`;
+- `0012_align_orcamento_month_constraint.sql`;
+- `0013_create_orcamento_categoria.sql`;
+- `0014_invalidate_password_reset_tokens.sql`;
+- `0015_password_changed_outbox.sql`;
+- `0016_add_session_policy.sql`;
+- `0017_add_session_reauthentication_budget.sql`;
+- `0018_transfer_create_intent.sql`.
 
 `synchronize: false` permanece obrigatorio, e as migrations continuam sendo
 aplicadas manualmente.
@@ -265,13 +278,24 @@ logger operacional; o `AuditLog` consultavel pelo usuario recebe apenas mensagem
 publica e metadados seguros. Campos sensiveis sao sanitizados, e emails/CPFs sao
 mascarados.
 
-Planejamentos possui uma excecao intencional ao caminho defensivo global. Suas
-mutacoes auditadas chamam `logEntityEventTransactional` com o mesmo
-`EntityManager` da transacao do agregado. Nesses fluxos, a auditoria e a ultima
-escrita logica e uma falha ao inserir `audit_log` deve provocar rollback da
-mutacao e dos efeitos derivados. Os payloads registram IDs, status e dados
-operacionais minimos, sem nomes, emails, observacoes, DTOs ou entidades
-completas.
+As mutacoes de transacoes financeiras (`POST`, `PATCH` e `DELETE`) e as
+mutacoes auditadas de Planejamentos chamam `logEntityEventTransactional` com o
+mesmo `EntityManager` da operacao. A gravacao do evento em `audit_log` participa
+da mesma transacao; se ela falhar, a mutacao e revertida. Isso e distinto do
+logging global best-effort: eventos de autenticacao, negacoes 401/403 e falhas
+5xx continuam sem condicionar a resposta HTTP. Os payloads transacionais
+registram apenas dados operacionais minimos.
+
+O contrato de `GET /transacoes` esta detalhado no OpenAPI. A listagem aceita os
+filtros `mes`, `tipo`, `contaId` e `categoriaId`, alem de `limit` (1 a 100,
+padrao 50) e `offset` (minimo 0, padrao 0). A pagina usa `take`/`skip`, ordena
+por `data DESC` e `createdAt DESC`, e retorna uma lista sem metadados de total.
+Um EXPLAIN local sobre apenas 33 linhas (cerca de 1,08 ms) nao e evidencia
+suficiente para descartar um indice composto em producao; reavalie com volume,
+distribuicao e consultas representativos antes de decidir sobre indice.
+
+A migration `0011_add_transacao_positive_amount_check.sql` adiciona a
+constraint `chk_transacao_valor_positivo` (`valor > 0`) para transacoes.
 
 A consulta de auditoria fica em `GET /audit-logs`, protegida por JWT e limitada
 ao usuario autenticado.
@@ -337,3 +361,11 @@ promover mudancas de schema, conferir:
 Este documento deve ficar focado na arquitetura. Passos operacionais detalhados,
 comandos repetitivos e credenciais demo devem permanecer nos documentos
 operacionais.
+
+## Fronteira transacional de credenciais
+
+Login, emissao de recuperacao, consumo/troca e refresh coordenam pela linha
+`usuario` antes de tokens/sessoes. Hash verificado fora do lock precisa ser
+revalidado; recuperacao distingue consumo e invalidacao. Nao existe entrega
+duravel de notificacao de senha alterada nesta entrega parcial.
+[Contratos, limites e evidencia](../validacao/SEGURANCA_CREDENCIAIS_ETAPA_1_RESULTADO.md).

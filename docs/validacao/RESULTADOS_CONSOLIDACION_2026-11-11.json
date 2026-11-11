@@ -1,0 +1,248 @@
+{
+  "date": "2026-11-11",
+  "status": "CONSOLIDADO_CON_FALLOS_CONOCIDOS",
+  "codeCandidate": "f8e2168df2f4135b1b11dddc7da4585d7ae048d8",
+  "runtime": {
+    "node": "22.23.4",
+    "npm": "10.9.9",
+    "git": "2.56.1.windows.1",
+    "gitnexus": "1.6.12"
+  },
+  "installations": {
+    "backendClean": {
+      "exitCode": 0,
+      "packages": 780
+    },
+    "frontendFinalClean": {
+      "exitCode": 0,
+      "packages": 1101,
+      "command": "npm ci --offline --no-audit --no-fund"
+    }
+  },
+  "types": {
+    "backend": 0,
+    "frontend": 0
+  },
+  "builds": {
+    "nest": 0,
+    "expoWeb": 0
+  },
+  "jest": {
+    "backend": {
+      "passed": 1079,
+      "failed": 1,
+      "suites": 100,
+      "failures": [
+        {
+          "file": "backendnest/src/transacoes/repositories/transacao.repository.spec.ts",
+          "name": "TransacaoRepository keeps filters and ordering while applying bounded pagination"
+        }
+      ]
+    },
+    "frontend": {
+      "passed": 837,
+      "failed": 36,
+      "suites": 95,
+      "failures": [
+        {
+          "file": "frontend/src/modules/planejamentos/__tests__/planejamentos-gasto-form.test.tsx",
+          "name": "PlanejamentoGastoFormScreen abre o perfil pelo shell movel"
+        },
+        {
+          "file": "frontend/src/modules/planejamentos/__tests__/usePlanejamentoDetailMutations.test.tsx",
+          "name": "usePlanejamentoDetailMutations trata sessao expirada e delega o redirecionamento"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects unauthenticated access to /dashboard"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects unauthenticated access to /contas-create"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects unauthenticated access to /decisoes"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects unauthenticated access to /usuario"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects unauthenticated access to /reset-password"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects unauthenticated access to /audit-logs"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard allows unauthenticated access to /login"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard allows unauthenticated access to /register"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard allows unauthenticated access to /forgot-password"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard allows unauthenticated access to /reset-password-token"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard allows unauthenticated access to /privacidade"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard allows unauthenticated access to /prototype/slime"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects authenticated access to /login to dashboard"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects authenticated access to /register to dashboard"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard redirects authenticated access to / to dashboard"
+        },
+        {
+          "file": "frontend/__tests__/navigation/protected-routes.test.ts",
+          "name": "RootLayout route guard does not navigate before the root navigation state is ready"
+        },
+        {
+          "file": "frontend/src/modules/transacoes/__tests__/transacoes-screen.test.tsx",
+          "name": "TransacoesScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/audit-logs/__tests__/audit-logs-screen.test.tsx",
+          "name": "AuditLogsScreen redirects to login when audit log request returns unauthorized"
+        },
+        {
+          "file": "frontend/src/modules/pagos-divida/__tests__/pagos-divida-screen.test.tsx",
+          "name": "PagosDividaScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/transferencias/__tests__/transferencias-screen.test.tsx",
+          "name": "TransferenciasScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/dividas/__tests__/dividas-screen.test.tsx",
+          "name": "DividasScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/relatorios/__tests__/relatorios-screen.test.tsx",
+          "name": "RelatoriosScreen redirects to login when report generation returns unauthorized"
+        },
+        {
+          "file": "frontend/src/modules/previsao-deficit/__tests__/previsao-screen.test.tsx",
+          "name": "PrevisaoDeficitScreen redirects to login when prediction returns unauthorized"
+        },
+        {
+          "file": "frontend/src/modules/contas/__tests__/contas-screen.test.tsx",
+          "name": "ContasScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/categorias/__tests__/categorias-screen.test.tsx",
+          "name": "CategoriasScreen redirects to login when loading fails with an unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/metas/__tests__/metas-screen.test.tsx",
+          "name": "MetasScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/alertas/__tests__/alertas-screen.test.tsx",
+          "name": "AlertasScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/orcamentos/__tests__/orcamentos-screen.test.tsx",
+          "name": "OrcamentosScreen redirects to login when loading fails with unauthorized error"
+        },
+        {
+          "file": "frontend/src/modules/pagos-divida/validators/__tests__/pagoDividaForm.test.ts",
+          "name": "validatePagoDividaForm rejects empty or invalid payment value: "
+        },
+        {
+          "file": "frontend/src/modules/pagos-divida/validators/__tests__/pagoDividaForm.test.ts",
+          "name": "validatePagoDividaForm rejects empty or invalid payment value: valor-invalido"
+        },
+        {
+          "file": "frontend/src/modules/pagos-divida/validators/__tests__/pagoDividaForm.test.ts",
+          "name": "validatePagoDividaForm rejects non-positive payment value: 0"
+        },
+        {
+          "file": "frontend/src/modules/pagos-divida/validators/__tests__/pagoDividaForm.test.ts",
+          "name": "validatePagoDividaForm rejects non-positive payment value: -10"
+        },
+        {
+          "file": "frontend/src/modules/pagos-divida/validators/__tests__/pagoDividaForm.test.ts",
+          "name": "validatePagoDividaForm rejects invalid calendar date"
+        },
+        {
+          "file": "frontend/src/modules/pagos-divida/validators/__tests__/pagoDividaForm.test.ts",
+          "name": "validatePagoDividaForm rejects Brazilian date format"
+        }
+      ],
+      "comparedWithCleanInitialNode22": {
+        "introduced": [],
+        "notReproduced": []
+      }
+    }
+  },
+  "focusedB1": {
+    "typesExit": 0,
+    "passed": 351,
+    "failed": 0,
+    "suites": 37
+  },
+  "offlineHarness": {
+    "passed": 98,
+    "failed": 0,
+    "realPostgres": false,
+    "realBrowser": false
+  },
+  "lint": {
+    "backend": {
+      "full": {
+        "files": 374,
+        "errors": 1555,
+        "warnings": 140
+      },
+      "maintainedSources": {
+        "files": 374,
+        "errors": 1555,
+        "warnings": 140
+      },
+      "excludedGeneratedPath": null,
+      "autofix": false
+    },
+    "frontend": {
+      "full": {
+        "files": 380,
+        "errors": 3784,
+        "warnings": 2564
+      },
+      "maintainedSources": {
+        "files": 379,
+        "errors": 70,
+        "warnings": 78
+      },
+      "excludedGeneratedPath": "frontend/smoke-web",
+      "autofix": false
+    }
+  },
+  "notExecuted": [
+    "PostgreSQL integration and migrations",
+    "Browser E2E",
+    "Android/iOS runtime",
+    "ML Python tests",
+    "Remote CI and P4 execution"
+  ],
+  "evidenceCustody": "Private preservation package; full logs and raw JSON are not published."
+}

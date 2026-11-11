@@ -217,3 +217,29 @@ as tabelas `planejamento`, `participante_planejamento`,
 ## Conclusao
 
 A API esta funcionalmente coerente entre backend, frontend e testes automatizados para os fluxos usados hoje pela aplicacao. O contrato oficial agora esta formalizado em `backendnest/swagger.yaml`, e os README apontam para essa fonte. Este relatorio permanece como auditoria tecnica e nao substitui o contrato OpenAPI.
+
+### Acompanhamento do modulo de transacoes - 2026-09-19
+
+Esta nota complementa o retrato historico acima; nao altera os resultados nem
+os comandos executados naquela auditoria. O contrato atual de `GET
+/transacoes` no OpenAPI inclui os filtros `mes`, `tipo`, `contaId` e
+`categoriaId`, alem de `limit` (1..100, padrao 50) e `offset` (>=0, padrao 0).
+A pagina usa `take`/`skip`, ordena por `data DESC` e `createdAt DESC` e retorna
+uma lista sem metadados de total. O frontend atualmente envia apenas os quatro
+filtros de negocio, sem paginacao explicita.
+
+Tambem foi conferida a migration `0011_add_transacao_positive_amount_check.sql`,
+que adiciona `CHECK (valor > 0)`. Criacao, atualizacao e exclusao logica de
+transacoes gravam o evento de auditoria na mesma transacao; falha dessa escrita
+reverte a mutacao. Essa garantia e especifica a esse caminho transacional e nao
+substitui nem generaliza o logging global best-effort. Um EXPLAIN local com 33
+linhas (aproximadamente 1,08 ms) e insuficiente para concluir que nao sera
+necessario indice composto em producao.
+
+## Atualizacao de credenciais - 2026-10-05
+
+`POST /auth/reset-password` exige `senhaAtual` e `novaSenha`; mantem 201.
+Senha atual incorreta retorna 400 `AUTH_CURRENT_PASSWORD_INVALID`, sem revogacao;
+prova/sessao concorrente invalida retorna 401 `AUTH_INVALID_SESSION`. Contrato
+estatico atualizado em `backendnest/swagger.yaml`. Verificacao HTTP isolada nao
+substitui PostgreSQL: [evidencias e pendencias](SEGURANCA_CREDENCIAIS_ETAPA_1_RESULTADO.md).

@@ -37,7 +37,7 @@ A pasta `arquitetura/` descreve a organização técnica do sistema, seus módul
 - [Arquitetura do Módulo de Machine Learning](arquitetura/MACHINE_LEARNING.md): fonte oficial da integracao ML.
 - [Design System do Frontend](arquitetura/FRONTEND_DESIGN_SYSTEM.md): parcial; guia de evolucao visual do frontend.
 - [Arquitetura do Dashboard Frontend](arquitetura/FRONTEND_DASHBOARD.md): parcial; historico tecnico detalhado do dashboard.
-- Arquitetura de banco de dados: documento dedicado ainda nao existe.
+- [Arquitetura e Especificação do Banco de Dados](arquitetura/BANCO_DE_DADOS.md): fonte oficial do modelo de dados, dicionário de tabelas, ERD e catálogo de migrações.
 - Segurança: documento dedicado ainda nao existe.
 
 ## Operação
@@ -50,6 +50,7 @@ A pasta `operacao/` deve reunir instruções para preparar ambientes, executar o
 - CI/CD: em construção
 - Seed demo: em construção
 - [Runbook Operacional Local](operacao/RUNBOOK.md)
+- [U5 — controles antes da ativação](operacao/SESSOES_U5_DEPLOYMENT.md): ensaio privado concluído; deploy real bloqueado. [Gate manual de schema](operacao/U5_PREDEPLOY_CHECK.sql), não readiness automática.
 
 ## Desenvolvimento
 
@@ -63,6 +64,7 @@ A pasta `desenvolvimento/` deve reunir práticas de desenvolvimento, testes, pad
 
 ## Validação
 
+- [Auditoria do estado atual — 15/10/2026](validacao/AUDITORIA_ESTADO_ATUAL_SISTEMA_2026-10-15.md): inventário, achados priorizados e limites das provas; não executa nem autoriza P4 ou entrega móvel.
 - [Validação de Endpoints e APIs](validacao/VALIDACAO_ENDPOINTS_APIS.md): relatório de auditoria; não substitui `backendnest/swagger.yaml`.
 - Contrato oficial HTTP: [backendnest/swagger.yaml](../backendnest/swagger.yaml).
 - Coleção Postman: não encontrada neste repositório.
@@ -101,6 +103,8 @@ A pasta `pesquisa/` deve reunir estudos e avaliações futuras que ainda não fa
 - Open Finance: em construção
 - Inteligência artificial: em construção
 - Funcionalidades futuras: em construção
+- [U5 — Gestão de sessões próprias: pesquisa e plano](planejamento/SEGURANCA_SESSOES_ETAPA_2_U5_PESQUISA.md): primeiro recorte implementado localmente. [Resultado atual e evidências](validacao/SEGURANCA_SESSOES_ETAPA_2_U5_RESULTADO.md): HTTP/PG 11/11 histórico, dois casos browser PASS em execuções separadas e controles privados U5D 10/10. CI remota PG16/deploy real ainda sem prova. Não encerra U3/U4/U5 nem ativa migrations no banco da aplicação.
+- [U6 — Preparação operacional local](validacao/SEGURANCA_SESSOES_ETAPA_2_U6_RESULTADO.md): coordenador offline, perfis e evidência sanitizada; 119 testes selecionados e polling são históricos. P1 PASS local no spec/tipos completos/build ([ficha P1](validacao/SEGURANCA_SESSOES_ETAPA_2_U6_RESULTADO.md#p1-tipos-backend-completos-corrigidos--2026-10-12)). P2 LOCAL_PASS delimitado: puro 16/16, negativo SQL nativo 2/2 e novo positivo C6 4/4, unidades separadas ([ficha P2 e limites](validacao/SEGURANCA_SESSOES_ETAPA_2_U6_RESULTADO.md#p2-prova-local-delimitada--2026-10-12)); observer OS ao vivo adicional do negativo permanece NOT_TESTED. P3/P4 OPEN; coordenador ainda fixa tipos/dispatch BLOCKED; CI/deploy não executados. [Pesquisa original](planejamento/SEGURANCA_SESSOES_ETAPA_2_U6_PESQUISA.md) e [plano atual](planejamento/SEGURANCA_SESSOES_ETAPA_2_U6_PENDENCIAS_PLANO.md). Produção BLOCKED; U6/etapa 2 OPEN, sem ativação.
 
 ## Governança documental
 
@@ -141,3 +145,10 @@ A pasta `arquivo/` contém documentos preservados por valor histórico, rastreab
 - [Relatório Auth Session Frontend](arquivo/relatorios-de-migracao/RELATORIO_AUTH_SESSION_FRONTEND.md)
 - [Relatório Rotas Protegidas Frontend](arquivo/relatorios-de-migracao/RELATORIO_ROTAS_PROTEGIDAS_FRONTEND.md)
 - [Roteiro Demo Antigo](arquivo/relatorios-de-migracao/ROTEIRO_DEMO_ANTIGO.md)
+
+## Preservación y consolidación — 11 de noviembre de 2026
+
+- [Informe de ejecución y estado consolidado](validacao/CONSOLIDACION_2026-11-11.md)
+- [Matriz completa de conservación](planejamento/MATRIZ_CONSERVACION_2026-11-11.json)
+- [Resultados y fallos pendientes](validacao/RESULTADOS_CONSOLIDACION_2026-11-11.json)
+- [Recuperación local comprobada](operacao/RECUPERACION_LOCAL_2026-11-11.md)

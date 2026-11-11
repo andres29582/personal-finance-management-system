@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !**/.env.example
+!backendnest/.env.production.example
 
 # Dependencias
 node_modules/
@@ -78,3 +79,8 @@ desktop.ini
 # Ferramentas locais
 .gitnexus/
 .expo/
+
+# Snapshots locales conservados como evidencia
+/navigation-delivery-piho88bu/
+/.navigation-delivery-jybd4rmv/
+/.atl/

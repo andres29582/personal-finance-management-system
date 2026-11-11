@@ -31,6 +31,7 @@ O sistema esta dividido em duas aplicacoes:
 - `transferencias` afetam o saldo das contas, mas nao entram em relatorios de receitas e despesas.
 - `pagos-divida` cria e exclui sua `transacao` associada dentro de uma transacao de banco de dados.
 - `saldoAtual` nao e persistido na tabela `conta`; ele e calculado a partir do saldo inicial, transacoes e transferencias.
+- Para o modelo de dados completo, dicionário de tabelas, índices e diagrama ERD, consulte [BANCO_DE_DADOS.md](BANCO_DE_DADOS.md).
 
 ## Frontend
 

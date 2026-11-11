@@ -1,0 +1,3597 @@
+{
+  "schemaVersion": 1,
+  "referenceDate": "2026-11-10",
+  "timezone": "America/Sao_Paulo",
+  "project": "meu-sistema-financeiro",
+  "branch": "codex/frontend-architecture-incremental",
+  "head": "43bcfac1817568d62ba7d1b0103468037cd4de6e",
+  "indexSha256": "65e3d1e039cf19da5f77a5736184886fa98d60e04a403a2c9080ad982c902216",
+  "indexMatchesHead": true,
+  "scope": "Preliminary planning inventory before creating this inventory and its accompanying plan. Generated directories and root logs omitted; .gitignore files applied; Git global excludes not evaluated.",
+  "counts": {
+    "tracked": 922,
+    "modified": 159,
+    "missing": 1,
+    "new": 195,
+    "changedPaths": 355
+  },
+  "areas": {
+    "ci": 2,
+    "tooling_config": 7,
+    "agent_guidance": 8,
+    "backend_other": 39,
+    "auth_backend": 39,
+    "backend_tests": 23,
+    "documentation": 29,
+    "frontend": 170,
+    "migrations": 5,
+    "session_harness": 33
+  },
+  "constraints": {
+    "gitCliAvailable": false,
+    "nodeCliAvailable": false,
+    "npmCliAvailable": false,
+    "gitnexusAvailable": false,
+    "worktreeRegistrations": 39,
+    "tmpTopLevelEntries": 191
+  },
+  "privateBackupOnly": [
+    "backendnest/.env",
+    "frontend/.env"
+  ],
+  "preserveIgnoredEvidence": true,
+  "backupCreated": false,
+  "commitsCreated": false,
+  "entries": [
+    {
+      "path": ".claude/skills/gitnexus/gitnexus-cli/SKILL.md",
+      "status": "new",
+      "area": "agent_guidance",
+      "indexBlob": null,
+      "rawSha256": "58f9f765306b285c661b86777e2097b3efb43dabe9e19d42f795e88faf9081a2",
+      "bytes": 4632,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".claude/skills/gitnexus/gitnexus-debugging/SKILL.md",
+      "status": "new",
+      "area": "agent_guidance",
+      "indexBlob": null,
+      "rawSha256": "d8090c85e2c8faffd4767fc2dcc52aeb3f3dab3dc7218bc96b29dacf53635d64",
+      "bytes": 3668,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".claude/skills/gitnexus/gitnexus-exploring/SKILL.md",
+      "status": "new",
+      "area": "agent_guidance",
+      "indexBlob": null,
+      "rawSha256": "21b18eee1f679efff654bf45f9dc32a495c81c014d210ac7e778c58a2a204dbd",
+      "bytes": 2978,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".claude/skills/gitnexus/gitnexus-guide/SKILL.md",
+      "status": "new",
+      "area": "agent_guidance",
+      "indexBlob": null,
+      "rawSha256": "746d057790de5b034d19d603dfa77eb9b596407918025481b4b29214efee2581",
+      "bytes": 10265,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md",
+      "status": "new",
+      "area": "agent_guidance",
+      "indexBlob": null,
+      "rawSha256": "09e529505da155532059a3656557811f99bafff0f05c8f9e6e47bb96edc340d3",
+      "bytes": 2848,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".claude/skills/gitnexus/gitnexus-refactoring/SKILL.md",
+      "status": "new",
+      "area": "agent_guidance",
+      "indexBlob": null,
+      "rawSha256": "544841cf90c9ebe92a2f3018b034593c2bfd8617f968412d3599a22725e3c73e",
+      "bytes": 3912,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "status": "modified",
+      "area": "ci",
+      "indexBlob": "9532431f8da44718731de885a039bb5aa492a6e4",
+      "rawSha256": "a17765dee07968867654f4a29d4dfd7a118aa8f9b687bc82030d111de8932601",
+      "bytes": 6775,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".github/workflows/p4-proof.yml",
+      "status": "new",
+      "area": "ci",
+      "indexBlob": null,
+      "rawSha256": "d3456d4a43967a567f202c2b544cfbc0cdc731b550f569ae546fab53d7dd9335",
+      "bytes": 4112,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": ".gitignore",
+      "status": "modified",
+      "area": "tooling_config",
+      "indexBlob": "7c00362b8ca4e932a5bc1ca33019dfbbb9ad0b67",
+      "rawSha256": "aab1ca1ddb1dfb0d2d878f2510488ed37fd919486344a16f92ca3c67eb90742d",
+      "bytes": 1007,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "AGENTS.md",
+      "status": "modified",
+      "area": "agent_guidance",
+      "indexBlob": "5d65fbed879716f778badff92f1bf62c9a36af6f",
+      "rawSha256": "f7798491dcc9bfc57a1267a49b1a73734d3ff80e274d015f938fca62b09dbe34",
+      "bytes": 3036,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "CLAUDE.md",
+      "status": "modified",
+      "area": "agent_guidance",
+      "indexBlob": "a247546f08ab515a345f0b7cee70b7b3775d1be7",
+      "rawSha256": "2b0eed78d2772075a656a51b388e2d265e605e42da995e4c1a875ee37ea85830",
+      "bytes": 3228,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/.env.example",
+      "status": "modified",
+      "area": "tooling_config",
+      "indexBlob": "662f9db27cd5b74ca2bdb8e200f33aed8c1792b6",
+      "rawSha256": "cce5dea1fb79445b92cd16584f0c77e082238dcdbd95747a70066ec8035bde79",
+      "bytes": 2811,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/.env.production.example",
+      "status": "new",
+      "area": "tooling_config",
+      "indexBlob": null,
+      "rawSha256": "c7902cfe11a07137bf426740877995858a881a6aefd0a4c87004b994df77c25c",
+      "bytes": 943,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/README.md",
+      "status": "modified",
+      "area": "tooling_config",
+      "indexBlob": "90a7729edc120e60f7e461450d7ff736630a016f",
+      "rawSha256": "6da0bd1132adbfd3bbd1eedf7ddd86073086669fa4accb27b36bf43edec717e8",
+      "bytes": 18515,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/migrations/0014_invalidate_password_reset_tokens.sql",
+      "status": "new",
+      "area": "migrations",
+      "indexBlob": null,
+      "rawSha256": "715dee621d082d289883b4e52b70d0fa3dcf83dcbec088a91eeb3e9a82dd4d33",
+      "bytes": 227,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/migrations/0015_password_changed_outbox.sql",
+      "status": "new",
+      "area": "migrations",
+      "indexBlob": null,
+      "rawSha256": "f52cab6bd25936311b42604cd2881315104a90c2cfc8149bd6a841b62e81dc15",
+      "bytes": 1264,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/migrations/0016_add_session_policy.sql",
+      "status": "new",
+      "area": "migrations",
+      "indexBlob": null,
+      "rawSha256": "50b6078c4f1962f304f6a9fa04e7edb4e515cac7595a59d93df48e137478cc4a",
+      "bytes": 1358,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/migrations/0017_add_session_reauthentication_budget.sql",
+      "status": "new",
+      "area": "migrations",
+      "indexBlob": null,
+      "rawSha256": "e2ab6a402eba3cf288cb9334267159b353cccac65da3f9ae8a9c1ef4d7371747",
+      "bytes": 587,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/migrations/0018_transfer_create_intent.sql",
+      "status": "new",
+      "area": "migrations",
+      "indexBlob": null,
+      "rawSha256": "ebe1dd171c289ce186e4be6815074c82feb729fb53e494a14a889f558bf4ad94",
+      "bytes": 445,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/package-lock.json",
+      "status": "modified",
+      "area": "tooling_config",
+      "indexBlob": "ee0eed40f8a8b3250fadbb2bf7447ee44fdddaa5",
+      "rawSha256": "00246a9b566ee7b2b06001d1b213e90ef699f656c6daf7e11ecb2df5207a9d21",
+      "bytes": 408586,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/package.json",
+      "status": "modified",
+      "area": "tooling_config",
+      "indexBlob": "93cd9bb243501555f5f2b5c7f264e14ea977f9f7",
+      "rawSha256": "0797743f7c03f553ae8bf7d81bcbe40e611620089c529213e68fc2fbf3d7bba5",
+      "bytes": 3241,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/app.module.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "372cc0e36515e47a5e951036a915aea7952c549c",
+      "rawSha256": "c70836b5d07c1586bfb5410a3ceccfe309fc4ed20e7a583ec0429e7ce330fbbc",
+      "bytes": 5749,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/auth-sessions.service.spec.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "7c72adce05704484957710454b7c8656095ddf78",
+      "rawSha256": "443ace62d3775e9a8f6fdf2f4266d2ff2ec63722178047f781fc40e949d2c85b",
+      "bytes": 997,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/auth-sessions.service.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "b61134f56199e438cb98730c70b0143d11033c29",
+      "rawSha256": "ba184ab024eafbc7a12b0a76541b3a86f6da392161c57b47cb7105e6ed08287d",
+      "bytes": 2465,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/auth.controller.spec.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "e0f4a27f9dc640b5f78141b6c259f0dcc0883b1c",
+      "rawSha256": "af209fbc404e1675836dd1f581446108c1843402f90823926742d9da428ece0b",
+      "bytes": 5192,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/auth.controller.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "9c28dd2abeadc5dafef06f21670f8ae0c3899e69",
+      "rawSha256": "010baaa5e3ff03f1791c88c97ed9244b519a694ad32c7fd41494f4442cd181dd",
+      "bytes": 3930,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/auth.module.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "6480c1d9063f2cf88c68ecaf92d7276feb2807a5",
+      "rawSha256": "67936b5a395f5450c3f55c317e64de771ab24c3b419cd885f4ef2154a393c00d",
+      "bytes": 2416,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/auth.service.spec.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "e0f6e894d00e293f560b7b0febe0cfa642429d42",
+      "rawSha256": "b1814b13e8c81804dc844eb7f9757c368db4be2e310bd266589e888d169c9bf2",
+      "bytes": 30601,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/auth.service.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "1659acc43a66ea656b045c66f8caeb8e67e9689a",
+      "rawSha256": "279d4a47c5c03e8d64314565e56dbc713c1ac81fc0ea93a1bd8cb31272399c4d",
+      "bytes": 16730,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/config/auth-token.config.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "96c97d408b7074d9ad28bb48de27fa24dce0ddbe",
+      "rawSha256": "089d3caa744082e68a94a151fda937d2fd35cb752b180bed9abda416440c3795",
+      "bytes": 4709,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/credential-harness.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "c1efe3ea046d48671f35c2a78ba393bcda949281c31878b59311f5ba7b625bd8",
+      "bytes": 1621,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/credential-http.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "d5b6850213a17570624b55e7c5b32f0992a1b8bdf0d79049a9ef08ffc0dbcb63",
+      "bytes": 3816,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/dto/current-password.dto.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "543731ff09537f9257f24108d7743386c7ac1528389eb6aa1b9d4031ed593cff",
+      "bytes": 833,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/dto/reset-password.dto.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "523e5a3d6d33351d79ca0336b8afe20df4477eb3",
+      "rawSha256": "aed0eb36d9dc3e89a110b51800b743d04e61ecc7d2ca3b3d99945469c4297ec0",
+      "bytes": 281,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/dto/session-management.dto.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "d98411518245a5d22200ec18ecb731ccd25de411770e100d39cc0181a16281f6",
+      "bytes": 1907,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/dto/session-management.dto.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "0fad34bd4e915c0db9b405329685bfb615860d323e1e7854b9359e0ba14da45d",
+      "bytes": 2114,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/entities/auth-session.entity.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "fff524546da778850f9596ed151f5e9d9bb94f3d",
+      "rawSha256": "0f946f7155bd9a09036d630df51275cd1a64c7c3e9a057ff01747eb3f7ae1dcd",
+      "bytes": 1703,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/entities/password-changed-outbox.entity.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "c8b51048eaf16c8f63263869af7ce400c6ebca6db52b95ebf6ca9c326622e852",
+      "bytes": 1551,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/entities/password-reset-token.entity.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "fcda2a4519067a002f47066b8bfb060b8eea7efe",
+      "rawSha256": "4eda7f1b8430ef189b7addbe173bdc29439dcbd1af738a91a32fba7137934f8c",
+      "bytes": 660,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/guards/jwt-auth.guard.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "cdef209d1f098169336e3b44c78f7cd9ab73387d4d02da4c2405fbafb83ab69d",
+      "bytes": 1038,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/guards/jwt-auth.guard.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "2155290edea420d9d7e339f20679f3114d4c2d69",
+      "rawSha256": "dd31e59617f7987bc66c744c5f03a43f0659842862a6f534a71b93f761016c44",
+      "bytes": 652,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/notifications/password-changed-outbox.repository.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "d17e370508708c0137c90d77c4014b0a1436911ae5f2cd28adc2c1d0b0f18dde",
+      "bytes": 7404,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/notifications/password-changed-outbox.repository.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "c8e524ff79eeac1f19beef1db3ce99080fded7bfdcf360586d68cc88cd715b26",
+      "bytes": 5550,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/notifications/password-changed.config.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "60d03711f467d8a67aa8f0707cc01b15837c7541a7e752a237f6bb6a0e55271c",
+      "bytes": 1217,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/notifications/password-changed.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "ca530fc44cfe5bef68b1b890c721d34f331c04aa108e3359fbe0989d115a44cf",
+      "bytes": 6480,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/notifications/password-changed.worker.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "2af113770385096049542343fe752380290789284c77118ea447a8b0b886fa11",
+      "bytes": 2397,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/notifications/resend-password-changed.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "abc3c0725ce79306e2338e5fdf878fa7c4797bccc3fd4c65f9a7ce7e441028c2",
+      "bytes": 3058,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/repositories/auth-session.repository.spec.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "870369ff63a2452bda224f48a5435c24e9cff1dc",
+      "rawSha256": "8a476d66c88cfc1e7fe884bac5bebff0f88265d3919aa540d06888eed0737011",
+      "bytes": 6869,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/repositories/auth-session.repository.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "8b1048f1a4b60d94de49e619958c7a7fe8f7b9fc",
+      "rawSha256": "a3de3495ac3ab5fc710fc0bdcced7ae55c7c96e0b3af5265ccd11325913e2b89",
+      "bytes": 17167,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/repositories/credential-lock.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "9451c03ade2acfc232192db092b4c416f4bea5a9088673f2d13e204408da0b71",
+      "bytes": 1411,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/repositories/password-reset-token.repository.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "3809afa0b24dd191338602832888a1efb7adb03262261570e0bff1f10401e497",
+      "bytes": 7009,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/repositories/password-reset-token.repository.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "acddb4d74b7e4036097dac0d1dd0943f812d3b98",
+      "rawSha256": "555ad79834e9dae25662f3eba88b9c404453a36ed7479cb61c406683b73d57f6",
+      "bytes": 5543,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/repositories/session-management.repository.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "a88953f53e4851f154c66f4a2a9b554b7ae33ad47f45a510351d165aa8aab06c",
+      "bytes": 6008,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/session-activity.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "c9d2d96b6d74a22656cdffe9539d371372a6ec4885830fefaef9db9bf8ae49c8",
+      "bytes": 1143,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/session-activity.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "aac5352bf5157cdb6526941c4e1cf7116d056b1cb10fd5fb63640ba201611357",
+      "bytes": 1244,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/session-http.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "c7b23e35307c21ed39a23b2e56bdfbc2ee4a43c467f5109d974a9aaf9ae519dd",
+      "bytes": 5077,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/session-policy.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "09cb9c6ce609bfe954057df3db8ab2c992b77d033c5e6d303887571816d90a5e",
+      "bytes": 3570,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/session-policy.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "e398c290fb8625485425a64817e667bba9b8c98c32b08df02cc6565cd2e6a1d8",
+      "bytes": 3675,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/session-token.spec.ts",
+      "status": "new",
+      "area": "auth_backend",
+      "indexBlob": null,
+      "rawSha256": "2038b360e0afc6eb1a2da44fd168ccff1ee6d03d0ebd7670bbd91c95e0a59c57",
+      "bytes": 4431,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/strategies/jwt.strategy.spec.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "b92948263e4d63852ddbc71d83aaa84d633742c0",
+      "rawSha256": "fd2b0de785ba3fe471bdcefb83a106eda5d632c3f89569f2edd77bd940f040a2",
+      "bytes": 2224,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/auth/strategies/jwt.strategy.ts",
+      "status": "modified",
+      "area": "auth_backend",
+      "indexBlob": "9edd0db053348152adb6f1ac8dd1a01b6116face",
+      "rawSha256": "678b6ed48705f72a9971182fea485b5cdc7182d9dc49dd48d45d6ad048132d46",
+      "bytes": 1993,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/common/monetary-bounds.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "2d10ca2517e4c28a6ffe7b989e9465c38f0f76bfbda0131e51784a179d1204bf",
+      "bytes": 4295,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/common/monetary-limits.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "d03d66f84015c56f081d5b3eec3dd0c188ba24b7817a564ea2eac4b99b0f210b",
+      "bytes": 261,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/config/e2e-cleanup.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "0e16f4c2c2cc36abcf8c91ba1c3db0a21f2f5c6a35cc3835e58f60aa73411f26",
+      "bytes": 4537,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/config/e2e-harness.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "c7b029233d8ffe658bcd342eb611c7ab7788707dca59ea86a23884f257ad4c32",
+      "bytes": 3014,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/config/http-runtime.config.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "6079a44a7ac1889e0f479f08687cd4e5848db7a4",
+      "rawSha256": "1556fa29273e24b27bfdd032a2f2540edd10ad25778f782f0a38de9f7fda60bc",
+      "bytes": 4095,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/config/u6-profiles.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "716d80bc1728594f4be1cab85dbb630f6263c2118051e67261a5d34d87b3f592",
+      "bytes": 4523,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/contas/dto/create-conta.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "3a7ccaa329d3d96c0df7e3dec302d3af5292e8f9",
+      "rawSha256": "f2dc838df6eb7f46fe3267fb8c4be9681ca826e331a96049acb2c9da504b274c",
+      "bytes": 905,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/contas/dto/update-conta.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "58302d47697439225fa8d385f0778697a44752eb",
+      "rawSha256": "e32145130f7c918e8b7a5ec0babc49c3cd49e9aeb0743c3491c0057647ac0b1e",
+      "bytes": 719,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/dividas/dto/create-divida.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "80d9669a80cefed1cbb730e50b59e713281164af",
+      "rawSha256": "c59c37e25cd3c9ee64d9b80265d8aa25f76764f53c1fec17952884bbccf5ae0b",
+      "bytes": 1867,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/dividas/dto/update-divida.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "3541f73cc88832114395b601418be596e3d14cf8",
+      "rawSha256": "af41bd44e08e993eb44933935f6f099b2945b202aa70b14b2be41e69464e6658",
+      "bytes": 1471,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/logs/logs.service.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "ba2767cb7b0945f85a81c6edd612bd4c69bbf17b",
+      "rawSha256": "7b416c58f492121ab558e3f7ed11d82f89e446b87dabc0aeca57e0ca065d11c1",
+      "bytes": 8294,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/logs/session-management-privacy.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "975c52976006810226578c66ae8cb122fc5585624d29c33ff5312f3cfd3bf18d",
+      "bytes": 1339,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/metas/dto/create-meta.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "d5021ad0c8a1f27170cf935f457af200e810a0a2",
+      "rawSha256": "d0abcadcf135f5c3b2fb3f16dd4d7a1795f3c2484a7fca3f4502c0b11ff83788",
+      "bytes": 835,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/metas/dto/update-meta.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "afa282cf8ab8335a6f8d3fda06110e277d9c33b6",
+      "rawSha256": "ce30ac7bcb28a3e528d348f38835630d500ee8d6ceeea5f653472592f1976160",
+      "bytes": 856,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/orcamentos/dto/create-orcamento-categoria.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "6335dee4c6a2e5c2f27e1f0ff7fc6c07fc48d1cf",
+      "rawSha256": "1cfda605077aab3f25821e187f1796899250c035fb2d9b279dcab89071850118",
+      "bytes": 447,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/orcamentos/dto/create-orcamento.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "908cf255ca8cb9f78db239069d9ffac432ca84d2",
+      "rawSha256": "09eb4f2aaea310d3e2aac0d4fd5bacae3263228e56736a2fea097bfab33085a2",
+      "bytes": 472,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/orcamentos/dto/update-orcamento-categoria.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "ed261a9b2f4768d2670e26b8669652e63c4cac7b",
+      "rawSha256": "4f059c4e84c87c334057464e22097de5a1d41d20bb53536b04ce09b10de74753",
+      "bytes": 404,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/orcamentos/dto/update-orcamento.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "16adeca2730166aa65fbe201032ced17395c4d86",
+      "rawSha256": "20404d6b2a82d9fa41d091e1736cdcda5602d10db10fa7dbb14499c983b4aed3",
+      "bytes": 407,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/pagos-divida/dto/create-pago-divida.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "5e9ab157b76136d5bec367fb4630a6a371d27dcf",
+      "rawSha256": "b6a40a5d35f3d6ff414e8669b8a04f2ad84362b5dc7f6ef05c9772b80def3f98",
+      "bytes": 862,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/planejamentos/dto/create-gasto-planejamento.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "7085cefa9a2577f9f3f38b1319f66bb5d7d2f853",
+      "rawSha256": "3dbd12053e2b262bcd8be16b9c0052d703497884fb762eeba64c6b7529583ee9",
+      "bytes": 1301,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/planejamentos/dto/update-gasto-planejamento.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "6719a923f175ed4ed6a0e02e3a7b0e2da2f73736",
+      "rawSha256": "e764a0c925b33cb13989eabb412dd35fd8261d20d1bb90567dd932048186b375",
+      "bytes": 1781,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/scripts/migrate.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "ebe708279746be6d6245fe30ba0d328af1f138b9a528741624b70555f44fa365",
+      "bytes": 3662,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/scripts/migration-runner.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "96c67dc29aa284337d755d9c62d57ae2ccddf344e9ef05ced2459f1d2c723c09",
+      "bytes": 6638,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/scripts/migration-runner.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "f6f834cebc098f04cbe8f0aacefce606b95653253f2a6c4281ea4e1303edb3a2",
+      "bytes": 6174,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transacoes/dto/create-transacao.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "e69a52f7bd7767dbc4f8a7f3651ead8f6f69b5d6",
+      "rawSha256": "7ffba7f41b60a78f0ca47293a2ed439b1006f0d48fcfbb0aa7b705389011aa16",
+      "bytes": 1023,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transacoes/dto/update-transacao.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "23286cbfe7fb67c4fb8e275662220f3cf7d4a88c",
+      "rawSha256": "0f5cf7e520764eb9ef796ebf50d11386385c57a294e47b803920db5c88e5ce5d",
+      "bytes": 1009,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transacoes/repositories/transacao.repository.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "075342b634f10369f79fafef66a8cf84b60e3290",
+      "rawSha256": "b038687807223e5219e98773a6df940a41fcd295932ccb7ece76daf656161031",
+      "bytes": 2055,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/dto/create-transferencia.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "d41413f38986e551a1fd33e74d7911e197d42171",
+      "rawSha256": "c7c81a90d1d21ef78905615a8645d1d19f9e5b7d13b62516e728725032c795a0",
+      "bytes": 1031,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/dto/find-transferencias.dto.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "d8575aa64000587c8100804aab79efe1949cfe26b2fe66b8dd3b00dfe69dbe92",
+      "bytes": 340,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/dto/update-transferencia.dto.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "f9da54b028e85d60f50b36f66f1766702f644d83",
+      "rawSha256": "e7c741eca9aaa9e738d80b19aebb1e4c576bea72d5369133debaaa8b137d8c29",
+      "bytes": 885,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/entities/transferencia.entity.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "5b22182104dfd9c96ec187b36d0d914ababf31e0",
+      "rawSha256": "6453648df92f75f59d017491b27cbe646614f7967bcc3b6f37071939a94aa697",
+      "bytes": 1522,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/history-pagination.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "3be990d9c4c60dd961cb550e42d13021440c3ea247efe16c046a41726814f90d",
+      "bytes": 3595,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/repositories/transferencia.repository.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "e8147b489e3507e011cccab183f0bd45e72f08f5",
+      "rawSha256": "56f508230f0b9262d025e264757dac27753b7f6ed3b03c59a23c1301c527d172",
+      "bytes": 1629,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/transfer-intent.spec.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "3a094e228b148f29623fbb442df81a401b5f6bdcfde8e39e4ec900f20f78f0f1",
+      "bytes": 7587,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/transfer-intent.ts",
+      "status": "new",
+      "area": "backend_other",
+      "indexBlob": null,
+      "rawSha256": "4409d16a6a0e3d855ac62884829bf9baa06fbcc6970514b6126eada85bc75352",
+      "bytes": 1769,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/transferencias.controller.spec.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "cc19eff263fcf2e5bf4a7dc128ba21ff15efa25e",
+      "rawSha256": "a702a8178ea02b37bcedec94a5852ab9ac781668e300a768a6e0f8bca8aeff5c",
+      "bytes": 3287,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/transferencias.controller.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "60d8aa3804f0f5b83baaf4800316994b4896db97",
+      "rawSha256": "5fde6f47194a7e3de49496a37f4f8a6a0dadb96bc01eaa0922de03d79c857480",
+      "bytes": 1863,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/src/transferencias/transferencias.service.ts",
+      "status": "modified",
+      "area": "backend_other",
+      "indexBlob": "4fee4576846f6d190476313d7fd4a3ca75e3a447",
+      "rawSha256": "9172b5d346ce750d14c960a052322f0d00aa429f7422bba22b783da455127db3",
+      "bytes": 8081,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/swagger.yaml",
+      "status": "modified",
+      "area": "tooling_config",
+      "indexBlob": "fcfadb902debb3df7f927edf33cb274e73f93180",
+      "rawSha256": "707bed2272b0295db3796348930b21c891c2d1a65cda98988b1e84f2e160e425",
+      "bytes": 169107,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/budget-allocation-concurrency.e2e-spec.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "db1dbdef7ba94153f9d84760811a2148563d790d1801ab6eb9cebc8a222ab7c2",
+      "bytes": 4501,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/credential-boundaries.e2e-spec.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "e66d33b2a1c1ca880e31371f5a00133c1193fdb9a10aadf4a0b25a3b8df8b94e",
+      "bytes": 15759,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-app.ts",
+      "status": "modified",
+      "area": "backend_tests",
+      "indexBlob": "e6b1fee5eee714986a1c188e3a2ca3c19ad3edc7",
+      "rawSha256": "ab232d23caf20ff56d10f703ad4cbc21345681cb8f81253cb2c2ffb30c77fc3f",
+      "bytes": 1888,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-database.ts",
+      "status": "modified",
+      "area": "backend_tests",
+      "indexBlob": "372b9f9e4a2aff990f540dd5f99df64676d82b01",
+      "rawSha256": "b0cfacbbabdaf756445323ab927397493243490acef57c2fbcdd60694e91ce0a",
+      "bytes": 4208,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-environment.cjs",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "057d7132570e3676482cc9432f13d0d39b80284fd97c55943708bd240e62440d",
+      "bytes": 151,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-runner.cjs",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "f6b07060218cf0d46799b28aca6deac7de42ccd4ab65bad51d10204915e316bf",
+      "bytes": 3200,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-runner.spec.cjs",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "a44492c537e80e2b9d96ced6c5c17f260428ffc7f81af68c464dff802b565c48",
+      "bytes": 2694,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-runtime.cjs",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "d602ab6e708de521cb48db04bf7cb265d836061efd06cf4e1f3280a2742c19d1",
+      "bytes": 11341,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-runtime.d.cts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "07ae0ef5767110ece4d2887a41b1c7c46135051fb89c178a7713700354d5bc3a",
+      "bytes": 1053,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/e2e-runtime.spec.cjs",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "4217ffa09d75284be5a40d4c641845d7e86186f9661f63cb0df5700a085b1b6e",
+      "bytes": 11559,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/financial-active-account-concurrency.e2e-spec.ts",
+      "status": "modified",
+      "area": "backend_tests",
+      "indexBlob": "fd2fcedcc34bbaaace2e7443eed82c48f6e768a2",
+      "rawSha256": "0b27c7c80d05952098faab34bb100fb7b5d78871111e6728485943d04e287643",
+      "bytes": 32443,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/financial-active-category-concurrency.e2e-spec.ts",
+      "status": "modified",
+      "area": "backend_tests",
+      "indexBlob": "92e36f7b564f7ea00a4fc79eb554c3c9297dfb51",
+      "rawSha256": "9877249a7dd16d248c9667762d40d5ebfd9990c6c1a4ca07494e41e31ef9f170",
+      "bytes": 14788,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/financial-active-debt-concurrency.e2e-spec.ts",
+      "status": "modified",
+      "area": "backend_tests",
+      "indexBlob": "4511ebfc8cb65cb4cecac06685a1681515c14353",
+      "rawSha256": "c0650f73556553b7be2419e5e6aa3f422d6d87f975f643f771180f36b3f8ebf6",
+      "bytes": 14181,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/financial-business-rules.e2e-spec.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "a952925c501e09d73fc5fd5ff4ba5c53a1b5fec65dc20c7f1eb821c484f5c7cb",
+      "bytes": 7566,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/financial-closure-runner.cjs",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "09531e33de3c014445102e51cc9da6090e6146a29b0f60422b279aaf31d70186",
+      "bytes": 16556,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/financial-closure-runner.spec.cjs",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "d3ee739c710ebc91fafc78ba6b0e227f859594d7f6ce477319ea4a74a0f0510d",
+      "bytes": 2176,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/helpers/postgres-concurrency.helper.ts",
+      "status": "modified",
+      "area": "backend_tests",
+      "indexBlob": "8f7a9c172018c2476c44295960fcaaf067b02bf0",
+      "rawSha256": "9b71e653b3594cb6584a131f7795b2e90b5c3dd2b5387c9b875e2d4d2d2bb3a9",
+      "bytes": 13468,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/jest-e2e.json",
+      "status": "modified",
+      "area": "backend_tests",
+      "indexBlob": "e9d912f3e3cefc18505d3cd19b3a5a9f567f5de0",
+      "rawSha256": "1ef0621154b9a0a57f77444bc8002802f33078619ee61c2d5e4bce5bd235354a",
+      "bytes": 234,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/password-changed-outbox.e2e-spec.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "ad20d525b9787c09424967fee3f5ea9bb4134d521bad8b219955898588e295ca",
+      "bytes": 18373,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-boundaries.e2e-spec.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "3d3ed3ed687bb0863ef37055651a2b8cb1805f7f5c4b38a19b3bd0e70092b47f",
+      "bytes": 11147,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/README.md",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "d6da71a992764f493b499c37b7bd96fc2ae53c75bf8ce6d3074f80cda20ae853",
+      "bytes": 22328,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/a8.spec.ts",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "0856c71063fd706ed51d613188234ae6ccc1b15badd4d766d9af89b74baed897",
+      "bytes": 6097,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/browser.config.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "8dc735350c340e3536f14262aa95ee9455781533631a0f7828f1edcd5ebf4069",
+      "bytes": 1084,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/c6-negative.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "6637f08be28ce2244e08c88fdbfb828ea8c0a23dcbf59eb708532b04d7d880a9",
+      "bytes": 4048,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/c6.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "f3681b33a744b4af3b7e6d7fb724380674cc3f49013189704ece91d2959a8c10",
+      "bytes": 16131,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/contract.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "c639fcadaae7f9afb8baa3085587812ae0d3fdc06b9f9734e941e237d8f8f107",
+      "bytes": 10599,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/contract.spec.ts",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "176a0124e322cc4c819de9638c751f7040f818968ff860c1e259159dbdadfc8a",
+      "bytes": 5395,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/e2e-lease-compat.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "cdb53aab3bc41b52b025aa55e4b2f7ec32ce8f7017b10079792469a26203f80b",
+      "bytes": 5097,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/load.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "5bc4f8ce79be962adf186352ad171e6a6df52480dc8b3405d6cb050d8af27db8",
+      "bytes": 16561,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/load.spec.ts",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "868f5a899dcdd1b2a5b4ed46aa7237eae34d769e548f58ac99470f8b823426e0",
+      "bytes": 3706,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/p4-ci.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "a3a23f5ab916a02dea4cceced35521183a92764567a82e41bddf0232ea400858",
+      "bytes": 8943,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/p4-pg16.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "2b3981cda659ffd9d35b3adeb726b1e83e09caf9ea80ae043874aaf85eeedce6",
+      "bytes": 9959,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/p4-proof.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "be91dec4b3f67c037552e0654ee9fa30d9587c8fd323d9279c21f707f6a6fe0b",
+      "bytes": 6295,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/p4-proof.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "f539048d273494b5bf919acc333e08015528a1af91548fe08cfbb274193aab99",
+      "bytes": 17315,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/prepare.ts",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "2e82b28b58725be2ddc25b00d6f1e89848124ce3dcc535a35a57becd45ecc26c",
+      "bytes": 2734,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/register.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "56ed10dcc6ef187a9eba8b8c5139faa62fe4e97c6e56c1c4459196a8c3f13777",
+      "bytes": 759,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/runner.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "d9be1bc391901cbe6541dac00cdecb529882d4b2369cef32837cf1cab9d43c4c",
+      "bytes": 29202,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u5-browser.spec.ts",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "334a0385e93785902fb07228aa11c733da644b21990c03f4be711d74d8fc42b5",
+      "bytes": 25294,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u5-deployment.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "1c6835780284364a49de35562004088b9f9f83740d8620022d1fd4d0543f6147",
+      "bytes": 18888,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u5-deployment.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "c487e4f2d060ae77597c401acc22ebe1584c95d800ef0114eaf85f5bd25311eb",
+      "bytes": 7864,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u5-poll.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "c41ca2a187f92c0d523abcd5958188abf1c5984f06b71e019a432a9d55e5e7f8",
+      "bytes": 2320,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u5.ts",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "72ecb40877c88be4ed1e16320a3ed619e01e0263dd401060f5cd7cbb1b46dd81",
+      "bytes": 25694,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-case-proof.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "45314457e8a0c1538d392f4fe6cb692e1bb05257a572ac5cd46227e09b722a7d",
+      "bytes": 16191,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-case-proof.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "5447933fd8d3e2428931267ae6f2f06b384c2843dc8fc9b6aaaeb881257eec1a",
+      "bytes": 14137,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-job.ps1",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "8ae72f66e29c41591cfaccc79fb474ea7060629151eeacce494337cc7078cb83",
+      "bytes": 3451,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-owned.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "a98cab596dcdc3a230a2a26ab916e728350772880048397ecd6dd689232b6238",
+      "bytes": 5161,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-owned.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "e464649262f7f653aa66121df9c3832488204268baf2f1577fb80b5116afd116",
+      "bytes": 2599,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-runtime.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "22d36d241c403202585d847d3697a284f1e6ab75eaebb6a83efa19409d8ec64a",
+      "bytes": 15170,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-runtime.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "5fdef7653bff0897dd223848210545d1a82fe39350685c028b9a8f29b050aeb0",
+      "bytes": 11740,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-source.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "15e80fe7f7d55902c02188b5356e7fa268497163859adbbf991c2541763f1053",
+      "bytes": 2011,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-synthetic-owner.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "61951be8c04e3f4771bea55c41c20a8745e06ce4c75ea4ef7915e64f0b0d59e7",
+      "bytes": 1273,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "839f22de18f22f80413f2f9e3ec503ae585b7cd87938f6904bafb05165b7ae7e",
+      "bytes": 18426,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/session-harness/u6.spec.cjs",
+      "status": "new",
+      "area": "session_harness",
+      "indexBlob": null,
+      "rawSha256": "cd812379f0fb336bcb3e8e84fc1b1b37c7e462a4c42937c1fb0758fa37c5298b",
+      "bytes": 18955,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/transfer-intent-concurrency.e2e-spec.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "9d09b8b9c3c8e1d03244f2dab053cae71d16c198472948fb7bdfffbe6998fe80",
+      "bytes": 2329,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/u4-browser-bootstrap.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "c65cd06a639096497bbba6b9d6420e3bc74258fd2a0a4e176ae997d671f85f0d",
+      "bytes": 1691,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "backendnest/test/u4-browser-database.ts",
+      "status": "new",
+      "area": "backend_tests",
+      "indexBlob": null,
+      "rawSha256": "cc0f47fe6589cf0a15d1c7d7b0aaf4925a402ea3e5b7bd8394a0592a3f059a29",
+      "bytes": 1198,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/README.md",
+      "status": "modified",
+      "area": "documentation",
+      "indexBlob": "969bd31dfd9e9447a7feeb7509a49ceb94a7c59a",
+      "rawSha256": "953f91f008ea7dae633886ff180684eaf36bc84caea96f66391bbb7c010ca377",
+      "bytes": 9604,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/arquitetura/ARQUITETURA.md",
+      "status": "modified",
+      "area": "documentation",
+      "indexBlob": "f249c7e12a8e3d1cb77f7e42f62e683a59d0ed03",
+      "rawSha256": "d67ec23d4abf90b191954038dcdbb971981ec0eb1120c8d1ff158f186c30a3a3",
+      "bytes": 2903,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/arquitetura/BACKEND.md",
+      "status": "modified",
+      "area": "documentation",
+      "indexBlob": "9c1fdaceafbcccb2d6d1ced059190b016e97867b",
+      "rawSha256": "ddb6cf7c13ee782f144034484b8f3d63119e915d6464f7116ad4929a64eb35a6",
+      "bytes": 16608,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/arquitetura/BANCO_DE_DADOS.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "e59f215f05aae1850870034ebf55f99e9831eb011eaab7c4901813266f8b63cf",
+      "bytes": 30165,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/arquitetura/FRONTEND.md",
+      "status": "modified",
+      "area": "documentation",
+      "indexBlob": "ab37e98d5cd878faca8d93996647b6e3ab884923",
+      "rawSha256": "86760a6a4e9aa91d95341eefeadc5a0b7faab491b5b54499b815c169f0cb34b3",
+      "bytes": 25486,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/desenvolvimento/TESTES.md",
+      "status": "modified",
+      "area": "documentation",
+      "indexBlob": "2d91209e8c1e7be7d6db23c73c3b1434a98e2e80",
+      "rawSha256": "12750dd3d81761fd889000fdc205eaebba14f5fe2a25599a63897baaad09cc27",
+      "bytes": 26208,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/operacao/RESEND_DESENVOLVIMENTO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "658e067c1fd9b70273fca813c2b12e71ad4e4dd2e84e9ebf254000324c9ce835",
+      "bytes": 10459,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/operacao/SESSOES_U5_DEPLOYMENT.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "55109d4dda04097e6478bdcca42eee81f142cc30fd7597936df370ce9717bacc",
+      "bytes": 7699,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/operacao/U5_PREDEPLOY_CHECK.sql",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "e788acc913c41b2be56e4cf61cd07e1d9c05ac7cf1bc524f302426e232ff4df2",
+      "bytes": 4715,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/planejamento/SEGURANCA_CREDENCIAIS_ETAPA_1.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "50cfa355122377758f620680f8dd0ba30ce32d03c1ae03b38e9a1cbdab25b044",
+      "bytes": 27010,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/planejamento/SEGURANCA_SESSOES_ETAPA_2.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "8da31e2fda9d35ae9a78b8b031d23270777ac8a72aaf98daa51ed7bd1c963aec",
+      "bytes": 68305,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/planejamento/SEGURANCA_SESSOES_ETAPA_2_U3_PESQUISA.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "1b071360719a7fca72ab1fee91ce10d7527a471b3dd5044434f3837ca981a9ae",
+      "bytes": 24559,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/planejamento/SEGURANCA_SESSOES_ETAPA_2_U4_PESQUISA.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "c3b340eba2064cae73ec2a761b44eabcb2ea2e8a84d980de53f2fd2acbe580f2",
+      "bytes": 32272,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/planejamento/SEGURANCA_SESSOES_ETAPA_2_U5_PESQUISA.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "a72e2732183edb399e9634d203bad50f1791842b54784c87117ac82137bed93f",
+      "bytes": 28610,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/planejamento/SEGURANCA_SESSOES_ETAPA_2_U6_PENDENCIAS_PLANO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "6e54aebd263d194f035eca28c08782ce35b9c9160e3b17992e0e127d04f6453d",
+      "bytes": 31809,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/planejamento/SEGURANCA_SESSOES_ETAPA_2_U6_PESQUISA.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "b5fb5305b198afdb34d72daa45bbc469bf657e30538d07dbc4c4afa7e0512e5f",
+      "bytes": 24771,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/produto/REQUISITOS.md",
+      "status": "modified",
+      "area": "documentation",
+      "indexBlob": "cab6c49084e929d37385122312166b42ff88c6aa",
+      "rawSha256": "47107c44fad803adf2e97ec6c66e2d621389f44c954f15e96e79c9ef66a6eb09",
+      "bytes": 56981,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/AUDITORIA_COMPLETA_2026-11-10.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "6efbfc95e6519aa973c2de53bd364cedc396cd6ef1044eb5e0f850704e614f13",
+      "bytes": 28220,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/AUDITORIA_ESTADO_ATUAL_SISTEMA_2026-10-15.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "8c790fc65c4b1f1b251ac2af698547ab57576454733e853595d2d24176f77dbd",
+      "bytes": 56826,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/AUDITORIA_HARNESS_SESSOES.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "4b8b5d2924cf3e5623c34cc678d958057aaf1921210487f1395741640f6cd816",
+      "bytes": 27280,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_CREDENCIAIS_ETAPA_1_RESULTADO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "b81c137022ffd234a5d24ba85ba16c1f54ef8acf0cb7a064f839080bb36db8cf",
+      "bytes": 26823,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_SESSOES_ETAPA_2_P4_CI.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "3cb8221d9b9c49d2d3360973f4f3d04cb8c3b88a4aa0a2cdf7581c8e1d7eea96",
+      "bytes": 12631,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_SESSOES_ETAPA_2_U1_RESULTADO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "2fd1e2e7d758e12e696351d131f731bc1c339796b30d14a1e2e13d0d99115bc4",
+      "bytes": 11517,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_SESSOES_ETAPA_2_U2_RESULTADO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "6e5374ef1f77bddffde3d5b3c66259ad302f294601559f2f47e3b458f8c42e90",
+      "bytes": 9515,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_SESSOES_ETAPA_2_U3_RESULTADO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "c606e839dc107004dee34dea1bb66b9c9629bdf0e235aa0521173a484f0c1853",
+      "bytes": 23884,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_SESSOES_ETAPA_2_U4_RESULTADO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "c0df7506b9880af69308ee0efa1f73ae3c99ec7d29bb42d9800e8a43ecc1e01e",
+      "bytes": 58079,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_SESSOES_ETAPA_2_U5_RESULTADO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "5f94331d9864d1161d90e333861d0fa51f37b98660398b7aa51cf652d77098c3",
+      "bytes": 20194,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/SEGURANCA_SESSOES_ETAPA_2_U6_RESULTADO.md",
+      "status": "new",
+      "area": "documentation",
+      "indexBlob": null,
+      "rawSha256": "bdec57f88b440a4a27f1f72e5324ce5906df5c08870f1c95578293d4abfa01ad",
+      "bytes": 56617,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "docs/validacao/VALIDACAO_ENDPOINTS_APIS.md",
+      "status": "modified",
+      "area": "documentation",
+      "indexBlob": "69c7de8eaf0106b6ec43b286382c4d6c63c873f5",
+      "rawSha256": "53c0fd3bf3ba883767eba2db7d72b36cc86c9e71db4ca5a8141cfbe5adf8244d",
+      "bytes": 19028,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/auth-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "15d57288d6fd98c9fcf331f25176098e26fa7ed909a6e9d4a1bcfe4cb3901450",
+      "bytes": 866,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/decisoes-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "43232f9c5fb4d5b85e212e741a413d92259d83ba362e201d46ceba5cf49f90ea",
+      "bytes": 864,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/helpers/session-fixtures.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "7b6056837a68eca4bfd3a757ad8b6fe3bb3cf6428acf5e80a0a49d698e5e105f",
+      "bytes": 1800,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/navigation/mobile-access-contract.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "8adbaec6b46555c7f400feecdbcd65475fc6a96cc06b6a823931552a7c4f9b9b",
+      "bytes": 3538,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/navigation/protected-routes.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "03cc272dc7ccd8c947def077ad1db3687cccb60d",
+      "rawSha256": "17474ed5f50a7bd3d2ba0e7189ff920f29ac68e26a7eb40d06cab456abce39c4",
+      "bytes": 2661,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/navigation/session-authority-root.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "baf2f6f55d8c1bd6c5e9be8aa711091a0ea48c1e1792d6d374d462ae657d03d6",
+      "bytes": 8562,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/api-deadline.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "fcb1b09eab7dddbee776313d577fe1f5b86df30e5252ecfb9848ba195c4fad02",
+      "bytes": 1389,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/api.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "c809fa8c91efde60be850df66c0d34a1c4f08f77",
+      "rawSha256": "39a92b6f27ac42e00991af0994992528150060c7ddfcc9765c03ef7f61b6eb8a",
+      "bytes": 15642,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/credential-session-races.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "52201249680a8b160e07fc02d09bb7ffa4e33e202c2841b3b4c1810486e48e21",
+      "bytes": 12542,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/financialDraftCoverage.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "784911261563e0b250d1015a54b8d0ae603927cd05b4f104ae5397273677ae5f",
+      "bytes": 14165,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/financialDraftForms.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "4ac66755ba1dd3ec36962bdfc853cd105f8fb8460a562405207f7be2ae4a14ca",
+      "bytes": 6904,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/financialDraftHook.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "62c2821a5f913cf4c43f422cecd5c077694b53d94313fcac161556a284c31a46",
+      "bytes": 2224,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/historyRequestFence.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "d66e36bc5ffd7a5d86a30bbee163ec7ee9fa00576b921a9d8c19838d202012b2",
+      "bytes": 1548,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/logout-consumers.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "ffa0f915538e5989497492092b2eff7495ba7ccfdfe7d58b88f8bcc3ac30ba80",
+      "bytes": 8930,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/logout-coordinator.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "035c7cf53b828ae38594c803bb25d92899b1ea034541fdb3f00374df2f30d01e",
+      "bytes": 7698,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/logout-tombstone.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "3cd02897840a0217febc70e527031feba6a9ee6d07c6e34f71837bc672d8b99a",
+      "bytes": 495,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/session-authority.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "e58b3567f0dedcb1a09013a15d164f984a07f5aad952ef70e13b9dd5e51bb1cb",
+      "bytes": 952,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/session-consumer.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "c0b11e634b7c7fe39fd72924160b29f234e1bfd5045ce2a855efd51b9464e754",
+      "bytes": 3345,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/session-contexts.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "d8c0e9aa9a8b612ac36fad364f31708aa595980b54164c6754defcca080255fa",
+      "bytes": 11624,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/services/session-management-local-logout.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "d4f0ce6366dfc7c11a5c88d23af948ed2727db05685203446a292f2d339c1043",
+      "bytes": 2528,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/storage/authStorage.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "18df11cb082aa190e1cb9b2f449cd5a7c7593b79",
+      "rawSha256": "b223959c15144cfc900fc59984278de5b69545efa33e78ed3e7ed4b37081eaf7",
+      "bytes": 6421,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/storage/financialDrafts.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "6b0e44a97d7086ff14d9f41fb6d5d4c171732182c85871e6b46ccdc0e629ee0f",
+      "bytes": 3151,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/utils/api-error.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "2b23df808e8a4febef2eb12bd81895a0b3c8dba6",
+      "rawSha256": "6cc283eeabb44d640f0694e1fe6c88d2794a538e630acf134d32ee4e994254fa",
+      "bytes": 5563,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/utils/number-input.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "061753ba415ff65ee335d39b4d9fd5524e32fb63",
+      "rawSha256": "bc0660463353f3b00b447d2a827268533f091d9017bd3681d898cabf7a5ab109",
+      "bytes": 1000,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/__tests__/utils/transferIntent.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "79d1fa9d048c3b9a9213ed5b9a19c5b19e005ca9dceb80ca37254edd9839987b",
+      "bytes": 1208,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/app.json",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "9accf46bd2dc49b8d8e4536f0616966252dfc536",
+      "rawSha256": "b4b484a3d09b7165bc2629d774d9cfeb7e986d777b03ebed822e6defb742d4c6",
+      "bytes": 1319,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/app/decisoes.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "45ee4dc2273935429e8cb9969b3c7beea2a650969f804a0e2ee2477b1d958494",
+      "bytes": 1491,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/app/prototype/slime.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "1a92d97b311ef1c3cbed89134ed4357259f27740f39569aa9303cd79d151e300",
+      "bytes": 101,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/app/sessoes.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "0a2a183dbae20a9804ae64ca5bf73f3ec585cf6e6fbae66cae0042f34b26c823",
+      "bytes": 88,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/components/auth-screen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "529928eb00a3421e47b867d647d337a484213379",
+      "rawSha256": "88fab35e50c0053bc9afceb318f9b22bd5d4d04a8c84b7331e91327696943d99",
+      "bytes": 8362,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/docs/template-migration.md",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "a2d65ceeab3c623d840b6f4a7c1737cc1b927244aab1200c7fae3e102a3e4775",
+      "bytes": 3940,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/jest.setup.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "59bf0cfcec245174e0f0ffb46fa4088d15447945",
+      "rawSha256": "e4b12bba8c447fe4610f1f701caa966f4c1d6f010575445f28751757e513cfcb",
+      "bytes": 276,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "d1b209a9ccf01ade078bb9b99edcdc5cdb8c0d67",
+      "rawSha256": "2929f3789f64b73d916b5a3ed8568c5e6c2986e49012bab4a23160195cf8ba65",
+      "bytes": 580622,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/package.json",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "8fdd059200d2646917652e88786ccb7c892e2b5a",
+      "rawSha256": "eb13adf39064a3af852e6c6dff17e6ed1a8b12c5064edc52d3479deddeb507e1",
+      "bytes": 2083,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/playwright.financial.config.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "ccd34a5882c2849664fae526b011ff571f37c7c0ad09683a92978a2f8ca024a1",
+      "bytes": 785,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/playwright.session.config.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "eb8db67bfde8281319bc9911b9c70700fdaa0080d6c8b691c9b68f40d4aa8a35",
+      "bytes": 783,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/playwright.u4.config.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "9c4d013f3cf5529585c5a5ae2a5ab411a183bfac2107f404ca0c7a18469043e4",
+      "bytes": 585,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/alertas/__tests__/alertas-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "eab88d5b9638523682fe572990875c42dbe0bc63",
+      "rawSha256": "ed04eb3c125dfd1117e2daed4272216e28a4e3b02cfd9adebb92be6978bcac2c",
+      "bytes": 6642,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/alertas/__tests__/alertas-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "8251c88062428d6850b258e8445bfbd170577fa7abbaef343228aee2cc1841b7",
+      "bytes": 3603,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/alertas/screens/AlertasFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "c1073b79538a2c6b818836937812da34e4d91300",
+      "rawSha256": "03df8a603bdefce66357f30528600ec7659749887907ebada9f3c49a82e15bfc",
+      "bytes": 8977,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/alertas/screens/AlertasScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "911d24c446c012f62981febda656a80f2572f385",
+      "rawSha256": "4cabbd1ebe833d8d4db9957aa31c3eb4e8c567631f78b655c6d851bab759dd3e",
+      "bytes": 5762,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/audit-logs/__tests__/audit-logs-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "111bbeafdb8de282da68d49e59ffa4cfffb20212",
+      "rawSha256": "a1a6d7297f24c118fcda229f7cfdfbe976176d93c11d50be328bc0a3917dfb85",
+      "bytes": 4351,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/audit-logs/screens/AuditLogsScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "8458d277c2043e9d7218ef833292e0e2fdd34f81",
+      "rawSha256": "4b395339fcd447c7174d4a6a564160e60a6f77ba8eb39f4600c8c4fd18db443c",
+      "bytes": 5727,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/auth-flow.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "678640378adf3e51e823c27965ba2363c84d0c24",
+      "rawSha256": "e1210908f4034fa38a18d18b17dc9f6fce540965ab95f4118e73e2c3485957b2",
+      "bytes": 9326,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/authService.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "c6b8b3434f5aee99c693ea9ef4c4209f4e9b5061",
+      "rawSha256": "a5fe3a0f7fc0ad127e601ee44ef2ffb6d6258ef5be5ee3c0df2025f75feb7d2a",
+      "bytes": 10646,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/login.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "89a72a0d2748b768d66367dfba24e7c695b9187b",
+      "rawSha256": "189f8600b9a724baea08cc7fb991bfcec9b356f131895a65d834f6395125039a",
+      "bytes": 9445,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/privacidade-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "2590744a5cc06570bdb321aaa70ba435f4a2fc3aae1439310c894184aa2cd3e1",
+      "bytes": 2348,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/register.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "291b948d2d035e3379d74a5d449817e672ed510e",
+      "rawSha256": "3cc67b38f971516b37feb3080a0c45e6e5b27680fa9ea6d7ae1400ea40e2c615",
+      "bytes": 13414,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/reset-password-screens.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "d7954b558b3f3346ae6084c2c72fa4e997699a6b",
+      "rawSha256": "b14fcbdff3a11bfde35d046cc0f6f076974fc9ae9ba646fa1c9b1dd7df1a1a5f",
+      "bytes": 5988,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/session-management-service.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "bdd690aa66ef7ae988e60a8b845aec44b4e3fae830e55109e68291971a18994f",
+      "bytes": 2873,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/__tests__/sessions-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "5e886b16292447245bfead7e34182e18a4d86e158ef63a263bd6ec35c6829ec9",
+      "bytes": 7052,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/screens/LoginScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "a8102a55cb5302111705f7c4fab65d83710ee7e6",
+      "rawSha256": "7ff4f06626a2e87b28ec5f501cc4907c6e4c83669dd84301c66355b071ae9a0a",
+      "bytes": 10051,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/screens/PrivacidadeScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "7f33f67fbf9dc6769a3e11c8bd2bd136df430ba0",
+      "rawSha256": "a68b58e9f7ed3126c11b4f8ad8504132d7d72df7f150a18c0b18e7d46a98b08f",
+      "bytes": 4294,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/screens/RegisterScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "ae4a4c811bb76da58d49f515c4265e7a657f3b69",
+      "rawSha256": "cd3892ad470074ca83491bd5ab28b59ee7f58a84a72f25eb40446f67a6db7472",
+      "bytes": 15466,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/screens/ResetPasswordScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "e17f7435673a504b9a877535742875a41cc81117",
+      "rawSha256": "8500663f6dd3958906ec40e33e88c20d7c9c80fe93a3444ca9a37fb42e7f7c15",
+      "bytes": 5514,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/screens/SessionsScreen.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "9e371b14dea36b082d555cfa120c52ec5bfb5f77e8b056b2d06c8799b0f96847",
+      "bytes": 12008,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/services/authService.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "58a09450d87c8b78183a18569879f4b7c5bb3c64",
+      "rawSha256": "3ea7177af583ab252a34f5872e993f9015ce1833ab189758c55c18b5fec92a51",
+      "bytes": 2311,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/services/logoutCoordinator.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "393311d015c9571ad109bb491d2fa4ff698814aa30185f059e9f58bf886810bf",
+      "bytes": 4360,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/services/sessionAuthority.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "4985ee2ea9f5aec6a811f82009aa48d980b5ca1a647e19acf3213b0861ff4527",
+      "bytes": 3269,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/services/sessionManagement.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "b4ea8b54be5d132edcb6a041282df65ce97f72f3e3354adcbbf7d65bdee7a90e",
+      "bytes": 2131,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/auth/types/auth.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "10cc74553d7f86d3b7cd197cf25f82007392c014",
+      "rawSha256": "a2a03d81f798286bc24eecf28854553c77b67ff645e2613d11dd20b547693edb",
+      "bytes": 1451,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/categorias/__tests__/categoria-form.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "5a65ed22d41eae5b45248b8e8015e257eb191126125e4436fc494acb80e7fe7f",
+      "bytes": 2861,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/categorias/__tests__/categorias-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "a33c11a50449a57bfb3bfbe27daba9a4be9eaab17331c84421cf0bb66258cd91",
+      "bytes": 3680,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/categorias/screens/CategoriaFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "0a41a2eabe44008a8ce9ae6f731e05848123c079",
+      "rawSha256": "b2c8a9040baa7899fbed2c9ef5bb92fa62baf62ee22aa897978342c7d3d8bd42",
+      "bytes": 6076,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/categorias/screens/CategoriasScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "0bdb0f501aa7e285aea309aaa2b9cfdf7a5743d8",
+      "rawSha256": "b6447669c979e98ac2bf484ad1dd3cc64ac2b9e362d163b38dea3b53e90f87f0",
+      "bytes": 6876,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/contas/__tests__/contas-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "8871bc90c2a24f86c2e22261ba7c407adf715b80",
+      "rawSha256": "ad146cffee187079abfc287e1123e177e560ad27a7412c2f441ba9095a9dcf63",
+      "bytes": 4770,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/contas/__tests__/contas-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "6afd42373ddbc7ed4309ae8dcc76415b4634df44",
+      "rawSha256": "303bc786e5152936bb67702f60d034783a89984fe71bd9f707e08518a87452de",
+      "bytes": 4679,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/contas/screens/ContasCreateScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "ed4c4d9568b1575d280cb4f435b4e4748aa70051",
+      "rawSha256": "7ce443e73db5cfc040b6efbd9ebbce89bd962647e75002a75550af8118a77987",
+      "bytes": 8083,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/contas/screens/ContasEditScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "5823c7b5462d21cb516b65f5538ef3f70d6a09cd",
+      "rawSha256": "8d13b174219d10ad7e91d6f59d53707325ef49332c94da6ae83e3079d3b4c71a",
+      "bytes": 9223,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/contas/screens/ContasScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "11c9c6050249837e5cb4d85ac86011588b233625",
+      "rawSha256": "e2c95b501c4723d87ace70191b88ddff90f51c8adc60f29181339b9ba4b395cf",
+      "bytes": 7119,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/__tests__/dashboard.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "7748ee44597d268077b6ebaa80f45c5397dae741",
+      "rawSha256": "f926fbe9e4b385c01ac95e7133b96fa645b46e10100a983788e91292913ddb40",
+      "bytes": 14666,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/__tests__/home.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "d65651cee57238cb6d7b4c7cedaf10138f585d2b96156b2b6bc97c2f2fb4657a",
+      "bytes": 2802,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/components/BudgetOverviewCard.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "0e1682e5fe5a1b4e9bd68e5cfd9981a68c9da23f",
+      "rawSha256": "bd0590a9e45ae804b2cf5068d702e1d2e9cbb606ca0a518ae965ac4a87534a22",
+      "bytes": 3195,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/components/CategoryBarsCard.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "54d24166055afa67b9eaa36b34da3053e8dbeef5",
+      "rawSha256": "296d51248f7d40194103db2ae7a92c21429ba10b1740d371628017d42cca6154",
+      "bytes": 3157,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/components/DashboardShell.tsx",
+      "status": "missing",
+      "area": "frontend",
+      "indexBlob": "ada7ba465ec7fa0fd60ce1cb0ac68a328cb3031b",
+      "rawSha256": null,
+      "bytes": null,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/components/FinancialSummaryGrid.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "1344d8d0c444d60116a841c393500caf5fe278d0",
+      "rawSha256": "ec4f167bf9268089dd44cb40d00d09c276e4a16a968d7e159711c65e68132dd9",
+      "bytes": 704,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/components/GoalProgressCard.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "7bbb700cde2c371a6f2dac84fe0030b9e7e985e1",
+      "rawSha256": "867499d54cfcd51fe128b6a0e0532375b122279707e193a219a969d6856ba28a",
+      "bytes": 3001,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/components/MonthlyComparisonCard.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "5e2bb02f9839c56a72db71bb087ed91cf72d154b",
+      "rawSha256": "a1b1e7f7d7edd820066b4672e821acaaeb54d94d3fb077a24d66b9160fc8493a",
+      "bytes": 4885,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/components/RecentTransactionsCard.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "28cc9be059baf0963147093410d527bf7f6c6db6",
+      "rawSha256": "6c172a8da2cdfb06bb11fff3dd9ecc609204f01ee26fee731d8295fd84f6634f",
+      "bytes": 2655,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/hooks/useDashboardData.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "365d26ad30413614962e842b0e75c6066af34e93",
+      "rawSha256": "0a73a99c3858cf34509cecd148474f5490da2061f8be800a9f6dfec8412ebf53",
+      "bytes": 3973,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/screens/DashboardScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "9742b07eec6743f4d5b76d750a23b5b137560d2b",
+      "rawSha256": "ede08e05859efce9f177fb7d2a4765fa8362cc5fdbf688e0fc843e36a1a1663c",
+      "bytes": 5378,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/screens/HomeScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "58e32a339bab9b587782f2dfb8eb0f4dc63d900e",
+      "rawSha256": "fe6bbaa95c2d1de8c88814d0b0a889ac6b59a74b814eb2b5c6b272ab16c85e67",
+      "bytes": 2487,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/v2/components/FinancialSummaryCard.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "551bad0d09cdbdd75c3d6925839d898ed973e5e1",
+      "rawSha256": "be8e68316b3826c147f2e395475f027d1d4a38bb8e4ac9f20c03952dc9d90e8a",
+      "bytes": 4874,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dashboard/v2/components/InsightCard.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "9028fb33d04946e45bbdb4c1054b2a4894ec1bc8",
+      "rawSha256": "aa42591fbd37bf420c12a7e6b380dc2710f3a838205c9d40de4faeef9da99c0a",
+      "bytes": 2625,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dividas/__tests__/dividas-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "662da7d3f591c3d05aa4ad66b273f10786eafc60",
+      "rawSha256": "9247eb9b42e28cf5ac96212949c95b256aee3fef1847634d69780b7f2d609843",
+      "bytes": 4894,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dividas/__tests__/dividas-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "6f751b384fabde3202b596054f7fb7142eae5875",
+      "rawSha256": "a8c8cb3561f41e7651ec3afb9bf515f82c16ac29bd3fd534ca72320d68119dba",
+      "bytes": 4947,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dividas/screens/DividasFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "ad7f76fbc2fd8cea88ecad27462fd40fdf44f4cb",
+      "rawSha256": "6554a29b79dba80d911150669152f7d4f7ea219515d13d2b49b13a4c427a1144",
+      "bytes": 12641,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/dividas/screens/DividasScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "3709cebbd4649621d179f2fc0cab50123d32d07d",
+      "rawSha256": "484673d8132f073127ebf639d77e04238f8ba354fcca4e8214a571dfa0d947e8",
+      "bytes": 6131,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/metas/__tests__/metas-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "bf1015400edbbcc19057bf81140941d939bfdadf",
+      "rawSha256": "46d9f16997186312149c896e835cd5dd556a714b90a658cd25b2d6fc939b00be",
+      "bytes": 8000,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/metas/__tests__/metas-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "4f850b6fdc7f30cba7981bab4e4e6485d171d7f742ee460901ce5aee68028246",
+      "bytes": 3292,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/metas/screens/MetasFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "dfc06b2b46b865cb89ac1b863fedc148f0789c8b",
+      "rawSha256": "e49e3fac862619e05ebfde3984d60dcd498df2b51c126e3f79f171830031ff24",
+      "bytes": 11378,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/metas/screens/MetasScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "ed11c6b45e3fb4149c61e7f6119e29652bca4c8f",
+      "rawSha256": "10d51183934f596361623569b0ecf04521af82f21449c4fee6a8cd8db77d46da",
+      "bytes": 5187,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/orcamentos/__tests__/orcamentos-form.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "9eb2f186a23b86851483effaeb0144ae3fb7090c1bf147d8c648bc5932eff1ad",
+      "bytes": 3206,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/orcamentos/__tests__/orcamentos-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "13b113c7b6eb145bb850bbb550b1ee0bfc47bf35650f572dc7fe98653a6aa1a1",
+      "bytes": 2818,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/orcamentos/screens/OrcamentoFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "f5f838136863337e857d08e5abddef3bc8f88792",
+      "rawSha256": "2109595a676c6c08d42d8fe4e80e2c511e27b44e243e7124c7fd90528b836612",
+      "bytes": 6437,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/orcamentos/screens/OrcamentosScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "559cc3e3c85be68bc12a93174a428cb052a37bc7",
+      "rawSha256": "89539b61734e320ac1bfeed55b4b58723b5ed300c621b95cd6387c7ea4a3409d",
+      "bytes": 6493,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/pagos-divida/__tests__/pagos-divida-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "2bcdedbb63c28751b90e5ef8bdea97cf81e49364",
+      "rawSha256": "103a86af20b573b1d214a73c433f0d0feb2edd6b3f7116d629e7102c50eaddba",
+      "bytes": 10135,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/pagos-divida/screens/PagosDividaScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "6d57de31353c185eb62804bca37364f37d24cbf2",
+      "rawSha256": "5e49ad5ad8e88b5c786deed8facd7b6ba8d8f709afc54b88d5e027cf3166311a",
+      "bytes": 11944,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/pagos-divida/validators/pagoDividaForm.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "c368676792c7a912db8c0b851160e22f52f2ad12",
+      "rawSha256": "aefb7659e2d440dc1aa8a9f3adccce33d9e7efa00c92d22470b5fb4684d28cde",
+      "bytes": 1910,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/__tests__/planejamentos-detail.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "c0f355d8c796311e5ded6a92fb150d7596554433",
+      "rawSha256": "6a56ef3a015f2271f9413de915c56451b8d373f2efe2b4a5f2d0711d48e83c36",
+      "bytes": 34514,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/__tests__/planejamentos-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "3dbca952e3d1c056036f3490e7887c8e2cdf7dbc",
+      "rawSha256": "3aae3db8af958aa8249835f6e712813681849bc6e3e31c2a1695dbaf2859bcd2",
+      "bytes": 3122,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/__tests__/planejamentos-gasto-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "472a82bcddf217ebaf5d99df0aa162f8929a65c9",
+      "rawSha256": "bde7fcce26bbf3ae5594d5417a732a7de02304d3dba264519d9be1b7884bf785",
+      "bytes": 44221,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/__tests__/planejamentos-participante-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "8fab08bfed6fb0404d7a4c7b7615731f7f1dfaaf",
+      "rawSha256": "25a21fad9fe9fbbd5387234116b32b62f1f11dfe3f69220e9d302cf404f80249",
+      "bytes": 16545,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/__tests__/planejamentos-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "89cb83289c2fdc6b8ce976239c83fb0bc7476e32",
+      "rawSha256": "e35653564bd3fcc7d93a852424516fb970d2ca90534976f45f9b69b55d142a8f",
+      "bytes": 3362,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/screens/PlanejamentoDetailScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "dc391120a95895131ba76bc4e9cbd2950f3a04d9",
+      "rawSha256": "3c45fe1acb62230319240253f121df7a6b243f5f7b182791056604b8d8f98e31",
+      "bytes": 8056,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/screens/PlanejamentoFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "80318fda7e84021f1b4e3780e11aa7c94a6d85ee",
+      "rawSha256": "179004589bfc7254eca5fa10a21af976d7cc9843ba397ab9d629029da36d0131",
+      "bytes": 7460,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/screens/PlanejamentoGastoFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "cca0be0a977231fb198834d65bfe75ca43e12097",
+      "rawSha256": "62344a826ba0597ce6d1dabee39d48a6fc981a7ba4a2dcc49e52b2fd37a6c8bf",
+      "bytes": 32007,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/screens/PlanejamentoParticipanteFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "351f43c4e0c06f34c0e84c485befd59fca8f44ca",
+      "rawSha256": "1cbfd69c62b829aac7f91f78c6299596f5dd1362e6d81a8946ae284f0f1b3b9b",
+      "bytes": 14409,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/planejamentos/screens/PlanejamentosScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "bb4abb3e5fbe2ab74d4881ba6758a2ab59ee66a3",
+      "rawSha256": "247f55f697769f3b4e0ed1bfd63d2e8adaada5fa04d004843aebd574cdc735d1",
+      "bytes": 8271,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/previsao-deficit/__tests__/previsao-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "0e73ea45cea80f58b422bdf5d86298ff082208f0",
+      "rawSha256": "e1af0d3b0eaa29c190c9d9e176460284ddee33a37dbe5a21a2ca9f20ba00cd6a",
+      "bytes": 4517,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/previsao-deficit/screens/PrevisaoDeficitScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "81d852bb426508627f81192db4724da464bf847a",
+      "rawSha256": "de4affcad1b19be542d071fb8eb3226772b17167d0b10286e3f619f63a7d6100",
+      "bytes": 10076,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/relatorios/__tests__/relatorios-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "f0b3317d3b3e29f3a9ed9d2e31ece429011e98cc",
+      "rawSha256": "1d8a71fd5422ac3d95e028ba392a9e19d43a951de897b1a2430cd7cb905c5319",
+      "bytes": 4837,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/relatorios/screens/RelatoriosScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "ef0f5e8cdc03adbbbd0b86c7ef6d54dd0223ade4",
+      "rawSha256": "a6107c2327370b3043457127aecf6376a1d3ef57a76a5032737a60dd348080ed",
+      "bytes": 13138,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/__tests__/prepareTransacaoSubmission.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "28eb86c1e5a8f445be453d3b225da7590d1c15f128edaee5cbad98704ef30d17",
+      "bytes": 6022,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/__tests__/transacoes-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "14ddbaec950798500db49180e58ff1b2cd539cf3",
+      "rawSha256": "37ad2303e1239e6a271b3c9254887bae49d8af1094fccd1aab147245dce21a06",
+      "bytes": 12716,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/__tests__/transacoes-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "3a33b5a6b8d06b35111465ab39e096fb0bcb90c2",
+      "rawSha256": "83464becccaff84f8a0a28cdfbaae1220dfc6f0f3fea8a43f5ae82b788b3e056",
+      "bytes": 10451,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/application/prepareTransacaoSubmission.contract.typecheck.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "77b624d6811c25ae4c88ce52f0debee1d703897993ca8ea4ea215fbeac7f573a",
+      "bytes": 1411,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/application/prepareTransacaoSubmission.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "76e87a8d51d040b4ba2ce5dd1f54c36f113293bb3655ccea50b7ee2458233bf4",
+      "bytes": 2323,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/screens/TransacaoFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "9e08a4b1553697ade1c201a7a0680e069c659bdc",
+      "rawSha256": "2bc854439aee10868dfaca297b7d2ac7a2161cd5e3f9869bdf67ad659afe2702",
+      "bytes": 13186,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/screens/TransacoesScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "07da33e0361c2e9a2cadac402264051547f4ba99",
+      "rawSha256": "a3f06c1f1aaf6ddb418b7d54f48717c2aeff59d0e03fb25f8571f175a8f9b292",
+      "bytes": 16608,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transacoes/types/transacao.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "78a453bfe9754493da3cf7576037aa70d9dfe92b",
+      "rawSha256": "4aa4c866235278ebea757cfd1ef11629f14c733db62ad441e127e17aaa99c587",
+      "bytes": 838,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/__tests__/transferenciaService.test.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "b6066c30290fbb2b24c747e0973e11b4e4e69900",
+      "rawSha256": "1c99d092db05da86828f8c8739ef0fc56e76b797635ed75ab00b40a188216533",
+      "bytes": 5511,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/__tests__/transferencias-form.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "91ce0bc2b36baeddd4549307e31816a503a5846c",
+      "rawSha256": "cc5bf4efea570885fee9ddab95473ae33344297f5ad59d5b1be0ede20b150315",
+      "bytes": 8915,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/__tests__/transferencias-screen.test.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "e7275fdf0fe142d59d513c731601e31c56351652",
+      "rawSha256": "5aa38f3a08845f2df371e70af5501e76f0f6c2ffc54ed79c6ccc5a53ab5a3240",
+      "bytes": 7219,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/screens/TransferenciaFormScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "e855833310ec95922670f4ae2e4651c22ef4fc2b",
+      "rawSha256": "b48efa404f939791f4ee9aba78a8fd0c6a4931a6eed0ef29f9bfe059793a5c3d",
+      "bytes": 10226,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/screens/TransferenciasScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "59e2c1cc2df52432f7ff63d38f74ba29fd4ab522",
+      "rawSha256": "3122bf85990b2d69b2481a9b3412a1a1f669a10c6a9134ebde42b68c87c24c76",
+      "bytes": 7773,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/services/transferenciaService.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "ec891019f59fbad14f32ae96db12410362334964",
+      "rawSha256": "a6a386135af5e0a44b6112546c6568383eca5dfa538a3d822ea405a1433d5cfe",
+      "bytes": 1199,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/types/transferencia.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "92d4eb428e52957ca78a61fa817281c49fd9bf73",
+      "rawSha256": "9fae8d69f52484eabc196808f044a0d68e1945537ca3d5c19897de3caff70a52",
+      "bytes": 703,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/transferencias/utils/transferIntent.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "53cff5cb522be408adf50e4e5444c6c1f809a20deca7145cfbcb1e4926f1442c",
+      "bytes": 758,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/usuario/__tests__/usuario-screen.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "9de4bd8d62aab9d3773ef987efe329689dc3cbe04be5438ac7d9a98747b05130",
+      "bytes": 5061,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/modules/usuario/screens/UsuarioScreen.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "33af592dec0736bf380aa9d618626605e1de583a",
+      "rawSha256": "91ae01f1db96c0bd978b0e5632273490e2e4fafb25d03f2919defe9b1f0a0f26",
+      "bytes": 14895,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/navigation/RootLayout.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "a6b7b39ea1ed377c25a74b6e909e90c999303385",
+      "rawSha256": "c9183e74275004a2048ca44e40d11f22c2d6315ef990c09e357e3b3dff1c79fe",
+      "bytes": 7671,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/prototypes/SkiaSlimePrototypeScreen.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "366674674a5dc1a7581fcad85cbf2945b9abead6ab367e64047f03c8d344cc95",
+      "bytes": 5777,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/hooks/__tests__/useKeyboardVisible.test.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "d6ab9a836c211eed2faf6ece20a904f6c6da5018e090fd67f4747ee8c79e8622",
+      "bytes": 1108,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/hooks/historyRequestFence.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "99c71e7bc81fbacc564168915db1e0f12e693caab184e0387fc11f4b6ca107d4",
+      "bytes": 1000,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/hooks/useFinancialDraft.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "94d8f1bc67bd10b219f9a1a232a256cb29fa969bc67b1c2daade50524a1a3115",
+      "bytes": 2930,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/hooks/useKeyboardVisible.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "4a2298cf6075cac7dee93b3f13e952446190736e98534a5b8d4ca671da8f48e6",
+      "bytes": 814,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/hooks/useReducedMotion.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "0397f819bfbd0d7863b07c0ffd70e04a185828dab81797cc77df987fc66b5c51",
+      "bytes": 603,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/services/api.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "1d957dcf4f38cf45308e206453b99d60c26fd554",
+      "rawSha256": "13d95e0574d1e67efccc6c61fb46898e05d431988d02ddab0fad34eeecc64d5b",
+      "bytes": 10090,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/styles/financeTheme.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "bff347fc0b1a655b8e3b8dd5b080ab7ac7a88443",
+      "rawSha256": "bc5422c6c7e57cac5cdc771e6799450c78d8e972a3e1aadf3d1af1d1cf36db22",
+      "bytes": 3401,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/ui/AppShell.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "4c035e9938b40962ef98685f37df4703e1a30f82d386f9c76c30d50de82d7630",
+      "bytes": 9892,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/ui/GlassField.tsx",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "e7bdc74fecb07f1050be73ce02711fc3b3aa52ef",
+      "rawSha256": "92be6b1152564f79c64b5244f30390396b6f0b7bd3becf7d4d1282f51f22df75",
+      "bytes": 3833,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/ui/LiquidButton.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "4fb01667ace8678ddfdcf48dbb43f429516b5d39c1de9a4bb2c88b463d5b386e",
+      "bytes": 6911,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/ui/OceanicLogoLoader.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "5a4f303b7f3219cb3566065760e36b7aa50aecb5720c3bc549ba9c4f27b98068",
+      "bytes": 5909,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/ui/QuickActionsMenu.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "efd595e0e6464885611c3fb90f1d537a7892e5f7a17390db99631b30a0d2a0cc",
+      "bytes": 13871,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/ui/__tests__/QuickActionsMenu.test.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "307e4ed9b614646618167215dea35726f3d2a7e0162e1533debb991d51e2a3cb",
+      "bytes": 5822,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/src/shared/ui/index.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "5ea3fa16fb528f1d0ec1d63377e8e60899949a5d",
+      "rawSha256": "499d29167544238c1fb59c71178672a02a7d69268b4bff2a6e03fcb3452f00ff",
+      "bytes": 786,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/storage/authStorage.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "19d287dc81261ec75f03317fef944a68c24e22e7",
+      "rawSha256": "59b26203b12fccb0e89cb9b86db165b9b6525dd3467e43c05284263a7c2f9fea",
+      "bytes": 22003,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/storage/financialDrafts.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "7038bd9780e9df4918f5ad54d50436dce16f0aa0dbbd008313e20e7ab104a24f",
+      "bytes": 2435,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/expo/app.json",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "274977a6992b2c1e168c8bf0413f68aa327216dfb1c9d10279f4565ac1caf5c3",
+      "bytes": 214,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/expo/metro.config.cjs",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "6a3934c065aa8baaa5ce5537da2841106c170a6114c01206167b20a939aafbd9",
+      "bytes": 362,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/expo/package.json",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "5384c3c286ee79268fd95fe004073da7a878841f18bb5e7963dda2673a2615ea",
+      "bytes": 117,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/session-contexts.spec.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "e5e97ce718132af2df5b85246439050bd6536becd46c8fbd94fede8d277db671",
+      "bytes": 7651,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/session-entry.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "8d130fc6e3fcc6110e2ce6df0abeeefea5b73f3da63c8128e5a13e1c83c46a0e",
+      "bytes": 997,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/session-server.cjs",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "8370b7f21584652141a662e78c2ee43617e0f377918b02921e08eb09a644f94d",
+      "bytes": 3607,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/app.json",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "cf5f8367f416d904a5d33b1111418308f2163a9c89de40a90b276c291c488301",
+      "bytes": 179,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/app/_layout.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "be97c169becb66eb22fadd904251085c0ef3bbf481c34eef548a587a5fd3ddc1",
+      "bytes": 79,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/app/dashboard.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "4f9fd326d45cb757a21d4582e3c1979adebb920737d57a24ac9e398ea3022652",
+      "bytes": 287,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/app/index.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "3ff003255b0493af9f8fa9e2a739f2ad2a09c2361bca47944d8a4fe3ce3b356a",
+      "bytes": 35,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/app/login.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "f74c60ee73aeea06e46e9eea4c0e3ee837cc32596c04f053e753ef23f696d181",
+      "bytes": 91,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/app/sessoes.tsx",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "f0e325b2ebae1c980bfe96168b3fe2383c00b1773275a364cde627c6717deefb",
+      "bytes": 97,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/entry.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "b1a54b1214e1e9eca99d4ce707b484110c720956710b4163d69c579ba00e78f2",
+      "bytes": 2512,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/integrated.spec.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "6b578bb92afda5bdf8dbff4ddc8c5ee3e128216d49662810553f8ca0078e2cb2",
+      "bytes": 11730,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/metro.config.cjs",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "6a3934c065aa8baaa5ce5537da2841106c170a6114c01206167b20a939aafbd9",
+      "bytes": 362,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/browser/u4/package.json",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "2fc509e3e3aa9b8c5590e56d67990f9371e1426c628f1810f8dcc5b064b538fd",
+      "bytes": 92,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tests/financial/categories.spec.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "606f8f3fd0197b830d29e71ba7da295808be8746457d3c58e628af936c3b4138",
+      "bytes": 3444,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "909e9010867004d96567d0a03ef3dceea154eff6",
+      "rawSha256": "66505f4685bf8b168636916b8ae7012c652fe10edb89dfdd47ddc57e2d5b25ec",
+      "bytes": 277,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/utils/api-error.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "871eef2d7c03d634a558e118b191079b34e49835",
+      "rawSha256": "3116613664b6629654528be835d1faa7daaaee9a174ad323ae3361a92cc6c929",
+      "bytes": 2131,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/utils/number-input.ts",
+      "status": "modified",
+      "area": "frontend",
+      "indexBlob": "990f348993f21b5d15df1489c3836441fc03349e",
+      "rawSha256": "13be0ecd3a43caacc0378c7b8b2c931535184f72016eb383ae3332936d191497",
+      "bytes": 2109,
+      "review": "PENDING",
+      "batch": null
+    },
+    {
+      "path": "frontend/utils/session-error.ts",
+      "status": "new",
+      "area": "frontend",
+      "indexBlob": null,
+      "rawSha256": "796cad785c02411f434d69928fa67d6be33af37a03583be035ab9fadcd59ddba",
+      "bytes": 488,
+      "review": "PENDING",
+      "batch": null
+    }
+  ]
+}

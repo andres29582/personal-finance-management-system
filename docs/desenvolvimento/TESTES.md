@@ -396,6 +396,122 @@ Reforcos recomendados:
 - registrar no documento de testes frontend qualquer mudanca relevante de
   cobertura por rota.
 
+## Credenciais e bancos descartaveis
+
+O harness E2E exige configuracao `E2E_DB_*` explicita no ambiente do processo,
+confirmacao exata e identidade/role/banco descartaveis verificadas. Nao usa
+`DB_*` como fallback. Em `NODE_ENV=test`, o AppModule nao carrega `.env`;
+o setup aplica o perfil E2E antes dos imports da aplicacao, remove CA TLS
+herdada e desabilita os workers de notificacao. A preparacao apaga o esquema
+`public`: somente alvo isolado autorizado, nunca o banco habitual.
+
+### Execucao exclusiva do E2E
+
+Use `npm run test:e2e -- <filtro-opcional>`. O launcher conserva uma conexao
+PostgreSQL dedicada desde a admissao ate a saida confirmada do Jest e a
+verificacao de que nao restaram conexoes no banco. `--runInBand` continua
+ativo, mas nao substitui a exclusao entre processos.
+
+Antes de qualquer DDL, inclusive do controle do harness, sao validados:
+destino e confirmacao, usuario e banco efetivos, ownership, marcador
+`finance-e2e-disposable`, ausencia de privilegios elevados, memberships e
+outros bancos pertencentes ao role. Um advisory lock de sessao impede
+execucoes concorrentes. Um claim unico em `e2e_harness.run_claim`, fora de
+`public`, vincula token aleatorio, PID e inicio do backend proprietario.
+Cada reset revalida esse vinculo e o lock na conexao que executara o SQL.
+
+**Falha fecha o acesso:** perda do coordenador, execucao com erro, encerramento
+nao confirmado ou erro de limpeza conservam o claim. Nao existe takeover por
+tempo decorrido ou PID aparentemente livre. Descarte e reprovisione somente
+o alvo descartavel autorizado; nao remova o claim para forcar uma nova
+execucao. Nao ha ferramenta de recuperacao automatica nem privilegio
+`CREATEDB` para o role de testes.
+
+O Jest direto e os preparadores isolados rejeitam ausencia de lease. O P4
+usa o mesmo launcher. O supervisor browser/sessoes conserva seu lease durante
+preparacao, backend e cenarios, ate confirmar o encerramento dos participantes.
+O supervisor continua criando seu proprio banco descartavel por execucao.
+O supervisor somente autoriza apagar o claim quando os cenarios terminaram
+com sucesso, nao houve cancelamento e todas as etapas anteriores de limpeza
+tambem tiveram sucesso. A ausencia de processos participantes, sozinha, nao
+transforma uma execucao falha em uma liberacao autorizada.
+
+No C6, o backup da aplicacao exclui `e2e_harness` explicitamente. O restore
+recria apenas `public`; o schema de controle e o claim vivo permanecem fora
+do arquivo e das comparacoes de metadados da aplicacao.
+
+Conexoes do bootstrap usam limite de 5 s para conectar, 5 s para lock e 20 s
+para statement, configurados antes da primeira consulta; o limite cliente
+de 25 s nao substitui cancelamento no servidor. Os requests financeiros
+concorrentes mantem handles abortaveis, e a limpeza tenta todas as etapas,
+observa o fim das transacoes e descarta coordenadores nao saudaveis. Erros
+primarios e de limpeza permanecem juntos. O launcher limita a execucao a
+15 minutos e tenta encerrar somente seu processo filho.
+
+### Verificacao sem banco real
+
+Os contratos de admissao, ordem das guardas, perda de coordenador, claims
+anteriores, rollback de liberacao e erros compostos tem testes com clientes
+simulados. Os testes de limpeza usam QueryRunner e transporte simulados.
+Essas provas **nao certificam locks, cancelamento ou isolamento em PostgreSQL
+real**; a integracao requer uma execucao separada, explicitamente autorizada.
+
+```sh
+node --test --test-isolation=none test/e2e-runtime.spec.cjs test/e2e-runner.spec.cjs test/session-harness/e2e-lease-compat.spec.cjs
+node node_modules/jest/bin/jest.js --runInBand --runTestsByPath src/config/e2e-cleanup.spec.ts src/config/e2e-harness.spec.ts
+```
+
+Referencias: [advisory locks de sessao](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS),
+[limites no servidor](https://www.postgresql.org/docs/current/runtime-config-client.html),
+[opcoes do cliente pg](https://node-postgres.com/apis/client) e
+[configuracao sem dotenv no Nest](https://docs.nestjs.com/techniques/configuration).
+
+A suite `credential-boundaries.e2e-spec.ts` observa locks em conexoes separadas,
+sem sleeps. [Preflight, comandos e provas ainda pendentes](../validacao/SEGURANCA_CREDENCIAIS_ETAPA_1_RESULTADO.md).
+
+### Regressões financeiras focalizadas — 2026-10-23
+
+As suites `test/financial-business-rules.e2e-spec.ts` e
+`test/budget-allocation-concurrency.e2e-spec.ts` verificam os contratos HTTP e
+PostgreSQL de natureza imutável de categoria, eco compatível, edição histórica,
+centavos exatos, limite/delta de alocações, limiares de 80%/100% e serialização
+entre alocações/redução do orçamento. As corridas usam barreiras e observam
+bloqueios reais, não esperas temporizadas como prova de ordem.
+
+Com uma base descartável explicitamente autorizada e configurada, use o launcher
+mantido, a partir de `backendnest`:
+
+```sh
+npm run test:e2e -- --runTestsByPath test/financial-business-rules.e2e-spec.ts test/budget-allocation-concurrency.e2e-spec.ts
+```
+
+Há também um supervisor local focalizado, executado **somente com autorização
+específica**, a partir da raiz:
+
+```sh
+node backendnest/test/financial-closure-runner.cjs
+```
+
+Ele exige PostgreSQL 18 instalado no caminho Windows indicado no arquivo, Edge e
+dependências locais já instaladas. Cria cluster, rol restrito e banco marcados
+novos sob `.tmp/financial-runtime-<nonce>/`, sem ler o destino de `.env`. Confere
+portas loopback `55438`, `4328`, `4188`, sentinel, diretório e identidade do
+servidor antes de operações administrativas. Executa as duas suites pelo launcher;
+só após sucesso inicia Nest real, exportação da aplicação Expo completa e cenário
+Playwright financeiro. Não executa o supervisor amplo de sessões nem certifica
+Android/iOS. Segredos locais aleatórios não são impressos.
+
+O limite da exportação Expo é 180 segundos. Falha, cancelamento ou limpeza
+incerta conservam o claim; não reutilize o cluster nem remova o claim para forçar
+outra execução. O encerramento de handles filhos conhecidos não comprova, sozinho,
+o término de todos os descendentes Metro no Windows. O supervisor encerra apenas
+o PostgreSQL do seu diretório confirmado e mantém dados/evidências para inspeção.
+
+**Resultado atual:** seis testes HTTP/PostgreSQL passaram na execução final;
+a exportação Expo excedeu o limite e foi encerrada antes do cenário browser.
+A validação do cliente real continua **pendente**, sem screenshots nem PASS web.
+Veja [a evidência e os limites desta unidade](../validacao/AUDITORIA_ESTADO_ATUAL_SISTEMA_2026-10-15.md#fechamento-focalizado--2026-10-23).
+
 ### Contrato de atualização de transações — 2026-10-25
 
 `UpdateTransacaoRequestDto` exclui `ehAjuste`, como o PATCH da API; a criação
@@ -414,6 +530,24 @@ npm test -- --runInBand --testTimeout=15000 --runTestsByPath src/modules/transac
 As invariantes verificam a ausência da chave no PATCH, a preservação da flag
 opcional booleana na criação e a descrição anulável na atualização. Essa prova
 de tipos não certifica execução HTTP, banco ou interface real.
+
+### Evidência histórica de tipagem PostgreSQL — acompanhamento 2026-10-25
+
+Em 24/10, foi instalada somente a dependência de desenvolvimento `@types/pg`
+8.23.1; `pg` permaneceu em 8.20.0. A tipagem real revelou quatro wrappers
+incompatíveis: o contrato `QueryableClient` passou a limitar linhas a objetos e
+um adaptador genérico propaga o tipo para `Client.query<T>`, sem casts ou `any`.
+O `tsc --noEmit --incremental false` completo do backend terminou com exit 0;
+`migration-runner.spec.ts` passou com oito testes simulados. São resultados de
+24/10, não uma nova execução em 25/10; a falha TS7016 de 23/10 continua registrada
+como história. Nenhum entrypoint de migração foi importado ou executado.
+
+Registros locais de atribuição e logs: `.tmp/pg-types-20261024/`; são temporários,
+não documentação publicada automaticamente. O cliente real permanece adiado:
+seis E2E HTTP/PostgreSQL passaram em 23/10, mas o supervisor terminou com exit 1
+após o limite Expo de 180 s, antes do Edge. Não há screenshots/PASS web nem
+certificação de encerramento de todos os descendentes Metro ou do estado atual
+dos clusters históricos. Este acompanhamento não autoriza repetir o runtime.
 
 ### Entrega local verificada — 2026-10-25
 
