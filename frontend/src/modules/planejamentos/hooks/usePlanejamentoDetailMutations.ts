@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { resolveApiError } from '../../../../utils/api-error';
 import { confirmAction } from '../../../../utils/confirm-action';
 import {
@@ -233,14 +233,15 @@ export function usePlanejamentoDetailMutations({
   const transitionLockRef = useRef<PlanejamentoTransition | null>(null);
   const onUnauthorizedRef = useRef(onUnauthorized);
 
-  onUnauthorizedRef.current = onUnauthorized;
-
-  if (mutationContextRef.current.planejamentoId !== planejamentoId) {
-    mutationContextRef.current = {
-      generation: mutationContextRef.current.generation + 1,
-      planejamentoId,
-    };
-  }
+  useLayoutEffect(() => {
+    onUnauthorizedRef.current = onUnauthorized;
+    if (mutationContextRef.current.planejamentoId !== planejamentoId) {
+      mutationContextRef.current = {
+        generation: mutationContextRef.current.generation + 1,
+        planejamentoId,
+      };
+    }
+  }, [onUnauthorized, planejamentoId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -251,7 +252,9 @@ export function usePlanejamentoDetailMutations({
     };
   }, []);
 
-  useEffect(() => {
+  const [feedbackScope, setFeedbackScope] = useState(planejamentoId);
+  if (feedbackScope !== planejamentoId) {
+    setFeedbackScope(planejamentoId);
     setAcertosActionLoading(null);
     setAcertosError('');
     setAcertosInfo('');
@@ -264,7 +267,7 @@ export function usePlanejamentoDetailMutations({
     setTransitionLoading(null);
     setTransitionError('');
     setTransitionInfo('');
-  }, [planejamentoId]);
+  }
 
   const settlementMutationsAllowed =
     planejamento?.status === 'ABERTO' || planejamento?.status === 'FECHADO';
@@ -450,13 +453,12 @@ export function usePlanejamentoDetailMutations({
     [canManageLifecycle, isFinanciallySettled, planejamento],
   );
 
-  currentMutationCapabilitiesRef.current = {
-    canCancelExpense,
-    canPerformSettlementAction,
-    canPerformTransition,
-    canRemoveParticipant,
-    canSyncSettlements,
-  };
+  useLayoutEffect(() => {
+    currentMutationCapabilitiesRef.current = {
+      canCancelExpense, canPerformSettlementAction, canPerformTransition,
+      canRemoveParticipant, canSyncSettlements,
+    };
+  }, [canCancelExpense, canPerformSettlementAction, canPerformTransition, canRemoveParticipant, canSyncSettlements]);
 
   const hasCurrentMutationCapability = useCallback(
     (

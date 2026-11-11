@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getUser } from '../../../../storage/authStorage';
 import { resolveApiError } from '../../../../utils/api-error';
 import {
@@ -64,8 +64,16 @@ export function usePlanejamentoDetailData({
   const onUnauthorizedRef = useRef(onUnauthorized);
   const planejamentoIdRef = useRef(planejamentoId);
 
-  onUnauthorizedRef.current = onUnauthorized;
-  planejamentoIdRef.current = planejamentoId;
+  useLayoutEffect(() => {
+    onUnauthorizedRef.current = onUnauthorized;
+    planejamentoIdRef.current = planejamentoId;
+  }, [onUnauthorized, planejamentoId]);
+  const [identityScope, setIdentityScope] = useState(planejamentoId);
+  if (identityScope !== planejamentoId) {
+    setIdentityScope(planejamentoId);
+    setUsuarioAutenticadoId(null);
+    setParticipantPermissionError('');
+  }
 
   useEffect(() => {
     mountedRef.current = true;
@@ -318,8 +326,6 @@ export function usePlanejamentoDetailData({
     let active = true;
     const expectedPlanejamentoId = planejamentoId;
     const identityGeneration = ++identityGenerationRef.current;
-
-    setUsuarioAutenticadoId(null);
 
     async function loadUsuarioAutenticado() {
       try {

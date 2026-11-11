@@ -44,7 +44,8 @@ export function RootLayout() {
   const navigationState = useRootNavigationState();
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [authority, setAuthority] = useState<Authority>(null);
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState<{ authority: Authority; seconds: number } | null>(null);
+  const secondsLeft = !authority ? null : countdown?.authority === authority ? countdown.seconds : Math.max(0, Math.ceil((Date.parse(authority.state.idleExpiresAt) - Date.parse(authority.state.serverNow)) / 1000));
   const [retry, setRetry] = useState(0);
   const currentPath = useMemo(() => {
     if (!segments.length) {
@@ -164,10 +165,7 @@ export function RootLayout() {
     };
   }, [retry]);
   useEffect(() => {
-    if (!authority) {
-      setSecondsLeft(null);
-      return;
-    }
+    if (!authority) return;
     const interval =
       Date.parse(authority.state.idleExpiresAt) -
       Date.parse(authority.state.serverNow);
@@ -176,13 +174,14 @@ export function RootLayout() {
         0,
         Math.ceil((interval - (Date.now() - authority.receivedAt)) / 1000),
       );
-      setSecondsLeft(remaining);
+      setCountdown({ authority, seconds: remaining });
       if (remaining === 0) {
         suspendSessionAuthority();
         setRetry((value) => value + 1);
       }
     };
-    update();
+    // Expired authority must be hidden immediately; ticks trigger revalidation.
+    if (interval - (Date.now() - authority.receivedAt) <= 0) suspendSessionAuthority();
     const timer = setInterval(update, 1000);
     return () => clearInterval(timer);
   }, [authority]);

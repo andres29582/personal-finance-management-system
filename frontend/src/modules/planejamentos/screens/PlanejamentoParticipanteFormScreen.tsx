@@ -1,6 +1,6 @@
 import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { getUser } from '../../../../storage/authStorage';
 import { resolveApiError } from '../../../../utils/api-error';
@@ -110,20 +110,22 @@ export function PlanejamentoParticipanteFormScreen() {
   const [savingToken, setSavingToken] = useState<SaveToken | null>(null);
   const authorizationLoadRef = useRef<AuthorizationLoad | null>(null);
   const mountedRef = useRef(true);
-  const routeContextRef = useRef<RouteContext>({
+  const [routeContext, setRouteContext] = useState<RouteContext>({
     generation: 0,
     planejamentoId,
   });
   const savingLockRef = useRef<SaveToken | null>(null);
 
-  if (routeContextRef.current.planejamentoId !== planejamentoId) {
-    routeContextRef.current = {
-      generation: routeContextRef.current.generation + 1,
-      planejamentoId,
-    };
+  const routeContextRef = useRef(routeContext);
+  if (routeContext.planejamentoId !== planejamentoId) {
+    setRouteContext({ generation: routeContext.generation + 1, planejamentoId });
+    setAuthorizationLoad(null);
+    setFeedback(null);
+    setSavingToken(null);
   }
+  useLayoutEffect(() => { routeContextRef.current = routeContext; }, [routeContext]);
 
-  const currentGeneration = routeContextRef.current.generation;
+  const currentGeneration = routeContext.generation;
   const currentAuthorization =
     authorizationLoad?.generation === currentGeneration
       ? authorizationLoad
@@ -143,14 +145,13 @@ export function PlanejamentoParticipanteFormScreen() {
     savingToken?.generation === currentGeneration &&
     savingToken.planejamentoId === planejamentoId;
 
-  authorizationLoadRef.current = currentAuthorization;
+  useLayoutEffect(() => { authorizationLoadRef.current = currentAuthorization; }, [currentAuthorization]);
 
   useEffect(() => {
     mountedRef.current = true;
 
     return () => {
       mountedRef.current = false;
-      routeContextRef.current.generation += 1;
     };
   }, []);
 
@@ -158,12 +159,6 @@ export function PlanejamentoParticipanteFormScreen() {
     const expectedGeneration = routeContextRef.current.generation;
     const expectedPlanejamentoId = planejamentoId;
     let active = true;
-
-    setAuthorizationLoad(null);
-
-    setFeedback({ generation: expectedGeneration, message: '' });
-
-    setSavingToken(null);
 
     if (!expectedPlanejamentoId) {
       return () => {

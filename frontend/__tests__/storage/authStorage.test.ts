@@ -31,7 +31,8 @@ it.each([null, 'undefined', '{', JSON.stringify({ schemaVersion: 999 })])('never
 });
 it.each(['removeToken', 'removeRefreshToken', 'removeUser', 'clearSession'] as const)('legacy removal %s clears coherent session, never partial credentials', async method => {
   await storage.installSession(loginSession(), await storage.reconcileSession());
-  await storage[method]();
+  const remove = { removeToken: storage.removeToken, removeRefreshToken: storage.removeRefreshToken, removeUser: storage.removeUser, clearSession: storage.clearSession };
+  await remove[method]();
   expect(await storage.getToken()).toBeNull(); expect(await storage.getRefreshToken()).toBeNull(); expect(await storage.getUser()).toBeNull();
   expect(JSON.parse(values.get(storage.SESSION_KEY)!).status).toBe('signedOut');
 });

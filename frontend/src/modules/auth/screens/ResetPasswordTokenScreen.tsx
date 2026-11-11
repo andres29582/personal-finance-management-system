@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AuthScreen } from '../../../../components/auth-screen';
 import { resolveApiError } from '../../../../utils/api-error';
@@ -11,18 +11,18 @@ import { validatePassword } from '../validators/passwordPolicy';
 export function ResetPasswordTokenScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(() => typeof params.token === 'string' ? params.token : '');
+  const [tokenParam, setTokenParam] = useState(params.token);
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmar, setConfirmar] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (typeof params.token === 'string' && params.token) {
-      setToken(params.token);
-    }
-  }, [params.token]);
+  if (tokenParam !== params.token) {
+    setTokenParam(params.token);
+    if (typeof params.token === 'string' && params.token) setToken(params.token);
+  }
 
   async function handleSubmit() {
     setMessage('');

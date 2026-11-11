@@ -42,7 +42,7 @@ export function SessionsScreen() {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const active = useRef(true),
     sequence = useRef(0),
@@ -82,8 +82,6 @@ export function SessionsScreen() {
       const run = ++sequence.current;
       const origin = expected ?? (await getSessionSnapshot());
       if (!(await current(origin, run))) return;
-      setLoading(true);
-      setMessage("");
       try {
         const result = await listSessions(origin, cursor);
         if (!(await current(origin, run))) return;
@@ -104,8 +102,17 @@ export function SessionsScreen() {
     [current],
   );
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    void getSessionSnapshot().then(origin => {
+      if (!cancelled) void load(undefined, origin);
+    });
+    return () => { cancelled = true; };
   }, [load]);
+  function reload(cursor?: string, expected?: SessionSnapshot) {
+    setLoading(true);
+    setMessage("");
+    return load(cursor, expected);
+  }
   async function openConfirmation(target: OwnSession | null) {
     const origin = await getSessionSnapshot();
     if (!(await current(origin)) || mutating.current) return;
@@ -134,7 +141,7 @@ export function SessionsScreen() {
         submittedPassword = "";
         if (!(await current(origin))) return;
         setConfirmation(null);
-        await load(undefined, origin);
+        await reload(undefined, origin);
       } else {
         const operation = await revokeAllSessions(submittedPassword, origin);
         submittedPassword = "";
@@ -230,7 +237,7 @@ export function SessionsScreen() {
           description={message}
           tone="error"
           actionLabel="Tentar novamente"
-          onActionPress={() => void load()}
+          onActionPress={() => void reload()}
         />
       ) : null}
       {page?.items.length === 0 ? (
@@ -274,7 +281,7 @@ export function SessionsScreen() {
           label="Proxima pagina"
           variant="ghost"
           disabled={busy || loading}
-          onPress={() => void load(page.nextCursor!)}
+          onPress={() => void reload(page.nextCursor!)}
         />
       ) : null}
       {page ? (

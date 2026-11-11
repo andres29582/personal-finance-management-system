@@ -1,6 +1,6 @@
 import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -138,23 +138,24 @@ export function PlanejamentoGastoFormScreen() {
   const gastoId = normalizeRouteParam(params.gastoId);
   const isEditing = !!gastoId;
   const routeKey = JSON.stringify([planejamentoId ?? null, gastoId ?? null]);
-  const routeContextRef = useRef<ExpenseFormRouteContext>({
+  const [currentRoute, setCurrentRoute] = useState<ExpenseFormRouteContext>({
     gastoId,
     generation: 0,
     key: routeKey,
     planejamentoId,
   });
 
-  if (routeContextRef.current.key !== routeKey) {
-    routeContextRef.current = {
+  if (currentRoute.key !== routeKey) {
+    setCurrentRoute({
       gastoId,
-      generation: routeContextRef.current.generation + 1,
+      generation: currentRoute.generation + 1,
       key: routeKey,
       planejamentoId,
-    };
+    });
   }
 
-  const currentRoute = routeContextRef.current;
+  const routeContextRef = useRef(currentRoute);
+  useLayoutEffect(() => { routeContextRef.current = currentRoute; }, [currentRoute]);
   const draft = useFinancialDraft('planning-expense/' + routeKey, {
     descricao: '',
     valor: '',
@@ -219,6 +220,14 @@ export function PlanejamentoGastoFormScreen() {
   const loadGenerationRef = useRef(0);
   const mountedRef = useRef(true);
   const savingLockRef = useRef<ExpenseSavingToken | null>(null);
+  if (accessState.route !== currentRoute) {
+    setAccessState({ context: null, kind: planejamentoId ? 'loading' : 'missing-id', message: planejamentoId ? '' : 'Planejamento nao informado.', route: currentRoute });
+    setFeedback({ message: '', route: currentRoute });
+    setPagadoresDisponiveis([]);
+    setParticipantesDivisaoDisponiveis([]);
+    setSavingToken(null);
+  }
+
 
   const isCurrentRouteContext = useCallback(
     (expectedRoute: ExpenseFormRouteContext) =>
@@ -241,10 +250,6 @@ export function PlanejamentoGastoFormScreen() {
     return () => {
       mountedRef.current = false;
       loadGenerationRef.current += 1;
-      routeContextRef.current = {
-        ...routeContextRef.current,
-        generation: routeContextRef.current.generation + 1,
-      };
       savingLockRef.current = null;
     };
   }, []);
@@ -263,25 +268,6 @@ export function PlanejamentoGastoFormScreen() {
         setAccessState({ context, kind, message, route: expectedRoute });
       }
     };
-
-    setAccessState({
-      context: null,
-      kind: planejamentoId ? 'loading' : 'missing-id',
-      message: planejamentoId ? '' : 'Planejamento nao informado.',
-      route: expectedRoute,
-    });
-    setFeedback({ message: '', route: expectedRoute });
-    setPagadoresDisponiveis([]);
-    setParticipantesDivisaoDisponiveis([]);
-
-
-
-
-
-
-
-
-
 
     async function loadPlanejamento() {
       const loadScope = draft.capture();

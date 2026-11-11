@@ -71,18 +71,21 @@ type QuickActionsMenuProps = {
 };
 
 export function QuickActionsMenu({ onNavigate }: QuickActionsMenuProps) {
-  const [open, setOpen] = useState(false);
+  const [presentationState, setPresentationState] = useState({ open: false, version: 0 });
+  const { open, version } = presentationState;
   const trigger = useRef<View>(null);
   const entry = useRef<View>(null);
   const mounted = useRef(true);
   const navigating = useRef(false);
   const returnFocus = useRef(false);
-  const presentation = useRef({ open, version: 0 });
-  if (presentation.current.open !== open) {
-    presentation.current.open = open;
-    if (open) presentation.current.version++;
+  const presentation = useRef(presentationState);
+  function setOpen(nextOpen: boolean) {
+    const previous = presentation.current;
+    if (previous.open === nextOpen) return;
+    const next = { open: nextOpen, version: previous.version + (nextOpen ? 1 : 0) };
+    presentation.current = next;
+    setPresentationState(next);
   }
-  const version = presentation.current.version;
   function restoreTriggerFocus(expectedVersion = version) {
     if (
       mounted.current &&

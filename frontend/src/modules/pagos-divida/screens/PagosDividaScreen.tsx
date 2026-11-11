@@ -1,7 +1,7 @@
 import { useFinancialDraft } from '../../../shared/hooks/useFinancialDraft';
 import type { PaymentFieldErrors } from '../validators/pagoDividaForm';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { listCategorias } from '../../categorias/services/categoriaService';
 import { Categoria } from '../../categorias/types/categoria';
@@ -67,10 +67,17 @@ export function PagosDividaScreen() {
 
 
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!dividaId);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(dividaId ? '' : 'Divida invalida.');
   const [fieldErrors, setFieldErrors] = useState<PaymentFieldErrors>({});
+  const [loadedId, setLoadedId] = useState(dividaId);
+  if (loadedId !== dividaId) {
+    setLoadedId(dividaId);
+    setDivida(null); setPagos([]); setContas([]); setCategorias([]);
+    setLoading(!!dividaId); setSaving(false); setFieldErrors({});
+    setMessage(dividaId ? '' : 'Divida invalida.');
+  }
 
   const categoriasDespesa = useMemo(
     () => categorias.filter((categoria) => categoria.tipo === 'despesa'),
@@ -78,18 +85,13 @@ export function PagosDividaScreen() {
   );
   const paymentBlocked = divida?.ativa === false;
 
-  const loadPayments = useCallback(async () => {
+  useEffect(() => {
+    async function loadPayments() {
     const loadScope = draft.capture();
     if (!draft.isCurrent(loadScope)) return;
-    if (!dividaId) {
-      setMessage('Divida invalida.');
-      if (draft.isCurrent()) setLoading(false);
-      return;
-    }
+    if (!dividaId) return;
 
     try {
-      setLoading(true);
-      setMessage('');
       const [dividaData, pagosData, contasData, categoriasData] = await Promise.all([
         getDividaById(dividaId),
         listPagosByDivida(dividaId),
@@ -111,13 +113,11 @@ export function PagosDividaScreen() {
         router.replace('/login');
       }
     } finally {
-      if (draft.isCurrent()) setLoading(false);
+      if (draft.isCurrent(loadScope)) setLoading(false);
     }
-  }, [dividaId, router]);
-
-  useEffect(() => {
+    }
     void loadPayments();
-  }, [loadPayments]);
+  }, [dividaId, router]);
 
   async function reloadPayments() {
     if (!dividaId) {
