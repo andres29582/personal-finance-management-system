@@ -22,6 +22,69 @@ permissions:
   contents: read
 
 jobs:
+  access-browser:
+    name: Access web journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      CI: true
+      E2E_DB_HOST: localhost
+      E2E_DB_PORT: 5432
+      E2E_DB_USERNAME: finance_e2e_access_ci_owner
+      E2E_DB_PASSWORD: disposable-access-ci-only
+      E2E_DB_NAME: finance_e2e_access_ci
+      E2E_DB_RESET_CONFIRM: finance_e2e_access_ci
+      EXPO_NO_DOTENV: 1
+      EXPO_NO_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backendnest/package-lock.json
+            frontend/package-lock.json
+      - name: Install locked application dependencies
+        run: |
+          npm ci --prefix backendnest --no-audit --no-fund
+          npm ci --prefix frontend --no-audit --no-fund
+      - name: Install headless Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Bootstrap the confined disposable database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -X -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE finance_e2e_access_ci_owner LOGIN PASSWORD 'disposable-access-ci-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+          CREATE DATABASE finance_e2e_access_ci OWNER finance_e2e_access_ci_owner;
+          COMMENT ON DATABASE finance_e2e_access_ci IS 'finance-e2e-disposable';
+          REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+          REVOKE CONNECT ON DATABASE template1 FROM PUBLIC;
+          REVOKE ALL ON DATABASE finance_e2e_access_ci FROM PUBLIC;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE finance_e2e_access_ci TO finance_e2e_access_ci_owner;
+          SQL
+      - name: Verify access runner confinement checks
+        run: node --test backendnest/test/access-browser-runner.spec.cjs
+      - name: Build and verify real access journeys
+        working-directory: backendnest
+        run: npm run test:access-browser
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
