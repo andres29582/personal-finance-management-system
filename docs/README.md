@@ -157,3 +157,7 @@ A pasta `arquivo/` contém documentos preservados por valor histórico, rastreab
 
 - [Resultado de cierre](validacao/CIERRE_PRUEBAS_ACCESO_2026-11-11.md): registro atómico, Jest completo y seis recorridos web reales aprobados; límites y deuda de lint explícitos.
 - [Plan implementado](planejamento/PLAN_CIERRE_PRUEBAS_ACCESO_2026-11-11.md) y [runbook de ejecución](operacao/PRUEBAS_ACCESO_WEB.md).
+
+## Próxima entrega: calidad y CI
+
+- [Plan de implementación de calidad, reproducibilidad y CI](planejamento/PLAN_CALIDAD_CI_2026-11-11.md): perfiles de lint, correcciones por contratos, instalación limpia Linux/PG16, revisión de P4 y validación remota del candidato exacto. Estado: planificado.
