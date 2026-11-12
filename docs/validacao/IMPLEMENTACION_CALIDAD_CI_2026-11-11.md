@@ -7,6 +7,12 @@ Rama local `codex/calidad-ci-2026-11-11`.
 Candidato de código/CI: `146cba8573130f19905b669cf52a7c8d41185675`.
 [Resumen verificable](RESULTADOS_CALIDAD_CI_2026-11-12.json).
 
+Continuación P4 del 12/11: los dos bloqueos locales se corrigieron en
+`ef06512ac226bc97109050489f6c36456151dd19`; el E2E actual pasó 192/192 sin
+omisiones y fue aceptado por el validador P4. Las mediciones 191+1 y los demás
+resultados que siguen pertenecen al cierre de calidad anterior.
+[Resultados actuales y pendiente remoto](IMPLEMENTACION_P4_2026-11-12.md).
+
 El [plan](../planejamento/PLAN_CALIDAD_CI_2026-11-11.md) se implementa en lotes.
 Las pruebas del cierre de acceso se conservan con sus identidades anteriores.
 La custodia privada `_calidad-20261111`, fuera del repositorio, contiene hashes

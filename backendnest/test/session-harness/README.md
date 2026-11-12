@@ -1,5 +1,13 @@
 # Current session proof harness
 
+## P4: correcciones locales verificadas — 2026-11-12
+
+**LOCAL_PASS_BOUNDED; REMOTE_NOT_TESTED / OPEN.** U6 portable 37/37,
+Windows Job separado 2/2 y E2E completo 192/192 sin skips. Las dos rutas P4
+usan la entrada portable; `npm run test:harness:windows` conserva los casos nativos.
+Linux/PG16 y readback remoto siguen pendientes. Los resultados anteriores
+que siguen son históricos. [Evidencia actual](../../../docs/validacao/IMPLEMENTACION_P4_2026-11-12.md).
+
 ## P4: preparado localmente; prova remota pendente — 2026-10-14
 
 **P4 IMPLEMENTED_LOCAL / PURE_PASS; REMOTE_NOT_TESTED / OPEN. U6/etapa 2 OPEN;

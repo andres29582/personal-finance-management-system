@@ -129,5 +129,18 @@
     },
     "remoteMainObserved": "e9ee0db68bd318942a826cfee4fb0e36850a998a",
     "qualityCodeCandidateChangedPaths": 78
+  },
+  "p4FollowUp": {
+    "date": "2026-11-12",
+    "codeCommit": "ef06512ac226bc97109050489f6c36456151dd19",
+    "report": "RESULTADOS_P4_2026-11-12.json",
+    "status": "LOCAL_PASS_BOUNDED_REMOTE_PENDING",
+    "e2e": {
+      "pass": 192,
+      "fail": 0,
+      "skipped": 0,
+      "suites": 38
+    },
+    "previousChecksAreHistorical": true
   }
 }

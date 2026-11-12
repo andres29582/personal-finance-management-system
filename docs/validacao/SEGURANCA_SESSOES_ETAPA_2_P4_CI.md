@@ -1,4 +1,25 @@
-# P4: preparação local concluída; aceite remoto aberto — 2026-10-15
+# P4: correcciones locales verificadas; aceptación remota abierta — 2026-11-12
+
+**Estado actual: LOCAL_PASS_BOUNDED; REMOTE_NOT_TESTED / OPEN.**
+La auditoría del candidato `ec97588cf3c234dd8cede526dab4359e766d9b0c`
+(código/CI `146cba8573130f19905b669cf52a7c8d41185675`) encontró que P4
+invoca pruebas exclusivas de Windows en sus rutas Linux y que su validador
+estricto rechaza el E2E actual con una prueba y una suite omitidas.
+Ambos bloqueos fueron corregidos en `ef06512ac226bc97109050489f6c36456151dd19`:
+suite U6 portable común y dos casos Windows conservados por separado;
+E2E completo 192/192, 38 suites, cero omitidos y aceptado por el validador P4 real.
+Node y la instalación de ambos paquetes ya estaban actualizados.
+[Implementación, evidencia actual y límites](IMPLEMENTACION_P4_2026-11-12.md).
+No se ejecutó CI remota; Linux/PG16, publicación y readback remoto siguen pendientes.
+
+El [plan de implementación vigente](../planejamento/PLAN_ACTUALIZACION_P4_2026-11-12.md)
+define correcciones, pruebas, nuevo manifiesto y aceptación remota por SHA exacto.
+Los resultados, candidatos y afirmaciones de preparación completa que siguen
+corresponden al estado histórico del 15 de octubre; no acreditan el candidato actual.
+
+---
+
+# Histórico: preparação local concluída; aceite remoto aberto — 2026-10-15
 
 **LOCAL_PREPARATION_COMPLETE / PURE_PASS; P4 REMOTE_NOT_TESTED / OPEN;
 U6/etapa 2 OPEN; produção BLOCKED.** P3 segue LOCAL_PASS_BOUNDED / CLOSED

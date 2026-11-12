@@ -1,0 +1,117 @@
+{
+  "date": "2026-11-12",
+  "timezone": "America/Sao_Paulo",
+  "status": "LOCAL_PASS_BOUNDED_REMOTE_PENDING",
+  "base": "ec97588cf3c234dd8cede526dab4359e766d9b0c",
+  "codeCommit": "ef06512ac226bc97109050489f6c36456151dd19",
+  "branch": "codex/actualizacion-p4-2026-11-12",
+  "runtime": {
+    "os": "Windows",
+    "node": "22.23.4",
+    "postgresql": "18.6",
+    "linuxNative": "NOT_RUN",
+    "postgresql16": "NOT_RUN"
+  },
+  "checks": {
+    "p4Pure": {
+      "pass": 18,
+      "fail": 0,
+      "skipped": 0
+    },
+    "u6Entrypoint": {
+      "pass": 37,
+      "fail": 0,
+      "skipped": 0
+    },
+    "portableHarness": {
+      "pass": 124,
+      "fail": 0,
+      "skipped": 0,
+      "containsOtherReportedChecks": true
+    },
+    "windowsOwnership": {
+      "pass": 2,
+      "fail": 0,
+      "bodyPreserved": true,
+      "guardianMetadataPreserved": true
+    },
+    "u6Offline": {
+      "checks": 6,
+      "status": "PASS",
+      "checksumReadback": "PASS",
+      "sourceSnapshot": "BEFORE_FINAL_DOCUMENTATION"
+    },
+    "sqlUniqueness": {
+      "pass": 1,
+      "observedDatabaseBlocking": true,
+      "fixtureCleanupReadback": {
+        "users": 0,
+        "transfers": 0
+      }
+    },
+    "e2e": {
+      "pass": 192,
+      "fail": 0,
+      "skipped": 0,
+      "suites": 38,
+      "pendingSuites": 0,
+      "p4SummaryAccepted": true,
+      "reportSha256": "0dce45128ca843d1d8dc922e70a7f419e190878a41301bf121e3991d62629ad2"
+    },
+    "backendLint": {
+      "files": 425,
+      "errors": 0,
+      "warnings": 22
+    },
+    "lintContract": "PASS",
+    "typesFull": "PASS",
+    "typesBuild": "PASS",
+    "nestBuild": "PASS",
+    "actionlint": {
+      "version": "1.7.12",
+      "status": "PASS",
+      "shellcheck": "NOT_RUN",
+      "pyflakes": "NOT_RUN"
+    }
+  },
+  "notRepeated": [
+    "frontend unit/types/lint/build",
+    "access browser",
+    "ML Linux"
+  ],
+  "remote": {
+    "observedMain": "e9ee0db68bd318942a826cfee4fb0e36850a998a",
+    "mainIsAncestor": false,
+    "workflowOnDefaultBranch": false,
+    "status": "NOT_RUN",
+    "artifactReadback": "PENDING",
+    "logRetentionDays": null
+  },
+  "closure": {
+    "p4": "OPEN",
+    "u6Etapa2": "OPEN",
+    "production": "BLOCKED"
+  },
+  "sources": [
+    {
+      "path": "backendnest/test/harness-offline.cjs",
+      "sha256": "996247c53b6eae11eb379983b1703dd0aa08bfadce97f27046bd7d0433a0efe7"
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-owned.spec.cjs",
+      "sha256": "40eb22eeb0229ff6233c4e9267a26f418f0c0a59761391b0afea43c06d469000"
+    },
+    {
+      "path": "backendnest/test/session-harness/u6-windows.spec.cjs",
+      "sha256": "2d0142bbb4370eb4a70c03c988b0d9f2f1f8766e297cb284177ebea04bf7823c"
+    },
+    {
+      "path": "backendnest/test/session-harness/p4-proof.spec.cjs",
+      "sha256": "e08564b1b1837440816b6288b4f5b729f2433c4c4423a45bc0300d47cb9d941d"
+    },
+    {
+      "path": "backendnest/test/transfer-intent-concurrency.e2e-spec.ts",
+      "sha256": "160f14e01f754f13455a657069f32c95468a3fac1243e5a070d5600cc66df3d1"
+    }
+  ]
+}

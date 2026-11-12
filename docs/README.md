@@ -10,6 +10,8 @@ Documentos em `docs/validacao/` sao relatorios de auditoria e nao substituem o c
 
 ## Documentos principais
 
+- [P4: implementación local y aceptación remota pendiente](validacao/IMPLEMENTACION_P4_2026-11-12.md)
+- [Plan de actualización P4](planejamento/PLAN_ACTUALIZACION_P4_2026-11-12.md)
 - [Roadmap de Profissionalização](produto/ROADMAP_PROFISSIONALIZACAO.md)
 - [Requisitos](produto/REQUISITOS.md)
 - [Manual do Usuário](produto/MANUAL_DO_USUARIO.md)
