@@ -6,6 +6,44 @@ const os = require('node:os');
 const proof = require('./p4-proof.cjs');
 const pg16 = require('./p4-pg16.cjs');
 
+test('the U6 entrypoint used by both P4 paths registers portable tests without Windows jobs', () => {
+  const vm = require('node:vm');
+  const { createRequire } = require('node:module');
+  const registered = [];
+  const loaded = new Set();
+  const load = (file) => {
+    if (loaded.has(file)) return;
+    loaded.add(file);
+    const localRequire = createRequire(file);
+    vm.runInNewContext(fs.readFileSync(file, 'utf8'), {
+      __dirname: path.dirname(file),
+      module: { exports: {} },
+      require: (id) => {
+        if (id === 'node:test')
+          return { test: (name) => registered.push(name) };
+        if (id.endsWith('.spec.cjs')) return load(localRequire.resolve(id));
+        return localRequire(id);
+      },
+      process: { platform: 'linux' },
+    });
+  };
+  load(path.join(__dirname, 'u6.spec.cjs'));
+  assert.ok(registered.length > 20);
+  assert.ok(registered.some((name) => name.startsWith('owned transport')));
+  assert.equal(
+    registered.some((name) => name.startsWith('actual synthetic Windows job')),
+    false,
+  );
+  const portableCount = registered.length;
+  load(path.join(__dirname, 'u6-windows.spec.cjs'));
+  assert.equal(registered.length - portableCount, 2);
+  assert.ok(
+    registered
+      .slice(portableCount)
+      .every((name) => name.startsWith('actual synthetic Windows job')),
+  );
+});
+
 function fixture() {
   const phase = (afterExists) => ({
     native: {
@@ -448,6 +486,9 @@ test('installed Jest JSON projection needs no omitted todo/assertion-count field
   for (const mutate of [
     (v) => (v.wasInterrupted = true),
     (v) => (v.numPendingTests = 1),
+    (v) => (v.numPendingTestSuites = 1),
+    (v) => (v.numFailedTests = 1),
+    (v) => (v.numFailedTestSuites = 1),
     (v) => (v.testResults[0].assertionResults[0].status = 'skipped'),
     (v) => (v.numTotalTests = 2),
     (v) => delete v.numRuntimeErrorTestSuites,
