@@ -8,3 +8,6 @@ tests/.tmp/
 venv/
 .env
 *.log
+
+.venv-ci-first/
+.venv-ci-second/
