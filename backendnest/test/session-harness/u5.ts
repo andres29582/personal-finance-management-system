@@ -7,7 +7,14 @@ import { AuthSession } from '../../src/auth/entities/auth-session.entity';
 import { User } from '../../src/users/entities/user.entity';
 import { AuthSessionRepository } from '../../src/auth/repositories/auth-session.repository';
 import { decodeSessionCursor } from '../../src/auth/dto/session-management.dto';
-const { identity, initializeAuthority } = require('./contract.cjs');
+import { identity, initializeAuthority } from './contract.cjs';
+import {
+  jsonObject,
+  objectValue,
+  stringValue,
+  numberValue,
+  sqlRows,
+} from './json-boundary';
 const root = process.env.SESSION_HARNESS_ARTIFACTS!;
 const source = new DataSource({
   type: 'postgres',
@@ -64,7 +71,7 @@ function tracked<T>(operation: Promise<T>): Promise<T> {
 }
 const adapter = {
   query: async (sql: string, args?: unknown[]) => ({
-    rows: await source.query(sql, args),
+    rows: await source.query<unknown[]>(sql, args),
   }),
 };
 let repository: AuthSessionRepository;
@@ -97,14 +104,22 @@ async function request(path: string, token?: string, body?: unknown) {
     signal: AbortSignal.timeout(12000),
   });
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
+  const payload = text ? jsonObject(text) : {};
+  const error = payload.error ? objectValue(payload.error) : null;
+  const code = error?.code === undefined ? undefined : stringValue(error.code);
   // Test-only evidence contains no credentials, passwords or raw target identifiers.
   proof.http.push({
     path: path.replace(/\/sessions\/[^/?]+\/revoke/, '/sessions/:id/revoke'),
     status: response.status,
-    code: payload?.error?.code,
+    code,
   });
-  return { status: response.status, payload, text, headers: response.headers };
+  return {
+    status: response.status,
+    payload,
+    code,
+    text,
+    headers: response.headers,
+  };
 }
 async function login(email: string) {
   const response = await request('/auth/login', undefined, {
@@ -112,26 +127,33 @@ async function login(email: string) {
     senha: 'U4-disposable-password-42!',
   });
   assert.equal(response.status, 200);
-  const data = response.payload.data;
-  const claims = JSON.parse(
-    Buffer.from(data.access_token.split('.')[1], 'base64url').toString('utf8'),
+  const data = objectValue(response.payload.data);
+  const claims = jsonObject(
+    Buffer.from(
+      stringValue(data.access_token).split('.')[1],
+      'base64url',
+    ).toString('utf8'),
   );
-  const [row] = await source.query(
+  const [row] = await sqlRows(
+    source,
     'SELECT usuario_id FROM auth_session WHERE id=$1::uuid',
     [claims.sid],
   );
   assert.equal(row.usuario_id, claims.sub);
   return {
-    access: data.access_token as string,
-    refresh: data.refresh_token as string,
-    user: claims.sub as string,
-    sid: claims.sid as string,
+    access: stringValue(data.access_token),
+    refresh: stringValue(data.refresh_token),
+    user: stringValue(claims.sub),
+    sid: stringValue(claims.sid),
   };
 }
 async function fixture(count = 2) {
   await identity(adapter);
   const id = randomUUID();
-  const [base] = await source.query('SELECT senha_hash FROM usuario LIMIT 1');
+  const [base] = await sqlRows(
+    source,
+    'SELECT senha_hash FROM usuario LIMIT 1',
+  );
   await source.query(
     'INSERT INTO usuario(id,nome,email,senha_hash) VALUES($1,$2,$3,$4)',
     [id, 'U5 repository fixture', `${id}@example.com`, base.senha_hash],
@@ -143,15 +165,16 @@ async function fixture(count = 2) {
     await repository.createSession({
       id: sid,
       userId: id,
-      expectedPasswordHash: base.senha_hash,
+      expectedPasswordHash: stringValue(base.senha_hash),
       maxActiveSessions: 30,
       policy: { idleSeconds: 900, absoluteSeconds: 43200, version: 1 },
-      issue: async (now, absolute) => ({
-        access_token: 'synthetic-repository-only',
-        refresh_token: 'synthetic-repository-only',
-        refreshTokenHash: 'before',
-        expiresAt: absolute,
-      }),
+      issue: (now, absolute) =>
+        Promise.resolve({
+          access_token: 'synthetic-repository-only',
+          refresh_token: 'synthetic-repository-only',
+          refreshTokenHash: 'before',
+          expiresAt: absolute,
+        }),
     });
   }
   return {
@@ -159,12 +182,13 @@ async function fixture(count = 2) {
     caller: ids[0],
     target: ids[1],
     ids,
-    hash: base.senha_hash as string,
+    hash: stringValue(base.senha_hash),
   };
 }
 async function raw(sid: string) {
   return (
-    await source.query(
+    await sqlRows(
+      source,
       'SELECT authenticated_at::text,last_activity_at::text,absolute_expires_at::text,refresh_expires_at::text,last_used_at::text,updated_at::text,revoked_at::text,terminal_reason FROM auth_session WHERE id=$1::uuid',
       [sid],
     )
@@ -173,10 +197,18 @@ async function raw(sid: string) {
 async function waited(pid: number, minimum = 1) {
   const start = Date.now();
   for (;;) {
-    const rows: Array<{ pid: number; blockers: number[]; wait: string }> =
-      await source.query(
-        "SELECT pid,pg_blocking_pids(pid) AS blockers,wait_event_type AS wait FROM pg_stat_activity WHERE application_name='u5-repository-proof' AND datname=current_database()",
-      );
+    const rawRows = await sqlRows(
+      source,
+      "SELECT pid,pg_blocking_pids(pid) AS blockers,wait_event_type AS wait FROM pg_stat_activity WHERE application_name='u5-repository-proof' AND datname=current_database()",
+    );
+    const rows = rawRows.map((row) => {
+      assert.ok(Array.isArray(row.blockers));
+      return {
+        pid: numberValue(row.pid),
+        blockers: row.blockers.map(numberValue),
+        wait: row.wait === null ? null : stringValue(row.wait),
+      };
+    });
     const chain = (
       candidate: number,
       visited: number[] = [],
@@ -220,22 +252,25 @@ async function withLock(
   await lock.connect();
   try {
     await lock.startTransaction();
-    const [pid] = await lock.query('SELECT pg_backend_pid() AS pid');
+    const [pid] = await sqlRows(lock, 'SELECT pg_backend_pid() AS pid');
     if (session)
-      await lock.query(
+      await sqlRows(
+        lock,
         'SELECT id FROM auth_session WHERE id=$1::uuid AND usuario_id=$2::uuid FOR UPDATE',
         [session, user],
       );
     else
-      await lock.query('SELECT id FROM usuario WHERE id=$1::uuid FOR UPDATE', [
-        user,
-      ]);
+      await sqlRows(
+        lock,
+        'SELECT id FROM usuario WHERE id=$1::uuid FOR UPDATE',
+        [user],
+      );
     let released = false;
     const timer = setTimeout(() => {
       if (!released) void lock.rollbackTransaction().catch(() => {});
     }, 3000);
     try {
-      return await work(pid.pid, async () => {
+      return await work(numberValue(pid.pid), async () => {
         await lock.commitTransaction();
         released = true;
       });
@@ -256,26 +291,29 @@ async function main() {
   try {
     await initializeAuthority(adapter);
     await caseOf('migration-budget-and-index', async () => {
-      const [columns] = await source.query(
+      const [columns] = await sqlRows(
+        source,
         "SELECT count(*)::integer AS n FROM information_schema.columns WHERE table_name='auth_session_reauthentication'",
       );
       assert.equal(columns.n, 3);
-      const [index] = await source.query(
+      const [index] = await sqlRows(
+        source,
         "SELECT indexdef FROM pg_indexes WHERE indexname='auth_session_owner_authenticated_idx'",
       );
       assert.match(
-        index.indexdef,
+        stringValue(index.indexdef),
         /usuario_id, authenticated_at DESC, id DESC/,
       );
-      const constraints = await source.query(
+      const constraints = await sqlRows(
+        source,
         "SELECT contype,confdeltype FROM pg_constraint WHERE conrelid='auth_session_reauthentication'::regclass",
       );
       assert.ok(
         constraints.some(
-          (row: any) => row.contype === 'f' && row.confdeltype === 'c',
+          (row) => row.contype === 'f' && row.confdeltype === 'c',
         ),
       );
-      assert.ok(constraints.some((row: any) => row.contype === 'p'));
+      assert.ok(constraints.some((row) => row.contype === 'p'));
       return { columns: columns.n, ownerCascade: true, ownerKeysetIndex: true };
     });
     const a = await login('current-1@example.com'),
@@ -288,10 +326,12 @@ async function main() {
       const result = await request('/auth/sessions', a.access);
       assert.equal(result.status, 200);
       assert.equal(result.headers.get('cache-control'), 'no-store');
-      const data = result.payload.data;
+      const rawData = objectValue(result.payload.data);
+      assert.ok(Array.isArray(rawData.items));
+      const data = { ...rawData, items: rawData.items.map(objectValue) };
       assert.equal(data.items.length, 2);
-      assert.equal(data.items.filter((row: any) => row.isCurrent).length, 1);
-      assert.equal(data.items.find((row: any) => row.isCurrent).id, a.sid);
+      assert.equal(data.items.filter((row) => row.isCurrent).length, 1);
+      assert.equal(data.items.find((row) => row.isCurrent)?.id, a.sid);
       for (const item of data.items)
         assert.deepEqual(
           Object.keys(item).sort(),
@@ -305,7 +345,7 @@ async function main() {
             'lastActivityAt',
           ].sort(),
         );
-      assert.equal(data.nextCursor, null);
+      assert.equal(rawData.nextCursor, null);
       for (const path of [
         '/auth/sessions?limit=21',
         '/auth/sessions?cursor=!bad',
@@ -349,7 +389,7 @@ async function main() {
             await request(`/auth/sessions/${remote.sid}/revoke`, a.access, {
               senhaAtual: 'wrong-U5-secret',
             })
-          ).payload.error.code,
+          ).code,
           'AUTH_CURRENT_PASSWORD_INVALID',
         );
         assert.equal((await request('/auth/session', a.access)).status, 200);
@@ -364,7 +404,7 @@ async function main() {
           assert.equal(result.headers.get('cache-control'), 'no-store');
         }
         assert.equal(
-          (await request('/auth/session', remote.access)).payload.error.code,
+          (await request('/auth/session', remote.access)).code,
           'AUTH_SESSION_REVOKED',
         );
         assert.equal(
@@ -375,11 +415,12 @@ async function main() {
           senhaAtual: 'U4-disposable-password-42!',
         });
         assert.equal(limit.status, 429);
-        assert.equal(limit.payload.error.code, 'AUTH_REAUTHENTICATION_LIMIT');
+        assert.equal(limit.code, 'AUTH_REAUTHENTICATION_LIMIT');
         assert.equal((await request('/auth/session', a.access)).status, 200);
         assert.equal(
           (
-            await source.query(
+            await sqlRows(
+              source,
               'SELECT attempts FROM auth_session_reauthentication WHERE usuario_id=$1',
               [a.user],
             )
@@ -409,7 +450,7 @@ async function main() {
         assert.equal(result.text, '');
         for (const owner of [global, globalRemote])
           assert.equal(
-            (await request('/auth/session', owner.access)).payload.error.code,
+            (await request('/auth/session', owner.access)).code,
             'AUTH_SESSION_REVOKED',
           );
         assert.equal(
@@ -417,7 +458,7 @@ async function main() {
             await request('/auth/refresh', undefined, {
               refreshToken: global.refresh,
             })
-          ).payload.error.code,
+          ).code,
           'AUTH_SESSION_REVOKED',
         );
         assert.equal(
@@ -445,9 +486,10 @@ async function main() {
       );
       assert.equal(response.status, 401);
       const start = Date.now();
-      let rows: any[] = [];
+      let rows: Record<string, unknown>[] = [];
       while (!rows.length) {
-        rows = await source.query(
+        rows = await sqlRows(
+          source,
           "SELECT route,details,message FROM audit_log WHERE route='/auth/sessions/:id/revoke'",
         );
         assert.ok(Date.now() - start < 2000, 'real persisted audit required');
@@ -490,7 +532,7 @@ async function main() {
         assert.ok(first.nextCursor);
         const second = await repository.listOwnSessions(f.user, f.caller, {
           limit: 20,
-          cursor: decodeSessionCursor(first.nextCursor!),
+          cursor: decodeSessionCursor(first.nextCursor),
         });
         assert.equal(second.items.length, 6);
         assert.equal(second.nextCursor, null);
@@ -498,7 +540,8 @@ async function main() {
         assert.equal(new Set(all.map((row) => row.id)).size, 26);
         assert.equal(all.filter((row) => row.isCurrent).length, 1);
         assert.deepEqual(await raw(f.caller), before);
-        const cursor = decodeSessionCursor(first.nextCursor!)!;
+        const cursor = decodeSessionCursor(first.nextCursor);
+        assert.ok(cursor);
         assert.equal(
           cursor.authenticatedAt,
           first.items.at(-1)!.authenticatedAt,
@@ -525,10 +568,11 @@ async function main() {
           results.filter((row) => row.status === 'fulfilled').length,
           5,
         );
-        for (const row of results.filter(
-          (row) => row.status === 'rejected',
-        ) as PromiseRejectedResult[])
-          assert.equal(row.reason.code, 'AUTH_REAUTHENTICATION_LIMIT');
+        for (const row of results.filter((row) => row.status === 'rejected'))
+          assert.equal(
+            objectValue(row.reason).code,
+            'AUTH_REAUTHENTICATION_LIMIT',
+          );
         await identity(adapter);
         await source.query(
           "UPDATE auth_session_reauthentication SET window_started_at=clock_timestamp()-interval '60 seconds' WHERE usuario_id=$1",
@@ -540,7 +584,8 @@ async function main() {
         );
         assert.equal(
           (
-            await source.query(
+            await sqlRows(
+              source,
               'SELECT attempts FROM auth_session_reauthentication WHERE usuario_id=$1',
               [f.user],
             )
@@ -558,7 +603,7 @@ async function main() {
         await repository.revoke(f.caller, f.user);
         await assert.rejects(
           repository.revokeOwnSessions(f.user, f.caller, f.hash, f.target),
-          (e: any) => e.code === 'AUTH_SESSION_REVOKED',
+          (e: unknown) => objectValue(e).code === 'AUTH_SESSION_REVOKED',
         );
         assert.deepEqual(await raw(f.target), before);
         const g = await fixture();
@@ -572,7 +617,8 @@ async function main() {
         ]);
         await assert.rejects(
           repository.revokeOwnSessions(g.user, g.caller, hash, g.target),
-          (e: any) => e.code === 'AUTH_CURRENT_PASSWORD_INVALID',
+          (e: unknown) =>
+            objectValue(e).code === 'AUTH_CURRENT_PASSWORD_INVALID',
         );
         assert.equal((await raw(g.target)).revoked_at, null);
         return {
@@ -592,12 +638,13 @@ async function main() {
         const pending = tracked(
           repository.revokeOwnSessions(f.user, f.caller, f.hash, f.target).then(
             () => ({ code: 'unexpected-success' }),
-            (e: any) => ({ code: e.code }),
+            (e: unknown) => ({ code: objectValue(e).code }),
           ),
         );
         observed = await waited(pid);
         for (;;) {
-          const [row] = await source.query(
+          const [row] = await sqlRows(
+            source,
             "SELECT clock_timestamp() >= last_activity_at + interval '900 seconds' AS expired FROM auth_session WHERE id=$1",
             [f.caller],
           );
@@ -626,16 +673,17 @@ async function main() {
           f.target,
           f.user,
           'before',
-          async (_now, absolute) => ({
-            access_token: 'synthetic',
-            refresh_token: 'synthetic',
-            refreshTokenHash: 'after',
-            expiresAt: absolute,
-          }),
+          (_now, absolute) =>
+            Promise.resolve({
+              access_token: 'synthetic',
+              refresh_token: 'synthetic',
+              refreshTokenHash: 'after',
+              expiresAt: absolute,
+            }),
         );
       assert.ok('tokens' in (await rotate()));
       await repository.revokeOwnSessions(f.user, f.caller, f.hash, f.target);
-      assert.equal(((await rotate()) as any).failure, 'AUTH_SESSION_REVOKED');
+      assert.equal(objectValue(await rotate()).failure, 'AUTH_SESSION_REVOKED');
       const g = await fixture();
       let observed = 0;
       await withLock(g.user, null, async (pid, release) => {
@@ -648,18 +696,22 @@ async function main() {
             g.target,
             g.user,
             'before',
-            async (_now, absolute) => ({
-              access_token: 'synthetic',
-              refresh_token: 'synthetic',
-              refreshTokenHash: 'after',
-              expiresAt: absolute,
-            }),
+            (_now, absolute) =>
+              Promise.resolve({
+                access_token: 'synthetic',
+                refresh_token: 'synthetic',
+                refreshTokenHash: 'after',
+                expiresAt: absolute,
+              }),
           ),
         );
         await waited(pid, 2);
         await release();
         await revoke;
-        assert.equal(((await refresh) as any).failure, 'AUTH_SESSION_REVOKED');
+        assert.equal(
+          objectValue(await refresh).failure,
+          'AUTH_SESSION_REVOKED',
+        );
       });
       return {
         rotateFirstThenRevoke: true,
@@ -671,8 +723,8 @@ async function main() {
       'global-user-lock-orders-a-later-login-without-permanent-epoch',
       async () => {
         const f = await fixture();
-        let newId = randomUUID(),
-          observed = 0;
+        const newId = randomUUID();
+        let observed = 0;
         await withLock(f.user, null, async (pid, release) => {
           const revoke = tracked(
             repository.revokeOwnSessions(f.user, f.caller, f.hash),
@@ -685,12 +737,13 @@ async function main() {
               expectedPasswordHash: f.hash,
               maxActiveSessions: 5,
               policy: { idleSeconds: 900, absoluteSeconds: 43200, version: 1 },
-              issue: async (_now, absolute) => ({
-                access_token: 'synthetic',
-                refresh_token: 'synthetic',
-                refreshTokenHash: 'after',
-                expiresAt: absolute,
-              }),
+              issue: (_now, absolute) =>
+                Promise.resolve({
+                  access_token: 'synthetic',
+                  refresh_token: 'synthetic',
+                  refreshTokenHash: 'after',
+                  expiresAt: absolute,
+                }),
             }),
           );
           await waited(pid, 2);

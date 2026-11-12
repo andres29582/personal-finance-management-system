@@ -14,25 +14,29 @@ function fixture(failOn?: string) {
     isTransactionActive: false,
     connect: jest.fn(async () => {
       calls.push('connect');
+      return Promise.resolve();
     }),
     query: jest.fn(async (sql: string) => {
       calls.push(sql);
       if (failOn && sql.includes(failOn))
         throw new Error('synthetic query failure');
       if (sql.includes('pg_advisory_unlock'))
-        return [{ pg_advisory_unlock: true }];
-      return [];
+        return Promise.resolve([{ pg_advisory_unlock: true }]);
+      return Promise.resolve([]);
     }),
     release: jest.fn(async () => {
       calls.push('release');
       runner.isReleased = true;
+      return Promise.resolve();
     }),
-    releasePostgresConnection: jest.fn(async (_error: Error) => {
+    releasePostgresConnection: jest.fn<Promise<void>, [Error]>(async () => {
       calls.push('release');
       runner.isReleased = true;
+      return Promise.resolve();
     }),
     rollbackTransaction: jest.fn(async () => {
       calls.push('rollback');
+      return Promise.resolve();
     }),
   };
   const source = { createQueryRunner: () => runner } as unknown as DataSource;
@@ -109,9 +113,7 @@ describe('E2E barrier failure cleanup without PostgreSQL or HTTP', () => {
     const f = fixture('DROP');
     const primary = new Error('synthetic assertion failure');
     await expect(
-      f.harness.withBarrier(f.barrier, async () => {
-        throw primary;
-      }),
+      f.harness.withBarrier(f.barrier, () => Promise.reject(primary)),
     ).rejects.toMatchObject({ errors: [primary, expect.any(AggregateError)] });
     expect(f.calls.at(-1)).toBe('release');
   });

@@ -21,9 +21,9 @@ async function prepare() {
         [randomUUID(), `U4 fixture ${index}`, `u4-${index}@example.com`, hash],
       );
     }
-    const [identity] = await source.query(
-      'SELECT current_database() AS database,current_user AS role',
-    );
+    const [identity] = await source.query<
+      Array<{ database: string; role: string }>
+    >('SELECT current_database() AS database,current_user AS role');
     console.log(JSON.stringify({ prepared: true, ...identity, users: 8 }));
   } finally {
     await source.destroy();

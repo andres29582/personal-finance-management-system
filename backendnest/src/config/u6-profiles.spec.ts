@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { transpileModule } from 'typescript';
@@ -72,10 +73,19 @@ describe('U6 separate preparation profiles, no private dotenv or connection', ()
     );
     // Exercise only the actual pure resolver, with an isolated synthetic process.
     const compiled = transpileModule(resolver + '\n' + guard, {}).outputText;
-    return new Function(
-      'process',
-      compiled + '\nreturn resolveE2eDatabaseConfig();',
-    )({ env: values });
+    const result: unknown = runInNewContext(
+      compiled + '\nresolveE2eDatabaseConfig();',
+      { process: { env: values } },
+      { timeout: 1000 },
+    );
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('database' in result) ||
+      typeof result.database !== 'string'
+    )
+      throw new Error('Invalid E2E resolver result');
+    return result;
   }
 
   it('E2E template has no password or admin fallback and fails closed before DB access', () => {

@@ -3,6 +3,7 @@ import { TransferenciasController } from './transferencias.controller';
 import { TransferenciasService } from './transferencias.service';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { FindTransferenciasDto } from './dto/find-transferencias.dto';
 import { TransferenciaRepository } from './repositories/transferencia.repository';
 import { TransacaoRepository } from '../transacoes/repositories/transacao.repository';
 
@@ -22,15 +23,16 @@ describe('bounded financial history', () => {
     const rows = [{ id: 'row' }];
     const repository = { find: jest.fn().mockResolvedValue(rows) };
     expect(
-      await (
-        new TransferenciaRepository(repository as never).findByUser as Function
-      )('owner', { limit: 20, offset: 50 }),
+      await new TransferenciaRepository(repository as never).findByUser(
+        'owner',
+        { limit: 20, offset: 50 },
+      ),
     ).toBe(rows);
     expect(repository.find).toHaveBeenCalledWith(
       expect.objectContaining({
         take: 20,
         skip: 50,
-        where: expect.objectContaining({ usuarioId: 'owner' }),
+        where: expect.objectContaining({ usuarioId: 'owner' }) as unknown,
       }),
     );
   });
@@ -53,18 +55,15 @@ describe('bounded financial history', () => {
     { offset: -1 },
     { offset: 0.5 },
   ])('rejects invalid query %j', async (query) => {
-    const { FindTransferenciasDto } = require('./dto/find-transferencias.dto');
     expect(
-      (await validate(plainToInstance(FindTransferenciasDto, query) as object))
-        .length,
+      (await validate(plainToInstance(FindTransferenciasDto, query))).length,
     ).toBeGreaterThan(0);
   });
   it('transforms bounded query strings', async () => {
-    const { FindTransferenciasDto } = require('./dto/find-transferencias.dto');
     const query = plainToInstance(FindTransferenciasDto, {
       limit: '100',
       offset: '50',
-    }) as object;
+    });
     expect(await validate(query)).toEqual([]);
     expect(query).toEqual({ limit: 100, offset: 50 });
   });

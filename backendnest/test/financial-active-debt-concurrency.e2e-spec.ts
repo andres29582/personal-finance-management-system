@@ -116,7 +116,10 @@ describe('Financial active debt concurrency (e2e)', () => {
       errors,
       'Final concurrency cleanup failed',
     );
-    if (error) throw error;
+    if (error)
+      throw error instanceof Error
+        ? error
+        : new Error('Concurrency operation failed.', { cause: error });
   });
 
   it('A commits a debt payment before deactivating the locked debt', async () => {

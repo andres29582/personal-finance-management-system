@@ -51,13 +51,13 @@ describe('JWT deadline cap with real signing', () => {
         now,
         deadline,
       );
-      const payload = jwt.decode(token) as {
+      const payload = jwt.decode<{
         exp: number;
         iat: number;
         sub: string;
         sid: string;
         tokenType: string;
-      };
+      }>(token);
       expect(payload.exp).toBe(Math.floor(deadline.getTime() / 1000));
       expect(payload.exp * 1000).toBeLessThanOrEqual(deadline.getTime());
       expect(payload.iat).toBe(Math.floor(now.getTime() / 1000));
@@ -86,7 +86,7 @@ describe('JWT deadline cap with real signing', () => {
       now,
       absolute,
     );
-    const payload = jwt.decode(token) as { exp: number; iat: number };
+    const payload = jwt.decode<{ exp: number; iat: number }>(token);
     expect(payload.iat).toBe(Math.floor(now.getTime() / 1000));
     expect(payload.exp).toBe(Math.floor(absolute.getTime() / 1000));
     expect(payload.exp - payload.iat).toBe(43200);
@@ -109,7 +109,7 @@ describe('JWT deadline cap with real signing', () => {
       now,
       new Date(now.getTime() + 43200000),
     );
-    expect((jwt.decode(token) as { exp: number }).exp).toBe(
+    expect(jwt.decode<{ exp: number }>(token).exp).toBe(
       Math.floor(now.getTime() / 1000) + 900,
     );
     await expect(
@@ -122,7 +122,20 @@ describe('JWT deadline cap with real signing', () => {
     ).rejects.toMatchObject({ code: 'AUTH_INVALID_SESSION' });
   });
   it('exposes only non-secret session metadata without widening CORS origins', () => {
-    const app = { enableCors: jest.fn((_value: any) => {}) };
+    const app = {
+      enableCors: jest.fn<
+        void,
+        [
+          {
+            exposedHeaders: string[];
+            origin: (
+              origin: string,
+              done: (error: Error | null, allowed: boolean) => void,
+            ) => void;
+          },
+        ]
+      >(),
+    };
     configureCors(
       app as never,
       { allowedOrigins: ['https://allowed.example'] } as never,

@@ -1,9 +1,9 @@
-const {
+import {
   summarize,
   assertHealthy,
   assertAdmission,
   assertNoRenewal,
-} = require('./load.cjs');
+} from './load.cjs';
 
 describe('bounded concurrency harness helpers (not runtime proof)', () => {
   const expected = {

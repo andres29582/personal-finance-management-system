@@ -581,7 +581,7 @@ test('shared C6 native command uses fixed phase logs/flags and rejects timeout',
 test('runner imports C6 native-negative proof rather than trusting child exit zero', () => {
   const source = fs.readFileSync(path.join(__dirname, 'runner.cjs'), 'utf8');
   const boundary = source.slice(
-    source.search(/      const file =\s+selected === 'C6'/),
+    source.search(/ {6}const file =\s+selected === 'C6'/),
     source.indexOf("    } else if (selected === 'C7C8')"),
   );
   const importProof = (result) => {

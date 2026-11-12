@@ -8,7 +8,7 @@ import { configureEnvironment, readLease } from '../e2e-runtime.cjs';
 import { resolveSessionPolicy } from '../../src/auth/session-policy';
 import { resolveAuthTokenConfig } from '../../src/auth/config/auth-token.config';
 import { resolveThrottlerConfig } from '../../src/config/throttler.config';
-const { preflight, initializeAuthority } = require('./contract.cjs');
+import { preflight, initializeAuthority } from './contract.cjs';
 
 async function prepare() {
   // Do not use configureE2eEnvironment: its general E2E throttle profile is 1000.
@@ -32,18 +32,26 @@ async function prepare() {
   await connection.connect();
   try {
     const query = {
-      query: async (sql: string, args?: unknown[]) => ({
-        rows: await connection.query(sql, args),
-      }),
+      query: async (
+        sql: string,
+        args?: unknown[],
+      ): Promise<{ rows: unknown[] }> => {
+        const rows: unknown = await connection.query(sql, args);
+        if (!Array.isArray(rows)) throw new Error('Expected SQL row array');
+        return { rows };
+      },
     };
     const reader = { get: (key: string) => process.env[key] } as Parameters<
       typeof resolveSessionPolicy
     >[0];
-    const {
-      accessSecret: _access,
-      refreshSecret: _refresh,
-      ...token
-    } = resolveAuthTokenConfig(reader);
+    const resolvedToken = resolveAuthTokenConfig(reader);
+    const token = {
+      issuer: resolvedToken.issuer,
+      algorithm: resolvedToken.algorithm,
+      accessExpiresIn: resolvedToken.accessExpiresIn,
+      refreshExpiresIn: resolvedToken.refreshExpiresIn,
+      maxActiveSessions: resolvedToken.maxActiveSessions,
+    };
     const contract = await preflight(query, {
       policy: resolveSessionPolicy(reader),
       throttle: resolveThrottlerConfig(reader),
@@ -80,7 +88,7 @@ async function prepare() {
     await db.destroy();
   }
 }
-void prepare().catch((error) => {
-  console.error(error.message);
+void prepare().catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : 'Preparation failed.');
   process.exitCode = 1;
 });

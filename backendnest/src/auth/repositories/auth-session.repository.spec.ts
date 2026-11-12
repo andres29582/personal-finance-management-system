@@ -18,9 +18,9 @@ function valid(id = 'session-1') {
 }
 function fixture() {
   const calls: string[] = [];
-  let current: any = valid();
+  let current = valid();
   const manager = {
-    query: jest.fn(async (sql: string) => {
+    query: jest.fn((sql: string) => {
       calls.push(
         sql.includes('clock_timestamp')
           ? 'clock'
@@ -28,45 +28,57 @@ function fixture() {
             ? 'sessions'
             : 'timeout',
       );
-      return sql.includes('clock_timestamp')
-        ? [{ milliseconds: now.getTime() }]
-        : sql.includes('FOR UPDATE')
-          ? [{ id: 'session-1' }]
-          : [];
+      return Promise.resolve(
+        sql.includes('clock_timestamp')
+          ? [{ milliseconds: now.getTime() }]
+          : sql.includes('FOR UPDATE')
+            ? [{ id: 'session-1' }]
+            : [],
+      );
     }),
-    findOne: jest.fn(async (target: any) => {
+    findOne: jest.fn((target: unknown) => {
       calls.push(target === User ? 'user' : 'session');
-      return target === User
-        ? { id: 'user-1', senhaHash: 'verified' }
-        : current;
+      return Promise.resolve(
+        target === User ? { id: 'user-1', senhaHash: 'verified' } : current,
+      );
     }),
-    find: jest.fn(async () => [current]),
-    update: jest.fn(async (..._args: unknown[]) => ({ affected: 1 })),
-    save: jest.fn(async (_: any, data: any) => data),
-    create: jest.fn((_: any, data: any) => data),
+    find: jest.fn(() => Promise.resolve([current])),
+    update: jest
+      .fn<Promise<{ affected: number }>, unknown[]>()
+      .mockResolvedValue({ affected: 1 }),
+    save: jest.fn((...args: [unknown, Partial<AuthSession>]) =>
+      Promise.resolve(args[1]),
+    ),
+    create: jest.fn((...args: [unknown, Partial<AuthSession>]) => args[1]),
   };
   const source = {
-    transaction: jest.fn(async (work: any) => {
-      const result = await work(manager);
-      calls.push('commit');
-      return result;
-    }),
+    transaction: jest.fn(
+      async (
+        work: (transactionManager: typeof manager) => Promise<unknown>,
+      ) => {
+        const result = await work(manager);
+        calls.push('commit');
+        return result;
+      },
+    ),
   };
   return {
     repository: new AuthSessionRepository({} as never, source as never),
     manager,
     calls,
-    setSession: (session: any) => {
+    setSession: (session: ReturnType<typeof valid>) => {
       current = session;
     },
   };
 }
-const issue = jest.fn(async () => ({
-  access_token: 'access',
-  refresh_token: 'refresh',
-  refreshTokenHash: 'next',
-  expiresAt: new Date(now.getTime() + 60000),
-}));
+const issue = jest.fn(() =>
+  Promise.resolve({
+    access_token: 'access',
+    refresh_token: 'refresh',
+    refreshTokenHash: 'next',
+    expiresAt: new Date(now.getTime() + 60000),
+  }),
+);
 describe('AuthSessionRepository atomic authority', () => {
   beforeEach(() => issue.mockClear());
   it('takes user then session locks before clock and returns only after commit', async () => {
@@ -119,14 +131,14 @@ describe('AuthSessionRepository atomic authority', () => {
   });
   it('reads no clock until session lock resolves', async () => {
     const f = fixture();
-    let release!: (v: any) => void;
+    let release!: (v: ReturnType<typeof valid>) => void;
     let entered!: () => void;
     const reached = new Promise<void>((r) => (entered = r));
-    const lock = new Promise((r) => (release = r));
+    const lock = new Promise<ReturnType<typeof valid>>((r) => (release = r));
     f.manager.findOne.mockImplementation(async (target: any) => {
       if (target === User) return { id: 'user-1', senhaHash: 'verified' };
       entered();
-      return lock as any;
+      return lock;
     });
     const pending = f.repository.authorize('session-1', 'user-1', false);
     await reached;
@@ -145,7 +157,7 @@ describe('AuthSessionRepository atomic authority', () => {
         issue,
       ),
     ).resolves.toHaveProperty('tokens');
-    const update = f.manager.update.mock.calls[0] as any[];
+    const update = f.manager.update.mock.calls[0];
     expect(update[2]).not.toHaveProperty('lastActivityAt');
     expect(update[2]).not.toHaveProperty('absoluteExpiresAt');
     const reused = await f.repository.rotateIfActiveWithMatchingToken(

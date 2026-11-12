@@ -25,34 +25,35 @@ function fixture() {
   const user = { id: 'owner', senhaHash: 'verified' };
   let quota = true;
   const manager = {
-    query: jest.fn(async (sql: string, _args?: unknown[]) => {
+    query: jest.fn((sql: string, ...args: unknown[]) => {
+      void args;
       if (sql.includes('clock_timestamp')) {
         calls.push('clock');
-        return [{ milliseconds: now.getTime() }];
+        return Promise.resolve([{ milliseconds: now.getTime() }]);
       }
       if (sql.includes('FOR UPDATE')) {
         calls.push('sessions');
-        return rows.map(({ id }) => ({ id }));
+        return Promise.resolve(rows.map(({ id }) => ({ id })));
       }
       if (sql.includes('INSERT INTO auth_session_reauthentication')) {
         calls.push('reserve');
-        return quota ? [{ attempts: 1 }] : [];
+        return Promise.resolve(quota ? [{ attempts: 1 }] : []);
       }
       if (sql.includes('to_char')) {
         calls.push('page');
-        return [];
+        return Promise.resolve([]);
       }
       calls.push('timeout');
-      return [];
+      return Promise.resolve([]);
     }),
-    findOne: jest.fn(async (entity: unknown) => {
+    findOne: jest.fn((entity: unknown) => {
       calls.push(entity === User ? 'user' : 'caller');
-      return entity === User ? user : rows[0];
+      return Promise.resolve(entity === User ? user : rows[0]);
     }),
-    find: jest.fn(async () => rows),
-    update: jest.fn(async () => {
+    find: jest.fn(() => Promise.resolve(rows)),
+    update: jest.fn(() => {
       calls.push('revoke');
-      return { affected: 1 };
+      return Promise.resolve({ affected: 1 });
     }),
   };
   const source = {
@@ -62,10 +63,7 @@ function fixture() {
       return result;
     }),
   };
-  const repository = new AuthSessionRepository(
-    {} as never,
-    source as never,
-  ) as any;
+  const repository = new AuthSessionRepository({} as never, source as never);
   return {
     repository,
     manager,

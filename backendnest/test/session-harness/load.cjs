@@ -113,8 +113,11 @@ async function main() {
     cleanup: {},
   };
   const safe = (r) => {
-    const { state, headerState, ...record } = r;
-    return record;
+    return Object.fromEntries(
+      Object.entries(r).filter(
+        ([key]) => !['state', 'headerState'].includes(key),
+      ),
+    );
   };
   const row = async (f) =>
     (
@@ -286,7 +289,9 @@ async function main() {
           assertAdmission(sample, minimumWaits, otherRequired);
           admitted = true;
           break;
-        } catch {}
+        } catch {
+          /* Continue polling until real lock admission or the deadline. */
+        }
         await new Promise((resolve) => setTimeout(resolve, 10)); // Poll cadence, not an admission assertion.
       }
       assert.equal(
@@ -354,7 +359,11 @@ async function main() {
       assertFixture((await authority(db)).instants.find((r) => r.id === f.sid));
     }
     const beforeActive = await Promise.all(accounts.map(row));
-    proof.identities = accounts.map(({ token, ...f }) => f);
+    proof.identities = accounts.map((account) =>
+      Object.fromEntries(
+        Object.entries(account).filter(([key]) => key !== 'token'),
+      ),
+    );
     proof.identityEvidence =
       'Verified HS256 SID/sub joined to owned SQL row; distinct fixture deadlines matched in response body and X-Session-State. Response contract contains no SID/user fields; no identity headers added.';
     for (const many of [false, true]) {

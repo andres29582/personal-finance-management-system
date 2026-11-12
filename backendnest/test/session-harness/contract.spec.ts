@@ -1,4 +1,6 @@
-const {
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import {
   initializeAuthority,
   assertSchema,
   assertRuntime,
@@ -6,14 +8,11 @@ const {
   instantMicros,
   COLUMNS,
   BACKDATE_SQL,
-} = require('./contract.cjs');
+} from './contract.cjs';
 
 describe('current session harness contract (offline, not scenario proof)', () => {
   test('source guard declares one finite 120-second startup budget for every profile', () => {
-    const source = require('node:fs').readFileSync(
-      require('node:path').join(__dirname, 'runner.cjs'),
-      'utf8',
-    );
+    const source = readFileSync(join(__dirname, 'runner.cjs'), 'utf8');
     expect(source).toMatch(/startupMs: 120000,/);
     expect(source).toContain(
       "() => reject(Error('Backend readiness timeout'))",
@@ -22,13 +21,11 @@ describe('current session harness contract (offline, not scenario proof)', () =>
     expect(source).toContain('Date.now() - began <= proof.limits.startupMs');
   });
   const columns = () =>
-    Object.entries(COLUMNS as Record<string, [string, string]>).map(
-      ([column_name, [data_type, is_nullable]]) => ({
-        column_name,
-        data_type,
-        is_nullable,
-      }),
-    );
+    Object.entries(COLUMNS).map(([column_name, [data_type, is_nullable]]) => ({
+      column_name,
+      data_type,
+      is_nullable,
+    }));
   const runtime = () => ({
     policy: { idleSeconds: 900, absoluteSeconds: 43200, version: 1 },
     throttle: { limit: 60, ttl: 60000 },
@@ -52,9 +49,9 @@ describe('current session harness contract (offline, not scenario proof)', () =>
   test('sets and asserts UTC/DB clock before admitting writes', async () => {
     const calls: string[] = [];
     const db = {
-      query: async (sql: string) => {
+      query: (sql: string) => {
         calls.push(sql);
-        return {
+        return Promise.resolve({
           rows: sql.startsWith('SHOW')
             ? [{ TimeZone: 'UTC' }]
             : [
@@ -63,10 +60,10 @@ describe('current session harness contract (offline, not scenario proof)', () =>
                   now_us: '1791738000000001',
                 },
               ],
-        };
+        });
       },
     };
-    const clock = await initializeAuthority(db, async () => {
+    const clock = await initializeAuthority(db, () => {
       calls.push('identity');
     });
     expect(calls[0]).toBe('identity');
@@ -77,7 +74,10 @@ describe('current session harness contract (offline, not scenario proof)', () =>
   test('refuses a non-UTC connection even after SET', async () => {
     await expect(
       initializeAuthority(
-        { query: async () => ({ rows: [{ TimeZone: 'America/Sao_Paulo' }] }) },
+        {
+          query: () =>
+            Promise.resolve({ rows: [{ TimeZone: 'America/Sao_Paulo' }] }),
+        },
         async () => {},
       ),
     ).rejects.toThrow();
@@ -145,7 +145,8 @@ describe('current session harness contract (offline, not scenario proof)', () =>
     'rejects illegal deadline %s',
     (key) => {
       const f = fixture();
-      (f as any)[key] = key === 'absolute_us' ? '43201000002' : '43201000002';
+      (f as Record<string, unknown>)[key] =
+        key === 'absolute_us' ? '43201000002' : '43201000002';
       expect(() => assertFixture(f)).toThrow();
     },
   );

@@ -9,7 +9,7 @@ async function main() {
   const { ESLint } = createRequire(path.join(cwd, 'package.json'))('eslint');
   const linter = new ESLint({ cwd });
   const files = name === 'backendnest'
-    ? ['src/auth/auth.service.ts', 'src/auth/auth.service.spec.ts', 'test/e2e-runtime.cjs']
+    ? ['src/auth/auth.service.ts', 'src/auth/auth.service.spec.ts', 'test/e2e-runtime.cjs', 'test/e2e-runtime.d.cts', 'test/session-harness/contract.d.cts']
     : ['src/navigation/RootLayout.tsx', '__tests__/services/api.test.ts', 'tests/browser/session-server.cjs'];
   for (const file of files) assert.equal(await linter.isPathIgnored(path.join(cwd, file)), false, file);
   for (const file of name === 'frontend' ? ['dist/generated.js', 'smoke-web/generated.js', '.expo/generated.js'] : ['dist/generated.js'])

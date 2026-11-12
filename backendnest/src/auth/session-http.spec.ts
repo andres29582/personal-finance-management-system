@@ -23,7 +23,12 @@ describe('session HTTP through real Passport guard', () => {
     absoluteExpiresAt: '2026-10-10T12:00:00.000Z',
     policyVersion: 1,
   };
-  const originalHandler = AuthController.prototype.currentSession;
+  const originalHandler: unknown = Reflect.get(
+    AuthController.prototype,
+    'currentSession',
+  );
+  if (typeof originalHandler !== 'function')
+    throw new Error('Missing session handler');
   const handler = jest.spyOn(AuthController.prototype, 'currentSession');
   for (const key of Reflect.getMetadataKeys(originalHandler))
     Reflect.defineMetadata(
@@ -79,7 +84,7 @@ describe('session HTTP through real Passport guard', () => {
       .set('Authorization', `Bearer ${token(60)}`)
       .expect(200);
     expect(sessions.authorize).toHaveBeenCalledWith('session', 'owner', false);
-    expect(response.body.data).toEqual(state);
+    expect(response.body).toHaveProperty('data', state);
     expect(response.headers['cache-control']).toBe('no-store');
     expect(JSON.parse(response.headers['x-session-state'])).toEqual(state);
   });
@@ -88,7 +93,10 @@ describe('session HTTP through real Passport guard', () => {
       .get('/auth/session')
       .set('Authorization', `Bearer ${token(-1)}`)
       .expect(401);
-    expect(response.body.error.code).toBe('AUTH_ACCESS_TOKEN_EXPIRED');
+    expect(response.body).toHaveProperty(
+      'error.code',
+      'AUTH_ACCESS_TOKEN_EXPIRED',
+    );
     expect(handler).not.toHaveBeenCalled();
     expect(sessions.authorize).not.toHaveBeenCalled();
   });
@@ -97,7 +105,7 @@ describe('session HTTP through real Passport guard', () => {
       .get('/auth/session')
       .set('Authorization', `Bearer ${token(60, 'wrong-key')}`)
       .expect(401);
-    expect(response.body.error.code).toBe('UNAUTHORIZED');
+    expect(response.body).toHaveProperty('error.code', 'UNAUTHORIZED');
     expect(handler).not.toHaveBeenCalled();
   });
   it('preserves terminal idle and transient authority failures without handler effects', async () => {
@@ -111,7 +119,10 @@ describe('session HTTP through real Passport guard', () => {
       .get('/auth/session')
       .set('Authorization', `Bearer ${token(60)}`)
       .expect(401);
-    expect(expired.body.error.code).toBe('AUTH_SESSION_IDLE_EXPIRED');
+    expect(expired.body).toHaveProperty(
+      'error.code',
+      'AUTH_SESSION_IDLE_EXPIRED',
+    );
     sessions.authorize.mockRejectedValueOnce(
       new Error('private database details'),
     );
@@ -119,7 +130,10 @@ describe('session HTTP through real Passport guard', () => {
       .get('/auth/session')
       .set('Authorization', `Bearer ${token(60)}`)
       .expect(500);
-    expect(unavailable.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    expect(unavailable.body).toHaveProperty(
+      'error.code',
+      'INTERNAL_SERVER_ERROR',
+    );
     expect(JSON.stringify(unavailable.body)).not.toContain('private');
     expect(handler).not.toHaveBeenCalled();
   });

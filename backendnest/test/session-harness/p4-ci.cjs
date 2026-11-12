@@ -41,7 +41,9 @@ function execute(command, args, capMs, env, expectedExit = 0) {
       rejected = true;
       try {
         process.kill(-child.pid, 'SIGKILL');
-      } catch {}
+      } catch {
+        /* The owned process group may have exited before cancellation. */
+      }
     };
     const timer = setTimeout(stop, capMs);
     controller.signal.addEventListener('abort', stop, { once: true });

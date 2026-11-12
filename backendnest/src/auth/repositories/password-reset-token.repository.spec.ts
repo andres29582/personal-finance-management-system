@@ -18,8 +18,10 @@ describe('credential transaction boundaries', () => {
       .mockResolvedValue({ affected: 1, raw: [{ user_id: 'user-1' }] });
     const manager = {
       insert: jest.fn().mockResolvedValue({ identifiers: [{ id: 'event-1' }] }),
-      query: jest.fn(async (sql: string) =>
-        sql.includes('clock_timestamp') ? [{ milliseconds: Date.now() }] : [],
+      query: jest.fn((sql: string) =>
+        Promise.resolve(
+          sql.includes('clock_timestamp') ? [{ milliseconds: Date.now() }] : [],
+        ),
       ),
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn((entity: { name: string }) => {

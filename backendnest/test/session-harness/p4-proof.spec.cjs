@@ -246,7 +246,7 @@ test('manual workflow has no automatic trigger, private upload, cache or privile
   assert.match(yaml, /workflow_dispatch:/);
   assert.doesNotMatch(
     yaml,
-    /pull_request|\n  push:|\balways\(\)|\*|secrets\.|cache:|actions: write/,
+    /pull_request|\n {2}push:|\balways\(\)|\*|secrets\.|cache:|actions: write/,
   );
   assert.match(yaml, /contents: read/);
   assert.match(yaml, /retention-days: 7/);

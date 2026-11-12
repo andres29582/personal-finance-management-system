@@ -6,11 +6,21 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', '.dev-dist/**', '.dev-dist-localhost/**', 'coverage/**', '.tmp/**'],
+    ignores: [
+      'dist/**',
+      '.dev-dist/**',
+      '.dev-dist-localhost/**',
+      'coverage/**',
+      '.tmp/**',
+    ],
   },
   {
-    files: ['**/*.ts'],
-    extends: [eslint.configs.recommended, ...tseslint.configs.recommendedTypeChecked, eslintPluginPrettierRecommended],
+    files: ['**/*.{ts,cts,mts}'],
+    extends: [
+      eslint.configs.recommended,
+      ...tseslint.configs.recommendedTypeChecked,
+      eslintPluginPrettierRecommended,
+    ],
     languageOptions: {
       globals: globals.node,
       sourceType: 'commonjs',
@@ -23,7 +33,7 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
-      "prettier/prettier": ["error", { endOfLine: "auto" }],
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
   {

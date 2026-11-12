@@ -16,17 +16,25 @@ describe('OrcamentoRepository', () => {
     const queryBuilder = new SelectQueryBuilder<Transacao>(dataSource);
     jest.spyOn(queryBuilder, 'select').mockReturnValue(queryBuilder);
     jest.spyOn(queryBuilder, 'addSelect').mockReturnValue(queryBuilder);
-    jest.spyOn(queryBuilder, 'where').mockReturnValue(queryBuilder);
-    jest.spyOn(queryBuilder, 'andWhere').mockReturnValue(queryBuilder);
-    jest.spyOn(queryBuilder, 'groupBy').mockReturnValue(queryBuilder);
-    jest.spyOn(queryBuilder, 'addGroupBy').mockReturnValue(queryBuilder);
+    const where = jest
+      .spyOn(queryBuilder, 'where')
+      .mockReturnValue(queryBuilder);
+    const andWhere = jest
+      .spyOn(queryBuilder, 'andWhere')
+      .mockReturnValue(queryBuilder);
+    const groupBy = jest
+      .spyOn(queryBuilder, 'groupBy')
+      .mockReturnValue(queryBuilder);
+    const addGroupBy = jest
+      .spyOn(queryBuilder, 'addGroupBy')
+      .mockReturnValue(queryBuilder);
     jest
       .spyOn(queryBuilder, 'getRawMany')
       .mockResolvedValue([
         { mesReferencia: '2026-04', categoriaId: 'food', gastoAtual: '75' },
       ]);
     const transactionRepository = dataSource.manager.getRepository(Transacao);
-    jest
+    const createQueryBuilder = jest
       .spyOn(transactionRepository, 'createQueryBuilder')
       .mockReturnValue(queryBuilder);
     const repository = new OrcamentoRepository(
@@ -40,34 +48,25 @@ describe('OrcamentoRepository', () => {
       { mesReferencia: '2026-04', categoriaId: 'food', gastoAtual: '75' },
     ]);
 
-    expect(transactionRepository.createQueryBuilder).toHaveBeenCalledWith(
-      'transaction',
-    );
-    expect(queryBuilder.where).toHaveBeenCalledWith(
-      'transaction.usuarioId = :usuarioId',
-      { usuarioId: 'user-1' },
-    );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+    expect(createQueryBuilder).toHaveBeenCalledWith('transaction');
+    expect(where).toHaveBeenCalledWith('transaction.usuarioId = :usuarioId', {
+      usuarioId: 'user-1',
+    });
+    expect(andWhere).toHaveBeenCalledWith(
       "TO_CHAR(transaction.data, 'YYYY-MM') IN (:...mesReferencias)",
       { mesReferencias: ['2026-04'] },
     );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      'transaction.ehAjuste = :ehAjuste',
-      { ehAjuste: false },
-    );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      'transaction.tipo = :tipo',
-      { tipo: TipoTransacao.DESPESA },
-    );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      'transaction.excluidoEm IS NULL',
-    );
-    expect(queryBuilder.groupBy).toHaveBeenCalledWith(
+    expect(andWhere).toHaveBeenCalledWith('transaction.ehAjuste = :ehAjuste', {
+      ehAjuste: false,
+    });
+    expect(andWhere).toHaveBeenCalledWith('transaction.tipo = :tipo', {
+      tipo: TipoTransacao.DESPESA,
+    });
+    expect(andWhere).toHaveBeenCalledWith('transaction.excluidoEm IS NULL');
+    expect(groupBy).toHaveBeenCalledWith(
       "TO_CHAR(transaction.data, 'YYYY-MM')",
     );
-    expect(queryBuilder.addGroupBy).toHaveBeenCalledWith(
-      'transaction.categoriaId',
-    );
+    expect(addGroupBy).toHaveBeenCalledWith('transaction.categoriaId');
     expect(dataSource.isInitialized).toBe(false);
     expect(initialize).not.toHaveBeenCalled();
     expect(connect).not.toHaveBeenCalled();

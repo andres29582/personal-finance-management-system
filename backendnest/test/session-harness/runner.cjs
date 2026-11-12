@@ -611,6 +611,8 @@ async function main() {
   write('candidate', frozen);
   proof.sourceManifestSha256 = hash(path.join(root, 'candidate.json'));
   proof.artifacts = path.relative(repo, root).replaceAll(path.sep, '/');
+  let primaryFailure;
+  let primaryFailed = false;
   try {
     proof.externalBefore = await external('external-before');
     assert.ok(
@@ -862,55 +864,62 @@ async function main() {
     }
     cancellation.check();
     proof.status = 'completed';
-  } finally {
-    cancellation.beginCleanup();
-    if (cancellation.cancelled) proof.status = 'cancelled';
-    // Retain aggregate transport evidence even when Playwright exits nonzero.
-    proof.requestCounts = { ...counts };
-    if (
-      ['U5B', 'U5R'].includes(selected) &&
-      fs.existsSync(path.join(root, 'u5-browser-proof.json'))
-    ) {
-      proof.cases = JSON.parse(
-        fs.readFileSync(path.join(root, 'u5-browser-proof.json'), 'utf8'),
-      ).cases;
-    }
-    let cleanupError;
-    try {
-      await cleanup();
-    } catch (error) {
-      cleanupError = error;
-    }
-    if (
-      selected === 'C7C8' &&
-      fs.existsSync(path.join(root, 'load-proof.json'))
-    ) {
-      const result = JSON.parse(
-        fs.readFileSync(path.join(root, 'load-proof.json'), 'utf8'),
-      );
-      proof.cases = result.cases.map(({ case: name, status }) => ({
-        case: name,
-        status,
-      }));
-    }
-    await settleCleanup([
-      async () => {
-        integrity(frozen);
-        proof.frozenSourceUnchanged = true;
-      },
-      async () => {
-        if (proof.externalBefore) {
-          proof.externalAfter = await external('external-after');
-          assert.deepEqual(proof.externalAfter, proof.externalBefore);
-          proof.externalUnchanged = true;
-        }
-      },
-    ]);
-    if (cleanupError) throw cleanupError;
-    if (selected === 'C6_SQL_ERROR' && proof.status === 'completed')
-      validateCleanup(proof);
-    if (cancellation.cancelled) throw Error('Owned runtime cancelled');
+  } catch (error) {
+    primaryFailed = true;
+    primaryFailure = error;
   }
+  // Preserve primary failures and attempt every cleanup/readback independently.
+  cancellation.beginCleanup();
+  if (cancellation.cancelled) proof.status = 'cancelled';
+  proof.requestCounts = { ...counts };
+  await settleCleanup([
+    async () => {
+      if (primaryFailed) throw primaryFailure;
+    },
+    async () => {
+      if (
+        ['U5B', 'U5R'].includes(selected) &&
+        fs.existsSync(path.join(root, 'u5-browser-proof.json'))
+      ) {
+        proof.cases = JSON.parse(
+          fs.readFileSync(path.join(root, 'u5-browser-proof.json'), 'utf8'),
+        ).cases;
+      }
+    },
+    cleanup,
+    async () => {
+      if (
+        selected === 'C7C8' &&
+        fs.existsSync(path.join(root, 'load-proof.json'))
+      ) {
+        const result = JSON.parse(
+          fs.readFileSync(path.join(root, 'load-proof.json'), 'utf8'),
+        );
+        proof.cases = result.cases.map(({ case: name, status }) => ({
+          case: name,
+          status,
+        }));
+      }
+    },
+    async () => {
+      integrity(frozen);
+      proof.frozenSourceUnchanged = true;
+    },
+    async () => {
+      if (proof.externalBefore) {
+        proof.externalAfter = await external('external-after');
+        assert.deepEqual(proof.externalAfter, proof.externalBefore);
+        proof.externalUnchanged = true;
+      }
+    },
+    async () => {
+      if (selected === 'C6_SQL_ERROR' && proof.status === 'completed')
+        validateCleanup(proof);
+    },
+    async () => {
+      if (cancellation.cancelled) throw Error('Owned runtime cancelled');
+    },
+  ]);
 }
 main()
   .catch((e) => {

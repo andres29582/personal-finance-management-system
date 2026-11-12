@@ -1,18 +1,17 @@
-export {};
-const path = require('node:path'),
-  fs = require('node:fs');
-const { test, expect } = require(
-  path.resolve(__dirname, '../../../frontend/node_modules/@playwright/test'),
-);
-const { Client } = require('../../node_modules/pg');
-const {
-  identity: assertDatabaseIdentity,
+import path from 'node:path';
+import fs from 'node:fs';
+import { test, expect } from '../../../frontend/node_modules/@playwright/test';
+import { Client } from 'pg';
+import {
+  identity as assertDatabaseIdentity,
   initializeAuthority,
-} = require('./contract.cjs');
+} from './contract.cjs';
+import { statsValue } from './json-boundary';
+import type {} from './browser-contract';
 test('A8 offline local logout and sequential replacement after reconnect', async ({
   page,
   context,
-}: any) => {
+}) => {
   const db = new Client({
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT),
@@ -20,27 +19,37 @@ test('A8 offline local logout and sequential replacement after reconnect', async
     user: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
   });
-  const evidence: any = {
+  const evidence: Record<string, unknown> = {
     case: 'A8',
     status: 'running',
     concurrentSeparateContext: 'NOT RUN',
   };
-  const bridge = (fn: any) => page.evaluate(fn);
+  const bridge = <T>(fn: () => T | Promise<T>) => page.evaluate(fn);
   const durable = () =>
     page.evaluate(() => {
-      const envelope = JSON.parse(localStorage.getItem('auth_session_v3')!);
-      const token = envelope.credentials?.access_token;
-      const payload = token
-        ? JSON.parse(
-            atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')),
-          )
-        : null;
+      const object = (value: unknown): Record<string, unknown> => {
+        if (value === null || typeof value !== 'object' || Array.isArray(value))
+          return {};
+        return value as Record<string, unknown>;
+      };
+      const parsed: unknown = JSON.parse(
+        localStorage.getItem('auth_session_v3')!,
+      );
+      const envelope = object(parsed);
+      const token = object(envelope.credentials).access_token;
+      const decoded: unknown =
+        typeof token === 'string'
+          ? JSON.parse(
+              atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')),
+            )
+          : null;
+      const payload = object(decoded);
       return {
         status: envelope.status,
         sid: envelope.sessionId,
         credentialsCleared: envelope.credentials === null,
         userCleared: envelope.user === null,
-        userId: envelope.user?.id ?? null,
+        userId: object(envelope.user).id ?? null,
         tokenSid: payload?.sid ?? null,
         tokenUserId: payload?.sub ?? null,
         legacyKeysCleared: [
@@ -51,10 +60,13 @@ test('A8 offline local logout and sequential replacement after reconnect', async
         ].every((key) => localStorage.getItem(key) === null),
       };
     });
-  const stats = async () => (await page.request.get('/__stats')).json();
+  const stats = async () => {
+    const value: unknown = await (await page.request.get('/__stats')).json();
+    return statsValue(value);
+  };
   const login = async (index: number) => {
     await page.goto('/login');
-    await page.waitForFunction(() => !!(window as any).u4);
+    await page.waitForFunction(() => !!window.u4);
     await page
       .getByLabel('E-mail', { exact: true })
       .fill(`current-${index}@example.com`);
@@ -63,7 +75,9 @@ test('A8 offline local logout and sequential replacement after reconnect', async
       .fill('U4-disposable-password-42!');
     await page.getByRole('button', { name: 'Entrar', exact: true }).click();
     await expect(page.getByTestId('u4-protected')).toBeVisible();
-    return bridge(() => (window as any).u4.identity());
+    const own = await bridge(() => window.u4.identity());
+    if (!own.sid) throw new Error('Missing owned session identity');
+    return { ...own, sid: own.sid };
   };
   await db.connect();
   try {
@@ -71,19 +85,23 @@ test('A8 offline local logout and sequential replacement after reconnect', async
     const original = await login(5),
       before = await stats();
     const originalRow = (
-      await db.query(
-        'SELECT usuario_id,revoked_at FROM auth_session WHERE id=$1::uuid',
-        [original.sid],
-      )
+      await db.query<{
+        usuario_id: string;
+        revoked_at: Date | null;
+        policy_version: number;
+        idle_timeout_seconds: number;
+      }>('SELECT usuario_id,revoked_at FROM auth_session WHERE id=$1::uuid', [
+        original.sid,
+      ])
     ).rows[0];
     expect(originalRow).toBeTruthy();
     await context.setOffline(true);
-    const result = await bridge(() => (window as any).u4.logout());
+    const result = await bridge(() => window.u4.logout());
     expect(result.remote).toBe('unconfirmed');
     expect(result.localDurable).toBe(true);
     expect(result.cleanupComplete).toBe(true);
     await expect(page.getByTestId('u4-protected')).toHaveCount(0);
-    const capsule = await bridge(() => (window as any).u4.capsule());
+    const capsule = await bridge(() => window.u4.capsule());
     expect(capsule.status).toBe('signedOut');
     expect(capsule.signedOut).toBe(true);
     expect(await durable()).toMatchObject({
@@ -112,7 +130,12 @@ test('A8 offline local logout and sequential replacement after reconnect', async
     expect(replacement.sid).toEqual(expect.any(String));
     expect(replacement.sid).not.toBe(original.sid);
     const row = (
-      await db.query(
+      await db.query<{
+        usuario_id: string;
+        revoked_at: Date | null;
+        policy_version: number;
+        idle_timeout_seconds: number;
+      }>(
         'SELECT usuario_id,revoked_at,policy_version,idle_timeout_seconds FROM auth_session WHERE id=$1::uuid',
         [replacement.sid],
       )
@@ -134,7 +157,7 @@ test('A8 offline local logout and sequential replacement after reconnect', async
     });
     await page.reload();
     await expect(page.getByTestId('u4-protected')).toBeVisible();
-    expect((await bridge(() => (window as any).u4.identity())).sid).toBe(
+    expect((await bridge(() => window.u4.identity())).sid).toBe(
       replacement.sid,
     );
     expect(await durable()).toMatchObject({
@@ -163,9 +186,10 @@ test('A8 offline local logout and sequential replacement after reconnect', async
       signedOutTombstoneSidRetained: true,
       replacementDurableTokenAndUserIdentityConfirmed: true,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     evidence.status = 'failed';
-    evidence.error = error.message;
+    evidence.error =
+      error instanceof Error ? error.message : 'Unknown browser failure';
     throw error;
   } finally {
     await context.setOffline(false);

@@ -367,7 +367,7 @@ describe('OrcamentosService', () => {
       findOneBy: jest.Mock;
       create: jest.Mock;
       save: jest.Mock;
-      createQueryBuilder: jest.Mock;
+      createQueryBuilder: jest.Mock<{ getRawOne: jest.Mock }, []>;
     };
     beforeEach(() => {
       manager.findOne.mockResolvedValue({
@@ -392,8 +392,10 @@ describe('OrcamentosService', () => {
       };
       allocationRepository = {
         findOneBy: jest.fn(),
-        create: jest.fn((data) => data),
-        save: jest.fn(async (data) => data),
+        create: jest.fn((data: Partial<OrcamentoCategoria>) => data),
+        save: jest.fn((data: Partial<OrcamentoCategoria>) =>
+          Promise.resolve(data),
+        ),
         createQueryBuilder: jest.fn(() => query),
       };
       manager.getRepository.mockReturnValue(allocationRepository);

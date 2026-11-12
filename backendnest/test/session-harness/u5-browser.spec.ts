@@ -1,24 +1,68 @@
-export {};
-const path = require('node:path'),
-  fs = require('node:fs');
-const { test, expect } = require(
-  path.resolve(__dirname, '../../../frontend/node_modules/@playwright/test'),
-);
-const { Client } = require('../../node_modules/pg');
-const { identity: assertDatabaseIdentity } = require('./contract.cjs');
+import { objectValue, statsValue } from './json-boundary';
+import path from 'node:path';
+import fs from 'node:fs';
+import {
+  test,
+  expect,
+  type Page,
+  type Request,
+  type Response,
+  type Frame,
+  type Locator,
+} from '../../../frontend/node_modules/@playwright/test';
+import { Client } from 'pg';
+import { identity as assertDatabaseIdentity } from './contract.cjs';
+import type { BrowserIdentity, LifecycleEvent } from './browser-contract';
+type BrowserCase = Record<string, unknown> & {
+  case: string;
+  status: string;
+  layout?: Record<string, unknown>;
+};
+type Diagnostic = {
+  test: string;
+  phases: Array<Record<string, unknown>>;
+  http: Array<Record<string, unknown>>;
+  frames: Array<Record<string, unknown>>;
+  lifecycle: LifecycleEvent[];
+};
+type DiagnosticPage = Page & { __u5Diagnostic?: Diagnostic };
+type SessionRow = {
+  id: string;
+  usuario_id: string;
+  authenticated_at: Date;
+  last_activity_at: Date;
+  absolute_expires_at: Date;
+  idle_timeout_seconds: number;
+  policy_version: number;
+  revoked_at: Date | null;
+  terminal_reason: string | null;
+};
+type ProtectedSample = {
+  at: number;
+  path: string;
+  identity: BrowserIdentity | null;
+  protectedVisible: boolean;
+  currentSessionVisible: boolean;
+  unavailableVisible: boolean;
+};
 const password = 'U4-disposable-password-42!';
 const root = process.env.SESSION_HARNESS_ARTIFACTS;
-const evidence: any = {
+if (!root) throw new Error('Missing harness artifact root');
+const evidence: Record<string, unknown> & {
+  status: string;
+  cases: BrowserCase[];
+  diagnostics: Diagnostic[];
+} = {
   status: 'NOT RUN',
   cases: [],
   diagnostics: [],
   scope:
     'Real SessionsScreen/RootLayout/LoginScreen, actual HTTP and owned SQL; no financial dashboard, native lifecycle, BFCache or stale-global A/B proof.',
 };
-let db: any;
+let db: Client;
 
-test.beforeEach(async ({ page }: any, info: any) => {
-  const diagnostic: any = {
+test.beforeEach(async ({ page }, info) => {
+  const diagnostic: Diagnostic = {
     test: info.title,
     phases: [],
     http: [],
@@ -26,13 +70,13 @@ test.beforeEach(async ({ page }: any, info: any) => {
     lifecycle: [],
   };
   evidence.diagnostics.push(diagnostic);
-  (page as any).__u5Diagnostic = diagnostic;
-  await page.exposeFunction('__u5LifecycleEvent', (event: any) =>
+  (page as DiagnosticPage).__u5Diagnostic = diagnostic;
+  await page.exposeFunction('__u5LifecycleEvent', (event: LifecycleEvent) =>
     diagnostic.lifecycle.push(event),
   );
   await page.addInitScript(() => {
     const record = (type: string) =>
-      void (window as any).__u5LifecycleEvent({
+      void window.__u5LifecycleEvent({
         type,
         at: Date.now(),
         path: location.pathname,
@@ -44,11 +88,11 @@ test.beforeEach(async ({ page }: any, info: any) => {
       record('visibilitychange'),
     );
   });
-  const safeRequest = (request: any) => ({
+  const safeRequest = (request: Request) => ({
     method: request.method(),
     path: new URL(request.url()).pathname,
   });
-  page.on('response', (response: any) => {
+  page.on('response', (response: Response) => {
     if (new URL(response.url()).pathname.startsWith('/api/'))
       diagnostic.http.push({
         ...safeRequest(response.request()),
@@ -56,7 +100,7 @@ test.beforeEach(async ({ page }: any, info: any) => {
         status: response.status(),
       });
   });
-  page.on('requestfailed', (request: any) => {
+  page.on('requestfailed', (request: Request) => {
     if (new URL(request.url()).pathname.startsWith('/api/'))
       diagnostic.http.push({
         ...safeRequest(request),
@@ -64,7 +108,7 @@ test.beforeEach(async ({ page }: any, info: any) => {
         transportFailed: true,
       });
   });
-  page.on('framenavigated', (frame: any) => {
+  page.on('framenavigated', (frame: Frame) => {
     if (frame === page.mainFrame())
       diagnostic.frames.push({
         path: new URL(frame.url()).pathname,
@@ -72,17 +116,15 @@ test.beforeEach(async ({ page }: any, info: any) => {
       });
   });
 });
-test.afterEach(async ({ page }: any, info: any) => {
+test.afterEach(async ({ page }, info) => {
   await observe(page, 'finally-' + info.status);
 });
-async function observe(page: any, phase: string) {
+async function observe(page: DiagnosticPage, phase: string) {
   const diagnostic = page.__u5Diagnostic;
   if (!diagnostic) return;
   try {
     const state = await page.evaluate(async () => {
-      const identity = (window as any).u4
-        ? await (window as any).u4.identity()
-        : null;
+      const identity = window.u4 ? await window.u4.identity() : null;
       return {
         path: location.pathname,
         identity,
@@ -121,7 +163,7 @@ test.afterAll(async () => {
   evidence.status =
     evidence.cases.length ===
       (process.env.SESSION_HARNESS_CASE === 'U5R' ? 1 : 2) &&
-    evidence.cases.every((item: any) => item.status === 'PASS')
+    evidence.cases.every((item: BrowserCase) => item.status === 'PASS')
       ? 'PASS'
       : 'FAIL';
   fs.writeFileSync(
@@ -130,38 +172,49 @@ test.afterAll(async () => {
     { flag: 'wx' },
   );
 });
-async function caseOf(name: string, work: (record: any) => Promise<void>) {
-  const record: any = { case: name, status: 'FAIL' };
+async function caseOf(
+  name: string,
+  work: (record: BrowserCase) => Promise<void>,
+) {
+  const record: BrowserCase = { case: name, status: 'FAIL' };
   evidence.cases.push(record);
   await work(record);
   record.status = 'PASS';
 }
-async function login(page: any, index: number) {
+async function login(page: DiagnosticPage, index: number) {
   await page.goto('/login');
-  await page.waitForFunction(() => !!(window as any).u4);
+  await page.waitForFunction(() => !!window.u4);
   await page
     .getByLabel('E-mail', { exact: true })
     .fill(`current-${index}@example.com`);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByTestId('u4-protected')).toBeVisible();
-  return page.evaluate(() => (window as any).u4.identity());
+  const own = await page.evaluate(() => window.u4.identity());
+  if (!own.sid) throw new Error('Missing owned session identity');
+  return { ...own, sid: own.sid };
 }
 async function row(sid: string) {
   await assertDatabaseIdentity(db);
   return (
-    await db.query(
+    await db.query<SessionRow>(
       `SELECT id,usuario_id,authenticated_at,last_activity_at,absolute_expires_at,
     idle_timeout_seconds,policy_version,revoked_at,terminal_reason FROM auth_session WHERE id=$1`,
       [sid],
     )
   ).rows[0];
 }
-async function durable(page: any) {
+async function durable(page: DiagnosticPage) {
   return page.evaluate(() => {
-    const record = JSON.parse(
+    const object = (value: unknown): Record<string, unknown> => {
+      if (value === null || typeof value !== 'object' || Array.isArray(value))
+        return {};
+      return value as Record<string, unknown>;
+    };
+    const parsed: unknown = JSON.parse(
       localStorage.getItem('auth_session_v3') || 'null',
     );
+    const record = object(parsed);
     return {
       status: record?.status,
       credentialsPresent: !!record?.credentials,
@@ -179,26 +232,25 @@ async function durable(page: any) {
     };
   });
 }
-async function stats(page: any) {
-  return (await page.request.get('/__stats')).json();
+async function stats(page: DiagnosticPage) {
+  const value: unknown = await (await page.request.get('/__stats')).json();
+  return statsValue(value);
 }
-async function sessions(page: any) {
+async function sessions(page: DiagnosticPage) {
   await page.goto('/sessoes');
   await expect(page.getByText('Sessao atual', { exact: true })).toBeVisible();
 }
 async function ownedProtectedSample(
-  page: any,
+  page: DiagnosticPage,
   sid: string,
   requiredPath: '/sessoes' | null,
   pollOptions = { timeout: 5000, intervals: [100] },
 ) {
-  let sample: any;
+  let sample: ProtectedSample | undefined;
   await expect
     .poll(async () => {
       sample = await page.evaluate(async () => {
-        const own = (window as any).u4
-          ? await (window as any).u4.identity()
-          : null;
+        const own = window.u4 ? await window.u4.identity() : null;
         const protectedVisible =
           !!document.querySelector('[data-testid="u4-protected"]') ||
           document.body.innerText.includes('Sessao atual');
@@ -233,6 +285,8 @@ async function ownedProtectedSample(
         ? { path: requiredPath, currentSessionVisible: true }
         : {}),
     });
+  if (!sample?.identity || sample.identity.sid !== sid)
+    throw new Error('Owned protected sample was not observed');
   // Return the matching iteration, not a later read of intentionally mutable authority.
   page.__u5Diagnostic?.phases.push({
     phase: 'matched-owned-protected-sample',
@@ -240,16 +294,17 @@ async function ownedProtectedSample(
   });
   return sample;
 }
-function passwordInput(page: any) {
+function passwordInput(page: DiagnosticPage) {
   return page.getByLabel('Senha atual para confirmar encerramento', {
     exact: true,
   });
 }
-async function usableControl(page: any, control: any) {
+async function usableControl(page: DiagnosticPage, control: Locator) {
   await control.scrollIntoViewIfNeeded();
   await expect(control).toBeVisible();
   const bounds = await control.boundingBox();
   expect(bounds).not.toBeNull();
+  if (!bounds) throw new Error('Control has no visible bounding box');
   const viewport = await page.evaluate(() => ({
     width: innerWidth,
     height: innerHeight,
@@ -262,7 +317,7 @@ async function usableControl(page: any, control: any) {
   expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height + 1);
   return bounds;
 }
-async function globalConfirmation(page: any) {
+async function globalConfirmation(page: DiagnosticPage) {
   await usableControl(
     page,
     page.getByRole('button', {
@@ -295,7 +350,7 @@ async function globalConfirmation(page: any) {
 test('U5 real mobile-width screen rejects wrong password, revokes selected remote and confirms global cleanup', async ({
   page,
   browser,
-}: any) => {
+}) => {
   await caseOf('selected-and-global-real-browser', async (record) => {
     await page.setViewportSize({ width: 360, height: 800 });
     evidence.browser = {
@@ -370,14 +425,15 @@ test('U5 real mobile-width screen rejects wrong password, revokes selected remot
         }),
       ).toBeFocused();
       const wrongResponse = page.waitForResponse(
-        (response: any) =>
+        (response: Response) =>
           response.url().endsWith(`/auth/sessions/${remote.sid}/revoke`) &&
           response.request().method() === 'POST',
       );
       await page.keyboard.press('Enter');
       const wrong = await wrongResponse;
       expect(wrong.status()).toBe(400);
-      expect((await wrong.json()).error.code).toBe(
+      expect(objectValue(await wrong.json())).toHaveProperty(
+        'error.code',
         'AUTH_CURRENT_PASSWORD_INVALID',
       );
       await expect(page.getByRole('alert')).toContainText(
@@ -396,7 +452,7 @@ test('U5 real mobile-width screen rejects wrong password, revokes selected remot
       await expect(passwordInput(page)).toHaveValue('');
       await passwordInput(page).fill(password);
       const revokeResponse = page.waitForResponse(
-        (response: any) =>
+        (response: Response) =>
           response.url().endsWith(`/auth/sessions/${remote.sid}/revoke`) &&
           response.request().method() === 'POST',
       );
@@ -415,7 +471,7 @@ test('U5 real mobile-width screen rejects wrong password, revokes selected remot
       expect((await row(remote.sid)).revoked_at).not.toBeNull();
       expect((await row(current.sid)).revoked_at).toBeNull();
       const remoteDenied = await remotePage.evaluate(() =>
-        (window as any).u4.request('get', '/auth/session'),
+        window.u4.request('get', '/auth/session'),
       );
       expect(remoteDenied).toMatchObject({
         ok: false,
@@ -431,7 +487,7 @@ test('U5 real mobile-width screen rejects wrong password, revokes selected remot
       const before = await stats(page);
       await globalConfirmation(page);
       const globalResponse = page.waitForResponse(
-        (response: any) =>
+        (response: Response) =>
           response.url().endsWith('/auth/sessions/revoke-all') &&
           response.request().method() === 'POST',
       );
@@ -491,7 +547,7 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
   page,
   context,
   browser,
-}: any) => {
+}) => {
   await caseOf(
     'offline-and-postcommit-unknown-real-browser',
     async (record) => {
@@ -506,7 +562,7 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
       const otherContext = await browser.newContext({
         baseURL: 'http://127.0.0.1:4178',
       });
-      let remote: any;
+      let remote: Awaited<ReturnType<typeof login>>;
       try {
         remote = await login(await otherContext.newPage(), 2);
         expect(remote.sid).not.toBe(current.sid);
@@ -558,7 +614,7 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
           (before['POST /auth/sessions/revoke-all'] || 0),
       ).toBe(0);
       const freshConfirmation = page.waitForResponse(
-        (response: any) =>
+        (response: Response) =>
           new URL(response.url()).pathname === '/api/auth/session' &&
           response.request().method() === 'GET' &&
           response.status() === 200,
@@ -569,8 +625,8 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
       const confirmed = await freshConfirmation;
       expect(confirmed.status()).toBe(200);
       const recovered = await ownedProtectedSample(page, current.sid, null);
-      expect(recovered.identity.sid).toBe(current.sid);
-      expect(recovered.identity.authorityOwned).toBe(true);
+      expect(recovered.identity?.sid).toBe(current.sid);
+      expect(recovered.identity?.authorityOwned).toBe(true);
       expect((await row(current.sid)).revoked_at).toBeNull();
       record.preSendRecovery = {
         confirmationStatus: 200,
@@ -580,7 +636,7 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
       await observe(page, 'reconfirmed-before-navigation');
       // Root remount does not promise to preserve /sessoes after unavailable state.
       const navigationConfirmation = page.waitForResponse(
-        (response: any) =>
+        (response: Response) =>
           new URL(response.url()).pathname === '/api/auth/session' &&
           response.request().method() === 'GET' &&
           response.status() === 200,
@@ -592,8 +648,8 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
         current.sid,
         '/sessoes',
       );
-      expect(navigated.identity.sid).toBe(current.sid);
-      expect(navigated.identity.authorityOwned).toBe(true);
+      expect(navigated.identity?.sid).toBe(current.sid);
+      expect(navigated.identity?.authorityOwned).toBe(true);
       expect(navigated.path).toBe('/sessoes');
       record.postNavigationConfirmation = { status: 200, sample: navigated };
       expect((await row(current.sid)).revoked_at).toBeNull();
@@ -601,20 +657,17 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
       await observe(page, 'explicit-owned-session-list-restored');
       expect((await durable(page)).credentialsPresent).toBe(true);
       let actualCommitConfirmed = false;
-      await page.route(
-        '**/api/auth/sessions/revoke-all',
-        async (route: any) => {
-          const response = await route.fetch();
-          expect(response.status()).toBe(204);
-          expect(await response.text()).toBe('');
-          expect((await row(current.sid)).revoked_at).not.toBeNull();
-          expect((await row(remote.sid)).revoked_at).not.toBeNull();
-          actualCommitConfirmed = true;
-          record.actualCommitConfirmed = true;
-          // Lose only the real committed response; never fabricate valid JSON.
-          await route.abort('failed');
-        },
-      );
+      await page.route('**/api/auth/sessions/revoke-all', async (route) => {
+        const response = await route.fetch();
+        expect(response.status()).toBe(204);
+        expect(await response.text()).toBe('');
+        expect((await row(current.sid)).revoked_at).not.toBeNull();
+        expect((await row(remote.sid)).revoked_at).not.toBeNull();
+        actualCommitConfirmed = true;
+        record.actualCommitConfirmed = true;
+        // Lose only the real committed response; never fabricate valid JSON.
+        await route.abort('failed');
+      });
       try {
         await globalConfirmation(page);
         await page
@@ -643,7 +696,7 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
             (before['POST /auth/logout'] || 0),
         ).toBe(0);
         const terminalConfirmation = page.waitForResponse(
-          (response: any) =>
+          (response: Response) =>
             new URL(response.url()).pathname === '/api/auth/session' &&
             response.request().method() === 'GET' &&
             response.status() === 401,
@@ -652,7 +705,10 @@ test('U5 offline pre-send and actual post-commit response loss hide private cont
           .getByRole('button', { name: 'Tentar novamente', exact: true })
           .click();
         const denied = await terminalConfirmation;
-        expect((await denied.json()).error.code).toBe('AUTH_SESSION_REVOKED');
+        expect(await denied.json()).toHaveProperty(
+          'error.code',
+          'AUTH_SESSION_REVOKED',
+        );
         await expect(page).toHaveURL(/\/login$/);
         const final = await durable(page);
         expect(final.credentialsPresent).toBe(false);

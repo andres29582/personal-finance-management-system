@@ -1,3 +1,6 @@
+import type { QueryableClient } from './migration-runner';
+const createQueryMock = () =>
+  jest.fn() as jest.MockedFunction<QueryableClient['query']>;
 import {
   calculateChecksum,
   ensureMigrationTable,
@@ -28,7 +31,9 @@ describe('MigrationRunner Unit Tests', () => {
 
     expect(files.length).toBeGreaterThanOrEqual(18);
     expect(files[0].name).toBe('0001_mvp_baseline.sql');
-    expect(files[files.length - 1].name).toBe('0018_transfer_create_intent.sql');
+    expect(files[files.length - 1].name).toBe(
+      '0018_transfer_create_intent.sql',
+    );
 
     for (const file of files) {
       expect(file.name).toMatch(/^\d{4}_.*\.sql$/);
@@ -38,18 +43,19 @@ describe('MigrationRunner Unit Tests', () => {
   });
 
   it('ensureMigrationTable executes CREATE TABLE IF NOT EXISTS schema_migrations', async () => {
-    const mockQuery = jest.fn().mockResolvedValue({ rows: [] });
+    const mockQuery = createQueryMock().mockResolvedValue({ rows: [] });
     const client = { query: mockQuery };
 
     await ensureMigrationTable(client);
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
-    expect(mockQuery.mock.calls[0][0]).toContain('CREATE TABLE IF NOT EXISTS schema_migrations');
+    expect(mockQuery.mock.calls[0][0]).toContain(
+      'CREATE TABLE IF NOT EXISTS schema_migrations',
+    );
   });
 
   it('getAppliedMigrations parses applied records into a map', async () => {
-    const mockQuery = jest
-      .fn()
+    const mockQuery = createQueryMock()
       .mockResolvedValueOnce({ rows: [] }) // ensure table
       .mockResolvedValueOnce({
         rows: [
@@ -71,8 +77,7 @@ describe('MigrationRunner Unit Tests', () => {
   });
 
   it('getMigrationStatus flags applied vs pending migrations', async () => {
-    const mockQuery = jest
-      .fn()
+    const mockQuery = createQueryMock()
       .mockResolvedValueOnce({ rows: [] }) // ensure table
       .mockResolvedValueOnce({
         rows: [
@@ -90,15 +95,16 @@ describe('MigrationRunner Unit Tests', () => {
 
     expect(statuses.length).toBeGreaterThanOrEqual(18);
     const first = statuses.find((s) => s.name === '0001_mvp_baseline.sql');
-    const second = statuses.find((s) => s.name === '0002_align_schema_and_create_orcamento.sql');
+    const second = statuses.find(
+      (s) => s.name === '0002_align_schema_and_create_orcamento.sql',
+    );
 
     expect(first?.status).toBe('APPLIED');
     expect(second?.status).toBe('PENDING');
   });
 
   it('markMigrationsAsApplied inserts pending migrations into schema_migrations', async () => {
-    const mockQuery = jest
-      .fn()
+    const mockQuery = createQueryMock()
       .mockResolvedValueOnce({ rows: [] }) // ensure table
       .mockResolvedValueOnce({ rows: [] }) // ensure table in getAppliedMigrations
       .mockResolvedValueOnce({ rows: [] }) // getAppliedMigrations select
@@ -110,23 +116,29 @@ describe('MigrationRunner Unit Tests', () => {
     });
 
     expect(marked).toEqual(['0001_mvp_baseline.sql']);
-    const insertCall = mockQuery.mock.calls.find((call) =>
-      typeof call[0] === 'string' && call[0].includes('INSERT INTO schema_migrations'),
+    const insertCall = mockQuery.mock.calls.find(
+      (call) =>
+        typeof call[0] === 'string' &&
+        call[0].includes('INSERT INTO schema_migrations'),
     );
     expect(insertCall).toBeDefined();
-    expect(insertCall[1][0]).toBe('0001_mvp_baseline.sql');
+    expect(insertCall?.[1]?.[0]).toBe('0001_mvp_baseline.sql');
   });
 
   it('runPendingMigrations executes pending migrations with lock and records success', async () => {
-    const mockQuery = jest
-      .fn()
+    const mockQuery = createQueryMock()
       .mockResolvedValueOnce({ rows: [] }) // ensure table
       .mockResolvedValueOnce({ rows: [] }) // lock
       .mockResolvedValueOnce({ rows: [] }) // ensure table in getApplied
       .mockResolvedValueOnce({
         rows: [
           // All applied except the last one (0018)
-          { id: 1, name: '0001_mvp_baseline.sql', checksum: 'h', applied_at: new Date() },
+          {
+            id: 1,
+            name: '0001_mvp_baseline.sql',
+            checksum: 'h',
+            applied_at: new Date(),
+          },
         ],
       })
       .mockResolvedValue({ rows: [] }); // sql queries and unlock
@@ -136,12 +148,14 @@ describe('MigrationRunner Unit Tests', () => {
 
     // Mock getAppliedMigrations returning all except 0018
     const files = loadMigrationFiles(migrationsDir);
-    const allExceptLastRows = files.slice(0, files.length - 1).map((f, idx) => ({
-      id: idx + 1,
-      name: f.name,
-      checksum: f.checksum,
-      applied_at: new Date(),
-    }));
+    const allExceptLastRows = files
+      .slice(0, files.length - 1)
+      .map((f, idx) => ({
+        id: idx + 1,
+        name: f.name,
+        checksum: f.checksum,
+        applied_at: new Date(),
+      }));
 
     mockQuery.mockReset();
     mockQuery
@@ -151,16 +165,19 @@ describe('MigrationRunner Unit Tests', () => {
       .mockResolvedValueOnce({ rows: allExceptLastRows }) // applied select
       .mockResolvedValue({ rows: [] }); // execute 0018 & insert & unlock
 
-    const result = await runPendingMigrations(migrationsDir, client, { logger });
+    const result = await runPendingMigrations(migrationsDir, client, {
+      logger,
+    });
 
     expect(result.applied).toEqual(['0018_transfer_create_intent.sql']);
     expect(result.skipped.length).toBe(files.length - 1);
-    expect(logger).toHaveBeenCalledWith(expect.stringContaining('[SUCCESS]  0018_transfer_create_intent.sql'));
+    expect(logger).toHaveBeenCalledWith(
+      expect.stringContaining('[SUCCESS]  0018_transfer_create_intent.sql'),
+    );
   });
 
   it('runPendingMigrations rolls back and throws MigrationExecutionError on failure', async () => {
-    const mockQuery = jest
-      .fn()
+    const mockQuery = createQueryMock()
       .mockResolvedValueOnce({ rows: [] }) // ensure
       .mockResolvedValueOnce({ rows: [] }) // lock
       .mockResolvedValueOnce({ rows: [] }) // ensure
@@ -181,4 +198,3 @@ describe('MigrationRunner Unit Tests', () => {
     expect(unlockCall).toBeDefined();
   });
 });
-

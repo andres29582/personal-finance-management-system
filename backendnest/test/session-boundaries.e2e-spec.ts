@@ -1,3 +1,4 @@
+import { sqlRows, numberValue } from './session-harness/json-boundary';
 import { randomUUID } from 'crypto';
 import { DataSource, EntityManager, QueryRunner } from 'typeorm';
 import { User } from '../src/users/entities/user.entity';
@@ -81,13 +82,13 @@ describe('U4 authority on disposable PostgreSQL', () => {
     const runner = source.createQueryRunner();
     runners.add(runner);
     await runner.connect();
-    const [{ pid }] = await runner.query('SELECT pg_backend_pid() AS pid');
-    return { runner, pid: pid as number };
+    const [{ pid }] = await sqlRows(runner, 'SELECT pg_backend_pid() AS pid');
+    return { runner, pid: numberValue(pid) };
   }
   async function waitBlocked(pid: number, blocker: number) {
     const stop = Date.now() + 3000;
     while (Date.now() < stop) {
-      const [{ blocked }] = await source.query(
+      const [{ blocked }] = await source.query<Array<{ blocked: boolean }>>(
         `WITH RECURSIVE chain(pid,visited) AS (SELECT $1::integer,ARRAY[$1::integer] UNION ALL SELECT p.pid,c.visited||p.pid FROM chain c CROSS JOIN LATERAL unnest(pg_blocking_pids(c.pid)) p(pid) WHERE NOT p.pid=ANY(c.visited) AND cardinality(c.visited)<16) SELECT EXISTS(SELECT 1 FROM chain WHERE pid=$2::integer) AS blocked`,
         [pid, blocker],
       );
@@ -101,7 +102,7 @@ describe('U4 authority on disposable PostgreSQL', () => {
   async function waitExpired() {
     const stop = Date.now() + 3500;
     while (Date.now() < stop) {
-      const [{ expired }] = await source.query(
+      const [{ expired }] = await source.query<Array<{ expired: boolean }>>(
         'SELECT clock_timestamp() >= absolute_expires_at AS expired FROM auth_session WHERE id=$1',
         [sid],
       );
@@ -129,7 +130,7 @@ describe('U4 authority on disposable PostgreSQL', () => {
       );
       const result = repository(worker.runner)
         .authorize(sid, userId, true)
-        .catch((error) => error);
+        .catch((error: unknown) => error);
       try {
         await waitBlocked(worker.pid, blocker.pid);
         await waitExpired();
@@ -181,12 +182,13 @@ describe('U4 authority on disposable PostgreSQL', () => {
       sid,
       userId,
       'old',
-      async (_now, cap) => ({
-        access_token: 'access',
-        refresh_token: 'refresh',
-        refreshTokenHash: 'next',
-        expiresAt: new Date(Math.floor(cap.getTime() / 1000) * 1000),
-      }),
+      (_now, cap) =>
+        Promise.resolve({
+          access_token: 'access',
+          refresh_token: 'refresh',
+          refreshTokenHash: 'next',
+          expiresAt: new Date(Math.floor(cap.getTime() / 1000) * 1000),
+        }),
     );
     expect(result).toHaveProperty('tokens');
     const after = await source
@@ -208,9 +210,7 @@ describe('U4 authority on disposable PostgreSQL', () => {
         sid,
         userId,
         'wrong',
-        async () => {
-          throw new Error('must not issue');
-        },
+        () => Promise.reject(new Error('must not issue')),
       ),
     ).toEqual({ failure: 'AUTH_SESSION_IDLE_EXPIRED' });
     const terminal = await source
@@ -255,12 +255,13 @@ describe('U4 authority on disposable PostgreSQL', () => {
         expectedPasswordHash: 'verified',
         maxActiveSessions: 5,
         policy: { idleSeconds: 900, absoluteSeconds: 43200, version: 1 },
-        issue: async (_now, cap) => ({
-          access_token: 'access',
-          refresh_token: 'refresh',
-          refreshTokenHash: randomUUID(),
-          expiresAt: new Date(Math.floor(cap.getTime() / 1000) * 1000),
-        }),
+        issue: (_now, cap) =>
+          Promise.resolve({
+            access_token: 'access',
+            refresh_token: 'refresh',
+            refreshTokenHash: randomUUID(),
+            expiresAt: new Date(Math.floor(cap.getTime() / 1000) * 1000),
+          }),
       }),
     );
     const settled = Promise.allSettled(operations);
@@ -275,7 +276,7 @@ describe('U4 authority on disposable PostgreSQL', () => {
         await blocker.runner.rollbackTransaction();
       await settled;
     }
-    const [{ count }] = await source.query(
+    const [{ count }] = await source.query<Array<{ count: string }>>(
       "SELECT count(*)::integer AS count FROM auth_session WHERE usuario_id=$1 AND revoked_at IS NULL AND clock_timestamp()<absolute_expires_at AND clock_timestamp()<refresh_expires_at AND clock_timestamp()<last_activity_at+idle_timeout_seconds*interval '1 second'",
       [userId],
     );

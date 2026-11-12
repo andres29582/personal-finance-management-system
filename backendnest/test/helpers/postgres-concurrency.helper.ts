@@ -49,7 +49,10 @@ export class PostgresConcurrencyHarness {
     table,
     triggerEvent,
   }: InstallBarrierOptions): Promise<PostgresBarrier> {
-    if (this.cleanupFailure) throw this.cleanupFailure;
+    if (this.cleanupFailure)
+      throw this.cleanupFailure instanceof Error
+        ? this.cleanupFailure
+        : new Error('Prior cleanup failed.', { cause: this.cleanupFailure });
     const marker = `fc_${randomUUID().replaceAll('-', '')}`;
     const barrier: PostgresBarrier = {
       applicationName: `${marker}_${holder}`,
@@ -209,6 +212,7 @@ export class PostgresConcurrencyHarness {
           );
           await attempt(async () => {
             pending.request.abort();
+            return Promise.resolve();
           });
         }
       }
@@ -291,7 +295,9 @@ export class PostgresConcurrencyHarness {
     );
     if (error) {
       this.cleanupFailure = error;
-      throw error;
+      throw error instanceof Error
+        ? error
+        : new Error('Concurrency cleanup failed.', { cause: error });
     }
   }
 
@@ -339,7 +345,10 @@ export class PostgresConcurrencyHarness {
       cleanup.push(error);
     }
     const error = combine(primary, cleanup);
-    if (error) throw error;
+    if (error)
+      throw error instanceof Error
+        ? error
+        : new Error('Concurrency operation failed.', { cause: error });
     return value as T;
   }
 
@@ -353,7 +362,10 @@ export class PostgresConcurrencyHarness {
       errors,
       'Concurrency barrier cleanup failed',
     );
-    if (error) throw error;
+    if (error)
+      throw error instanceof Error
+        ? error
+        : new Error('Concurrency operation failed.', { cause: error });
   }
 
   cleanupAllSettled(): Promise<PromiseSettledResult<void>[]> {

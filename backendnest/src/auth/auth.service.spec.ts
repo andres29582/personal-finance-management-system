@@ -342,7 +342,7 @@ describe('AuthService', () => {
 
     expect(authSessionsService.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        issue: expect.any(Function),
+        issue: expect.any(Function) as unknown,
         userId: 'user-1',
         expectedPasswordHash: 'hashed-password',
       }),

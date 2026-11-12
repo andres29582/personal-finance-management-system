@@ -191,14 +191,15 @@ describe('credential boundaries on disposable PostgreSQL', () => {
       userId,
       expectedPasswordHash,
       policy: { idleSeconds: 900, absoluteSeconds: 43200, version: 1 },
-      issue: async (now: Date, absolute: Date) => ({
-        access_token: 'test-access',
-        refresh_token: 'test-refresh',
-        refreshTokenHash: 'new-refresh',
-        expiresAt: new Date(
-          Math.min(now.getTime() + 60000, absolute.getTime()),
-        ),
-      }),
+      issue: (now: Date, absolute: Date) =>
+        Promise.resolve({
+          access_token: 'test-access',
+          refresh_token: 'test-refresh',
+          refreshTokenHash: 'new-refresh',
+          expiresAt: new Date(
+            Math.min(now.getTime() + 60000, absolute.getTime()),
+          ),
+        }),
       maxActiveSessions: 5,
     } as const;
   }
@@ -290,14 +291,15 @@ describe('credential boundaries on disposable PostgreSQL', () => {
       sessionId,
       userId,
       'refresh-hash',
-      async (now, absolute) => ({
-        access_token: 'test-access',
-        refresh_token: 'test-refresh',
-        refreshTokenHash: 'next-hash',
-        expiresAt: new Date(
-          Math.min(now.getTime() + 60000, absolute.getTime()),
-        ),
-      }),
+      (now, absolute) =>
+        Promise.resolve({
+          access_token: 'test-access',
+          refresh_token: 'test-refresh',
+          refreshTokenHash: 'next-hash',
+          expiresAt: new Date(
+            Math.min(now.getTime() + 60000, absolute.getTime()),
+          ),
+        }),
     );
     await waitForLock(refresh.pid, locked.pid);
     await locked.runner.manager.update(

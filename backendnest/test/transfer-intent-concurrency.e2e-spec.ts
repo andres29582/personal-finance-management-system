@@ -35,7 +35,7 @@ describe.skip('transfer intent SQL uniqueness (requires migration 0018)', () => 
     try {
       await first.startTransaction();
       await second.startTransaction();
-      const winner = await first.query(sql, [
+      const winner: unknown = await first.query(sql, [
         randomUUID(),
         ...fixtures,
         key,
@@ -48,7 +48,7 @@ describe.skip('transfer intent SQL uniqueness (requires migration 0018)', () => 
         'a'.repeat(64),
       ]);
       await first.commitTransaction();
-      const loser = await pending;
+      const loser: unknown = await pending;
       expect(winner).toHaveLength(1);
       expect(loser).toHaveLength(0);
       await second.rollbackTransaction();

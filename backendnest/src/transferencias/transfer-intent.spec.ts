@@ -1,3 +1,4 @@
+import type { AuthenticatedRequest } from '../common/authenticated-request';
 import { validate } from 'class-validator';
 import { DataSource, EntityManager } from 'typeorm';
 import { CreateTransferenciaDto } from './dto/create-transferencia.dto';
@@ -36,35 +37,37 @@ function fixture() {
   let lookup: Lookup;
   let pending: IntentRow;
   const insert: InsertFixture = {
-    insert: jest.fn().mockReturnThis(),
-    into: jest.fn().mockReturnThis(),
+    insert: jest.fn(() => insert),
+    into: jest.fn(() => insert),
     values: jest.fn((value) => {
       pending = value;
       return insert;
     }),
-    onConflict: jest.fn().mockReturnThis(),
-    returning: jest.fn().mockReturnThis(),
-    execute: jest.fn(async () => {
+    onConflict: jest.fn(() => insert),
+    returning: jest.fn(() => insert),
+    execute: jest.fn(() => {
       const identity = pending.usuarioId + pending.idempotencyKey;
-      if (rows.has(identity)) return { raw: [] };
+      if (rows.has(identity)) return Promise.resolve({ raw: [] });
       rows.set(identity, { ...pending, excluidoEm: null });
-      return { raw: [{ id: pending.id }] };
+      return Promise.resolve({ raw: [{ id: pending.id }] });
     }),
   };
   const query: QueryFixture = {
-    addSelect: jest.fn().mockReturnThis(),
+    addSelect: jest.fn(() => query),
     where: jest.fn((_sql, args) => {
       lookup = args;
       return query;
     }),
-    getOne: jest.fn(
-      async () => rows.get(lookup.usuarioId + lookup.key) ?? null,
+    getOne: jest.fn(() =>
+      Promise.resolve(rows.get(lookup.usuarioId + lookup.key) ?? null),
     ),
   };
   const manager = {
-    create: jest.fn((_entity, value) => value),
-    save: jest.fn(async (value) => value),
-    createQueryBuilder: jest.fn((entity) => (entity ? query : insert)),
+    create: jest.fn((...args: [unknown, IntentRow]) => args[1]),
+    save: jest.fn((value: IntentRow) => Promise.resolve(value)),
+    createQueryBuilder: jest.fn((entity?: unknown) =>
+      entity ? query : insert,
+    ),
   };
   const accounts = { findActiveManyForWrite: jest.fn() };
   const logs = { logEntityEvent: jest.fn() };
@@ -193,13 +196,15 @@ describe('transfer create intent', () => {
       idempotencyFingerprint: 'secret',
     };
     const service = {
-      create: async () => row,
-      findOne: async () => row,
-      findAll: async () => [row],
-      update: async () => row,
+      create: () => Promise.resolve(row),
+      findOne: () => Promise.resolve(row),
+      findAll: () => Promise.resolve([row]),
+      update: () => Promise.resolve(row),
     };
     const controller = new TransferenciasController(service as any);
-    const req = { user: { id: 'user' } } as any;
+    const req = {
+      user: { id: 'user', email: 'u@example.com', nome: 'U', sid: 'sid' },
+    } as AuthenticatedRequest;
     for (const result of [
       await controller.create(req, payload),
       await controller.findOne('transfer', req),
