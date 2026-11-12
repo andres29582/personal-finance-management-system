@@ -1,3 +1,4 @@
+import { AuthorizedRequestAdmissions } from './helpers/authorized-request-admission';
 import { combine } from './e2e-runtime.cjs';
 import request, { type Response } from 'supertest';
 import { DataSource } from 'typeorm';
@@ -65,6 +66,7 @@ type BarrierDefinition = {
 jest.setTimeout(60000);
 
 describe('Financial active account concurrency (e2e)', () => {
+  const admissions = new AuthorizedRequestAdmissions();
   let app: E2eApplication;
   let appDataSource: DataSource;
   let coordinatorDataSource: DataSource;
@@ -84,7 +86,9 @@ describe('Financial active account concurrency (e2e)', () => {
       .filter(Boolean)
       .join(' ');
 
-    app = await createE2eApp();
+    app = await createE2eApp({ interceptors: [admissions] });
+    // Own the shared listener: a staged request must not close it while peers are pending.
+    await app.listen(0, '127.0.0.1');
     appDataSource = app.get(DataSource);
     coordinatorDataSource = new DataSource({
       type: 'postgres',
@@ -99,6 +103,7 @@ describe('Financial active account concurrency (e2e)', () => {
   });
 
   afterEach(async () => {
+    admissions.cancelAll();
     if (concurrencyHarness) {
       await concurrencyHarness.cleanupAll();
     }
@@ -156,6 +161,18 @@ describe('Financial active account concurrency (e2e)', () => {
     });
 
     await concurrencyHarness.withBarrier(barrier, async () => {
+      const admission = admissions.hold();
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
+          session,
+        ).set('X-E2E-Admission', admission.token),
+      );
+      await withTimeout(
+        admission.entered,
+        'competing request to finish real authentication',
+      );
       const transactionPromise = concurrencyHarness.trackRequest(
         barrier,
         withAuth(
@@ -172,15 +189,8 @@ describe('Financial active account concurrency (e2e)', () => {
           }),
         ),
       );
-
       const holder = await waitForTaggedHolder(barrier);
-      const deactivationPromise = concurrencyHarness.trackRequest(
-        barrier,
-        withAuth(
-          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
-          session,
-        ),
-      );
+      admission.release();
 
       const waitingDeactivation = await waitForBlockedActivity(
         barrier,
@@ -246,6 +256,26 @@ describe('Financial active account concurrency (e2e)', () => {
     });
 
     await concurrencyHarness.withBarrier(barrier, async () => {
+      const admission = admissions.hold();
+      const transactionPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(request(app.getHttpServer()).post('/transacoes'), session)
+          .set('X-E2E-Admission', admission.token)
+          .send(
+            makeTransacaoPayload({
+              categoriaId: category.id,
+              contaId: account.id,
+              data: '2026-08-02',
+              descricao: 'Transacao concorrente A2 rejeitada',
+              tipo: TipoTransacao.DESPESA,
+              valor: 100,
+            }),
+          ),
+      );
+      await withTimeout(
+        admission.entered,
+        'competing request to finish real authentication',
+      );
       const deactivationPromise = concurrencyHarness.trackRequest(
         barrier,
         withAuth(
@@ -253,24 +283,8 @@ describe('Financial active account concurrency (e2e)', () => {
           session,
         ),
       );
-
       const holder = await waitForTaggedHolder(barrier);
-      const transactionPromise = concurrencyHarness.trackRequest(
-        barrier,
-        withAuth(
-          request(app.getHttpServer()).post('/transacoes'),
-          session,
-        ).send(
-          makeTransacaoPayload({
-            categoriaId: category.id,
-            contaId: account.id,
-            data: '2026-08-02',
-            descricao: 'Transacao concorrente A2 rejeitada',
-            tipo: TipoTransacao.DESPESA,
-            valor: 100,
-          }),
-        ),
-      );
+      admission.release();
 
       const waitingTransaction = await waitForBlockedActivity(
         barrier,
@@ -331,6 +345,20 @@ describe('Financial active account concurrency (e2e)', () => {
       });
 
       await concurrencyHarness.withBarrier(barrier, async () => {
+        const admission = admissions.hold();
+        const deactivationPromise = concurrencyHarness.trackRequest(
+          barrier,
+          withAuth(
+            request(app.getHttpServer())
+              .patch(`/contas/${accountToDeactivate.id}/desativar`)
+              .set('X-E2E-Admission', admission.token),
+            session,
+          ),
+        );
+        await withTimeout(
+          admission.entered,
+          'competing request to finish real authentication',
+        );
         const transferPromise = concurrencyHarness.trackRequest(
           barrier,
           withAuth(
@@ -347,17 +375,8 @@ describe('Financial active account concurrency (e2e)', () => {
             }),
           ),
         );
-
         const holder = await waitForTaggedHolder(barrier);
-        const deactivationPromise = concurrencyHarness.trackRequest(
-          barrier,
-          withAuth(
-            request(app.getHttpServer()).patch(
-              `/contas/${accountToDeactivate.id}/desativar`,
-            ),
-            session,
-          ),
-        );
+        admission.release();
 
         const waitingDeactivation = await waitForBlockedActivity(
           barrier,
@@ -425,6 +444,29 @@ describe('Financial active account concurrency (e2e)', () => {
       });
 
       await concurrencyHarness.withBarrier(barrier, async () => {
+        const admission = admissions.hold();
+        const transferPromise = concurrencyHarness.trackRequest(
+          barrier,
+          withAuth(
+            request(app.getHttpServer()).post('/transferencias'),
+            session,
+          )
+            .set('X-E2E-Admission', admission.token)
+            .send(
+              makeTransferenciaPayload({
+                comissao: 10,
+                contaDestinoId: destination.id,
+                contaOrigemId: origin.id,
+                data: '2026-08-04',
+                descricao: `Transferencia concorrente ${code} rejeitada`,
+                valor: 200,
+              }),
+            ),
+        );
+        await withTimeout(
+          admission.entered,
+          'competing request to finish real authentication',
+        );
         const deactivationPromise = concurrencyHarness.trackRequest(
           barrier,
           withAuth(
@@ -434,24 +476,8 @@ describe('Financial active account concurrency (e2e)', () => {
             session,
           ),
         );
-
         const holder = await waitForTaggedHolder(barrier);
-        const transferPromise = concurrencyHarness.trackRequest(
-          barrier,
-          withAuth(
-            request(app.getHttpServer()).post('/transferencias'),
-            session,
-          ).send(
-            makeTransferenciaPayload({
-              comissao: 10,
-              contaDestinoId: destination.id,
-              contaOrigemId: origin.id,
-              data: '2026-08-04',
-              descricao: `Transferencia concorrente ${code} rejeitada`,
-              valor: 200,
-            }),
-          ),
-        );
+        admission.release();
 
         const waitingTransfer = await waitForBlockedActivity(
           barrier,
@@ -498,6 +524,18 @@ describe('Financial active account concurrency (e2e)', () => {
     });
 
     await concurrencyHarness.withBarrier(barrier, async () => {
+      const admission = admissions.hold();
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(
+          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
+          session,
+        ).set('X-E2E-Admission', admission.token),
+      );
+      await withTimeout(
+        admission.entered,
+        'competing request to finish real authentication',
+      );
       const paymentPromise = concurrencyHarness.trackRequest(
         barrier,
         withAuth(
@@ -514,15 +552,8 @@ describe('Financial active account concurrency (e2e)', () => {
           }),
         ),
       );
-
       const holder = await waitForTaggedHolder(barrier);
-      const deactivationPromise = concurrencyHarness.trackRequest(
-        barrier,
-        withAuth(
-          request(app.getHttpServer()).patch(`/contas/${account.id}/desativar`),
-          session,
-        ),
-      );
+      admission.release();
 
       const waitingDeactivation = await waitForBlockedActivity(
         barrier,
@@ -579,6 +610,26 @@ describe('Financial active account concurrency (e2e)', () => {
     });
 
     await concurrencyHarness.withBarrier(barrier, async () => {
+      const admission = admissions.hold();
+      const paymentPromise = concurrencyHarness.trackRequest(
+        barrier,
+        withAuth(request(app.getHttpServer()).post('/pagos-divida'), session)
+          .set('X-E2E-Admission', admission.token)
+          .send(
+            makePagoDividaPayload({
+              categoriaId: category.id,
+              contaId: account.id,
+              data: '2026-08-06',
+              descricao: 'Pagamento concorrente D2 rejeitado',
+              dividaId: debt.id,
+              valor: 150,
+            }),
+          ),
+      );
+      await withTimeout(
+        admission.entered,
+        'competing request to finish real authentication',
+      );
       const deactivationPromise = concurrencyHarness.trackRequest(
         barrier,
         withAuth(
@@ -586,24 +637,8 @@ describe('Financial active account concurrency (e2e)', () => {
           session,
         ),
       );
-
       const holder = await waitForTaggedHolder(barrier);
-      const paymentPromise = concurrencyHarness.trackRequest(
-        barrier,
-        withAuth(
-          request(app.getHttpServer()).post('/pagos-divida'),
-          session,
-        ).send(
-          makePagoDividaPayload({
-            categoriaId: category.id,
-            contaId: account.id,
-            data: '2026-08-06',
-            descricao: 'Pagamento concorrente D2 rejeitado',
-            dividaId: debt.id,
-            valor: 150,
-          }),
-        ),
-      );
+      admission.release();
 
       const waitingPayment = await waitForBlockedActivity(
         barrier,
@@ -659,8 +694,34 @@ describe('Financial active account concurrency (e2e)', () => {
       accountId: accountA.id,
       holder: 'transaction',
     });
+    const accountBBarrier = await installBarrier({
+      accountId: accountB.id,
+      holder: 'deactivation',
+    });
 
     await concurrencyHarness.withBarrier(accountABarrier, async () => {
+      const admissionB = admissions.hold();
+      const readAdmission = admissions.hold();
+      const deactivationPromise = concurrencyHarness.trackRequest(
+        accountBBarrier,
+        withAuth(
+          request(app.getHttpServer()).patch(
+            `/contas/${accountB.id}/desativar`,
+          ),
+          session,
+        ).set('X-E2E-Admission', admissionB.token),
+      );
+      const accountReadPromise = concurrencyHarness.trackRequest(
+        accountBBarrier,
+        withAuth(
+          request(app.getHttpServer()).get('/contas/' + accountB.id),
+          session,
+        ).set('X-E2E-Admission', readAdmission.token),
+      );
+      await Promise.all([
+        withTimeout(admissionB.entered, 'account B real authentication'),
+        withTimeout(readAdmission.entered, 'account B read authentication'),
+      ]);
       const transactionPromise = concurrencyHarness.trackRequest(
         accountABarrier,
         withAuth(
@@ -678,21 +739,9 @@ describe('Financial active account concurrency (e2e)', () => {
         ),
       );
       const accountAHolder = await waitForTaggedHolder(accountABarrier);
+      admissionB.release();
 
-      const accountBBarrier = await installBarrier({
-        accountId: accountB.id,
-        holder: 'deactivation',
-      });
       await concurrencyHarness.withBarrier(accountBBarrier, async () => {
-        const deactivationPromise = concurrencyHarness.trackRequest(
-          accountBBarrier,
-          withAuth(
-            request(app.getHttpServer()).patch(
-              `/contas/${accountB.id}/desativar`,
-            ),
-            session,
-          ),
-        );
         const accountBHolder = await waitForTaggedHolder(accountBBarrier);
 
         expect(accountBHolder.blockers).not.toContain(accountAHolder.pid);
@@ -706,7 +755,12 @@ describe('Financial active account concurrency (e2e)', () => {
           'E account B deactivation',
         );
         expect(deactivationResponse.status).toBe(200);
-        await expectAccountState(session, accountB.id, 500, true);
+        readAdmission.release();
+        const stateB = unwrapSuccess<ContaResponse>(
+          await withTimeout(accountReadPromise, 'independent account read'),
+        );
+        expect(stateB.ativa).toBe(false);
+        expect(Number(stateB.saldoAtual)).toBeCloseTo(500, 2);
         await expectTaggedHolderStillBlocked(
           accountABarrier,
           accountAHolder.pid,

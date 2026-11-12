@@ -1,4 +1,4 @@
-import { Provider, ValidationPipe } from '@nestjs/common';
+import { Provider, ValidationPipe, type NestInterceptor } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -15,6 +15,7 @@ export type E2eApplication = NestExpressApplication<Server>;
 
 type CreateE2eAppOptions = {
   overrideProviders?: Provider[];
+  interceptors?: NestInterceptor[];
 };
 
 export async function createE2eApp(
@@ -51,7 +52,10 @@ export async function createE2eApp(
       }),
     );
 
-    app.useGlobalInterceptors(new ResponseInterceptor());
+    app.useGlobalInterceptors(
+      new ResponseInterceptor(),
+      ...(options.interceptors ?? []),
+    );
 
     await app.init();
 
