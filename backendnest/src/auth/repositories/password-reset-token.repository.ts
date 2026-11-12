@@ -10,13 +10,7 @@ import {
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  DataSource,
-  EntityManager,
-  IsNull,
-  MoreThan,
-  Repository,
-} from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { AppUnauthorizedException } from '../../common/exceptions';
 import {
   credentialTime,

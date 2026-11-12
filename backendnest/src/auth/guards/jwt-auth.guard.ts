@@ -8,7 +8,10 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     user: TUser,
     info: { name?: string },
   ): TUser {
-    if (error) throw error;
+    if (error)
+      throw error instanceof Error
+        ? error
+        : new Error('Authentication failed.', { cause: error });
     if (!user) {
       if (info?.name === 'TokenExpiredError')
         throw new AppUnauthorizedException(

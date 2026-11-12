@@ -141,7 +141,7 @@ export class AuthSessionRepository extends BaseRepository<AuthSession> {
       },
     );
     if (decision.failure) rejectSession(decision.failure);
-    return decision.page!;
+    return decision.page;
   }
 
   async reserveSessionReauthentication(
@@ -360,7 +360,7 @@ export class AuthSessionRepository extends BaseRepository<AuthSession> {
       },
     );
     if (decision.failure) rejectSession(decision.failure);
-    return decision.state!;
+    return decision.state;
   }
   async touchIfActive(
     sessionId: string,
@@ -443,11 +443,7 @@ export class AuthSessionRepository extends BaseRepository<AuthSession> {
       return { tokens };
     });
   }
-  async revoke(
-    sessionId: string,
-    userId: string,
-    _revokedAt?: Date,
-  ): Promise<void> {
+  async revoke(sessionId: string, userId: string): Promise<void> {
     await credentialTransaction(this.dataSource, async (manager) => {
       if (!(await lockCredentialUser(manager, userId))) return;
       const session = await manager.findOne(AuthSession, {
@@ -464,7 +460,7 @@ export class AuthSessionRepository extends BaseRepository<AuthSession> {
       );
     });
   }
-  async revokeAllByUser(userId: string, _revokedAt?: Date): Promise<void> {
+  async revokeAllByUser(userId: string): Promise<void> {
     await credentialTransaction(this.dataSource, async (manager) => {
       if (!(await lockCredentialUser(manager, userId))) return;
       const sessions = await lockUserSessions(manager, userId);

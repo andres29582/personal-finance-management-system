@@ -235,7 +235,7 @@ export class AuthService {
         payload.sub,
         refreshToken,
         (now, absolute) =>
-          this.issueSessionTokens(user!, payload.sid, now, absolute),
+          this.issueSessionTokens(user, payload.sid, now, absolute),
       );
     if ('failure' in result) {
       if (result.reuse)
@@ -243,7 +243,7 @@ export class AuthService {
           event: 'REFRESH_TOKEN_REUSE_DETECTED',
           level: 'warn',
           success: false,
-          userId: user!.id,
+          userId: user.id,
           message: 'Reutilizacao de refresh token detectada; sessao revogada.',
           details: { sessionId: payload.sid },
         });
