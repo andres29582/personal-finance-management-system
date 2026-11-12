@@ -28,7 +28,11 @@
     "migration:status": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts status",
     "migration:dry-run": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts dry-run",
     "migration:mark-baseline": "node -r ts-node/register -r tsconfig-paths/register src/scripts/migrate.ts mark-baseline",
-    "lint:contract": "node test/lint-contract.cjs backendnest"
+    "lint:contract": "node test/lint-contract.cjs backendnest",
+    "typecheck": "tsc --noEmit --incremental false -p tsconfig.json",
+    "typecheck:build": "tsc --noEmit --incremental false -p tsconfig.build.json",
+    "test:harness:portable": "node test/harness-offline.cjs portable",
+    "test:harness:windows": "node test/harness-offline.cjs windows"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

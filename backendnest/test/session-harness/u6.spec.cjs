@@ -124,6 +124,9 @@ test('only known source files enter inventory; private and generated files do no
   }
   for (const name of [
     'backendnest/src/auth/auth.service.ts',
+    'backendnest/test/session-harness/contract.d.cts',
+    'backendnest/test/session-harness/load.d.cts',
+    'backendnest/eslint.config.mjs',
     'backendnest/.env.example',
     'backendnest/.env.production.example',
     'frontend/package-lock.json',

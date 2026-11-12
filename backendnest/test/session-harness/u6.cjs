@@ -191,7 +191,7 @@ function isSourcePath(name) {
     return false;
   if (['.gitignore', 'backendnest/Dockerfile'].includes(name)) return true;
   return (
-    /\.(?:ts|tsx|js|cjs|json|sql|md|ya?ml|example|ps1)$/.test(name) &&
+    /\.(?:ts|tsx|cts|mts|js|cjs|mjs|json|sql|md|ya?ml|example|ps1)$/.test(name) &&
     (['backendnest', 'frontend', 'docs', '.github'].includes(parts[0]) ||
       ['README.md', 'AGENTS.md'].includes(name))
   );

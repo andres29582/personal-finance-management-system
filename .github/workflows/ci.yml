@@ -54,23 +54,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
           cache-dependency-path: |
             backendnest/package-lock.json
             frontend/package-lock.json
       - name: Install locked application dependencies
+        timeout-minutes: 6
         run: |
           npm ci --prefix backendnest --no-audit --no-fund
           npm ci --prefix frontend --no-audit --no-fund
       - name: Install headless Chromium
+        timeout-minutes: 4
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Record Node, npm and PostgreSQL client versions
+        run: |
+          node --version
+          npm --version
+          psql --version
       - name: Bootstrap the confined disposable database
         env:
           PGPASSWORD: postgres
         run: |
           psql -X -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT version();
           CREATE ROLE finance_e2e_access_ci_owner LOGIN PASSWORD 'disposable-access-ci-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
           CREATE DATABASE finance_e2e_access_ci OWNER finance_e2e_access_ci_owner;
           COMMENT ON DATABASE finance_e2e_access_ci IS 'finance-e2e-disposable';
@@ -87,12 +95,15 @@ jobs:
 
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     # CI=true ajuda ferramentas do ecossistema React/Expo a
     # assumirem comportamento nao interativo dentro da pipeline.
     env:
       CI: true
+      EXPO_NO_DOTENV: 1
+      EXPO_NO_TELEMETRY: 1
 
     defaults:
       run:
@@ -105,14 +116,18 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Instalar dependencias do frontend
         # npm ci foi escolhido porque reproduz exatamente o lockfile,
         # deixando a pipeline previsivel e mais confiavel.
-        run: npm ci
+        timeout-minutes: 5
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify frontend lint contract
+        run: npm run lint:contract
 
       - name: Rodar lint do frontend
         # Aqui usamos o script atual do projeto para manter a CI
@@ -133,7 +148,8 @@ jobs:
 
   backend:
     name: Backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     env:
       CI: true
@@ -149,30 +165,30 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
           cache-dependency-path: backendnest/package-lock.json
 
-      - name: Instalar dependencias do backend
-        run: npm ci
+      - name: Install both locked packages for full cross-package harness types
+        timeout-minutes: 6
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix ../frontend --no-audit --no-fund
 
-      - name: Rodar lint do backend sem autofix
-        # O script npm atual do backend usa --fix, o que e util localmente,
-        # mas inadequado em CI porque uma pipeline nao deve reescrever codigo.
-        # Por isso, executamos o ESLint em modo somente validacao.
-        # O lint de CI fica no codigo de runtime; os specs sao validados
-        # pelo passo de testes para evitar falhas por mocks tipados como any.
-        run: >
-          npx eslint "src/**/*.ts"
-          --ignore-pattern "**/*.spec.ts"
-          --rule "@typescript-eslint/no-unsafe-assignment: warn"
-          --rule "@typescript-eslint/no-unsafe-call: warn"
-          --rule "@typescript-eslint/no-unsafe-member-access: warn"
+      - name: Verify maintained lint scope and blocking rules
+        run: npm run lint:contract
 
-      - name: Validar tipos do backend
-        # Usamos o mesmo escopo do build do Nest, que exclui specs/e2e.
-        # Os testes unitarios continuam executando no passo seguinte.
-        run: npx tsc --noEmit -p tsconfig.build.json
+      - name: Check all maintained sources, tests and Node configuration
+        run: npm run lint
+
+      - name: Validate full types and build types
+        run: |
+          npm run typecheck
+          npm run typecheck:build
+
+      - name: Run portable offline harnesses
+        timeout-minutes: 4
+        run: npm run test:harness:portable
 
       - name: Executar testes unitarios do backend
         # O modo runInBand reduz variacoes de concorrencia e torna
@@ -186,7 +202,7 @@ jobs:
 
   backend-e2e:
     name: Backend E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     services:
@@ -225,18 +241,20 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
           cache: npm
           cache-dependency-path: backendnest/package-lock.json
 
       - name: Instalar dependencias do backend
-        run: npm ci
+        timeout-minutes: 5
+        run: npm ci --no-audit --no-fund
 
       - name: Bootstrap confined disposable E2E database
         env:
           PGPASSWORD: postgres
         run: |
           psql -X -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT version();
           CREATE ROLE finance_e2e_ci_owner LOGIN PASSWORD 'disposable-ci-only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
           ALTER ROLE finance_e2e_ci_owner SET timezone='UTC';
           CREATE DATABASE finance_e2e_ci OWNER finance_e2e_ci_owner;
@@ -251,29 +269,64 @@ jobs:
         # O helper verifica owner/marker/confirmacao antes de recriar public.
         run: npm run test:e2e
 
-  ml:
-    name: Machine Learning
-    runs-on: ubuntu-latest
+  windows-ownership:
+    name: Windows process ownership
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.4
+      - name: Install locked backend dependencies
+        timeout-minutes: 5
+        run: npm ci --prefix backendnest --no-audit --no-fund
+      - name: Verify actual Windows Job cancellation and orphan containment
+        timeout-minutes: 3
+        working-directory: backendnest
+        run: npm run test:harness:windows
 
+  ml:
+    name: Machine Learning Linux lock
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ml-finance-tcc
-
+    env:
+      MPLBACKEND: Agg
+      PYTHONDONTWRITEBYTECODE: 1
     steps:
-      - name: Checkout do repositorio
-        uses: actions/checkout@v4
-
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11.18'
           cache: pip
-          cache-dependency-path: ml-finance-tcc/requirements.txt
-
-      - name: Instalar dependencias do ML
+          cache-dependency-path: ml-finance-tcc/requirements-ci.lock
+      - name: Record Linux and Python versions
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-
-      - name: Executar testes do ML
-        run: python -m pytest
+          uname -a
+          python --version
+          python -m pip --version
+      - name: First clean hash-checked installation
+        timeout-minutes: 6
+        run: |
+          python -m venv .venv-ci-first
+          .venv-ci-first/bin/python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --timeout 30 --retries 2 -r requirements-ci.lock
+          .venv-ci-first/bin/python -m pip check
+      - name: Test first clean environment
+        timeout-minutes: 3
+        run: .venv-ci-first/bin/python -m pytest
+      - name: Second independent hash-checked installation
+        timeout-minutes: 6
+        run: |
+          python -m venv .venv-ci-second
+          .venv-ci-second/bin/python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --timeout 30 --retries 2 -r requirements-ci.lock
+          .venv-ci-second/bin/python -m pip check
+      - name: Test second clean environment
+        timeout-minutes: 3
+        run: .venv-ci-second/bin/python -m pytest
+      - name: Confirm dependency inputs stayed unchanged
+        run: git diff --exit-code -- requirements.txt requirements-ci.lock
