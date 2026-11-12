@@ -61,13 +61,13 @@ jobs:
       - name: Configure Node without dependency cache
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
-      - name: Install locked backend dependencies without publishing diagnostics
+          node-version: 22.23.4
+      - name: Install both locked packages without publishing diagnostics
         timeout-minutes: 5
         working-directory: backendnest
         shell: bash
         run: |
-          if ! timeout --signal=TERM --kill-after=10s 270s npm ci --no-audit --no-fund > "$RUNNER_TEMP/p4-install-private.log" 2>&1; then
+          if ! timeout --signal=TERM --kill-after=10s 270s bash -c 'npm ci --no-audit --no-fund && npm ci --prefix ../frontend --no-audit --no-fund' > "$RUNNER_TEMP/p4-install-private.log" 2>&1; then
             echo P4_INSTALL_FAILED_NO_PRIVATE_UPLOAD
             exit 1
           fi
