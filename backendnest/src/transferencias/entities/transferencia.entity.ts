@@ -9,8 +9,15 @@ import {
 } from 'typeorm';
 
 @Entity('transferencia')
-@Index('uq_transferencia_usuario_idempotency', ['usuarioId', 'idempotencyKey'], { unique: true })
-@Check('ck_transferencia_idempotency_pair', '(idempotency_key IS NULL) = (idempotency_fingerprint IS NULL)')
+@Index(
+  'uq_transferencia_usuario_idempotency',
+  ['usuarioId', 'idempotencyKey'],
+  { unique: true },
+)
+@Check(
+  'ck_transferencia_idempotency_pair',
+  '(idempotency_key IS NULL) = (idempotency_fingerprint IS NULL)',
+)
 export class Transferencia {
   @PrimaryColumn('uuid')
   id: string;
@@ -45,10 +52,21 @@ export class Transferencia {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @Column({ name: 'idempotency_key', type: 'uuid', nullable: true, select: false })
+  @Column({
+    name: 'idempotency_key',
+    type: 'uuid',
+    nullable: true,
+    select: false,
+  })
   idempotencyKey: string | null;
 
-  @Column({ name: 'idempotency_fingerprint', type: 'varchar', length: 64, nullable: true, select: false })
+  @Column({
+    name: 'idempotency_fingerprint',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    select: false,
+  })
   idempotencyFingerprint: string | null;
 
   @Column({ name: 'excluido_em', type: 'timestamp', nullable: true })

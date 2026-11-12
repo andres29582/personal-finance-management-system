@@ -15,7 +15,10 @@ export class TransferenciaRepository extends BaseRepository<Transferencia> {
     super(transferenciaRepository);
   }
 
-  async findByUser(usuarioId: string, query: FindTransferenciasDto = {}): Promise<Transferencia[]> {
+  async findByUser(
+    usuarioId: string,
+    query: FindTransferenciasDto = {},
+  ): Promise<Transferencia[]> {
     return this.transferenciaRepository.find({
       where: { usuarioId, ...notSoftDeleted },
       order: { data: 'DESC', createdAt: 'DESC', id: 'DESC' },

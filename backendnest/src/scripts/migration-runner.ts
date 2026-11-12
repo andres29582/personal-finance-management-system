@@ -69,7 +69,9 @@ export function loadMigrationFiles(migrationsDir: string): MigrationFile[] {
   });
 }
 
-export async function ensureMigrationTable(client: QueryableClient): Promise<void> {
+export async function ensureMigrationTable(
+  client: QueryableClient,
+): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id SERIAL PRIMARY KEY,
@@ -177,7 +179,9 @@ export async function runPendingMigrations(
       }
 
       if (options.dryRun) {
-        logger(`[DRY-RUN] Pending: ${file.name} (checksum: ${file.checksum.slice(0, 8)}...)`);
+        logger(
+          `[DRY-RUN] Pending: ${file.name} (checksum: ${file.checksum.slice(0, 8)}...)`,
+        );
         applied.push(file.name);
         continue;
       }
@@ -231,4 +235,3 @@ export async function runPendingMigrations(
 
   return { applied, skipped };
 }
-

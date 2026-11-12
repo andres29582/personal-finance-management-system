@@ -39,8 +39,13 @@ async function main(): Promise<void> {
   try {
     switch (command) {
       case 'status': {
-        console.log(`\nVerificando status de migrações em [${dbConfig.database}]...\n`);
-        const statuses = await getMigrationStatus(migrationsDir, migrationClient);
+        console.log(
+          `\nVerificando status de migrações em [${dbConfig.database}]...\n`,
+        );
+        const statuses = await getMigrationStatus(
+          migrationsDir,
+          migrationClient,
+        );
 
         console.table(
           statuses.map((s) => ({
@@ -51,7 +56,9 @@ async function main(): Promise<void> {
           })),
         );
 
-        const pendingCount = statuses.filter((s) => s.status === 'PENDING').length;
+        const pendingCount = statuses.filter(
+          (s) => s.status === 'PENDING',
+        ).length;
         console.log(
           `\nTotal: ${statuses.length} migrações | Aplicadas: ${
             statuses.length - pendingCount
@@ -61,18 +68,24 @@ async function main(): Promise<void> {
       }
 
       case 'dry-run': {
-        console.log(`\n[DRY-RUN] Simulando migrações em [${dbConfig.database}]...\n`);
+        console.log(
+          `\n[DRY-RUN] Simulando migrações em [${dbConfig.database}]...\n`,
+        );
         const result = await runPendingMigrations(
           migrationsDir,
           migrationClient,
           { dryRun: true },
         );
-        console.log(`\nSimulação concluída: ${result.applied.length} migração(ões) pendente(s).\n`);
+        console.log(
+          `\nSimulação concluída: ${result.applied.length} migração(ões) pendente(s).\n`,
+        );
         break;
       }
 
       case 'mark-baseline': {
-        console.log(`\nRegistrando migrações existentes como baseline em [${dbConfig.database}]...\n`);
+        console.log(
+          `\nRegistrando migrações existentes como baseline em [${dbConfig.database}]...\n`,
+        );
         const marked = await markMigrationsAsApplied(
           migrationsDir,
           migrationClient,
@@ -88,16 +101,22 @@ async function main(): Promise<void> {
 
       case 'run':
       default: {
-        console.log(`\nIniciando execução de migrações em [${dbConfig.database}]...\n`);
+        console.log(
+          `\nIniciando execução de migrações em [${dbConfig.database}]...\n`,
+        );
         const result = await runPendingMigrations(
           migrationsDir,
           migrationClient,
         );
 
         if (result.applied.length === 0) {
-          console.log('✅ Banco de dados já está atualizado. Nenhuma migração pendente.\n');
+          console.log(
+            '✅ Banco de dados já está atualizado. Nenhuma migração pendente.\n',
+          );
         } else {
-          console.log(`\n✅ Sucesso! ${result.applied.length} migração(ões) aplicada(s) com sucesso.\n`);
+          console.log(
+            `\n✅ Sucesso! ${result.applied.length} migração(ões) aplicada(s) com sucesso.\n`,
+          );
         }
         break;
       }
@@ -112,4 +131,3 @@ main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });
-
