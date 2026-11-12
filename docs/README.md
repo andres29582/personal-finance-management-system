@@ -160,4 +160,4 @@ A pasta `arquivo/` contém documentos preservados por valor histórico, rastreab
 
 ## Próxima entrega: calidad y CI
 
-- [Plan de implementación de calidad, reproducibilidad y CI](planejamento/PLAN_CALIDAD_CI_2026-11-11.md): perfiles de lint, correcciones por contratos, instalación limpia Linux/PG16, revisión de P4 y validación remota del candidato exacto. Estado: planificado.
+- [Plan de implementación de calidad, reproducibilidad y CI](planejamento/PLAN_CALIDAD_CI_2026-11-11.md): perfiles de lint, correcciones por contratos, instalación limpia Linux/PG16, revisión de P4 y validación remota del candidato exacto. Estado: implementado localmente; ejecución Linux/CI/P4 pendiente. [Resultados](validacao/IMPLEMENTACION_CALIDAD_CI_2026-11-11.md).

@@ -1,0 +1,133 @@
+{
+  "date": "2026-11-12",
+  "timezone": "America/Sao_Paulo",
+  "status": "LOCAL_IMPLEMENTED_REMOTE_PENDING",
+  "branch": "codex/calidad-ci-2026-11-11",
+  "base": "261c209d7856400ab95ecc229971ba009b4f92ea",
+  "codeCandidate": "146cba8573130f19905b669cf52a7c8d41185675",
+  "runtime": {
+    "node": "22.23.4",
+    "postgresql": "18.6",
+    "browser": "Microsoft Edge headless / Chromium",
+    "linuxTarget": {
+      "os": "Ubuntu 24.04",
+      "postgresql": "16",
+      "python": "3.11.18",
+      "mlLockedPackages": 47
+    }
+  },
+  "checks": {
+    "backendJest": {
+      "pass": 1094,
+      "fail": 0,
+      "suites": 102
+    },
+    "frontendJest": {
+      "pass": 884,
+      "fail": 0,
+      "suites": 96
+    },
+    "backendMaintainedLint": {
+      "errors": 0,
+      "warnings": 22
+    },
+    "frontendMaintainedLint": {
+      "errors": 0,
+      "warnings": 78,
+      "exactBaselineWarningMatches": 77,
+      "migratedExistingWarning": "draft missing dependency moved from useCallback to useEffect in PagosDividaScreen"
+    },
+    "backendFullTypes": "PASS",
+    "backendBuildTypes": "PASS",
+    "frontendTypes": "PASS",
+    "nestBuild": "PASS",
+    "webExport": "PASS",
+    "portableHarness": {
+      "pass": 123,
+      "fail": 0,
+      "windowsCases": "EXPLICITLY_EXCLUDED"
+    },
+    "windowsOwnership": {
+      "pass": 2,
+      "fail": 0,
+      "guardianBytesMatch": true,
+      "originalMetadataPreserved": true
+    },
+    "postgresqlE2e": {
+      "pass": 191,
+      "fail": 0,
+      "skipped": 1,
+      "suitesPassed": 37,
+      "suiteSkipped": 1,
+      "baselineSkippedTest": "transfer-intent-concurrency.e2e-spec.ts: prepared RNF fixtures test"
+    },
+    "realAccessWeb": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "flaky": 0,
+      "sourceDigest": "761d8c857d3c220370c678e07240d9fe22b41ed4070716d24f8baeef5ee1739f",
+      "sourcesVerified": 862,
+      "sourceDrift": 0,
+      "childrenStopped": true,
+      "cleanupErrors": 0
+    },
+    "actionlint": {
+      "version": "1.7.12",
+      "status": "PASS"
+    }
+  },
+  "remote": {
+    "linuxPg16": "NOT_RUN",
+    "mlCleanInstallAndPytest": "NOT_RUN",
+    "generalCi": "NOT_RUN",
+    "p4": "NOT_RUN",
+    "publication": "NOT_PERFORMED"
+  },
+  "preservation": {
+    "historicalWorktrees": 39,
+    "metadataFilesVerified": 301,
+    "metadataDrift": 0,
+    "untouchedFilesVerified": 1064,
+    "sourceDrift": 0,
+    "portsReleased": [
+      55441,
+      4319,
+      4189
+    ],
+    "gcAuto": "0",
+    "maintenanceAuto": "false"
+  },
+  "evidence": {
+    "custody": "Private _calidad-20261111 outside repository",
+    "sha256": {
+      "q2-full-jest.json": "2e77eb3da230f2471b863d8a81b8b67c36a9c625bda309fb5d98940d489dd5d5",
+      "q5-full-unit-final.json": "2e0967b317ba4c490ddeade14b257c7ae2c94bccf9fe384298438ea48c49d69e",
+      "q5-full-e2e-final.json": "d7f0a561b19a729f117d6e43ab596813bbb3e0a677d90b3b7142d1bc4daee2e8",
+      "q5-admission-lint.json": "232c1933ca79c4787b256adb0183c9c16e57b155f3b9dbfe9e2aac3625d9279e",
+      "q2-final-lint.json": "18279f1e64c323a944ca7b314a1f72b88eec93280dd83945f46c70ec35ad360d",
+      "q7-portable-final.log": "bcca4d245457625aeb83afe0c24a755e0d26a93d6eb33fdcd9b0eb8ba667f662",
+      "q5-windows-owned.log": "b570edf40e0fa1996e3d7ef8d194eb712f54f5a83256ea9b5cba95d2577d28ab",
+      "workflows-closed-actionlint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "q5-final-types.receipt.json": "6bbb91123cf13e2ed869af08b9ab4704badefaa07f9d00de29315cd78ee2c8d9",
+      "q2-types-final.receipt.json": "c304b71cad63a196ba74d0ac22539ffa5e5487df20c7842bedb6a4147d21258d",
+      "q5-build.receipt.json": "6a93ad53f91129beb811550b8349e49ef6dde7152f91473a277beaafeef458ee",
+      "q5-build-types.receipt.json": "012decb4b2c9aa5b58d9170e740e1344386bdd217a2db198545614aaa6d19733",
+      "q5-web-export.receipt.json": "bfcde4249506a9bd1f4c50a66934326bf9d6f52e72b97567a89d36e1f908f2db"
+    },
+    "browserBindingSha256": "8eacee964c047fe3743d9b168f8d1d639221056af66eacad0de2f53e1db9df97",
+    "browserReportSha256": "49a62e9077376d02ca1a4e9160c814e971eddd2d4b4a2cc76cfe58b42cb04bea"
+  },
+  "scope": {
+    "localMain": "20f88b41abd0026fc9407bcf706dc60de9fef6a2",
+    "comparisonIncludesPriorConsolidationAndAccess": true,
+    "mainComparison": {
+      "files": 472,
+      "symbols": 1484,
+      "processes": 757,
+      "risk": "critical"
+    },
+    "remoteMainObserved": "e9ee0db68bd318942a826cfee4fb0e36850a998a",
+    "qualityCodeCandidateChangedPaths": 78
+  }
+}

@@ -1,7 +1,7 @@
 # Plan de implementación: calidad, reproducibilidad y CI
 
 Fecha: **11/11/2026**, America/Sao_Paulo.
-Estado: **IMPLEMENTACIÓN EN CURSO**. Baseline conservada en `codex/calidad-ci-2026-11-11`; contrato de lint definido y correcciones por lotes en progreso. [Seguimiento](../validacao/IMPLEMENTACION_CALIDAD_CI_2026-11-11.md).
+Estado: **IMPLEMENTACIÓN LOCAL TERMINADA (12/11/2026); LINUX/CI/P4 REMOTOS PENDIENTES**. Baseline y commits conservados en `codex/calidad-ci-2026-11-11`; ver resultados reales, omisión heredada y límites en el seguimiento. [Seguimiento](../validacao/IMPLEMENTACION_CALIDAD_CI_2026-11-11.md).
 Base: **`261c209d7856400ab95ecc229971ba009b4f92ea`**, rama
 `codex/cierre-pruebas-acceso`. El código de acceso validado está en `631b187`.
 
