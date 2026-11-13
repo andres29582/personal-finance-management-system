@@ -1,4 +1,18 @@
-# P4: correcciones locales verificadas; aceptación remota abierta — 2026-11-12
+# P4: primera ejecución remota fallida; aceptación abierta — 2026-11-13
+
+**Estado actual: PUBLISHED / CI_GENERAL_PASS / P4_REMOTE_FAILED / OPEN.**
+El bootstrap está integrado en `main` y la CI general del candidato pasó sus
+seis jobs. La primera ejecución P4 falló en el driver sin publicar artefactos;
+no es `REMOTE_NOT_TESTED`, tampoco es PASS. Se preparó una revisión de diagnóstico
+con códigos cerrados y sin exponer logs privados.
+[Resultados remotos y autorización pendiente](PUBLICACION_P4_2026-11-13.md).
+
+El contenido del 12/11 y de octubre que sigue conserva sus identidades y límites
+históricos; no sustituye el estado remoto actual.
+
+---
+
+# Histórico: correcciones locales verificadas — 2026-11-12
 
 **Estado actual: LOCAL_PASS_BOUNDED; REMOTE_NOT_TESTED / OPEN.**
 La auditoría del candidato `ec97588cf3c234dd8cede526dab4359e766d9b0c`

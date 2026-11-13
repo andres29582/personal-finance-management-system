@@ -2,8 +2,10 @@
 
 Fecha: **2026-11-12**, America/Sao_Paulo.
 Estado: **IMPLEMENTACIÓN LOCAL VERIFICADA; aceptación remota abierta**.
-P4.1–P4.4 completados en el alcance local; P4.5 preparado para revisión de
-publicación y ejecución; P4.6 pendiente de artefacto remoto.
+P4.1–P4.4 completados en el alcance local. Actualización del 13/11: publicación,
+bootstrap y CI general aprobados; la primera P4 falló sin artefactos. P4.5 sigue
+abierto para diagnóstico y nueva autorización de ejecución; P4.6 pendiente.
+[Seguimiento remoto](../validacao/PUBLICACION_P4_2026-11-13.md).
 Código: `ef06512ac226bc97109050489f6c36456151dd19`.
 [Resultados y límites](../validacao/IMPLEMENTACION_P4_2026-11-12.md).
 Base comprobada: `ec97588cf3c234dd8cede526dab4359e766d9b0c`, rama

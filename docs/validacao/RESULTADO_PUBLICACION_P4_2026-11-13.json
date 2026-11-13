@@ -1,0 +1,42 @@
+{
+  "date": "2026-11-13",
+  "published": true,
+  "codeBranch": "codex/actualizacion-p4-2026-11-12",
+  "ciAcceptedCommit": "88658d62c89cc1e470dbd3849dac8a4397cd4219",
+  "ciRun": 43436018983,
+  "ciJobs": 6,
+  "ciConclusion": "success",
+  "bootstrapPR": 137,
+  "bootstrapMerge": "55aebdbb167f1b3ae969524fe1caf1c7499d6507",
+  "mainCIRun": 43433224971,
+  "mainCI": "success",
+  "p4": {
+    "run": 43434466181,
+    "attempt": 1,
+    "commit": "3dfcd84475252a4f2ed7fb09c737bec781f17c78",
+    "conclusion": "failure",
+    "artifacts": 0,
+    "closure": "OPEN",
+    "cause": "NOT_IDENTIFIED_FROM_PUBLIC_LOG"
+  },
+  "diagnostic": {
+    "commit": "88658d62c89cc1e470dbd3849dac8a4397cd4219",
+    "ciRun": 43436018983,
+    "pureTests": 19,
+    "privateLogPreserved": true,
+    "publicOutput": "CLOSED_PHASE_CODE_ALLOWLIST",
+    "nextManualRun": "REQUIRES_ADDITIONAL_AUTHORIZATION",
+    "ciConclusion": "success",
+    "ciJobs": 6
+  },
+  "retention": {
+    "logsDays": 90,
+    "artifactDays": 7
+  },
+  "production": "BLOCKED",
+  "u6Etapa2": "OPEN",
+  "previousCIPass": {
+    "commit": "3dfcd84475252a4f2ed7fb09c737bec781f17c78",
+    "run": 43433895461
+  }
+}
