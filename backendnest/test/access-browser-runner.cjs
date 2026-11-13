@@ -43,6 +43,52 @@ function staticFile(root, url) {
   return target;
 }
 
+// Emit only fixed statuses, ordinal cases and source line numbers. Raw browser
+// errors can contain credentials, request bodies and local paths; keep them private.
+function browserFailures(report) {
+  const failures = [];
+  let ordinal = 0;
+  const visit = (suites) => {
+    if (!Array.isArray(suites)) return;
+    for (const suite of suites) {
+      for (const spec of Array.isArray(suite.specs) ? suite.specs : []) {
+        ordinal++;
+        for (const entry of Array.isArray(spec.tests) ? spec.tests : []) {
+          for (const result of Array.isArray(entry.results)
+            ? entry.results
+            : []) {
+            if (!['failed', 'timedOut', 'interrupted'].includes(result.status))
+              continue;
+            const locations = [
+              result.errorLocation,
+              ...(Array.isArray(result.errors)
+                ? result.errors.map((error) => error.location)
+                : []),
+            ];
+            const location = locations.find(
+              (item) =>
+                typeof item?.file === 'string' &&
+                item.file.replaceAll('\\', '/').split('/').at(-1) ===
+                  'access.spec.ts' &&
+                Number.isInteger(item.line) &&
+                item.line > 0 &&
+                item.line < 10000,
+            );
+            failures.push({
+              case: ordinal,
+              status: result.status,
+              line: location?.line ?? 0,
+            });
+          }
+        }
+      }
+      visit(suite.suites);
+    }
+  };
+  visit(report?.suites);
+  return failures;
+}
+
 async function run(env = process.env) {
   // No resources or application dotenv are loaded before explicit confinement.
   const config = runtime.resolveConfig(env);
@@ -368,6 +414,17 @@ async function run(env = process.env) {
       ),
     );
   }
+  if (primary) {
+    try {
+      const report = JSON.parse(
+        await fs.readFile(path.join(artifacts, 'browser.json'), 'utf8'),
+      );
+      for (const failure of browserFailures(report))
+        console.error('ACCESS_BROWSER_FAILURE:' + JSON.stringify(failure));
+    } catch {
+      console.error('ACCESS_BROWSER_REPORT_UNAVAILABLE');
+    }
+  }
   if (primary || cleanupErrors.length) throw primary || cleanupErrors[0];
   console.log(
     JSON.stringify({
@@ -379,7 +436,7 @@ async function run(env = process.env) {
   );
 }
 
-module.exports = { run, ports, staticFile };
+module.exports = { run, ports, staticFile, browserFailures };
 if (require.main === module)
   void run().catch((error) => {
     console.error(error.message);

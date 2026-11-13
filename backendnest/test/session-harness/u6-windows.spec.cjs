@@ -15,6 +15,7 @@ for (const orphan of [false, true])
     { timeout: 60000 },
     async () => {
       assert.equal(process.platform, 'win32');
+      fs.mkdirSync(path.join(repo, '.tmp'), { recursive: true });
       const root = fs.mkdtempSync(path.join(repo, '.tmp/u6-owned-pure-'));
       const binding = {
         case: 'C6',

@@ -56,3 +56,18 @@ test('does not inherit application database or dotenv destination', () => {
   assert.equal(env.E2E_DB_HOST, undefined);
   assert.equal(env.EXPO_NO_DOTENV, '1');
 });
+
+test('clean environment also works on hosts without Windows system variables', () => {
+  const previous = process.env.SystemRoot;
+  try {
+    delete process.env.SystemRoot;
+    const env = cleanEnvironment('synthetic-private-root');
+    assert.equal(env.SystemRoot, undefined);
+    assert.equal(env.WINDIR, undefined);
+    assert.equal(env.PATH.includes('undefined'), false);
+    assert.equal(env.DB_PASSWORD, undefined);
+  } finally {
+    if (previous === undefined) delete process.env.SystemRoot;
+    else process.env.SystemRoot = previous;
+  }
+});

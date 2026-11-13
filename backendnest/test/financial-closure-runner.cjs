@@ -48,7 +48,9 @@ function cleanEnvironment(root) {
     WINDIR: process.env.SystemRoot,
     PATH: [
       path.dirname(process.execPath),
-      path.join(process.env.SystemRoot, 'System32'),
+      ...(process.env.SystemRoot
+        ? [path.join(process.env.SystemRoot, 'System32')]
+        : []),
       pgBin,
     ].join(path.delimiter),
     TEMP: root,
