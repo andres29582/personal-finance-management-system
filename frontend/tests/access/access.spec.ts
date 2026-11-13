@@ -325,6 +325,11 @@ test("a held terminal A response cannot clear B and logout propagates across tab
   await expect(
     page.getByRole("button", { name: "Atualizar lista", exact: true }),
   ).toBeVisible();
+  // The refresh control renders before the initial list request completes.
+  // Drain that request before expiring A so only the staged refresh sees 401.
+  await expect(
+    page.getByText("Nenhuma conta encontrada", { exact: true }),
+  ).toBeVisible();
   await expire(first, "idle");
   let release!: () => void, captured!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
