@@ -60,11 +60,55 @@ por sí solo el fallo nativo aún no identificado.
 
 ## Aceptación todavía necesaria
 
+### Segundo intento autorizado y diagnóstico local
+
+El usuario autorizó una ejecución adicional sobre
+`88658d62c89cc1e470dbd3849dac8a4397cd4219`. El
+[run 43479614081](https://github.com/andres29582/personal-finance-management-system/actions/runs/43479614081),
+attempt 1, también falló sin publicar artefactos. Los códigos cerrados permiten
+ahora acotar el fallo:
+
+| Check P4 | Resultado del segundo intento |
+| --- | --- |
+| `types-full` | PASS |
+| `types-build` | PASS |
+| `u6-test` | PASS |
+| `u6-check` | PASS |
+| `pg16-negative` | FAIL |
+| `pg16-e2e` | No ejecutado por fallo previo |
+
+La preparación del servicio y la comprobación de versiones de clientes también
+terminaron antes de entrar en `pg16-negative`. Se descartan como ubicación del
+fallo las cuatro comprobaciones anteriores, pero el log público no identifica
+todavía el subpaso interno del adaptador negativo. No se confirmó una causa ni
+se modificó el validador para admitir un resultado diferente.
+
+Se reprodujo localmente **el mismo método `negative()`** con procesos nativos
+`pg_dump`/`pg_restore`, mediante un ejecutor Windows que adapta las rutas y
+captura stdout/stderr. No se ejecutó el driver Linux ni su aislamiento de entorno
+y grupos de procesos. Se usaron clústeres nuevos en los puertos 55443 y 55444:
+
+- PostgreSQL 18.6: PASS, cuatro comandos nativos.
+- PostgreSQL 16.16: PASS, cuatro comandos nativos.
+- En ambos casos se verificaron fail-fast, control, conservación del marcador,
+  cleanup de base/rol y ausencia final de dump/lista. Los clústeres se detuvieron
+  y ambos puertos quedaron libres.
+
+**Estos resultados Windows son diagnósticos; no acreditan PostgreSQL 16/Linux ni
+los grupos de procesos del driver Linux.** La investigación pendiente debe
+distinguir el comando/subpaso rechazado y su diagnóstico seguro dentro de CI.
+Los binarios portátiles 16.16 se obtuvieron de la
+[página oficial del proveedor](https://www.enterprisedb.com/download-postgresql-binaries)
+y se guardaron en la carpeta privada de herramientas, sin servicios ni cambios
+de PATH global. Archivo descargado: 378.078.504 bytes; SHA256 local de custodia
+`5c0d06f3d26a929ecb36dd931409f1e51a4181355794a259b90aae8bffc57a9f`.
+
 La retención real del repositorio se verificó por API: **90 días**. El artefacto
 P4 conserva la política aprobada de **siete días**, público y bajo custodia del
-propietario. La ejecución autorizada del paquete original ya fue utilizada;
-ese paquete excluía reintentos automáticos. Un nuevo run manual requiere ampliar
-esa autorización para el SHA concreto y su cap de 45 minutos.
+propietario. Se utilizaron las dos ejecuciones autorizadas: la original y la
+adicional. No se inició otro run. El paquete excluía reintentos automáticos;
+una futura ejecución requiere una nueva autorización concreta, después de
+preparar una investigación o corrección verificable.
 
 Después del nuevo run deben aprobarse P4, descarga y readback independiente:
 checksum, schema, commit, run/attempt, inventario Git y limpieza. Si vuelve a

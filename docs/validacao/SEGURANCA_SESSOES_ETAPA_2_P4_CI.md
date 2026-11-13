@@ -1,10 +1,12 @@
-# P4: primera ejecución remota fallida; aceptación abierta — 2026-11-13
+# P4: restauración negativa pendiente en CI; aceptación abierta — 2026-11-13
 
 **Estado actual: PUBLISHED / CI_GENERAL_PASS / P4_REMOTE_FAILED / OPEN.**
 El bootstrap está integrado en `main` y la CI general del candidato pasó sus
-seis jobs. La primera ejecución P4 falló en el driver sin publicar artefactos;
-no es `REMOTE_NOT_TESTED`, tampoco es PASS. Se preparó una revisión de diagnóstico
-con códigos cerrados y sin exponer logs privados.
+seis jobs. Las dos ejecuciones P4 autorizadas fallaron sin publicar artefactos.
+El segundo intento, run `43479614081` sobre `88658d6`, aprobó tipos y U6;
+el fallo está en `pg16-negative`, antes del E2E. La reproducción local del mismo
+adaptador pasó con PostgreSQL 16.16 y 18.6 en Windows, sin acreditar Linux.
+P4 no es `REMOTE_NOT_TESTED`, tampoco es PASS. No hubo otro run automático.
 [Resultados remotos y autorización pendiente](PUBLICACION_P4_2026-11-13.md).
 
 El contenido del 12/11 y de octubre que sigue conserva sus identidades y límites

@@ -1,7 +1,8 @@
 # P4: correcciones locales verificadas; aceptación remota pendiente
 
 **Actualización 2026-11-13:** publicación, bootstrap y CI general completados;
-primera P4 fallida sin artefactos. El resultado local que sigue se conserva como
+dos intentos P4 fallidos sin artefactos; último fallo localizado en `pg16-negative`.
+El resultado local que sigue se conserva como
 histórico. [Seguimiento remoto vigente](PUBLICACION_P4_2026-11-13.md).
 
 Fecha: **2026-11-12**, America/Sao_Paulo.

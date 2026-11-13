@@ -17,7 +17,34 @@
     "conclusion": "failure",
     "artifacts": 0,
     "closure": "OPEN",
-    "cause": "NOT_IDENTIFIED_FROM_PUBLIC_LOG"
+    "cause": "NATIVE_NEGATIVE_SUBSTEP_NOT_IDENTIFIED_ON_LINUX",
+    "attempts": [
+      {
+        "run": 43434466181,
+        "attempt": 1,
+        "commit": "3dfcd84475252a4f2ed7fb09c737bec781f17c78",
+        "conclusion": "failure",
+        "artifacts": 0
+      },
+      {
+        "run": 43479614081,
+        "attempt": 1,
+        "commit": "88658d62c89cc1e470dbd3849dac8a4397cd4219",
+        "conclusion": "failure",
+        "passedChecks": [
+          "types-full",
+          "types-build",
+          "u6-test",
+          "u6-check"
+        ],
+        "failedCheck": "pg16-negative",
+        "notRun": [
+          "pg16-e2e"
+        ],
+        "artifacts": 0
+      }
+    ],
+    "latestRun": 43479614081
   },
   "diagnostic": {
     "commit": "88658d62c89cc1e470dbd3849dac8a4397cd4219",
@@ -25,9 +52,10 @@
     "pureTests": 19,
     "privateLogPreserved": true,
     "publicOutput": "CLOSED_PHASE_CODE_ALLOWLIST",
-    "nextManualRun": "REQUIRES_ADDITIONAL_AUTHORIZATION",
+    "nextManualRun": "NOT_AUTHORIZED",
     "ciConclusion": "success",
-    "ciJobs": 6
+    "ciJobs": 6,
+    "additionalManualRunAuthorization": "USED_ONCE"
   },
   "retention": {
     "logsDays": 90,
@@ -38,5 +66,26 @@
   "previousCIPass": {
     "commit": "3dfcd84475252a4f2ed7fb09c737bec781f17c78",
     "run": 43433895461
+  },
+  "localDiagnostic": {
+    "operatingSystem": "Windows",
+    "postgresql": [
+      {
+        "version": "18.6",
+        "status": "PASS",
+        "nativeCommands": 4
+      },
+      {
+        "version": "16.16",
+        "status": "PASS",
+        "nativeCommands": 4
+      }
+    ],
+    "qualifiesPG16Linux": false,
+    "clustersStopped": true,
+    "portsFree": [
+      55443,
+      55444
+    ]
   }
 }
