@@ -77,6 +77,7 @@ jobs:
         shell: bash
         run: |
           if ! timeout --signal=TERM --kill-after=20s 2200s node backendnest/test/session-harness/p4-ci.cjs > "$RUNNER_TEMP/p4-driver-private.log" 2>&1; then
+            grep -E '^P4_(CHECK_(START|PASS):(types-full|types-build|u6-test|u6-check|pg16-negative|pg16-e2e)|INTERNAL_START:(configuration|source|pure-tests|service|client-versions|cleanup|export))$' "$RUNNER_TEMP/p4-driver-private.log" || true
             echo P4_CHECKS_FAILED_NO_PRIVATE_UPLOAD
             exit 1
           fi

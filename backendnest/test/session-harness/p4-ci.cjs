@@ -82,6 +82,7 @@ function execute(command, args, capMs, env, expectedExit = 0) {
   });
 }
 async function main() {
+  console.log('P4_INTERNAL_START:configuration');
   assert.equal(process.argv.length, 2);
   const config = pg16.configuration(process.env);
   assert.match(process.version, /^v22\./);
@@ -125,10 +126,12 @@ async function main() {
       ).stdout,
       '',
     );
+    console.log('P4_INTERNAL_START:source');
     const source = u6.inventory();
     const checks = [];
     const check = async (id, action) => {
       assert.equal(proof.CHECKS[checks.length][0], id);
+      console.log('P4_CHECK_START:' + id);
       const start = Date.now();
       const value = await action();
       const durationMs = Date.now() - start;
@@ -163,6 +166,7 @@ async function main() {
         120000,
       ),
     );
+    console.log('P4_INTERNAL_START:pure-tests');
     await node(['test/session-harness/p4-proof.spec.cjs'], 60000);
     await check('u6-test', () =>
       node(['test/session-harness/u6.spec.cjs'], 60000),
@@ -194,7 +198,9 @@ async function main() {
       assert.equal(value.remoteCI, 'NOT_TESTED'); // Historical U6 schema is deliberately unchanged.
       assert.deepEqual(value.source, source);
     });
+    console.log('P4_INTERNAL_START:service');
     const server = await pg16.freshService(config);
+    console.log('P4_INTERNAL_START:client-versions');
     const dump = pg16.clientVersion(
       (await command(path.join(pg16.BIN, 'pg_dump'), ['--version'], 10000))
         .stdout,
@@ -232,6 +238,7 @@ async function main() {
         return proof.e2eSummary(JSON.parse(fs.readFileSync(output, 'utf8')));
       }),
     );
+    console.log('P4_INTERNAL_START:cleanup');
     assert.deepEqual(u6.inventory(), source);
     await command(
       '/usr/bin/git',
@@ -241,6 +248,7 @@ async function main() {
     // Remove every private archive/report before constructing the portable export.
     fs.rmSync(root, { recursive: true });
     assert.equal(fs.existsSync(root), false);
+    console.log('P4_INTERNAL_START:export');
     const exportRoot = path.join(tmp, 'p4-export');
     fs.mkdirSync(exportRoot);
     proof.write(

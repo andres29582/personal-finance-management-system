@@ -298,6 +298,35 @@ test('manual workflow has no automatic trigger, private upload, cache or privile
   );
 });
 
+test('failure diagnostics admit fixed phase codes without private messages or paths', () => {
+  const yaml = require('js-yaml').load(
+    fs.readFileSync(
+      path.join(__dirname, '../../../.github/workflows/p4-proof.yml'),
+      'utf8',
+    ),
+  );
+  const step = yaml.jobs.proof.steps.find((item) =>
+    item.run?.includes('p4-ci.cjs'),
+  );
+  const match = /grep -E '([^']+)'/.exec(step.run);
+  assert.ok(match);
+  const allowed = new RegExp(match[1]);
+  for (const [id] of proof.CHECKS) {
+    assert.equal(allowed.test('P4_CHECK_START:' + id), true);
+    assert.equal(allowed.test('P4_CHECK_PASS:' + id), true);
+  }
+  const privateLines = [
+    'password=synthetic-secret',
+    '/private/runner/report.json',
+    'P4_CHECK_PASS:types-full password=synthetic-secret',
+    'Error: postgres://synthetic:secret@host/db',
+    'P4_INTERNAL_START:unreviewed-value',
+    'P4_CHECK_PASS:unknown',
+  ];
+  assert.ok(privateLines.every((line) => !allowed.test(line)));
+  assert.match(step.run, /P4_CHECKS_FAILED_NO_PRIVATE_UPLOAD\s+exit 1/);
+});
+
 test('PG16 negative adapter simulates both native branches under restricted owner and removes only owned resources', async () => {
   const vm = require('node:vm');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'p4-pg16-test-'));
