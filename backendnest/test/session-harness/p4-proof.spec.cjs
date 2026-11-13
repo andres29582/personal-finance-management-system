@@ -20,7 +20,7 @@ test('the U6 entrypoint used by both P4 paths registers portable tests without W
       module: { exports: {} },
       require: (id) => {
         if (id === 'node:test')
-          return { test: (name) => registered.push(name) };
+          return { test: (name) => registered.push(name), before: () => {} };
         if (id.endsWith('.spec.cjs')) return load(localRequire.resolve(id));
         return localRequire(id);
       },

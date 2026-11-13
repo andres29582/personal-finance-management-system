@@ -1,11 +1,64 @@
-const { test } = require('node:test');
+const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 const { once } = require('node:events');
-const { launchOwner, assignJob, waitExit, repo } = require('./u6-owned.cjs');
+const {
+  launchOwner,
+  assignJob,
+  waitExit,
+  repo,
+  cleanEnv,
+} = require('./u6-owned.cjs');
 const { validateBinding } = require('./u6-runtime.cjs');
+
+// Cold hosted Windows images can spend the guardian handshake window loading
+// PowerShell's C# compiler. Qualify that dependency before launching owned work.
+// The existing 3-minute CI step, 60-second cases and guardian caps stay unchanged.
+before(
+  () => {
+    assert.equal(process.platform, 'win32');
+    fs.mkdirSync(path.join(repo, '.tmp'), { recursive: true });
+    const root = fs.mkdtempSync(path.join(repo, '.tmp/u6-compiler-'));
+    const fd = fs.openSync(path.join(root, 'compiler-private.log'), 'wx');
+    let result;
+    try {
+      result = spawnSync(
+        path.join(
+          process.env.SystemRoot,
+          'System32/WindowsPowerShell/v1.0/powershell.exe',
+        ),
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          "Add-Type -TypeDefinition 'public static class U6CompilerProbe { public static int Ready() { return 1; } }'; if ([U6CompilerProbe]::Ready() -ne 1) { exit 1 }",
+        ],
+        {
+          cwd: root,
+          env: cleanEnv(root),
+          shell: false,
+          windowsHide: true,
+          stdio: ['ignore', fd, fd],
+          timeout: 55000,
+        },
+      );
+    } finally {
+      fs.closeSync(fd);
+    }
+    assert.equal(
+      result.error,
+      undefined,
+      'PowerShell compiler preflight unavailable',
+    );
+    assert.equal(result.signal, null);
+    assert.equal(result.status, 0, 'PowerShell compiler preflight failed');
+  },
+  { timeout: 60000 },
+);
+
 for (const orphan of [false, true])
   test(
     'actual synthetic Windows job ' +
